@@ -1,0 +1,195 @@
+.mapCard {
+  position: relative;
+  width: 100%;
+  height: 380px;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 16px 36px -8px rgba(10, 61, 74, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: #d8e5e8;
+  transition: all 0.3s ease;
+}
+
+.mapCanvas {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+
+/* Map Controls */
+.mapControls {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 25;
+}
+
+.mapControlBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0a3d4a;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(10, 61, 74, 0.12);
+  transition: all 0.2s ease;
+}
+
+.mapControlBtn:hover {
+  background: #ffffff;
+  transform: scale(1.08);
+  box-shadow: 0 6px 16px rgba(10, 61, 74, 0.2);
+}
+
+.mapOverlayBadge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0a3d4a;
+  box-shadow: 0 4px 14px rgba(10, 61, 74, 0.1);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Price Pins có Radar Pulse */
+.mapPin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 10;
+}
+
+.mapPin:hover,
+.mapPinActive {
+  transform: translate(-50%, -115%) scale(1.18);
+  z-index: 30;
+}
+
+.pinRadarRing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: pulseRadar 2s infinite ease-out;
+}
+
+@keyframes pulseRadar {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0.85;
+    box-shadow: 0 0 0 0 rgba(10, 61, 74, 0.45);
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 1;
+    box-shadow: 0 0 0 12px rgba(10, 61, 74, 0);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+    box-shadow: 0 0 0 0 rgba(10, 61, 74, 0);
+  }
+}
+
+.pinBadge {
+  background: #ffffff;
+  color: #0a3d4a;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(10, 61, 74, 0.22);
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+.pinBadgeDeal {
+  background: linear-gradient(135deg, #e1a13a 0%, #b6801e 100%);
+  color: #ffffff;
+  border-color: #fef08a;
+  box-shadow: 0 8px 20px rgba(225, 161, 58, 0.35);
+}
+
+.mapPinActive .pinBadge {
+  background: #0a3d4a;
+  color: #ffffff;
+  border-color: #38bdf8;
+  box-shadow: 0 10px 24px rgba(10, 61, 74, 0.35);
+}
+
+.pinPointer {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid #ffffff;
+  margin-top: -1px;
+}
+
+.pinPointerDeal {
+  border-top-color: #b6801e;
+}
+
+.mapPinActive .pinPointer {
+  border-top-color: #0a3d4a;
+}
+
+.pinTooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  background: #0a3d4a;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

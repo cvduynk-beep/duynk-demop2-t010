@@ -1,0 +1,318 @@
+/* Container bản đồ Leaflet chuẩn cao cấp */
+.mapContainer {
+  position: relative;
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(14, 82, 99, 0.12);
+  box-shadow: 0 8px 30px -10px rgba(10, 61, 74, 0.12);
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+}
+
+.mapElement {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: #f1f5f9;
+  z-index: 1;
+}
+
+/* Thanh điều khiển trên cùng (Quick Zones + Layer Switcher) */
+.mapTopBar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 1000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.topBarLeft {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  overflow-x: auto;
+  pointer-events: auto;
+  padding: 4px;
+  max-width: calc(100% - 160px);
+  scrollbar-width: none;
+}
+.topBarLeft::-webkit-scrollbar {
+  display: none;
+}
+
+.zoneQuickPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.zoneQuickPill:hover {
+  background: #ffffff;
+  color: #0e5263;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(14, 82, 99, 0.15);
+}
+
+.zoneQuickPillActive {
+  background: #0e5263 !important;
+  color: #ffffff !important;
+  border-color: #0e5263 !important;
+  box-shadow: 0 4px 14px rgba(14, 82, 99, 0.3) !important;
+}
+
+.dealBadgeTiny {
+  background: #f59e0b;
+  color: #ffffff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Nút đổi Layer Vệ tinh / Đô thị */
+.layerToggleGroup {
+  pointer-events: auto;
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  padding: 3px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1);
+}
+
+.layerBtn {
+  border: none;
+  background: transparent;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.layerBtnActive {
+  background: #0e5263;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(14, 82, 99, 0.25);
+}
+
+/* Điều khiển góc phải (Zoom & Recenter) */
+.mapRightControls {
+  position: absolute;
+  right: 12px;
+  bottom: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mapControlIconBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.mapControlIconBtn:hover {
+  background: #ffffff;
+  color: #0e5263;
+  transform: scale(1.06);
+}
+
+/* Thẻ Walkability & Chi tiết phân khu nổi ở góc dưới */
+.walkabilityCard {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  right: 60px;
+  max-width: 480px;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.2);
+  animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.walkCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.walkZoneName {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.walkPriceTag {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0e5263;
+  background: #e6f0f2;
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.walkDesc {
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.walkGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+  margin-bottom: 10px;
+}
+
+.walkItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.walkItemLabel {
+  font-size: 10px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.walkItemValue {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.walkCardActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.walkFilterBtn {
+  flex: 1;
+  padding: 7px 12px;
+  background: #0e5263;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.walkFilterBtn:hover {
+  background: #0a3d4a;
+}
+
+.walkCloseBtn {
+  padding: 7px 10px;
+  background: #f1f5f9;
+  color: #475569;
+  border: none;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.walkCloseBtn:hover {
+  background: #e2e8f0;
+}
+
+/* Loading skeleton */
+.mapLoading {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .topBarLeft {
+    max-width: calc(100% - 130px);
+  }
+  .walkabilityCard {
+    right: 12px;
+    bottom: 8px;
+    padding: 10px 12px;
+  }
+  .walkGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+}

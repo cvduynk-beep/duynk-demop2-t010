@@ -1,0 +1,113 @@
+.banner {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 460px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-panel);
+  box-shadow: 0 16px 36px -8px rgba(10, 61, 74, 0.28);
+  padding: 14px 16px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.iconWrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--lagoon-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(10, 61, 74, 0.2);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--fs-15);
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 2px 0;
+  line-height: 1.25;
+}
+
+.desc {
+  font-size: var(--fs-12);
+  color: var(--ink-2);
+  margin: 0;
+  line-height: 1.35;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.installBtn {
+  background: var(--lagoon-700);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-control);
+  font-size: var(--fs-13);
+  font-weight: 600;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.installBtn:hover {
+  background: var(--lagoon);
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--r-control);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeBtn:hover {
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+.iosHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: var(--lagoon-700);
+}

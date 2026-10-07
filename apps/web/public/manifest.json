@@ -1,0 +1,54 @@
+{
+  "name": "VinStay AI — Thuê căn hộ Vinhomes Ocean Park",
+  "short_name": "VinStay AI",
+  "description": "Hệ điều hành Cho thuê & Vận hành Căn hộ tại Vinhomes Ocean Park 1. Tìm căn thật, All-in Cost minh bạch, đón tại sảnh.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0A3D4A",
+  "theme_color": "#0A3D4A",
+  "orientation": "portrait-primary",
+  "lang": "vi",
+  "dir": "ltr",
+  "categories": ["business", "lifestyle", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Tìm căn hộ",
+      "short_name": "Tìm căn",
+      "url": "/units",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Chủ nhà ký gửi",
+      "short_name": "Ký gửi",
+      "url": "/landlord/consign",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Cổng Field Host",
+      "short_name": "Host",
+      "url": "/host/dashboard",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

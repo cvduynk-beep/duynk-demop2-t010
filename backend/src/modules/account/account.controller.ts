@@ -1,0 +1,64 @@
+import { Controller, Get, Patch, Put, Delete, Body, Param } from '@nestjs/common';
+import { ApiCookieAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
+import { AccountService } from './account.service';
+import { UpdateProfileDto } from './dto/account.dto';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+
+/**
+ * Mọi route `/me/*` yêu cầu đăng nhập (guard toàn cục gắn `request.user`) và CHỈ trả dữ liệu của chính người gọi.
+ * Tuyệt đối không đánh dấu `@Public()` ở đây: không có `request.user` thì không có "người dùng hiện tại".
+ */
+@ApiTags('11. Tài khoản & Hồ sơ cá nhân (/me)')
+@ApiCookieAuth('session-cookie')
+@Controller('me')
+export class AccountController {
+  constructor(private readonly accountService: AccountService) {}
+
+  @Get('profile')
+  @ApiOperation({ summary: 'Lấy thông tin tài khoản hiện tại' })
+  getProfile(@CurrentUser('id') userId: string) {
+    return this.accountService.getProfile(userId);
+  }
+
+  @Patch('profile')
+  @ApiOperation({ summary: 'Cập nhật thông tin tài khoản (hiện chỉ họ tên)' })
+  updateProfile(@CurrentUser('id') userId: string, @Body() dto: UpdateProfileDto) {
+    return this.accountService.updateProfile(userId, dto);
+  }
+
+  @Get('bookings')
+  @ApiOperation({ summary: 'Danh sách lịch hẹn xem phòng của người dùng' })
+  getBookings(@CurrentUser('id') userId: string) {
+    return this.accountService.getBookings(userId);
+  }
+
+  @Get('contracts')
+  @ApiOperation({ summary: 'Danh sách hợp đồng thuê & bàn giao của người dùng' })
+  getContracts(@CurrentUser('id') userId: string) {
+    return this.accountService.getContracts(userId);
+  }
+
+  @Get('favorites')
+  @ApiOperation({ summary: 'Danh sách căn hộ đã lưu yêu thích' })
+  getFavorites(@CurrentUser('id') userId: string) {
+    return this.accountService.getFavorites(userId);
+  }
+
+  @Put('favorites/:unitId')
+  @ApiOperation({ summary: 'Thêm căn hộ vào danh sách yêu thích' })
+  addFavorite(@CurrentUser('id') userId: string, @Param('unitId') unitId: string) {
+    return this.accountService.addFavorite(userId, unitId);
+  }
+
+  @Delete('favorites/:unitId')
+  @ApiOperation({ summary: 'Xóa căn hộ khỏi danh sách yêu thích' })
+  removeFavorite(@CurrentUser('id') userId: string, @Param('unitId') unitId: string) {
+    return this.accountService.removeFavorite(userId, unitId);
+  }
+
+  @Get('notifications')
+  @ApiOperation({ summary: 'Danh sách thông báo người dùng' })
+  getNotifications(@CurrentUser('id') userId: string) {
+    return this.accountService.getNotifications(userId);
+  }
+}

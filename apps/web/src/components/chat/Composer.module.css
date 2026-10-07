@@ -1,0 +1,188 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Viên nhập liệu kiểu chat AI: bo tròn lớn, nút gửi nằm ngay trong khung thay vì tách hàng riêng. */
+.shell {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 8px 8px 18px;
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 24px -6px rgba(10, 61, 74, 0.12);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.shell:focus-within {
+  border-color: #0a3d4a;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(10, 61, 74, 0.18), 0 12px 32px -8px rgba(10, 61, 74, 0.18);
+}
+
+.area {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  resize: none;
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 9px 0;
+  outline: none;
+}
+
+.area::placeholder {
+  color: var(--ink-3);
+}
+
+/* Nút gửi dùng màu chính (lagoon) — hổ phách chỉ dành cho tín hiệu như badge "Căn hời" (SPEC-P01 §0/§4). */
+.send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.2s ease, transform 0.1s ease;
+}
+
+.ready {
+  background: var(--lagoon);
+  color: #fff;
+  box-shadow: 0 4px 14px -4px rgba(14, 82, 99, 0.55);
+}
+.ready:hover:not(:disabled) {
+  background: var(--lagoon-700);
+}
+.send:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.send:disabled {
+  cursor: not-allowed;
+}
+
+/* Chip lọc tách hẳn khỏi viên nhập liệu — không còn viền chia cắt, đỡ rối mắt. */
+.filterRow {
+  display: flex;
+}
+
+.railToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.railToolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.quickChips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.quickChip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  color: #0a3d4a;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(10, 61, 74, 0.06);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.quickChip:hover:not(:disabled) {
+  background: #0a3d4a;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(10, 61, 74, 0.18);
+}
+
+.footHint {
+  padding-left: 6px;
+}
+
+.prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prompt {
+  max-width: 100%;
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 13.5px;
+  text-align: left;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.prompt:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: var(--lagoon-300);
+  color: var(--ink);
+}
+
+.guest {
+  padding-left: 6px;
+}
+
+.lock {
+  display: flex;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.lock strong {
+  display: block;
+  font-family: var(--font-head);
+  font-size: 16px;
+}
+
+.lock p {
+  margin: 4px 0 12px;
+}
+
+.lockIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--amber-100);
+  color: #7a4f0a;
+}
+
+/* Chạm ngón tay cần vùng bấm ≥44px trên di động (ưu tiên khả dụng). */
+@media (max-width: 640px) {
+  .send {
+    width: 44px;
+    height: 44px;
+  }
+}

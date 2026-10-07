@@ -1,0 +1,573 @@
+/* ── PortalShell: Hệ thống Khung giao diện Đồng bộ chuẩn Trang Khách thuê ── */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: #f4f6f8;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(224, 242, 247, 0.65) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(254, 243, 199, 0.4) 0px, transparent 50%);
+  background-attachment: fixed;
+  color: #132a31;
+}
+
+/* ── Top Navigation Bar: Kính mờ siêu thực (Frosted Glass Top Bar) ── */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-bottom: 1px solid rgba(14, 82, 99, 0.08);
+  box-shadow: 0 4px 20px -4px rgba(10, 61, 74, 0.06);
+  transition: all 0.2s ease;
+}
+
+.headerInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 24px;
+  min-height: 64px;
+}
+
+/* ── Bên trái: Logo + Badge phân hệ ── */
+.brandGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.portalBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(14, 82, 99, 0.08);
+  color: #0e5263;
+  border: 1px solid rgba(14, 82, 99, 0.15);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ── Ở giữa: Thanh điều hướng ngang Desktop (Dock Container) ── */
+.desktopNav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 auto;
+  padding: 4px 6px;
+  background: rgba(14, 82, 99, 0.04);
+  border: 1px solid rgba(14, 82, 99, 0.08);
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  text-decoration: none;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.navLink:hover {
+  background: rgba(14, 82, 99, 0.06);
+  color: #0e5263;
+}
+
+.navLinkActive {
+  background: #0e5263 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 3px 10px rgba(14, 82, 99, 0.25) !important;
+}
+
+.navLinkActive svg {
+  color: #f59e0b;
+}
+
+.badgeCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ea580c;
+  color: #ffffff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* ── Menu Dropdown con cho Nav Item ── */
+.navItemWithDropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dropdownChevronWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  margin-left: 1px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dropdownChevronWrap:hover {
+  background: rgba(14, 82, 99, 0.1);
+}
+
+.dropdownChevron {
+  transition: transform 0.2s ease;
+  opacity: 0.8;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+
+.navDropdownMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 270px;
+  background: #ffffff;
+  border: 1px solid rgba(14, 82, 99, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 16px 36px -4px rgba(10, 61, 74, 0.16);
+  padding: 6px;
+  z-index: 150;
+  animation: dropdownPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dropdownPop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.navDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.navDropdownItem:hover {
+  background: rgba(14, 82, 99, 0.06);
+  transform: translateX(2px);
+}
+
+.navDropdownItemActive {
+  background: rgba(14, 82, 99, 0.08);
+}
+
+.dropdownItemIconWrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(14, 82, 99, 0.08);
+  color: #0e5263;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dropdownItemTextWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dropdownItemTextWrap strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.dropdownItemTextWrap span {
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+/* ── Bên phải: SideSlot + Cài đặt + Khách thuê + Profile Menu ── */
+.rightGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.sideSlotWrap {
+  display: flex;
+  align-items: center;
+}
+
+/* Nút Cài đặt góc phải */
+.settingsBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  background: rgba(255, 255, 255, 0.85);
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.settingsBtn:hover {
+  background: #ffffff;
+  color: #0e5263;
+  border-color: #0e5263;
+  transform: translateY(-1px);
+}
+
+.settingsBtnActive {
+  background: #0e5263 !important;
+  color: #ffffff !important;
+  border-color: #0e5263 !important;
+  box-shadow: 0 3px 10px rgba(14, 82, 99, 0.25) !important;
+}
+
+.settingsBtnActive svg {
+  color: #f59e0b;
+}
+
+/* Nút chuyển sang Khách thuê */
+.tenantSwitchBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  text-decoration: none;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.tenantSwitchBtn:hover {
+  background: #ffffff;
+  color: #0e5263;
+  border-color: #0e5263;
+  box-shadow: 0 3px 10px rgba(14, 82, 99, 0.12);
+  transform: translateY(-1px);
+}
+
+/* ── Khối User Menu Dropdown (Góc phải sang trọng) ── */
+.userMenuWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.userTriggerBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 10px 0 4px;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 3px rgba(10, 61, 74, 0.04);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.userTriggerBtn:hover {
+  background: #ffffff;
+  border-color: #0e5263;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(14, 82, 99, 0.12);
+}
+
+.userTriggerActive {
+  border-color: #0e5263;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(14, 82, 99, 0.12);
+}
+
+.avatarPill {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #0e5263;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.userNameShort {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.userChevron {
+  color: #64748b;
+  transition: transform 0.2s ease;
+}
+
+/* Bảng menu sổ xuống của User Profile */
+.userDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 260px;
+  background: #ffffff;
+  border: 1px solid rgba(14, 82, 99, 0.14);
+  border-radius: 16px;
+  box-shadow: 0 18px 40px -4px rgba(10, 61, 74, 0.2), 0 0 0 1px rgba(14, 82, 99, 0.04);
+  padding: 8px;
+  z-index: 200;
+  animation: dropdownPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.userDropdownHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+}
+
+.userDropdownAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #0e5263;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.userDropdownIdentity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.userDropdownName {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userDropdownRole {
+  font-size: 11.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.userDropdownPortal {
+  font-size: 10px;
+  color: #0e5263;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 1px;
+}
+
+.userDropdownDivider {
+  height: 1px;
+  background: rgba(226, 232, 240, 0.8);
+  margin: 6px 4px;
+}
+
+.userDropdownSection {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.userDropdownSectionLabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+  padding: 4px 8px 2px;
+}
+
+.userDropdownLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.userDropdownLink:hover {
+  background: rgba(14, 82, 99, 0.06);
+  color: #0e5263;
+}
+
+.userDropdownLinkActive {
+  background: rgba(14, 82, 99, 0.08) !important;
+  color: #0e5263 !important;
+  font-weight: 600;
+}
+
+.userDropdownLogout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.userDropdownLogout:hover {
+  background: #fef2f2;
+}
+
+/* ── Dải Subnav cuộn ngang trên Tablet / Mobile ── */
+.mobileNavStrip {
+  display: none;
+  overflow-x: auto;
+  gap: 6px;
+  padding: 8px 16px 10px;
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  background: rgba(255, 255, 255, 0.7);
+  scrollbar-width: none;
+}
+
+.mobileNavStrip::-webkit-scrollbar {
+  display: none;
+}
+
+.mobileNavLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mobileNavLinkActive {
+  background: #0e5263 !important;
+  color: #ffffff !important;
+  border-color: #0e5263 !important;
+}
+
+.mobileNavLinkActive svg {
+  color: #f59e0b;
+}
+
+/* ── Khung nội dung chính (Main Content) ── */
+.main {
+  flex: 1;
+  width: 100%;
+}
+
+.contentWrap {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 28px 24px 64px;
+}
+
+/* ── Responsive Queries ── */
+@media (max-width: 1080px) {
+  .desktopNav {
+    display: none;
+  }
+  .mobileNavStrip {
+    display: flex;
+  }
+}
+
+@media (max-width: 640px) {
+  .headerInner {
+    padding: 0 14px;
+    min-height: 58px;
+  }
+  .portalBadge {
+    display: none;
+  }
+  .settingsBtnLabel,
+  .tenantSwitchLabel,
+  .userNameShort {
+    display: none;
+  }
+  .contentWrap {
+    padding: 16px 14px 48px;
+  }
+}
