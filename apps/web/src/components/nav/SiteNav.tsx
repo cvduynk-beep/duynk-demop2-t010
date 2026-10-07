@@ -13,9 +13,7 @@ import styles from "./SiteNav.module.css";
 
 const LINKS = [
   { href: "/", label: "Tìm căn" },
-  { href: "/#quy-trinh", label: "Cách hoạt động" },
   { href: "/booking", label: "Tra cứu lịch xem" },
-  { href: "/admin/dashboard", label: "Quản trị" },
 ];
 
 const ACCOUNT_LINKS = [

@@ -22,6 +22,12 @@ function readStorage(): MockState | null {
     if (!parsed.hostRoles) {
       parsed.hostRoles = {};
     }
+    if (!parsed.hostZones) {
+      parsed.hostZones = {};
+    }
+    if (!parsed.hostStatuses) {
+      parsed.hostStatuses = {};
+    }
     if (!parsed.holdPolicy) {
       parsed.holdPolicy = { defaultHours: 48, byUnit: {} };
     }

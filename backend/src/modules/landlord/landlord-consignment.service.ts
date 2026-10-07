@@ -176,9 +176,13 @@ export class LandlordConsignmentService {
     const meta = readConsignmentMeta(mandate.doorAccessConfig);
     if (!meta) throw new NotFoundException('Hồ sơ ký gửi không có dữ liệu biểu mẫu.');
 
-    const host = await this.prisma.fieldHost.findFirst({
+    let host = await this.prisma.fieldHost.findFirst({
       where: { assignedZone: { contains: mandate.unit.building.zoneName } },
     });
+    if (!host) {
+      // Fallback: Nếu phân khu chưa có Host riêng, giao cho Host khả dụng đầu tiên
+      host = await this.prisma.fieldHost.findFirst();
+    }
     const signedMeta: ConsignmentMeta = {
       ...meta,
       stage: 'awaiting_host',

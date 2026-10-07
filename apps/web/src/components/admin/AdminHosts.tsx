@@ -8,11 +8,13 @@ import {
   CheckCircle2,
   ChevronDown,
   Compass,
+  Lock,
   MapPin,
   RotateCcw,
   Search,
   Shield,
   SlidersHorizontal,
+  Unlock,
   UserCheck,
   UserPlus,
   Users,
@@ -22,8 +24,9 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
+import { setHostSuspended } from "@/lib/mock/actions";
 import { fmtPhone, initials, isValidVnPhone, vnd } from "@/lib/mock/format";
-import { hostEarnings, hostRoles } from "@/lib/mock/selectors";
+import { hostEarnings, hostRoles, hostStatus, hostZones, isHostSuspended } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
 import {
   HOSTS,
@@ -39,6 +42,7 @@ const STATUS: Record<HostStatus, { label: string; badge: string }> = {
   active: { label: "Đang trực", badge: "badge-kelp" },
   busy: { label: "Đang bận", badge: "badge-amber-soft" },
   off_duty: { label: "Nghỉ ca", badge: "badge-plain" },
+  suspended: { label: "Tạm đóng", badge: "badge-plain" },
 };
 
 const mm = (s: number) => `${Math.floor(s / 60)}′${String(s % 60).padStart(2, "0")}″`;
@@ -57,6 +61,8 @@ export function AdminHosts() {
 
   const list = HOSTS.filter((h) => {
     const roles = hostRoles(state, h.id);
+    const zones = hostZones(state, h.id);
+    const hStatus = hostStatus(state, h.id);
     const roleMatch =
       roleFilter === "all" ||
       (roleFilter === "both" && roles.includes("sale") && roles.includes("inspector")) ||
@@ -64,8 +70,8 @@ export function AdminHosts() {
       (roleFilter === "inspector" && roles.includes("inspector") && !roles.includes("sale"));
 
     return (
-      (status === "all" || h.status === status) &&
-      (zone === "all" || h.zones.includes(zone as never)) &&
+      (status === "all" || hStatus === status) &&
+      (zone === "all" || zones.includes(zone as never)) &&
       roleMatch &&
       (q === "" ||
         h.name.toLowerCase().includes(q.toLowerCase()) ||
@@ -74,9 +80,10 @@ export function AdminHosts() {
   });
 
   const totalCount = HOSTS.length;
-  const activeCount = HOSTS.filter((h) => h.status === "active").length;
-  const busyCount = HOSTS.filter((h) => h.status === "busy").length;
-  const offDutyCount = HOSTS.filter((h) => h.status === "off_duty").length;
+  const activeCount = HOSTS.filter((h) => hostStatus(state, h.id) === "active").length;
+  const busyCount = HOSTS.filter((h) => hostStatus(state, h.id) === "busy").length;
+  const offDutyCount = HOSTS.filter((h) => hostStatus(state, h.id) === "off_duty").length;
+  const suspendedCount = HOSTS.filter((h) => hostStatus(state, h.id) === "suspended").length;
   const saleCount = HOSTS.filter((h) => hostRoles(state, h.id).includes("sale")).length;
   const inspectorCount = HOSTS.filter((h) => hostRoles(state, h.id).includes("inspector")).length;
 
@@ -230,6 +237,7 @@ export function AdminHosts() {
                 <option value="active">Đang trực</option>
                 <option value="busy">Đang bận</option>
                 <option value="off_duty">Nghỉ ca</option>
+                <option value="suspended">Tạm đóng</option>
               </select>
               <ChevronDown size={15} className={styles.selectChevron} />
             </div>
@@ -270,6 +278,17 @@ export function AdminHosts() {
               <span className={`${styles.statusDot} ${styles.dotOff}`} />
               Nghỉ ca ({offDutyCount})
             </button>
+            {suspendedCount > 0 && (
+              <button
+                type="button"
+                className={`${styles.pillBtn} ${status === "suspended" ? styles.pillBtnActive : ""}`}
+                onClick={() => setStatus("suspended")}
+                style={{ color: status === "suspended" ? "#991b1b" : "var(--danger)" }}
+              >
+                <Lock size={12} />
+                Tạm đóng ({suspendedCount})
+              </button>
+            )}
           </div>
 
           <div className={styles.filterSummary}>
@@ -309,7 +328,7 @@ export function AdminHosts() {
             {
               key: "zone",
               header: "Phân khu",
-              render: (h) => h.zones.map((z) => zoneById(z).short).join(", "),
+              render: (h) => hostZones(state, h.id).map((z) => zoneById(z).short).join(", "),
             },
             {
               key: "roles",
@@ -329,9 +348,28 @@ export function AdminHosts() {
             {
               key: "status",
               header: "Trạng thái",
-              render: (h) => (
-                <span className={`badge ${STATUS[h.status].badge}`}>{STATUS[h.status].label}</span>
-              ),
+              render: (h) => {
+                const st = hostStatus(state, h.id);
+                if (st === "suspended") {
+                  return (
+                    <span
+                      className="badge"
+                      style={{
+                        background: "var(--danger-050)",
+                        color: "var(--danger)",
+                        border: "1px solid #fecaca",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <Lock size={11} /> Tạm đóng
+                    </span>
+                  );
+                }
+                return <span className={`badge ${STATUS[st].badge}`}>{STATUS[st].label}</span>;
+              },
             },
             {
               key: "tickets",
@@ -379,6 +417,48 @@ export function AdminHosts() {
               header: "Thu nhập tuần",
               align: "right",
               render: (h) => <b>{vnd(hostEarnings(state, h, state.fees).total)}đ</b>,
+            },
+            {
+              key: "actions",
+              header: "Thao tác",
+              render: (h) => {
+                const suspended = isHostSuspended(state, h.id);
+                return (
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${suspended ? "btn-primary" : "btn-quiet"}`}
+                    style={
+                      suspended
+                        ? { padding: "3px 8px", fontSize: 12 }
+                        : { padding: "3px 8px", fontSize: 12, color: "var(--danger)", border: "1px solid #fecaca" }
+                    }
+                    title={suspended ? "Mở lại tài khoản Field Host" : "Tạm đóng tài khoản Field Host"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      const res = setHostSuspended(h.id, !suspended, "Admin");
+                      if (res.ok) {
+                        toast(
+                          !suspended
+                            ? `Đã tạm đóng tài khoản ${h.name}. Toàn bộ quyền đã thu hồi và ngừng đổ căn.`
+                            : `Đã mở lại tài khoản ${h.name}. Quyền hạn và điều phối đã khôi phục.`,
+                          !suspended ? "info" : "success"
+                        );
+                      }
+                    }}
+                  >
+                    {suspended ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <Unlock size={11} /> Mở lại
+                      </span>
+                    ) : (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <Lock size={11} /> Tạm đóng
+                      </span>
+                    )}
+                  </button>
+                );
+              },
             },
           ] satisfies DataTableColumn<FieldHost>[]
         }

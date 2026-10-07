@@ -42,6 +42,10 @@ import {
   unitAddress,
   type Unit,
   type HostRole,
+  type HostStatus,
+  type ZoneId,
+  ZONES,
+  zoneById,
   zoneOfBuilding,
 } from "./units";
 import { inspectionSummary } from "./selectors-inspection";
@@ -96,11 +100,11 @@ const notice = (n: NoticeInput): Notice => ({ id: uid("nt"), at: iso(Date.now())
 
 const zaloToTenant = (phone: string, n: Omit<NoticeInput, "audience" | "channel" | "toKey">): Notice =>
   notice({ audience: "tenant", channel: "zalo", toKey: normalizePhone(phone), ...n });
-const zaloToLandlord = (landlordId: string, n: Omit<NoticeInput, "audience" | "channel" | "toKey">): Notice =>
+export const zaloToLandlord = (landlordId: string, n: Omit<NoticeInput, "audience" | "channel" | "toKey">): Notice =>
   notice({ audience: "landlord", channel: "zalo", toKey: landlordId, ...n });
-const pushToHost = (hostId: string, n: Omit<NoticeInput, "audience" | "channel" | "toKey">): Notice =>
+export const pushToHost = (hostId: string, n: Omit<NoticeInput, "audience" | "channel" | "toKey">): Notice =>
   notice({ audience: "host", channel: "push", toKey: hostId, ...n });
-const toAdmin = (n: Omit<NoticeInput, "audience" | "channel" | "toKey">): Notice =>
+export const toAdmin = (n: Omit<NoticeInput, "audience" | "channel" | "toKey">): Notice =>
   notice({ audience: "admin", channel: "system", ...n });
 
 const slotText = (slot: string, now = Date.now()) => `${fmtTime(slot)} ${dayLabel(slot, now).toLowerCase()}`;
@@ -109,7 +113,7 @@ function patchBooking(state: MockState, id: string, patch: Partial<Booking>): Mo
   return { ...state, bookings: state.bookings.map((b) => (b.id === id ? { ...b, ...patch } : b)) };
 }
 
-function withNotices(state: MockState, ...items: Notice[]): MockState {
+export function withNotices(state: MockState, ...items: Notice[]): MockState {
   return { ...state, notices: [...items, ...state.notices].slice(0, 300) };
 }
 
@@ -1542,6 +1546,93 @@ export function setHostRoles(hostId: string, roles: HostRole[], by: string): { o
       ...s.notices,
     ],
   }));
+  return { ok: true };
+}
+
+export function setHostZones(
+  hostId: string,
+  zones: ZoneId[],
+  by: string
+): { ok: true } | { ok: false; reason: string } {
+  if (!Array.isArray(zones) || zones.length < 1) {
+    return { ok: false, reason: "Field Host phải phụ trách ít nhất một phân khu." };
+  }
+  const allZoneIds: ZoneId[] = ZONES.map((z) => z.id);
+  if (!zones.every((z) => allZoneIds.includes(z))) {
+    return { ok: false, reason: "Phân khu không hợp lệ." };
+  }
+  const unique = Array.from(new Set(zones));
+  if (unique.length !== zones.length) {
+    return { ok: false, reason: "Phân khu bị trùng lặp." };
+  }
+  const host = hostById(hostId);
+  const hostName = host?.name ?? hostId;
+  const zoneNames = unique.map((zid) => zoneById(zid).name).join(", ");
+
+  setMockState((s) => {
+    // Khi được phân quyền theo khu vực nào thì Host tự động kèm cả quyền Thẩm định và quyền Dẫn khách
+    const prevRoles = s.hostRoles[hostId] ?? host?.roles ?? ["sale"];
+    const mergedRoles: HostRole[] = Array.from(new Set([...prevRoles, "sale", "inspector"]));
+
+    return {
+      ...s,
+      hostZones: {
+        ...s.hostZones,
+        [hostId]: unique,
+      },
+      hostRoles: {
+        ...s.hostRoles,
+        [hostId]: mergedRoles,
+      },
+      notices: [
+        toAdmin({
+          tone: "info",
+          title: "Thay đổi phân khu phụ trách",
+          body: `${by} phân quyền khu vực cho ${hostName}: ${zoneNames} (kèm quyền Thẩm định & Dẫn khách).`,
+        }),
+        ...s.notices,
+      ],
+    };
+  });
+  return { ok: true };
+}
+
+export function setHostSuspended(
+  hostId: string,
+  suspended: boolean,
+  by: string
+): { ok: true } | { ok: false; reason: string } {
+  const host = hostById(hostId);
+  if (!host) {
+    return { ok: false, reason: "Không tìm thấy Field Host." };
+  }
+
+  setMockState((s) => {
+    const currentStatus = s.hostStatuses?.[hostId] ?? host.status;
+    const newStatus: HostStatus = suspended
+      ? "suspended"
+      : (currentStatus === "suspended" ? "active" : currentStatus);
+
+    return {
+      ...s,
+      hostStatuses: {
+        ...s.hostStatuses,
+        [hostId]: newStatus,
+      },
+      notices: [
+        toAdmin({
+          tone: suspended ? "alert" : "success",
+          title: suspended ? "Tạm đóng tài khoản Field Host" : "Mở lại tài khoản Field Host",
+          body: `${by} đã ${suspended ? "tạm đóng" : "kích hoạt lại"} tài khoản ${host.name} (${hostId}). ${
+            suspended
+              ? "Toàn bộ quyền hạn đã bị thu hồi và ngừng phân bổ căn về Host này."
+              : "Đã khôi phục quyền hạn và kích hoạt điều phối trở lại."
+          }`,
+        }),
+        ...s.notices,
+      ],
+    };
+  });
   return { ok: true };
 }
 

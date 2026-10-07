@@ -46,7 +46,10 @@ import {
 import { useNow } from "@/lib/useNow";
 import styles from "@/components/consign/Consign.module.css";
 
-const HOST_ID = DEMO_USERS.host.refId!;
+import { hostRoles } from "@/lib/mock/selectors";
+import { useSession } from "@/lib/auth/client";
+
+const DEFAULT_HOST_ID = DEMO_USERS.host.refId!;
 const DECLARED_FIELDS: DeclaredField[] = [
   "identity",
   "layout",
@@ -59,8 +62,14 @@ const GROUPS: InventoryGroup[] = ["I", "II", "III", "IV", "V", "VI", "VII", "VII
 
 export function InspectionForm({ id }: { id: string }) {
   const state = useMock();
+  const session = useSession();
   const now = useNow(10_000);
   const c = consignmentById(state, id);
+
+  const currentHostId = session.user?.pendingHostId || DEFAULT_HOST_ID;
+  const isInspector = hostRoles(state, currentHostId).includes("inspector");
+  // Host được phép mở phiếu nếu được gán c.hostId hoặc c.hostId là currentHostId hoặc Host có quyền inspector
+  const activeHostId = c?.hostId || currentHostId;
 
   // ─── 1. Đối chiếu khai báo ──────────────────────────────────────────────
   const [declared, setDeclared] = useState<
@@ -180,7 +189,8 @@ export function InspectionForm({ id }: { id: string }) {
     return <div className="skeleton" style={{ height: 420 }} />;
   }
 
-  if (!c || c.hostId !== HOST_ID) {
+  const canAccess = c && (c.hostId === currentHostId || (isInspector && (!c.hostId || c.hostId === DEFAULT_HOST_ID || c.hostId === activeHostId)));
+  if (!c || !canAccess) {
     notFound();
   }
 
@@ -498,7 +508,7 @@ export function InspectionForm({ id }: { id: string }) {
       note: finalNote || undefined,
     };
 
-    const res = submitInspection(c.id, HOST_ID, draft);
+    const res = submitInspection(c.id, activeHostId, draft);
     if (!res.ok) {
       setError(res.reason);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -538,7 +548,7 @@ export function InspectionForm({ id }: { id: string }) {
               type="button"
               className="btn btn-primary"
               onClick={() => {
-                const res = hostAcceptInspection(c.id, HOST_ID);
+                const res = hostAcceptInspection(c.id, activeHostId);
                 if (res.ok) {
                   toast("Đã nhận. Bạn có thể mở phiếu thẩm định ngay.", "success");
                 } else {

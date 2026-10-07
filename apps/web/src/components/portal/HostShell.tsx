@@ -4,9 +4,9 @@ import { BookOpenText, ClipboardCheck, Radio, UserRound, Wallet } from "lucide-r
 import { loginPathFor } from "@/lib/auth/portals";
 import { useSession } from "@/lib/auth/client";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { hostRoles } from "@/lib/mock/selectors";
+import { hostRoles, hostZones } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
-import type { HostRole } from "@/lib/mock/units";
+import { zoneOfBuilding, type HostRole } from "@/lib/mock/units";
 import { HostSideTools } from "@/components/host/HostSideTools";
 import { PortalShell, type PortalNavItem } from "./PortalShell";
 
@@ -54,11 +54,20 @@ export function HostShell({ children }: { children: React.ReactNode }) {
   const u = DEMO_USERS.host;
   const hostId = u.refId!;
   const roles = hostRoles(state, hostId);
+  const myZones = hostZones(state, hostId);
+  const isInspector = roles.includes("inspector");
 
   const pending = state.bookings.filter((b) => b.hostId === hostId && b.status === "pending").length;
-  const awaitingInspect = state.consignments.filter(
-    (c) => c.hostId === hostId && c.status === "awaiting_host",
-  ).length;
+  const awaitingInspect = state.consignments.filter((c) => {
+    if (c.status !== "awaiting_host") return false;
+    if (c.hostId === hostId) return true;
+    if (isInspector) {
+      const z = zoneOfBuilding(c.building);
+      if (z && myZones.includes(z.id)) return true;
+      if (!c.hostId || c.hostId === "H01") return true;
+    }
+    return false;
+  }).length;
 
   const roleText = roles.map((r) => (r === "sale" ? "Sale" : "Thẩm định")).join(" + ");
   const userMeta = `Field Host · ${roleText || "Chưa gán vai"}`;

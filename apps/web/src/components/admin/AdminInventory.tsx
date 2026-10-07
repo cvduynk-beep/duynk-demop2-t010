@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, KeyRound, Smartphone, Timer, X } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
@@ -17,11 +17,19 @@ import { unitDisplayStatus } from "@/lib/mock/selectors";
 import { inspectionSummary, isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { useMock } from "@/lib/mock/store";
 import type { Consignment } from "@/lib/mock/types";
-import { FURNISHING_LABEL, LAYOUT_LABEL, UNITS, ZONES, hostById, hostForUnit, landlordById, unitAddress, unitById, zoneById, type Unit, type UnitDisplayStatus } from "@/lib/mock/units";
+import { FURNISHING_LABEL, LAYOUT_LABEL, UNITS, ZONES, hostById, hostForUnit, landlordById, unitAddress, unitById, zoneById, type Unit, type UnitDisplayStatus, type LayoutKind } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
 import styles from "./Admin.module.css";
 
 type Tab = "units" | "requests" | "exit";
+
+function parseLayoutKind(layout: string): LayoutKind {
+  if (layout === "STUDIO" || layout === "Studio") return "Studio";
+  if (layout === "ONE_BED_PLUS" || layout === "1PN") return "1PN";
+  if (layout === "TWO_BED_ONE_BATH" || layout === "TWO_BED_TWO_BATH" || layout === "2PN") return "2PN";
+  if (layout === "THREE_BED" || layout === "3PN") return "3PN";
+  return "2PN";
+}
 
 export function AdminInventory({ initialTab }: { initialTab: Tab }) {
   const state = useMock();
@@ -33,11 +41,71 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
   const [rejecting, setRejecting] = useState<Consignment | null>(null);
   const [note, setNote] = useState("Ảnh hiện trạng chưa rõ, cần bổ sung");
   const [rejectError, setRejectError] = useState("");
+  const [dbItems, setDbItems] = useState<Consignment[]>([]);
+
+  // Tự động kéo các căn đã ký gửi thực tế từ Backend Database về
+  useEffect(() => {
+    let unmounted = false;
+    async function loadDbConsignments() {
+      try {
+        const res = await fetch("/api/v1/host/inspections", { credentials: "same-origin" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data?.data;
+        if (!Array.isArray(list) || unmounted) return;
+
+        const mapped: Consignment[] = list.map((item: any) => {
+          const parts = (item.unitCode || "").split("-");
+          const doorPart = parts[2] || "";
+          const doorNum = doorPart.replace(new RegExp(`^${item.floor}`), "") || "01";
+          return {
+            id: item.consignmentId || item.id,
+            landlordId: item.landlordName || "Chủ nhà Ocean Park",
+            building: item.building,
+            floor: item.floor,
+            door: doorNum.padStart(2, "0"),
+            layout: parseLayoutKind(item.layout),
+            areaM2: item.carpetAreaM2 || 45,
+            askRent: item.askRent || 6000000,
+            suggestedDeposit: item.askRent || 6000000,
+            leaseTerm: "long",
+            furnished: true,
+            locks: ["smart"],
+            auditByHost: true,
+            status: (item.status as any) || "awaiting_host",
+            createdAt: item.createdAt || new Date().toISOString(),
+            signedAt: item.createdAt || new Date().toISOString(),
+            hostId: item.hostId || undefined,
+            inspectDueAt: new Date(new Date(item.createdAt || Date.now()).getTime() + 48 * 3600000).toISOString(),
+            furnishing: "full",
+            lock: "smart",
+            items: [],
+          };
+        });
+
+        if (!unmounted) setDbItems(mapped);
+      } catch {
+        // ignore offline
+      }
+    }
+    loadDbConsignments();
+    return () => {
+      unmounted = true;
+    };
+  }, []);
 
   if (!state.ready || !now) return <div className="skeleton" style={{ height: 360 }} />;
 
-  const reviewing = state.consignments.filter((c) => c.status === "reviewing");
-  const inspecting = state.consignments.filter((c) => c.status === "awaiting_host" || c.status === "inspecting");
+  // Hợp nhất dữ liệu mock và dữ liệu thực từ Database (không trùng id)
+  const allConsignments = [...state.consignments];
+  for (const dbItem of dbItems) {
+    if (!allConsignments.some((c) => c.id === dbItem.id || (c.building === dbItem.building && c.floor === dbItem.floor && c.door === dbItem.door))) {
+      allConsignments.push(dbItem);
+    }
+  }
+
+  const reviewing = allConsignments.filter((c) => c.status === "reviewing");
+  const inspecting = allConsignments.filter((c) => c.status === "awaiting_host" || c.status === "inspecting");
   const overdueCount = inspecting.filter((c) => isInspectOverdue(c, now)).length;
   const exiting = Object.values(state.mandates).filter((m) => m.status === "exiting");
   const units = UNITS.filter((u) => (zone === "all" || u.zoneId === zone) && (status === "all" || unitDisplayStatus(state, u) === status) && (lock === "all" || u.lock === lock));
@@ -51,7 +119,7 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
           Rổ hàng ({UNITS.length})
         </button>
         <button type="button" role="tab" aria-selected={tab === "requests"} onClick={() => setTab("requests")}>
-          Yêu cầu ký gửi {reviewing.length > 0 && <i>{reviewing.length}</i>}
+          Yêu cầu ký gửi {allConsignments.length > 0 && <i>{allConsignments.length}</i>}
         </button>
         <button type="button" role="tab" aria-selected={tab === "exit"} onClick={() => setTab("exit")}>
           Thoát uỷ quyền 15 ngày {exiting.length > 0 && <i>{exiting.length}</i>}
@@ -172,9 +240,9 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
             <span className="muted small">Host kiểm tra thực tế trong 48h trước khi Admin chốt.</span>
           </div>
 
-          {state.consignments.length === 0 && <div className={styles.empty}>Chưa có yêu cầu ký gửi.</div>}
+          {allConsignments.length === 0 && <div className={styles.empty}>Chưa có yêu cầu ký gửi.</div>}
           <div className={styles.reqs}>
-            {state.consignments.map((c) => {
+            {allConsignments.map((c) => {
               const summary = c.report ? inspectionSummary(c.report) : null;
               const host = c.hostId ? hostById(c.hostId) : null;
               return (

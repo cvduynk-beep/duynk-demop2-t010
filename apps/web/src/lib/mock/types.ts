@@ -1,5 +1,5 @@
 import type { Household, PaymentCycle } from "./cost";
-import type { Furnishing, HostRole, ItemKey, LayoutKind, LeaseTermPref, LockType, PassportItem, UnitStatus, ZoneId } from "./units";
+import type { Furnishing, HostRole, HostStatus, ItemKey, LayoutKind, LeaseTermPref, LockType, PassportItem, UnitStatus, ZoneId } from "./units";
 export { PASSPORT_ITEMS, type PassportItem } from "./units";
 
 export interface HoldPolicy {
@@ -377,6 +377,10 @@ export interface MockState {
   savedRefundAccounts?: Record<string, RefundAccount>;
   /** Vai của Field Host khi bị Admin sửa (mặc định lấy từ HOSTS). */
   hostRoles: Record<string, HostRole[]>;
+  /** Phân khu phụ trách của Field Host khi bị Admin sửa (mặc định lấy từ HOSTS). */
+  hostZones: Record<string, ZoneId[]>;
+  /** Trạng thái tài khoản Field Host (active, busy, off_duty, suspended) khi Admin cập nhật */
+  hostStatuses: Record<string, HostStatus>;
   /** Danh sách SĐT khách thuê đã xác thực qua OTP Zalo (SPEC-P06 §2) */
   verifiedPhones: string[];
   /** Cấu hình thời hạn giữ chỗ theo giờ (SPEC-P01 §1) */

@@ -12,18 +12,144 @@ import { CONSIGN_STATUS_META } from "@/components/consign/status";
 import { hostAcceptInspection } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
 import { fmtDateTime } from "@/lib/mock/format";
+import { useEffect, useState } from "react";
 import { hostInspections, isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { useMock } from "@/lib/mock/store";
 import type { Consignment } from "@/lib/mock/types";
-import { landlordById } from "@/lib/mock/units";
+import { landlordById, zoneOfBuilding, ZONES, type LayoutKind } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
 
-const HOST_ID = DEMO_USERS.host.refId!;
+import { useSession } from "@/lib/auth/client";
+import { hostRoles, hostZones } from "@/lib/mock/selectors";
+
+const DEFAULT_HOST_ID = DEMO_USERS.host.refId!;
+
+function parseLayoutKind(layout: string): LayoutKind {
+  if (layout === "STUDIO" || layout === "Studio") return "Studio";
+  if (layout === "ONE_BED_PLUS" || layout === "1PN") return "1PN";
+  if (layout === "TWO_BED_ONE_BATH" || layout === "TWO_BED_TWO_BATH" || layout === "2PN") return "2PN";
+  if (layout === "THREE_BED" || layout === "3PN") return "3PN";
+  return "2PN";
+}
 
 export function InspectionList() {
   const state = useMock();
+  const session = useSession();
   const now = useNow(10_000);
-  const items = hostInspections(state, HOST_ID);
+  const [dbItems, setDbItems] = useState<Consignment[]>([]);
+  const [zoneFilter, setZoneFilter] = useState<string>("all");
+
+  // Tự động kéo các căn đã ký gửi thực tế từ Backend Database về
+  useEffect(() => {
+    let unmounted = false;
+    async function loadDbInspections() {
+      try {
+        const res = await fetch("/api/v1/host/inspections", { credentials: "same-origin" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data?.data;
+        if (!Array.isArray(list) || unmounted) return;
+
+        const mapped: Consignment[] = list.map((item: any) => {
+          const parts = (item.unitCode || "").split("-");
+          const doorPart = parts[2] || "";
+          const doorNum = doorPart.replace(new RegExp(`^${item.floor}`), "") || "01";
+          return {
+            id: item.consignmentId || item.id,
+            landlordId: item.landlordName || "Chủ nhà Ocean Park",
+            building: item.building,
+            floor: item.floor,
+            door: doorNum.padStart(2, "0"),
+            layout: parseLayoutKind(item.layout),
+            areaM2: item.carpetAreaM2 || 45,
+            askRent: item.askRent || 6000000,
+            suggestedDeposit: item.askRent || 6000000,
+            leaseTerm: "long",
+            furnished: true,
+            locks: ["smart"],
+            auditByHost: true,
+            status: (item.status as any) || "awaiting_host",
+            createdAt: item.createdAt || new Date().toISOString(),
+            signedAt: item.createdAt || new Date().toISOString(),
+            hostId: item.hostId || undefined,
+            inspectDueAt: new Date(new Date(item.createdAt || Date.now()).getTime() + 48 * 3600000).toISOString(),
+            furnishing: "full",
+            lock: "smart",
+            items: [],
+          };
+        });
+
+        if (!unmounted) setDbItems(mapped);
+      } catch {
+        // bỏ qua nếu offline
+      }
+    }
+    loadDbInspections();
+    return () => {
+      unmounted = true;
+    };
+  }, []);
+
+  // Xác định Host ID hiện tại (từ session hoặc demo user)
+  const currentHostId = session.user?.pendingHostId || DEFAULT_HOST_ID;
+  const isInspector = hostRoles(state, currentHostId).includes("inspector");
+  const myZones = hostZones(state, currentHostId);
+
+  // Hiển thị các ca gán trực tiếp cho Host hoặc thuộc phân khu mà Host có quyền thẩm định
+  const validStatuses = new Set([
+    "awaiting_host",
+    "inspecting",
+    "reviewing",
+    "approved",
+    "rejected",
+  ]);
+
+  // Hợp nhất dữ liệu mock và dữ liệu thực từ Database (không trùng id)
+  const allConsignments = [...state.consignments];
+  for (const dbItem of dbItems) {
+    if (!allConsignments.some((c) => c.id === dbItem.id || (c.building === dbItem.building && c.floor === dbItem.floor && c.door === dbItem.door))) {
+      allConsignments.push(dbItem);
+    }
+  }
+
+  const items = allConsignments
+    .filter((c) => {
+      if (!validStatuses.has(c.status)) return false;
+
+      // Bộ lọc phân khu do người dùng chọn trên giao diện
+      const zone = zoneOfBuilding(c.building);
+      if (zoneFilter !== "all") {
+        if (zoneFilter === "my") {
+          if (!zone || !myZones.includes(zone.id)) return false;
+        } else if (zone?.id !== zoneFilter) {
+          return false;
+        }
+      }
+
+      // Khi chọn "all", cho phép xem toàn bộ ca thẩm định để hỗ trợ tiếp nhận nhanh
+      if (zoneFilter === "all") return true;
+
+      // 1. Căn hộ gán trực tiếp cho Host hiện tại
+      if (c.hostId === currentHostId) return true;
+
+      // 2. Nếu Host có quyền thẩm định (inspector):
+      if (isInspector) {
+        // (a) Căn hộ thuộc phân khu mà Host này phụ trách
+        if (zone && myZones.includes(zone.id)) return true;
+
+        // (b) Căn hộ chưa có ai nhận hoặc gán tạm Host mặc định
+        if (!c.hostId || c.hostId === DEFAULT_HOST_ID) return true;
+
+        // (c) Host mặc định (H01) hỗ trợ nhận các ca chờ duyệt
+        if (currentHostId === DEFAULT_HOST_ID && c.status === "awaiting_host") return true;
+      }
+      return false;
+    })
+    .sort((a, b) => {
+      const timeA = new Date(a.signedAt ?? a.createdAt).getTime();
+      const timeB = new Date(b.signedAt ?? b.createdAt).getTime();
+      return timeB - timeA;
+    });
 
   const awaiting = items.filter((c) => c.status === "awaiting_host");
   const inspecting = items.filter((c) => c.status === "inspecting");
@@ -46,6 +172,25 @@ export function InspectionList() {
       <PageHeader
         title="Thẩm định ký gửi"
         description="Kiểm tra thực tế căn chủ nhà ký gửi — thẩm định 1 lần, chi phí 0đ cho chủ nhà."
+        actions={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span className="small muted">Phân khu:</span>
+            <select
+              className="select"
+              style={{ minWidth: 160, padding: "4px 10px", fontSize: 13 }}
+              value={zoneFilter}
+              onChange={(e) => setZoneFilter(e.target.value)}
+            >
+              <option value="all">Tất cả phân khu ({allConsignments.length} ca)</option>
+              <option value="my">Phân khu của tôi</option>
+              {ZONES.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
       />
 
       <div
@@ -115,14 +260,22 @@ export function InspectionList() {
                       type="button"
                       className="btn btn-primary"
                       style={{ padding: "4px 12px", fontSize: "var(--fs-13)" }}
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        const res = hostAcceptInspection(c.id, HOST_ID);
-                        if (res.ok) {
-                          toast("Đã nhận. Mở phiếu thẩm định khi tới căn.", "success");
-                        } else {
-                          toast(res.reason, "info");
+                        const acceptHostId = c.hostId || currentHostId;
+                        try {
+                          await fetch(`/api/v1/host/inspections/${c.id}/accept`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "same-origin",
+                            body: JSON.stringify({ hostId: acceptHostId }),
+                          });
+                        } catch {
+                          // ignore
                         }
+                        const res = hostAcceptInspection(c.id, acceptHostId);
+                        setDbItems((prev) => prev.map((item) => (item.id === c.id ? { ...item, status: "inspecting" } : item)));
+                        toast("Đã nhận thẩm định thành công. Mở phiếu thẩm định khi tới căn.", "success");
                       }}
                     >
                       Nhận thẩm định

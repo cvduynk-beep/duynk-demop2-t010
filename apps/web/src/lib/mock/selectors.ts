@@ -10,6 +10,7 @@ import {
   zoneOfBuilding,
   type FieldHost,
   type HostRole,
+  type HostStatus,
   type Unit,
   type UnitDisplayStatus,
   type UnitStatus,
@@ -123,12 +124,36 @@ export function unitDisplayStatus(state: MockState, unit: Unit): UnitDisplayStat
   return hasOpen ? "viewing" : "available";
 }
 
+export function hostStatus(state: MockState, hostId: string): HostStatus {
+  if (state.hostStatuses && state.hostStatuses[hostId]) {
+    return state.hostStatuses[hostId];
+  }
+  const host = hostById(hostId);
+  return host?.status ?? "active";
+}
+
+export function isHostSuspended(state: MockState, hostId: string): boolean {
+  return hostStatus(state, hostId) === "suspended";
+}
+
 export function hostRoles(state: MockState, hostId: string): HostRole[] {
+  // Khi bị tạm đóng, Field Host mất tất cả các quyền!
+  if (isHostSuspended(state, hostId)) {
+    return [];
+  }
   if (state.hostRoles && state.hostRoles[hostId]) {
     return state.hostRoles[hostId];
   }
   const host = hostById(hostId);
   return host?.roles ?? ["sale"];
+}
+
+export function hostZones(state: MockState, hostId: string): ZoneId[] {
+  if (state.hostZones && state.hostZones[hostId]) {
+    return state.hostZones[hostId];
+  }
+  const host = hostById(hostId);
+  return host?.zones ?? [];
 }
 
 export function pickHostFor(
@@ -137,31 +162,41 @@ export function pickHostFor(
   role: HostRole
 ): { hostId: string; fallback: boolean } {
   const z = zoneById(zoneId);
-  if (z && hostRoles(state, z.hostId).includes(role)) {
+  if (
+    z &&
+    !isHostSuspended(state, z.hostId) &&
+    hostZones(state, z.hostId).includes(zoneId) &&
+    hostRoles(state, z.hostId).includes(role)
+  ) {
     return { hostId: z.hostId, fallback: false };
   }
 
-  // Lấy Host đầu tiên trong HOSTS có zones chứa zoneId, có role và status !== "off_duty"
+  // Lấy Host đầu tiên trong HOSTS có zones chứa zoneId, có role và không off_duty, không suspended
   const candidateOnDuty = HOSTS.find(
     (h) =>
-      h.zones.includes(zoneId) &&
-      hostRoles(state, h.id).includes(role) &&
-      h.status !== "off_duty"
+      !isHostSuspended(state, h.id) &&
+      hostStatus(state, h.id) !== "off_duty" &&
+      hostZones(state, h.id).includes(zoneId) &&
+      hostRoles(state, h.id).includes(role)
   );
   if (candidateOnDuty) {
     return { hostId: candidateOnDuty.id, fallback: false };
   }
 
-  // Bỏ điều kiện status
+  // Bỏ điều kiện off_duty, nhưng vẫn LOẠI BỎ suspended
   const candidateAny = HOSTS.find(
-    (h) => h.zones.includes(zoneId) && hostRoles(state, h.id).includes(role)
+    (h) =>
+      !isHostSuspended(state, h.id) &&
+      hostZones(state, h.id).includes(zoneId) &&
+      hostRoles(state, h.id).includes(role)
   );
   if (candidateAny) {
     return { hostId: candidateAny.id, fallback: false };
   }
 
-  // Không có ai => fallback Host mặc định
-  return { hostId: z ? z.hostId : "H01", fallback: true };
+  // Không có ai => fallback Host mặc định còn hoạt động (không bị suspended)
+  const defaultHost = HOSTS.find((h) => !isHostSuspended(state, h.id));
+  return { hostId: defaultHost ? defaultHost.id : (z ? z.hostId : "H01"), fallback: true };
 }
 
 /** Số khách đang quan tâm căn (≥3 → gắn cờ HOT). */
@@ -205,9 +240,10 @@ export function freeAt(state: MockState, hostId: string, slotIso: string, ignore
 
 export function saleCandidates(state: MockState, zoneId: ZoneId | null): FieldHost[] {
   return HOSTS.filter((h) => {
-    if (h.status === "off_duty") return false;
+    const st = hostStatus(state, h.id);
+    if (st === "off_duty" || st === "suspended") return false;
     if (!hostRoles(state, h.id).includes("sale")) return false;
-    if (zoneId !== null && !h.zones.includes(zoneId)) return false;
+    if (zoneId !== null && !hostZones(state, h.id).includes(zoneId)) return false;
     return true;
   }).sort((a, b) => {
     if (b.rating !== a.rating) return b.rating - a.rating;
@@ -266,9 +302,16 @@ export function dispatchSale(
     };
   }
 
-  // 4. không ai ⇒ { hostId: top?.id ?? zone?.hostId ?? "H01", state:"open", tier:"wide_pool", offeredTo:[], escalated:true }
+  // 4. không ai ⇒ chọn host còn hoạt động (không bị suspended)
+  const defaultActive = HOSTS.find((h) => !isHostSuspended(state, h.id))?.id ?? "H01";
+  const fallbackHost = (top && !isHostSuspended(state, top.id))
+    ? top.id
+    : (zone && !isHostSuspended(state, zone.hostId))
+    ? zone.hostId
+    : defaultActive;
+
   return {
-    hostId: top?.id ?? zone?.hostId ?? "H01",
+    hostId: fallbackHost,
     state: "open",
     tier: "wide_pool",
     offeredTo: [],

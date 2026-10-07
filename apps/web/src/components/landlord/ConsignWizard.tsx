@@ -23,8 +23,13 @@ import { vnd } from "@/lib/mock/format";
 import { errorText, landlordApi } from "@/lib/landlord/api";
 import { LAYOUT_LABEL, LEASE_TERM_LABEL } from "@/lib/landlord/labels";
 import type { BuildingOption, Consignment, LayoutKind, LeaseTermPref, LockKind } from "@/lib/landlord/types";
+import type { Consignment as MockConsignment } from "@/lib/mock/types";
 import { queries, type QueryDef } from "@/lib/landlord/queries";
 import { invalidateLandlordData, useLandlordQuery } from "@/lib/landlord/useLandlordQuery";
+import { getMockState, setMockState } from "@/lib/mock/store";
+import { pickHostFor } from "@/lib/mock/selectors";
+import { HOSTS, hostById, zoneOfBuilding } from "@/lib/mock/units";
+import { pushToHost, toAdmin, withNotices, zaloToLandlord } from "@/lib/mock/actions";
 import { ConsignOtpSign } from "./ConsignOtpSign";
 import { PhotoPicker } from "./PhotoPicker";
 import { QueryView } from "./QueryView";
@@ -486,6 +491,64 @@ function Wizard({
     setCreatedId(c.id);
     setDone(true);
     invalidateLandlordData();
+
+    // Đồng bộ hồ sơ vào MockState cho màn hình Field Host & Admin
+    try {
+      const nowMs = Date.now();
+      const zone = zoneOfBuilding(f.building);
+      const state = getMockState();
+      const picked = zone ? pickHostFor(state, zone.id, "inspector") : { hostId: "H01", fallback: false };
+      const assignedHostId = (c.hostId && HOSTS.some((h) => h.id === c.hostId)) ? c.hostId : picked.hostId;
+      const hostName = hostById(assignedHostId)?.name ?? assignedHostId;
+      const can = `${f.building} · Tầng ${f.floor} · Căn ${f.door.padStart(2, "0")}`;
+
+      const mockConsign: MockConsignment = {
+        id: c.id,
+        landlordId: (c as { landlordId?: string }).landlordId || "L1",
+        building: f.building,
+        floor: Number(f.floor),
+        door: f.door.padStart(2, "0"),
+        layout: f.layout,
+        areaM2: area,
+        askRent: rent,
+        suggestedDeposit: deposit || rent,
+        leaseTerm: f.leaseTerm,
+        furnished: Boolean(f.furnished),
+        locks: f.locks,
+        auditByHost: true,
+        status: "awaiting_host",
+        createdAt: c.createdAt || new Date(nowMs).toISOString(),
+        signedAt: c.signedAt || new Date(nowMs).toISOString(),
+        hostId: assignedHostId,
+        inspectDueAt: c.inspectDueAt || new Date(nowMs + 48 * 3_600_000).toISOString(),
+        furnishing: f.furnished ? "full" : "empty",
+        lock: (f.locks[0] as "smart" | "physical") || "smart",
+        items: [],
+      };
+
+      setMockState((s) => {
+        const exists = s.consignments.some((item) => item.id === c.id);
+        const updatedList: MockConsignment[] = exists
+          ? s.consignments.map((item) => (item.id === c.id ? { ...item, ...mockConsign } : item))
+          : [mockConsign, ...s.consignments];
+
+        return withNotices(
+          { ...s, consignments: updatedList },
+          pushToHost(assignedHostId, {
+            tone: "info",
+            title: "Ticket thẩm định ký gửi mới",
+            body: `${can} (${f.layout}, ${area} m²), hạn 48h.`,
+          }),
+          toAdmin({
+            tone: "info",
+            title: "Yêu cầu ký gửi mới",
+            body: `${can} giao chuyên viên thẩm định ${hostName}.`,
+          }),
+        );
+      });
+    } catch {
+      // bỏ qua nếu lỗi đồng bộ mock
+    }
   };
 
   if (done) {

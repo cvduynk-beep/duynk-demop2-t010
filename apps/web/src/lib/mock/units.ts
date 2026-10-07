@@ -2275,7 +2275,7 @@ export const LANDLORDS: Landlord[] = [
 
 export const landlordById = (id: string) => LANDLORDS.find((l) => l.id === id);
 
-export type HostStatus = "active" | "busy" | "off_duty";
+export type HostStatus = "active" | "busy" | "off_duty" | "suspended";
 
 export interface FieldHost {
   id: string;
