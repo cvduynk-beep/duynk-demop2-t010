@@ -14,7 +14,7 @@ import { DEMO_USERS } from "@/lib/mock/actors";
 import { fmtDateTime } from "@/lib/mock/format";
 import { useEffect, useState } from "react";
 import { hostInspections, isInspectOverdue } from "@/lib/mock/selectors-inspection";
-import { useMock } from "@/lib/mock/store";
+import { setMockState, useMock } from "@/lib/mock/store";
 import type { Consignment } from "@/lib/mock/types";
 import { landlordById, zoneOfBuilding, ZONES, type LayoutKind } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
@@ -79,7 +79,21 @@ export function InspectionList() {
           };
         });
 
-        if (!unmounted) setDbItems(mapped);
+        if (!unmounted) {
+          setDbItems(mapped);
+          setMockState((s) => {
+            const nextConsignments = [...s.consignments];
+            for (const m of mapped) {
+              const idx = nextConsignments.findIndex((item) => item.id === m.id);
+              if (idx >= 0) {
+                nextConsignments[idx] = { ...nextConsignments[idx], ...m };
+              } else {
+                nextConsignments.push(m);
+              }
+            }
+            return { ...s, consignments: nextConsignments };
+          });
+        }
       } catch {
         // bỏ qua nếu offline
       }

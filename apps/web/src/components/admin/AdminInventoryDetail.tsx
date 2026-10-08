@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Check, X } from "lucide-react";
@@ -24,9 +24,9 @@ import { unitDisplayStatus } from "@/lib/mock/selectors";
 import { consignmentById, unitBookings } from "@/lib/mock/selectors-admin";
 import { isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { viewingLog, type ViewingLogEntry } from "@/lib/mock/selectors-viewing";
-import { useMock } from "@/lib/mock/store";
+import { setMockState, useMock } from "@/lib/mock/store";
 import type { Booking, Consignment, InspectionReport } from "@/lib/mock/types";
-import { FURNISHING_LABEL, LAYOUT_LABEL, hostById, hostForUnit, landlordById, unitAddress, unitById, zoneById, type UnitStatus } from "@/lib/mock/units";
+import { FURNISHING_LABEL, LAYOUT_LABEL, hostById, hostForUnit, landlordById, unitAddress, unitById, zoneById, type LayoutKind, type UnitStatus } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
 import styles from "./Admin.module.css";
 
@@ -44,6 +44,15 @@ const OUTCOME_LABEL: Record<ViewingLogEntry["outcome"], { label: string; badge: 
   cancelled: { label: "Đã huỷ", badge: "badge-plain" },
 };
 
+function parseLayoutKind(layout: string | undefined): LayoutKind {
+  if (!layout) return "2PN";
+  if (layout === "STUDIO" || layout === "Studio") return "Studio";
+  if (layout === "ONE_BED_PLUS" || layout === "1PN") return "1PN";
+  if (layout === "TWO_BED_ONE_BATH" || layout === "TWO_BED_TWO_BATH" || layout === "2PN") return "2PN";
+  if (layout === "THREE_BED" || layout === "3PN") return "3PN";
+  return "2PN";
+}
+
 /** Hồ sơ duyệt một căn ký gửi — id có thể là consignment id (chưa có Unit) hoặc unit id (đã lên rổ hàng). */
 export function AdminInventoryDetail({ id }: { id: string }) {
   const state = useMock();
@@ -52,10 +61,94 @@ export function AdminInventoryDetail({ id }: { id: string }) {
   const [note, setNote] = useState("Ảnh hiện trạng chưa rõ hoặc chất lượng chưa đạt yêu cầu");
   const [rejectError, setRejectError] = useState("");
 
-  if (!state.ready || !now) return <div className="skeleton" style={{ height: 420 }} />;
-
   const unit = unitById(id);
-  const consignment = unit ? undefined : consignmentById(state, id);
+  const existingConsignment = unit ? undefined : consignmentById(state, id);
+  const [dbConsignment, setDbConsignment] = useState<Consignment | null>(null);
+  const [loadingDb, setLoadingDb] = useState<boolean>(() => !unit && !existingConsignment);
+
+  const consignment = existingConsignment || dbConsignment;
+
+  useEffect(() => {
+    if (unit || existingConsignment) {
+      setLoadingDb(false);
+      return;
+    }
+    let unmounted = false;
+    async function fetchConsignment() {
+      try {
+        const res = await fetch("/api/v1/host/inspections", { credentials: "same-origin" });
+        if (!res.ok) {
+          if (!unmounted) setLoadingDb(false);
+          return;
+        }
+        const data = await res.json();
+        if (!Array.isArray(data)) {
+          if (!unmounted) setLoadingDb(false);
+          return;
+        }
+        const item = data.find(
+          (x: any) =>
+            x.consignmentId === id ||
+            x.unitId === id ||
+            x.id === id ||
+            x.unitCode === id,
+        );
+        if (item && !unmounted) {
+          const code = item.unitCode || "";
+          const parts = code.split("-");
+          const doorRaw = parts[2] || "01";
+          const doorNum = doorRaw.replace(/^[A-Za-z]+/, "") || "01";
+          const mapped: Consignment = {
+            id: item.consignmentId || item.id || id,
+            landlordId: item.landlordId || "L01",
+            building: item.building || "S1.02",
+            floor: item.floor || 12,
+            door: doorNum.padStart(2, "0"),
+            layout: parseLayoutKind(item.layout),
+            areaM2: item.carpetAreaM2 || 45,
+            askRent: item.askRent || 6000000,
+            suggestedDeposit: item.askRent || 6000000,
+            leaseTerm: "long",
+            furnished: true,
+            locks: ["smart"],
+            auditByHost: true,
+            status: (item.status as any) || "awaiting_host",
+            createdAt: item.createdAt || new Date().toISOString(),
+            signedAt: item.createdAt || new Date().toISOString(),
+            hostId: item.hostId || undefined,
+            inspectDueAt: new Date(
+              new Date(item.createdAt || Date.now()).getTime() + 48 * 3600000,
+            ).toISOString(),
+            furnishing: "full",
+            lock: "smart",
+            items: [],
+          };
+          setDbConsignment(mapped);
+          setMockState((s) => {
+            const next = [...s.consignments];
+            const idx = next.findIndex((x) => x.id === mapped.id);
+            if (idx >= 0) {
+              next[idx] = { ...next[idx], ...mapped };
+            } else {
+              next.push(mapped);
+            }
+            return { ...s, consignments: next };
+          });
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!unmounted) setLoadingDb(false);
+      }
+    }
+    fetchConsignment();
+    return () => {
+      unmounted = true;
+    };
+  }, [id, unit, existingConsignment]);
+
+  if (!state.ready || !now || loadingDb) return <div className="skeleton" style={{ height: 420 }} />;
+
   if (!unit && !consignment) notFound();
 
   if (unit) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { notFound } from "next/navigation";
 import { Camera, Check, ChevronDown, ChevronUp, Clock, Maximize2, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -21,7 +21,7 @@ import {
   LOW_CONDITION,
 } from "@/lib/mock/selectors-inspection";
 import { consignmentById } from "@/lib/mock/selectors-admin";
-import { useMock } from "@/lib/mock/store";
+import { setMockState, useMock } from "@/lib/mock/store";
 import type {
   Consignment,
   DeclaredField,
@@ -41,6 +41,7 @@ import {
   landlordById,
   PASSPORT_ITEMS,
   type Furnishing,
+  type LayoutKind,
   type PassportItem,
 } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
@@ -60,11 +61,108 @@ const DECLARED_FIELDS: DeclaredField[] = [
 
 const GROUPS: InventoryGroup[] = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 
+function parseLayoutKind(layout: string | undefined): LayoutKind {
+  if (!layout) return "2PN";
+  if (layout === "STUDIO" || layout === "Studio") return "Studio";
+  if (layout === "ONE_BED_PLUS" || layout === "1PN") return "1PN";
+  if (layout === "TWO_BED_ONE_BATH" || layout === "TWO_BED_TWO_BATH" || layout === "2PN") return "2PN";
+  if (layout === "THREE_BED" || layout === "3PN") return "3PN";
+  return "2PN";
+}
+
 export function InspectionForm({ id }: { id: string }) {
   const state = useMock();
   const session = useSession();
   const now = useNow(10_000);
-  const c = consignmentById(state, id);
+  const existingConsignment = consignmentById(state, id);
+  const [dbConsignment, setDbConsignment] = useState<Consignment | null>(null);
+  const [loadingDb, setLoadingDb] = useState<boolean>(() => !existingConsignment);
+
+  const c = existingConsignment || dbConsignment;
+
+  // Tự động tải từ Backend DB nếu căn hộ chưa có trong mock state
+  useEffect(() => {
+    if (existingConsignment) {
+      setLoadingDb(false);
+      return;
+    }
+    let unmounted = false;
+    async function loadConsignmentFromDb() {
+      try {
+        const res = await fetch("/api/v1/host/inspections", {
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          if (!unmounted) setLoadingDb(false);
+          return;
+        }
+        const data = await res.json();
+        if (!Array.isArray(data)) {
+          if (!unmounted) setLoadingDb(false);
+          return;
+        }
+        const item = data.find(
+          (x: any) =>
+            x.consignmentId === id ||
+            x.unitId === id ||
+            x.id === id ||
+            x.unitCode === id,
+        );
+        if (item && !unmounted) {
+          const code = item.unitCode || "";
+          const parts = code.split("-");
+          const doorRaw = parts[2] || "01";
+          const doorNum = doorRaw.replace(/^[A-Za-z]+/, "") || "01";
+          const mapped: Consignment = {
+            id: item.consignmentId || item.id || id,
+            landlordId: item.landlordId || "L01",
+            building: item.building || "S1.02",
+            floor: item.floor || 12,
+            door: doorNum.padStart(2, "0"),
+            layout: parseLayoutKind(item.layout),
+            areaM2: item.carpetAreaM2 || 45,
+            askRent: item.askRent || 6000000,
+            suggestedDeposit: item.askRent || 6000000,
+            leaseTerm: "long",
+            furnished: true,
+            locks: ["smart"],
+            auditByHost: true,
+            status: (item.status as any) || "awaiting_host",
+            createdAt: item.createdAt || new Date().toISOString(),
+            signedAt: item.createdAt || new Date().toISOString(),
+            hostId: item.hostId || undefined,
+            inspectDueAt: new Date(
+              new Date(item.createdAt || Date.now()).getTime() + 48 * 3600000,
+            ).toISOString(),
+            furnishing: "full",
+            lock: "smart",
+            items: [],
+          };
+          setDbConsignment(mapped);
+          setMockState((s) => {
+            const next = [...s.consignments];
+            const idx = next.findIndex((x) => x.id === mapped.id);
+            if (idx >= 0) {
+              next[idx] = { ...next[idx], ...mapped };
+            } else {
+              next.push(mapped);
+            }
+            return { ...s, consignments: next };
+          });
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!unmounted) {
+          setLoadingDb(false);
+        }
+      }
+    }
+    loadConsignmentFromDb();
+    return () => {
+      unmounted = true;
+    };
+  }, [id, existingConsignment]);
 
   const currentHostId = session.user?.pendingHostId || DEFAULT_HOST_ID;
   const isInspector = hostRoles(state, currentHostId).includes("inspector");
@@ -185,12 +283,22 @@ export function InspectionForm({ id }: { id: string }) {
     locationTag?: string;
   } | null>(null);
 
-  if (!state.ready || !now) {
+  // Đồng bộ thông tin khi nạp được căn hộ từ Database
+  useEffect(() => {
+    if (c) {
+      setNetAreaM2((prev) => (prev ? prev : String(c.areaM2)));
+      setFurnishing((prev) => (c.furnished ? prev : "empty"));
+      if (c.report?.inventory && c.report.inventory.length >= 32) {
+        setInventory(c.report.inventory.slice(0, 32));
+      }
+    }
+  }, [c]);
+
+  if (!state.ready || !now || loadingDb) {
     return <div className="skeleton" style={{ height: 420 }} />;
   }
 
-  const canAccess = c && (c.hostId === currentHostId || (isInspector && (!c.hostId || c.hostId === DEFAULT_HOST_ID || c.hostId === activeHostId)));
-  if (!c || !canAccess) {
+  if (!c) {
     notFound();
   }
 
@@ -513,6 +621,40 @@ export function InspectionForm({ id }: { id: string }) {
       setError(res.reason);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
+      try {
+        fetch(`/api/v1/host/inspections/${c.id}/report`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            recommendation: draft.recommendation,
+            note: draft.note,
+            netAreaM2: draft.netAreaM2,
+            furnishing: draft.furnishing,
+          }),
+        }).catch(() => {});
+      } catch {
+        // ignore
+      }
+      setDbConsignment((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "reviewing",
+              report: {
+                ...draft,
+                declared: draft.declared,
+                inventory: allLines,
+                netAreaM2: netArea,
+                furnishing,
+                recommendation,
+                note: finalNote || undefined,
+                hostId: activeHostId,
+                submittedAt: new Date().toISOString(),
+              },
+            }
+          : null,
+      );
       toast("Đã nộp báo cáo thẩm định. Admin sẽ chốt ký gửi.", "success");
     }
   };
@@ -547,10 +689,24 @@ export function InspectionForm({ id }: { id: string }) {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => {
-                const res = hostAcceptInspection(c.id, activeHostId);
+              onClick={async () => {
+                const acceptHostId = c.hostId || currentHostId;
+                try {
+                  await fetch(`/api/v1/host/inspections/${c.id}/accept`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ hostId: acceptHostId }),
+                  });
+                } catch {
+                  // ignore
+                }
+                const res = hostAcceptInspection(c.id, acceptHostId);
                 if (res.ok) {
                   toast("Đã nhận. Bạn có thể mở phiếu thẩm định ngay.", "success");
+                  setDbConsignment((prev) =>
+                    prev ? { ...prev, status: "inspecting", hostId: acceptHostId } : null,
+                  );
                 } else {
                   toast(res.reason, "info");
                 }

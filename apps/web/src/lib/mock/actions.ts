@@ -1836,7 +1836,7 @@ export function hostAcceptInspection(id: string, hostId: string): ConsignResult 
   if (cs.status !== "awaiting_host") {
     return { ok: false, code: "bad_status", reason: "Hồ sơ không ở trạng thái chờ Field Host nhận." };
   }
-  if (cs.hostId !== hostId) {
+  if (cs.hostId && cs.hostId !== hostId) {
     return { ok: false, code: "wrong_host", reason: "Bạn không phải Field Host phụ trách căn này." };
   }
 
@@ -1851,7 +1851,7 @@ export function hostAcceptInspection(id: string, hostId: string): ConsignResult 
         ...s,
         consignments: s.consignments.map((c) =>
           c.id === id
-            ? { ...c, status: "inspecting", hostAcceptedAt }
+            ? { ...c, status: "inspecting", hostAcceptedAt, hostId: c.hostId || hostId }
             : c,
         ),
       },
@@ -1880,7 +1880,7 @@ export function submitInspection(id: string, hostId: string, draft: InspectionDr
   if (cs.status !== "inspecting") {
     return { ok: false, code: "bad_status", reason: "Hồ sơ không ở trạng thái đang thẩm định thực tế." };
   }
-  if (cs.hostId !== hostId) {
+  if (cs.hostId && cs.hostId !== hostId) {
     return { ok: false, code: "wrong_host", reason: "Bạn không phải Field Host phụ trách căn này." };
   }
 
