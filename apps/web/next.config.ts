@@ -6,6 +6,13 @@ const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:4000").replace
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "images.unsplash.com" },
+      { protocol: "https", hostname: "**.supabase.co" },
+      { protocol: "https", hostname: "img.vietqr.io" },
+    ],
+  },
   // Có proxy.ts thì Next đệm body của MỌI request (kể cả rewrite sang backend) vào bộ nhớ, mặc định chỉ 10MB —
   // vượt là cắt cụt body và proxy lỗi 500. Tải ảnh ký gửi tối đa 8 ảnh × 3MB = 24MB (xem lib/landlord/photos.ts).
   experimental: { proxyClientMaxBodySize: "30mb" },

@@ -12,6 +12,7 @@ import { unitStatus } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
 import type { CriteriaState } from "@/lib/mock/types";
 import { UNITS } from "@/lib/mock/units";
+import { useUnits } from "@/lib/property/useUnits";
 import { useRole, useSession } from "@/lib/auth/client";
 import { ButlerMascot, VINNY_GREETINGS, type MascotMood } from "@/components/mascot/ButlerMascot";
 import { Composer } from "./Composer";
@@ -74,9 +75,10 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   const [mascotCustomSpeech, setMascotCustomSpeech] = useState<string | null>(null);
   const busy = useRef(false);
 
-  const statusOf = (u: (typeof UNITS)[number]) => unitStatus(state, u);
-  const openCount = UNITS.filter((u) => unitStatus(state, u) === "available").length;
-  const results = searchUnits(chat.criteria, statusOf);
+  const { units } = useUnits();
+  const statusOf = (u: any) => unitStatus(state, u);
+  const openCount = units.filter((u) => unitStatus(state, u) === "available").length;
+  const results = searchUnits(chat.criteria, statusOf, units);
 
   const mascotMood: MascotMood = thinking
     ? "thinking"

@@ -171,6 +171,7 @@ export interface Unit {
   title: string;
   description: string;
   items: ItemKey[];
+  mediaUrls?: string[];
 }
 
 interface UnitSeed extends Omit<Unit, "code" | "zoneId" | "layoutLabel" | "verifiedAt" | "door"> {
@@ -2250,7 +2251,12 @@ export const UNITS: Unit[] = seeds.map(({ door, plus, verifiedDay, ...u }) => {
 
 export const unitById = (id: string) => UNITS.find((u) => u.id === id);
 
-export const unitPhoto = (u: Pick<Unit, "id">, n: number) => `/units/${u.id}/${n}.jpg`;
+export const unitPhoto = (u: Pick<Unit, "id"> & { mediaUrls?: string[] }, n: number) => {
+  if (u.mediaUrls && u.mediaUrls.length >= n && u.mediaUrls[n - 1]) {
+    return u.mediaUrls[n - 1];
+  }
+  return `/units/${u.id}/${n}.jpg`;
+};
 
 /** "S2.12 · Tầng 16 · Căn 08" — định danh chuẩn [Tòa-Tầng-Căn]. */
 export const unitAddress = (u: Pick<Unit, "building" | "floor" | "door">) => `${u.building} · Tầng ${u.floor} · Căn ${u.door}`;

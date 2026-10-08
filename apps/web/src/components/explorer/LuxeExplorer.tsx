@@ -21,7 +21,7 @@ import { allInCost } from "@/lib/mock/cost";
 import { vnd, vndShort } from "@/lib/mock/format";
 import { hostForUnit, unitAddress, unitPhoto, zoneById, type Unit, type ZoneId } from "@/lib/mock/units";
 import { OceanParkInteractiveMap } from "@/components/map/OceanParkInteractiveMap";
-import { UNITS } from "@/lib/mock/units";
+import { useUnits } from "@/lib/property/useUnits";
 import { toggleFavorite } from "@/lib/mock/actions";
 import { useMock } from "@/lib/mock/store";
 import styles from "./LuxeExplorer.module.css";
@@ -30,6 +30,7 @@ type SheetPosition = "peek" | "half" | "full";
 
 export function LuxeExplorer() {
   const store = useMock();
+  const { units } = useUnits();
   const [query, setQuery] = useState("");
   const [priceFilter, setPriceFilter] = useState<"all" | "under7" | "7to10" | "above10">("all");
   const [bedFilter, setBedFilter] = useState<string>("all");
@@ -46,7 +47,7 @@ export function LuxeExplorer() {
 
   // Lọc danh sách căn hộ theo các tiêu chí tìm kiếm
   const filteredUnits = useMemo(() => {
-    return UNITS.filter((u) => {
+    return units.filter((u) => {
       // 1. Text Search
       if (query.trim()) {
         const q = query.toLowerCase().trim();
@@ -223,7 +224,7 @@ export function LuxeExplorer() {
               setZoneFilter(next);
               if (z) {
                 if (sheetState === "peek") setSheetState("half");
-                const firstInZone = UNITS.find((u) => u.zoneId === z);
+                const firstInZone = units.find((u) => u.zoneId === z);
                 if (firstInZone) setActiveUnitId(firstInZone.id);
               }
             }}

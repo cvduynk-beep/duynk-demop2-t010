@@ -6,7 +6,7 @@ import { FilterTray } from "@/components/chat/FilterTray";
 import { criteriaChips, emptyCriteria, searchUnits } from "@/lib/mock/matchmaker";
 import { unitStatus } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
-import { UNITS } from "@/lib/mock/units";
+import { useUnits } from "@/lib/property/useUnits";
 import { UnitCard } from "./UnitCard";
 import styles from "./UnitsBrowser.module.css";
 
@@ -15,17 +15,18 @@ type Sort = "best" | "price" | "area";
 /** Trang duyệt toàn bộ căn (không cần chat): bộ lọc giống khung chat, sắp xếp và danh sách đã lưu. */
 export function UnitsBrowser() {
   const state = useMock();
+  const { units } = useUnits();
   const [criteria, setCriteria] = useState(emptyCriteria);
   const [sort, setSort] = useState<Sort>("best");
   const [onlySaved, setOnlySaved] = useState(false);
 
-  const all = searchUnits(criteria, (u) => unitStatus(state, u));
+  const all = searchUnits(criteria, (u) => unitStatus(state, u), units);
   let list = onlySaved ? all.filter((r) => state.favorites.includes(r.unit.id)) : [...all];
   if (sort === "price") list = [...list].sort((a, b) => a.cost.total - b.cost.total);
   if (sort === "area") list = [...list].sort((a, b) => b.unit.areaM2 - a.unit.areaM2);
 
   const chips = criteriaChips(criteria);
-  const holding = UNITS.filter((u) => unitStatus(state, u) === "holding").length;
+  const holding = units.filter((u) => unitStatus(state, u) === "holding").length;
 
   return (
     <div className={`wrap ${styles.page}`}>

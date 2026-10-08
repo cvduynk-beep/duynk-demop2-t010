@@ -215,9 +215,10 @@ function passes(u: Unit, c: CriteriaState, ignoreBudget = false): boolean {
   return true;
 }
 
-export function searchUnits(c: CriteriaState, statusOf: StatusLookup): MatchResult[] {
+export function searchUnits(c: CriteriaState, statusOf: StatusLookup, unitsList?: Unit[]): MatchResult[] {
   const out: MatchResult[] = [];
-  for (const unit of UNITS) {
+  const list = unitsList && unitsList.length > 0 ? unitsList : UNITS;
+  for (const unit of list) {
     if (statusOf(unit) !== "available") continue;
     if (!passes(unit, c)) continue;
     const cost = allInCost(unit, c.household);
