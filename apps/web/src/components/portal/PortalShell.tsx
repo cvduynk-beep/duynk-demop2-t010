@@ -63,9 +63,10 @@ interface PortalShellProps {
 
 /** Thuần, export để test: active khi khớp href, href/…, hoặc một tiền tố trong match (khớp p hoặc p/…). */
 export function isNavActive(
-  pathname: string,
+  pathname: string | null | undefined,
   item: Pick<PortalNavItem, "href" | "match" | "children">,
 ): boolean {
+  if (!pathname) return false;
   if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
     return true;
   }
@@ -343,7 +344,7 @@ export function PortalShell({
   compactLogo = false,
   accountHref,
 }: PortalShellProps) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
 
   return (
     <div className={styles.shell}>

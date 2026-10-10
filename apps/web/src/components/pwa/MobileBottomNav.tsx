@@ -12,7 +12,7 @@ interface MobileBottomNavProps {
 }
 
 export function MobileBottomNav({ activeTab, onTabChange }: MobileBottomNavProps) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
   const store = useMock();
   const savedCount = store.favorites.length;
 

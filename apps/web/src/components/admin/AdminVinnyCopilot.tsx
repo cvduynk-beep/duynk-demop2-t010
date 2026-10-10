@@ -59,22 +59,23 @@ export function AdminVinnyCopilot() {
 
   // Xác định tên trang hiện tại để tạo ngữ cảnh
   const getPageInfo = () => {
-    if (pathname.includes("/admin/reports")) {
+    const path = pathname || "";
+    if (path.includes("/admin/reports")) {
       return { title: "Báo cáo & KPI", tag: "reports" };
     }
-    if (pathname.includes("/admin/inventory")) {
+    if (path.includes("/admin/inventory")) {
       return { title: "Căn hộ & Ký gửi", tag: "inventory" };
     }
-    if (pathname.includes("/admin/bookings")) {
+    if (path.includes("/admin/bookings")) {
       return { title: "Điều phối lịch xem", tag: "bookings" };
     }
-    if (pathname.includes("/admin/hosts")) {
+    if (path.includes("/admin/hosts")) {
       return { title: "Quản trị Field Host", tag: "hosts" };
     }
-    if (pathname.includes("/admin/commission")) {
+    if (path.includes("/admin/commission")) {
       return { title: "Biến phí & Thù lao", tag: "commission" };
     }
-    if (pathname.includes("/admin/contracts")) {
+    if (path.includes("/admin/contracts")) {
       return { title: "Hợp đồng & Cọc", tag: "contracts" };
     }
     return { title: "Tổng quan Dashboard", tag: "dashboard" };

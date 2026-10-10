@@ -6,7 +6,7 @@ import { BookOpen, FileSpreadsheet, Users } from "lucide-react";
 import styles from "@/components/admin/Contracts.module.css";
 
 export function ContractsSubnav() {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
 
   const isTemplates = pathname.startsWith("/admin/contracts/templates");
   const isParties = pathname.startsWith("/admin/contracts/parties");

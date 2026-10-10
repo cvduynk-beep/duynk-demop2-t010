@@ -14,7 +14,7 @@ const MENU = [
 ];
 
 export default function AccountLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
   return (
     <>
       <SiteNav />
