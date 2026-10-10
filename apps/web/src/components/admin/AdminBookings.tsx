@@ -11,7 +11,7 @@ import { dayLabel, fmtTime, maskPhone } from "@/lib/mock/format";
 import { setMockState, useMock } from "@/lib/mock/store";
 import { HOSTS, hostById, unitAddress, unitById } from "@/lib/mock/units";
 import type { Booking } from "@/lib/mock/types";
-import { dispatchApi } from "@/lib/apiClient";
+import { adminApi, dispatchApi } from "@/lib/apiClient";
 import { useNow } from "@/lib/useNow";
 import { useEffect } from "react";
 import styles from "./Admin.module.css";
@@ -61,6 +61,7 @@ export function AdminBookings() {
                 },
               };
               if (existingIdx >= 0) {
+                if (nextBookings[existingIdx].dispatch?.assignedByAdmin) continue;
                 nextBookings[existingIdx] = { ...nextBookings[existingIdx], ...mappedBooking };
               } else {
                 nextBookings.push(mappedBooking);
@@ -174,6 +175,13 @@ export function AdminBookings() {
               key: "sla",
               header: "SLA nhận ca",
               render: (b) => {
+                if (b.dispatch?.assignedByAdmin) {
+                  return (
+                    <span className={styles.okText} title="Đã được Admin trực tiếp điều phối tay">
+                      <CheckCircle2 size={14} aria-label="Đã điều phối" /> Admin đã giao
+                    </span>
+                  );
+                }
                 const wait = now - new Date(b.createdAt).getTime();
                 const over = b.status === "pending" && wait > SLA_MS;
                 const took = b.confirmedAt ? Math.round((new Date(b.confirmedAt).getTime() - new Date(b.createdAt).getTime()) / 1000) : null;
@@ -202,7 +210,13 @@ export function AdminBookings() {
               render: (b) =>
                 b.status === "pending" ? (
                   <div style={{ display: "flex", gap: 6 }}>
-                    <select className="select" style={{ minHeight: 36, minWidth: 140 }} value={pick[b.id] ?? ""} onChange={(e) => setPick({ ...pick, [b.id]: e.target.value })} aria-label={`Giao ticket ${b.ref} cho Host`}>
+                    <select
+                      className="select"
+                      style={{ minHeight: 36, minWidth: 140 }}
+                      value={pick[b.id] ?? ""}
+                      onChange={(e) => setPick({ ...pick, [b.id]: e.target.value })}
+                      aria-label={`Giao ticket ${b.ref} cho Host`}
+                    >
                       <option value="">Giao cho…</option>
                       {HOSTS.filter((h) => h.status !== "off_duty" && h.id !== b.hostId).map((h) => (
                         <option key={h.id} value={h.id}>
@@ -215,13 +229,25 @@ export function AdminBookings() {
                       className="btn btn-quiet btn-sm"
                       disabled={!pick[b.id]}
                       onClick={() => {
-                        adminReassign(b.id, pick[b.id]);
-                        toast(`Đã giao ticket ${b.ref} cho ${hostById(pick[b.id])?.name}`, "success");
+                        const targetHostId = pick[b.id];
+                        if (!targetHostId) return;
+                        adminReassign(b.id, targetHostId);
+                        setPick((prev) => {
+                          const next = { ...prev };
+                          delete next[b.id];
+                          return next;
+                        });
+                        toast(`Đã giao ticket ${b.ref} cho ${hostById(targetHostId)?.name}`, "success");
+                        adminApi.reassignBooking(b.id, targetHostId).catch(() => null);
                       }}
                     >
                       Giao
                     </button>
                   </div>
+                ) : b.dispatch?.assignedByAdmin ? (
+                  <span className="badge badge-kelp xs" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <CheckCircle2 size={12} /> Đã giao {hostById(b.hostId)?.name || b.hostId}
+                  </span>
                 ) : (
                   <span className="muted">—</span>
                 ),

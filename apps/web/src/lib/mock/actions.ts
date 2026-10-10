@@ -738,14 +738,41 @@ export function adminReassign(id: string, hostId: string) {
   const b = requireBooking(id);
   const unit = unitById(b.unitId)!;
   const to = hostById(hostId)!;
-  const dispatchPatch = b.dispatch?.state === "open"
-    ? { dispatch: { ...b.dispatch, state: "assigned" as const, claimedAt: iso(Date.now()) } }
-    : {};
+  const nowIso = iso(Date.now());
+  const dispatchPatch = {
+    dispatch: {
+      ...b.dispatch,
+      state: "assigned" as const,
+      tier: b.dispatch?.tier || ("top" as const),
+      offeredTo: [hostId],
+      openedAt: b.dispatch?.openedAt || nowIso,
+      claimedAt: nowIso,
+      escalated: false,
+      assignedByAdmin: true,
+    },
+  };
   setMockState((s) =>
     withNotices(
-      patchBooking(s, id, { hostId, ...dispatchPatch }),
-      pushToHost(hostId, { bookingId: id, unitId: unit.id, tone: "alert", title: "Admin giao ticket cho bạn", body: `${b.tenant.name} · ${unitAddress(unit)} · hẹn ${slotText(b.slot)}. Vui lòng nhận trong 3 phút.` }),
-      toAdmin({ bookingId: id, unitId: unit.id, tone: "info", title: "Đã điều phối thủ công", body: `${b.ref} chuyển cho Host ${to.name}.` }),
+      patchBooking(s, id, {
+        hostId,
+        status: "confirmed",
+        confirmedAt: nowIso,
+        ...dispatchPatch,
+      }),
+      pushToHost(hostId, {
+        bookingId: id,
+        unitId: unit.id,
+        tone: "alert",
+        title: "Admin giao ticket cho bạn",
+        body: `${b.tenant.name} · ${unitAddress(unit)} · hẹn ${slotText(b.slot)}. Đã được chỉ định trực tiếp bởi Admin.`,
+      }),
+      toAdmin({
+        bookingId: id,
+        unitId: unit.id,
+        tone: "info",
+        title: "Đã điều phối thủ công",
+        body: `${b.ref} chuyển cho Host ${to.name}. Trạng thái: Đã xác nhận ca.`,
+      }),
     ),
   );
 }

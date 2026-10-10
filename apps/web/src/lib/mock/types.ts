@@ -27,6 +27,7 @@ export interface BookingDispatch {
   openedAt: string;
   claimedAt?: string;
   escalated?: boolean;
+  assignedByAdmin?: boolean;
 }
 
 /**
