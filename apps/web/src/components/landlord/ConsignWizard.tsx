@@ -659,8 +659,8 @@ function Wizard({
       const can = `${f.building} · Tầng ${f.floor} · Căn ${f.door.padStart(2, "0")}`;
 
       const mockConsign: MockConsignment = {
-        id: c.id,
-        landlordId: (c as { landlordId?: string }).landlordId || "L1",
+        id: c?.id || `cs-${nowMs}`,
+        landlordId: (c as { landlordId?: string })?.landlordId || "L1",
         building: f.building,
         floor: Number(f.floor),
         door: f.door.padStart(2, "0"),

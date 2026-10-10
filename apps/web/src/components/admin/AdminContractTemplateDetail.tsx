@@ -175,7 +175,7 @@ export function AdminContractTemplateDetail({ templateId }: Props) {
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <span className={styles.docIdText}>{s.id}</span>
-                    <span className="muted small">[{s.actor.toUpperCase()}]</span>
+                    <span className="muted small">[{String(s.actor || "").toUpperCase()}]</span>
                     <span style={{ fontWeight: 500, color: "var(--ink)" }}>{s.step}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

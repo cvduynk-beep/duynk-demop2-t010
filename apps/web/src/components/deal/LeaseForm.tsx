@@ -43,7 +43,7 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
   const [paymentCycle, setPaymentCycle] = useState<PaymentCycle>(1);
 
   // Tài khoản hoàn cọc
-  const initialHolderName = (savedAccount?.holderName || booking.kyc?.fullName || booking.tenant.name).toUpperCase();
+  const initialHolderName = String(savedAccount?.holderName || booking.kyc?.fullName || booking.tenant?.name || "").toUpperCase();
   const initialBank = savedAccount?.bankName
     ? POPULAR_BANKS.includes(savedAccount.bankName)
       ? savedAccount.bankName
@@ -108,7 +108,7 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
         setNapasStatus("not_found");
       } else {
         // Hợp lệ chính chủ
-        const verifiedName = (booking.kyc?.fullName || booking.tenant.name).toUpperCase();
+        const verifiedName = String(booking.kyc?.fullName || booking.tenant?.name || "").toUpperCase();
         setNapasStatus("verified");
         setNapasOwner(verifiedName);
         setHolderName(verifiedName);
@@ -385,7 +385,7 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
               <div style={{ color: "var(--danger)", fontSize: 12.5, marginTop: 4, display: "flex", alignItems: "flex-start", gap: 6, lineHeight: 1.4 }}>
                 <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
                 <span>
-                  <b>Cảnh báo lệch tên:</b> Tài khoản ngân hàng thuộc về <b>{napasOwner}</b> (không khớp với CCCD <b>{tenantName.toUpperCase()}</b>). Vui lòng sử dụng tài khoản chính chủ.
+                  <b>Cảnh báo lệch tên:</b> Tài khoản ngân hàng thuộc về <b>{napasOwner}</b> (không khớp với CCCD <b>{String(tenantName || "").toUpperCase()}</b>). Vui lòng sử dụng tài khoản chính chủ.
                 </span>
               </div>
             )}

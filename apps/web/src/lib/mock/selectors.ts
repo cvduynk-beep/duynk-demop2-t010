@@ -211,8 +211,8 @@ export function unitInterest(state: MockState, unit: Unit): number {
 export const HOT_THRESHOLD = 3;
 
 export function bookingByRef(state: MockState, ref: string): Booking | undefined {
-  const key = ref.trim().toUpperCase();
-  return state.bookings.find((b) => b.ref === key);
+  const key = (ref || "").trim().toUpperCase();
+  return state.bookings.find((b) => (b.ref || "").toUpperCase() === key);
 }
 
 export const bookingById = (state: MockState, id: string) =>

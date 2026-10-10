@@ -6,7 +6,7 @@ import { zoneOfBuilding } from "@/lib/mock/units";
  */
 export function parseLayoutKind(layout: string | undefined): { layout: LayoutKind; layoutLabel: string } {
   if (!layout) return { layout: "2PN", layoutLabel: "2 phòng ngủ" };
-  const upper = layout.toUpperCase();
+  const upper = String(layout || "").toUpperCase();
   if (upper === "STUDIO") return { layout: "Studio", layoutLabel: "Studio" };
   if (upper === "ONE_BED_PLUS" || upper === "1PN+") return { layout: "1PN", layoutLabel: "1PN+" };
   if (upper === "ONE_BED" || upper === "1PN") return { layout: "1PN", layoutLabel: "1 phòng ngủ" };
@@ -20,24 +20,24 @@ export function parseLayoutKind(layout: string | undefined): { layout: LayoutKin
  * Adapter ánh xạ một bản ghi Căn hộ từ Database / Backend DTO sang Model Unit hiển thị trên giao diện
  */
 export function mapDbUnitToFrontendUnit(dbUnit: any): Unit {
-  const buildingCode = dbUnit.building?.buildingCode || "S1.02";
+  const buildingCode = dbUnit?.building?.buildingCode || "S1.02";
   const zone = zoneOfBuilding(buildingCode);
-  const { layout, layoutLabel } = parseLayoutKind(dbUnit.layoutType);
+  const { layout, layoutLabel } = parseLayoutKind(dbUnit?.layoutType);
 
-  const unitCode = dbUnit.unitCode || `VHOP-${buildingCode}-0804`;
+  const unitCode = dbUnit?.unitCode || `VHOP-${buildingCode}-0804`;
   const codeParts = unitCode.split("-");
   const doorRaw = codeParts[2] || "01";
   const door = doorRaw.length >= 2 ? doorRaw.slice(-2) : doorRaw.padStart(2, "0");
 
   const bedrooms = layout === "Studio" ? 0 : layout === "1PN" ? 1 : layout === "2PN" ? 2 : 3;
-  const bathrooms = dbUnit.layoutType === "TWO_BED_TWO_BATH" || layout === "3PN" ? 2 : 1;
+  const bathrooms = dbUnit?.layoutType === "TWO_BED_TWO_BATH" || layout === "3PN" ? 2 : 1;
 
-  const rent = Number(dbUnit.baseRentPrice) || 6_000_000;
-  const marketAvg = Number(dbUnit.marketAvgPrice) || Math.round(rent * 1.12);
-  const areaM2 = Number(dbUnit.carpetAreaM2) || 45;
+  const rent = Number(dbUnit?.baseRentPrice) || 6_000_000;
+  const marketAvg = Number(dbUnit?.marketAvgPrice) || Math.round(rent * 1.12);
+  const areaM2 = Number(dbUnit?.carpetAreaM2) || 45;
 
   let baseStatus: UnitStatus = "available";
-  const rawStatus = (dbUnit.status || "").toUpperCase();
+  const rawStatus = String(dbUnit?.status || "").toUpperCase();
   if (rawStatus === "HOLDING") baseStatus = "holding";
   else if (rawStatus === "RENTED") baseStatus = "rented";
 

@@ -198,9 +198,9 @@ export function contractRows(state: MockState, now: number): ContractRow[] {
     ];
 
     rows.push({
-      key: `mandate.${c.id}`,
+      key: `mandate.${c.id || Math.random()}`,
       kind: "mandate",
-      docId: `UQ-${c.id.toUpperCase()}`,
+      docId: `UQ-${String(c.id || "CONSIGN").toUpperCase()}`,
       status,
       unitLabel: `${c.building} · Tầng ${c.floor} · Căn ${c.door}`,
       consignmentId: c.id,

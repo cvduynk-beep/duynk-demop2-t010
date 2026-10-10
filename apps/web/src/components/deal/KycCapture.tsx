@@ -34,7 +34,7 @@ function mockOcr(b: Booking): { fields: Fields; confidence: IdCardData["confiden
 
   return {
     fields: {
-      fullName: b.tenant.name.toUpperCase(),
+      fullName: String(b.tenant?.name || "").toUpperCase(),
       idNumber: `001${digits}`,
       dob: "12/04/2001",
       issuedDate: "18/08/2021",
@@ -134,7 +134,7 @@ export function KycCapture({ booking, onDone }: KycCaptureProps) {
     (k) => conf[k] < LOW && !touched.has(k)
   );
 
-  const isNameMismatch = fields.fullName.trim().toUpperCase() !== booking.tenant.name.trim().toUpperCase();
+  const isNameMismatch = String(fields.fullName || "").trim().toUpperCase() !== String(booking.tenant?.name || "").trim().toUpperCase();
   const hasMismatch = isNameMismatch;
 
   const handleEdit = (k: keyof Fields, v: string) => {

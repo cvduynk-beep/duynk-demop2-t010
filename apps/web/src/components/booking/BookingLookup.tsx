@@ -25,7 +25,7 @@ export function BookingLookup() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanRef = ref.trim().toUpperCase();
+    const cleanRef = (ref || "").trim().toUpperCase();
     const b = bookingByRef(state, cleanRef);
     if (!b || !ownsBooking(state, b)) {
       setError("Không tìm thấy lịch hẹn này trong tài khoản của bạn.");
