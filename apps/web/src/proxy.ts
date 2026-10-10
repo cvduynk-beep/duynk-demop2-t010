@@ -33,7 +33,20 @@ export async function proxy(request: NextRequest) {
     if (res.ok) user = ((await res.json()) as { data?: { user: SessionUser | null } }).data?.user ?? null;
     setCookies = res.headers.getSetCookie();
   } catch {
-    // Backend không với tới được ⇒ coi như chưa đăng nhập.
+    // Backend không với tới được ⇒ kiểm tra phiên demo offline
+  }
+
+  // Fallback cho môi trường Cloud Demo / Standalone Vercel
+  if (!user) {
+    const demoCookie = request.cookies.get("vs_demo_session")?.value;
+    if (demoCookie) {
+      try {
+        const demoUser = JSON.parse(Buffer.from(demoCookie, "base64").toString("utf8"));
+        if (demoUser && demoUser.portal === required) {
+          user = demoUser;
+        }
+      } catch {}
+    }
   }
 
   if (!user || user.portal !== required) {
