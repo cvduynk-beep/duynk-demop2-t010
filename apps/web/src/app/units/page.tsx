@@ -1,16 +1,5 @@
-import type { Metadata } from "next";
-import { SiteNav } from "@/components/nav/SiteNav";
-import { UnitsBrowser } from "@/components/unit/UnitsBrowser";
-
-export const metadata: Metadata = { title: "Tìm căn hộ" };
+import { redirect } from "next/navigation";
 
 export default function UnitsPage() {
-  return (
-    <>
-      <SiteNav />
-      <main>
-        <UnitsBrowser />
-      </main>
-    </>
-  );
+  redirect("/?view=all");
 }

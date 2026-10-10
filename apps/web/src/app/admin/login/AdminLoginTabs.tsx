@@ -5,17 +5,27 @@ import { useSearchParams } from "next/navigation";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Tabs } from "@/components/auth/Tabs";
 import { PortalAuth } from "@/components/auth/PortalAuth";
+import { RfidVerifyStep } from "@/components/auth/RfidVerifyStep";
 import { safeNext } from "@/lib/auth/portals";
 
 type Tab = "host" | "admin";
 
 /**
- * Internal login: Field Host (Google or email + password, no signup — Admin creates the account) and Admin
- * (email + password, no signup).
+ * Internal login: Field Host (Google or email + password) and Admin
+ * (email + password, no signup). Host must verify RFID on first login.
  */
 export function AdminLoginTabs() {
   const searchParams = useSearchParams();
+  const rfidPending = searchParams.get("rfidPending");
   const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "admin" ? "admin" : "host");
+
+  if (rfidPending) {
+    return (
+      <AuthShell brandFoot="Nội bộ team P-010.">
+        <RfidVerifyStep hostId={rfidPending} onDone={() => {}} />
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell brandFoot="Nội bộ team P-010.">
@@ -30,9 +40,8 @@ export function AdminLoginTabs() {
       <PortalAuth
         key={tab}
         portal={tab}
-        label={tab === "host" ? "Field Host" : "quản trị"}
-        allowSignup={false}
         next={safeNext(searchParams.get("next"))}
+        label={tab === "host" ? "Field Host" : "quản trị"}
         initialError={searchParams.get("tab") === tab ? searchParams.get("error") : null}
         initialNotice={
           searchParams.get("tab") === tab && searchParams.get("confirmed") === "1"
@@ -42,7 +51,7 @@ export function AdminLoginTabs() {
       />
       {tab === "host" && (
         <p style={{ marginTop: 24, fontSize: "0.82rem", color: "var(--slate)" }}>
-          Tài khoản Field Host do Admin tạo. Chưa có tài khoản? Liên hệ Admin.
+          Chỉ email đã được Admin thêm vào danh sách Field Host mới đăng ký được.
         </p>
       )}
     </AuthShell>

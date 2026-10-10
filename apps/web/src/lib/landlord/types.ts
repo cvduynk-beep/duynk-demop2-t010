@@ -1,13 +1,11 @@
 /** Kiểu dữ liệu trả về từ `/api/v1/landlord/*` — khớp backend/src/modules/landlord (landlord-*.service.ts). */
 
-import type { InventoryGroup, LandlordInspectionView } from "@/lib/inspection/types";
-
 export type UnitStatus = "available" | "viewing" | "holding" | "rented" | "unlisted" | "maintenance";
 export type MandateStatus = "pending_inspection" | "active" | "exiting" | "ended";
 export type LayoutKind = "Studio" | "1PN" | "2PN" | "3PN";
 export type LockKind = "smart" | "physical";
-export type LeaseTermPref = "mid" | "long" | "fixed";
-export type ConsignmentStatus = "draft" | "awaiting_host" | "inspecting" | "awaiting_landlord" | "approved" | "rejected";
+export type LeaseTermPref = "flexible" | "long" | "mid" | "fixed";
+export type ConsignmentStatus = "draft" | "awaiting_host" | "inspecting" | "reviewing" | "approved" | "rejected";
 
 export interface MandateSummary {
   id: string;
@@ -108,23 +106,6 @@ export interface ConsignmentPhoto {
   url: string | null;
 }
 
-/** Đề xuất giá/cọc bảo đảm của Inspector, chờ chủ nhà đồng ý (stage `awaiting_landlord`). */
-export interface PricingProposal {
-  rent: number;
-  securityDeposit: number;
-  reason: string | null;
-  proposedAt: string;
-  original: { rent: number; securityDeposit: number };
-}
-
-export interface PricingDecisionResult {
-  stage: "approved" | "rejected";
-  unitCode: string;
-  listedAt: string | null;
-  rent?: number;
-  securityDeposit?: number;
-}
-
 export interface Consignment {
   id: string;
   unitId: string;
@@ -147,19 +128,19 @@ export interface Consignment {
   photoCount: number;
   /** Chỉ có ở `GET /landlord/consignments/:id` (danh sách chỉ có `photoCount`). */
   photos?: ConsignmentPhoto[];
+  allowFastClose?: boolean;
+  floorRent?: number | null;
   createdAt: string;
   signedAt: string | null;
   ownershipWarrantedAt: string | null;
   inspectDueAt: string | null;
   hostId: string | null;
   hostAcceptedAt: string | null;
-  /** Phiếu thẩm định + ảnh (link ký 1h) — chỉ có ở `GET /landlord/consignments/:id`; null khi Host chưa nộp. */
-  inspection?: LandlordInspectionView | null;
+  /** Báo cáo thẩm định do Field Host nộp (cấu trúc do module Host quy định; null khi chưa có). */
+  report: unknown;
   decidedAt: string | null;
   decidedBy: string | null;
   decisionNote: string | null;
-  /** Khác null chỉ khi `status = awaiting_landlord`. */
-  pricingProposal?: PricingProposal | null;
 }
 
 export interface CreateConsignmentInput {
@@ -173,26 +154,22 @@ export interface CreateConsignmentInput {
   leaseTerm: LeaseTermPref;
   furnished: boolean;
   locks: LockKind[];
+  allowFastClose?: boolean;
+  floorRent?: number;
   doorCode?: string;
-  /** Ghi chú cho Host/Admin (≤ 300 ký tự): quy chế căn. */
+  bankName?: string;
+  bankAccount?: string;
+  bankAccountHolder?: string;
+  saveAsDefaultPayout?: boolean;
+  items?: string[];
   note?: string;
-  /** Mã hạng mục (catalog 32 món) chủ khai có sẵn; màn thẩm định của Host tick sẵn các món này. */
-  inventoryCodes?: string[];
-}
-
-/** Một hạng mục trong bảng kê 32 món (Điều 5) để chủ nhà chọn. */
-export interface InventoryCatalogEntry {
-  code: string;
-  group: InventoryGroup;
-  name: string;
+  draft?: boolean;
 }
 
 export interface SignOtpInfo {
-  /** false ⇒ số đã xác thực của tài khoản, backend KHÔNG gửi mã và `sign` không cần OTP. */
-  otpRequired: boolean;
   maskedPhone: string | null;
   expiresInSeconds: number;
-  /** Chỉ có ở chế độ demo (chưa có nhà cung cấp OTP, ngoài production). */
+  /** Chỉ có khi backend bật OTP_ECHO_DEV_CODE (môi trường dev). */
   devCode?: string;
 }
 
@@ -242,12 +219,19 @@ export interface BuildingOption {
   totalFloors: number;
 }
 
+export interface BankPayoutAccount {
+  bankName: string;
+  bankAccount: string;
+  bankAccountHolder: string;
+  isVerified: boolean;
+  verifiedAt?: string;
+}
+
 export interface MyProfile {
   id: string;
   fullName: string | null;
   email: string | null;
   isPhoneVerified: boolean;
-  /** SĐT của chính chủ (dạng `0901234567`), null nếu chưa có. */
-  phone: string | null;
   createdAt: string;
+  payoutAccount?: BankPayoutAccount | null;
 }

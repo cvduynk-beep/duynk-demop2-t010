@@ -1,29 +1,14 @@
 import { Check, Clock, X } from "lucide-react";
-import { fmtDateTime } from "@/lib/format";
+import type { Consignment } from "@/lib/mock/types";
+import { fmtDateTime } from "@/lib/mock/format";
+import { isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import type { ConsignStatusKey } from "./status";
 import styles from "./Consign.module.css";
 
-/** Chỉ các trường tiến trình cần để hiển thị hồ sơ ký gửi từ API. */
-export interface TimelineSource {
-  status: ConsignStatusKey;
-  signedAt?: string;
-  hostAcceptedAt?: string;
-  decidedAt?: string;
-  note?: string;
-  inspectDueAt?: string;
+/** Chỉ các trường tiến trình cần — để cả hồ sơ mock (Admin/Host) lẫn hồ sơ từ API (Chủ nhà) đều dùng được. */
+export type TimelineSource = Pick<Consignment, "status" | "signedAt" | "hostAcceptedAt" | "decidedAt" | "note" | "inspectDueAt"> & {
   report?: { submittedAt?: string };
-}
-
-/** Quá hạn thẩm định 48h: chỉ khi đang chờ/đang thẩm định. */
-function isInspectOverdue(c: Pick<TimelineSource, "status" | "inspectDueAt">, now: number): boolean {
-  if (c.status !== "awaiting_host" && c.status !== "inspecting") return false;
-  if (!c.inspectDueAt) return false;
-  return now > new Date(c.inspectDueAt).getTime();
-}
-
-/** Trạng thái tương thích hồ sơ cũ — API hiện tại không phát trạng thái này. */
-const ADMIN_MOCK_STATUS = "reviewing";
+};
 
 interface ConsignTimelineProps {
   c: TimelineSource;
@@ -33,10 +18,6 @@ interface ConsignTimelineProps {
 export function ConsignTimeline({ c, now }: ConsignTimelineProps) {
   const overdue = isInspectOverdue(c, now);
 
-  // 5 mốc (hồ sơ 16 + hồ sơ 18: bước chủ nhà đồng ý giá): không còn bước Admin duyệt. Hồ sơ cũ có thể mang trạng thái đã bỏ — coi như
-  // "Thẩm định" đã xong, "Kết quả" đang chờ.
-  const inspected = Boolean(c.report?.submittedAt) || c.status === ADMIN_MOCK_STATUS || c.status === "awaiting_landlord" || c.status === "approved" || c.status === "rejected";
-  const decided = c.status === "approved" || c.status === "rejected";
   const steps = [
     {
       label: "Ký ủy quyền",
@@ -46,7 +27,7 @@ export function ConsignTimeline({ c, now }: ConsignTimelineProps) {
       isDanger: false,
     },
     {
-      label: "Host nhận ca",
+      label: "Host nhận",
       time: c.hostAcceptedAt ? fmtDateTime(c.hostAcceptedAt) : undefined,
       isDone: Boolean(c.hostAcceptedAt),
       isCurrent: c.status === "awaiting_host",
@@ -55,22 +36,22 @@ export function ConsignTimeline({ c, now }: ConsignTimelineProps) {
     {
       label: "Thẩm định",
       time: c.report?.submittedAt ? fmtDateTime(c.report.submittedAt) : undefined,
-      isDone: inspected,
+      isDone: Boolean(c.report?.submittedAt),
       isCurrent: c.status === "inspecting",
       isDanger: false,
     },
     {
-      label: "Chờ bạn đồng ý giá",
-      time: undefined,
-      isDone: c.status === "approved",
-      isCurrent: c.status === "awaiting_landlord",
+      label: "Admin duyệt",
+      time: c.decidedAt ? fmtDateTime(c.decidedAt) : undefined,
+      isDone: c.status === "approved" || c.status === "rejected",
+      isCurrent: c.status === "reviewing",
       isDanger: false,
     },
     {
-      label: c.status === "rejected" ? "Không đạt" : c.status === "approved" ? "Đã niêm yết" : "Kết quả",
+      label: c.status === "rejected" ? "Không duyệt" : c.status === "approved" ? "Đã ký gửi" : "Kết quả",
       time: c.decidedAt ? fmtDateTime(c.decidedAt) : undefined,
-      isDone: decided,
-      isCurrent: decided || c.status === ADMIN_MOCK_STATUS,
+      isDone: c.status === "approved" || c.status === "rejected",
+      isCurrent: c.status === "approved" || c.status === "rejected",
       isDanger: c.status === "rejected",
       note: c.status === "rejected" ? c.note : undefined,
     },

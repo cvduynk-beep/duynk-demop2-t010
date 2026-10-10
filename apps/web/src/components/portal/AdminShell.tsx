@@ -1,33 +1,65 @@
 "use client";
 
-import { Building2, FileSignature, Gauge, Radar, Settings, SlidersHorizontal, Users } from "lucide-react";
+import { BarChart3, Building2, FileSignature, Gauge, Radar, Settings, SlidersHorizontal, Users } from "lucide-react";
 import { loginPathFor } from "@/lib/auth/portals";
 import { useSession } from "@/lib/auth/client";
+import { DEMO_USERS } from "@/lib/mock/actors";
+import { contractKpis, contractRows } from "@/lib/mock/contracts";
+import { useMock } from "@/lib/mock/store";
+import { useNow } from "@/lib/useNow";
+import { AdminVinnyCopilot } from "@/components/admin/AdminVinnyCopilot";
 import { PortalShell } from "./PortalShell";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
+  const state = useMock();
+  const now = useNow(60_000);
+  const pendingCs = state.consignments.filter((c) => c.status === "reviewing").length;
+  const pendingBk = state.bookings.filter((b) => b.status === "pending").length;
+  const contractBadge = now ? contractKpis(contractRows(state, now)).needsAction : 0;
   const session = useSession();
+  const u = DEMO_USERS.admin;
   return (
     <PortalShell
       portal="Quản trị nền tảng"
-      userName={session.user?.fullName ?? session.user?.email ?? (session.ready ? "Tài khoản" : "Đang tải…")}
-      userMeta={session.user?.portal ?? "Quản trị"}
+      hidePortalBadge
+      hideTenantSwitch
+      compactLogo
+      logoHref="/admin/dashboard"
+      userName={session.user?.fullName ?? session.user?.email ?? u.name}
+      userMeta="Operations Lead"
       signOutHref={loginPathFor("admin")}
-      crumbLabels={{
-        "/admin/contracts/parties": "Theo bên ký",
-        "/admin/contracts/templates": "Mẫu hợp đồng",
-      }}
+      settingsHref="/admin/settings"
       nav={[
         { href: "/admin/dashboard", label: "Tổng quan", icon: Gauge },
-        { href: "/admin/inventory", label: "Căn hộ & ký gửi", icon: Building2 },
-        { href: "/admin/bookings", label: "Điều phối lịch xem", icon: Radar },
-        { href: "/admin/contracts", label: "Hợp đồng", icon: FileSignature },
-        { href: "/admin/hosts", label: "Field Host", icon: Users },
-        { href: "/admin/commission", label: "Biến phí Host", icon: SlidersHorizontal },
-        { href: "/admin/settings", label: "Cài đặt", icon: Settings },
+        { href: "/admin/reports", label: "Báo cáo & KPI", icon: BarChart3 },
+        { href: "/admin/inventory", label: "Căn hộ & ký gửi", icon: Building2, badge: pendingCs },
+        { href: "/admin/bookings", label: "Điều phối lịch", icon: Radar, badge: pendingBk },
+        { href: "/admin/contracts", label: "Hợp đồng", icon: FileSignature, badge: contractBadge },
+        {
+          href: "/admin/hosts",
+          label: "Field Host",
+          icon: Users,
+          match: ["/admin/hosts", "/admin/commission"],
+          children: [
+            {
+              href: "/admin/hosts",
+              label: "Danh sách Field Host",
+              icon: Users,
+              description: "Điều phối, phân quyền & KPI trực sảnh",
+            },
+            {
+              href: "/admin/commission",
+              label: "Biến phí & Thù lao",
+              icon: SlidersHorizontal,
+              description: "Cấu hình hoa hồng deal & thưởng nóng",
+            },
+          ],
+        },
       ]}
     >
       {children}
+      <AdminVinnyCopilot />
     </PortalShell>
   );
 }
+

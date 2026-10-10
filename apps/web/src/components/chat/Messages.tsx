@@ -1,13 +1,60 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { LayoutList } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { LayoutList, Sparkles } from "lucide-react";
 import { Facade } from "@/components/brand/Facade";
-import { LogoMark } from "@/components/brand/Logo";
-import { fmtTime } from "@/lib/format";
+import { fmtTime } from "@/lib/mock/format";
 import type { ChatMessage } from "@/lib/mock/types";
+import { InlineChatUnits } from "./InlineChatUnits";
 import styles from "./Messages.module.css";
+
+function highlightKeywords(str: string): ReactNode {
+  const parts = str.split(/(S\d+\.\d+\s*·\s*Tầng\s*\d+\s*·\s*Căn\s*\d+|All-in\s*[\d.]+\s*đ\/tháng|thấp hơn mặt bằng toà\s*\d+%|\d+\s*căn)/g);
+  return parts.map((part, i) => {
+    if (/S\d+\.\d+\s*·\s*Tầng\s*\d+\s*·\s*Căn\s*\d+/.test(part)) {
+      return (
+        <strong key={i} className={styles.unitHighlight}>
+          {part}
+        </strong>
+      );
+    }
+    if (/All-in\s*[\d.]+\s*đ\/tháng/.test(part)) {
+      return (
+        <strong key={i} className={styles.costHighlight}>
+          {part}
+        </strong>
+      );
+    }
+    if (/thấp hơn mặt bằng toà\s*\d+%/.test(part)) {
+      return (
+        <span key={i} className={styles.dealHighlight}>
+          {part}
+        </span>
+      );
+    }
+    if (/^\d+\s*căn$/.test(part)) {
+      return (
+        <strong key={i} className={styles.numHighlight}>
+          {part}
+        </strong>
+      );
+    }
+    return part;
+  });
+}
+
+function formatAiText(text: string) {
+  const sentences = text.split(/(?<=[.?!])\s+/).filter(Boolean);
+  if (sentences.length <= 1) {
+    return <p className={styles.paragraph}>{highlightKeywords(text)}</p>;
+  }
+
+  return sentences.map((s, idx) => (
+    <p key={idx} className={styles.paragraph}>
+      {highlightKeywords(s)}
+    </p>
+  ));
+}
 
 function Typewriter({ text, onTick, onDone }: { text: string; onTick: () => void; onDone: () => void }) {
   const words = text.split(/(\s+)/);
@@ -34,38 +81,28 @@ interface MessagesProps {
   freshId: string | null;
   onFreshDone: () => void;
   onShowResults?: (count: number) => void;
+  initialUnitIds?: string[];
+  hideInlineUnits?: boolean;
 }
 
-export function Messages({ greeting, messages, thinking, freshId, onFreshDone, onShowResults }: MessagesProps) {
+export function Messages({ greeting, messages, thinking, freshId, onFreshDone, onShowResults, initialUnitIds, hideInlineUnits }: MessagesProps) {
   const end = useRef<HTMLDivElement>(null);
-  // Chỉ cuộn khung tin nhắn (tổ tiên cuộn được gần nhất), KHÔNG kéo cả trang như scrollIntoView.
   const scroll = () => {
-    let box = end.current?.parentElement ?? null;
-    while (box) {
-      const overflowY = getComputedStyle(box).overflowY;
-      if ((overflowY === "auto" || overflowY === "scroll") && box.scrollHeight > box.clientHeight) break;
-      box = box.parentElement;
-    }
-    if (box) box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
+    end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   };
 
-  // Bỏ qua lần chạy đầu (mount): so với giá trị lần trước để đúng cả khi Strict Mode chạy effect hai lần.
-  const tail = messages.at(-1)?.text.length ?? 0; // tin đang stream dài ra ⇒ cuộn theo
-  const prev = useRef({ count: messages.length, thinking, tail });
   useEffect(() => {
-    if (prev.current.count === messages.length && prev.current.thinking === thinking && prev.current.tail === tail) return;
-    prev.current = { count: messages.length, thinking, tail };
     scroll();
-  }, [messages.length, thinking, tail]);
+  }, [messages.length, thinking]);
 
   return (
     <div className={styles.list} role="log" aria-live="polite" aria-label="Cuộc trò chuyện với VinStay AI">
       <div className={`${styles.row} ${styles.ai}`}>
-        <span className={styles.avatar}>
-          <LogoMark size={26} />
+        <span className={styles.avatar} aria-hidden>
+          <Sparkles size={18} />
         </span>
         <div className={styles.col}>
-          <div className={styles.bubble}>{greeting}</div>
+          <div className={styles.bubble}>{formatAiText(greeting)}</div>
         </div>
       </div>
 
@@ -75,19 +112,27 @@ export function Messages({ greeting, messages, thinking, freshId, onFreshDone, o
         return (
           <div key={m.id} className={`${styles.row} ${mine ? styles.me : styles.ai}`}>
             {!mine && (
-              <span className={styles.avatar}>
-                <LogoMark size={26} />
+              <span className={styles.avatar} aria-hidden>
+                <Sparkles size={18} />
               </span>
             )}
             <div className={styles.col}>
-              <div className={`${styles.bubble} ${mine ? styles.mine : ""} ${m.id.startsWith("notice-") ? styles.notice : ""}`}>{fresh ? <Typewriter text={m.text} onTick={scroll} onDone={onFreshDone} /> : m.text}</div>
-              {!mine && m.resultIds && m.resultIds.length > 0 && onShowResults && !fresh && (
-                <button type="button" className={styles.results} onClick={() => onShowResults(m.resultIds!.length)}>
-                  <LayoutList size={15} /> Xem {m.resultIds.length} căn khớp
-                </button>
-              )}
-              {!mine && m.cta && (
-                <Link href={m.cta.href} className={styles.results}>{m.cta.label}</Link>
+              <div className={`${styles.bubble} ${mine ? styles.mine : ""}`}>
+                {fresh ? (
+                  <Typewriter text={m.text} onTick={scroll} onDone={onFreshDone} />
+                ) : mine ? (
+                  m.text
+                ) : (
+                  formatAiText(m.text)
+                )}
+              </div>
+
+              {!mine && m.resultIds && m.resultIds.length > 0 && !fresh && !hideInlineUnits && (
+                <InlineChatUnits
+                  unitIds={m.resultIds}
+                  criteria={m.criteria}
+                  onShowResults={onShowResults}
+                />
               )}
               <span className={styles.time}>{fmtTime(m.at)}</span>
             </div>
@@ -97,8 +142,8 @@ export function Messages({ greeting, messages, thinking, freshId, onFreshDone, o
 
       {thinking && (
         <div className={`${styles.row} ${styles.ai}`} aria-label="VinStay AI đang quét danh sách căn">
-          <span className={styles.avatar}>
-            <LogoMark size={26} />
+          <span className={styles.avatar} aria-hidden>
+            <Sparkles size={18} />
           </span>
           <div className={`${styles.bubble} ${styles.thinking}`}>
             <div className={styles.miniFacade}>

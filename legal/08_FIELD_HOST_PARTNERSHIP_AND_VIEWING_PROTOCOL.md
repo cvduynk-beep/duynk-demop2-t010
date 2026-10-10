@@ -90,9 +90,10 @@ Nhằm triệt tiêu triệt để tình trạng tranh giành khách (Lead Canni
 ```
 
 * **Chỉ số SLA bắt buộc đối với Bên B:**
-  * **Thời gian phản hồi nhận ticket:** Mặc định không quá **03 (ba) phút** (hoặc theo ngưỡng thời gian chờ được Quản trị viên thiết lập cho phân khu trên Trang Quản trị Admin) kể từ thời điểm hệ thống phát thông báo.
+  * **Thời gian phản hồi nhận ticket ca dẫn:** Mặc định không quá **03 (ba) phút** (hoặc theo ngưỡng thời gian chờ được Quản trị viên thiết lập cho phân khu trên Trang Quản trị Admin) kể từ thời điểm hệ thống phát thông báo.
   * **Tỷ lệ nhận ca (Acceptance Rate):** Duy trì tối thiểu **$\ge 80\%$** trên tổng số ticket phân bổ trong tháng.
   * **Tỷ lệ hoàn thành buổi xem phòng (Completion Rate):** Đạt tối thiểu **$\ge 95\%$** (trừ trường hợp khách hủy hẹn bất khả kháng).
+  * **Tiếp nhận & Thẩm định Hồ sơ Ký gửi (Consignment SLA 2h):** Hồ sơ ký gửi căn hộ mới được ưu tiên cho Host phụ trách phân khu (0–30p), sau đó tự động chuyển sang Open Pool liên phân khu (30p–2h) cho bất kỳ Host nào nhận trước (First-to-Claim). Quá 2h chưa ai nhận sẽ tự động chuyển cấp cho Area Lead và kích hoạt cảnh báo còi đỏ trên Admin; Quản trị viên (Admin) có toàn quyền Override chỉ định Host bất kỳ lúc nào.
 
 ---
 
@@ -169,18 +170,10 @@ Nhằm bảo đảm an ninh tài sản tuyệt đối cho Chủ nhà (thực hi�
      * (iii) Bên B chủ động quẹt thẻ thang máy hướng dẫn khách di chuyển sang xem ngay căn thứ 2 trong bán kính 300m để hỗ trợ khách chốt cọc;
      * (iv) **Bảo vệ quyền lợi hoa hồng trọn vẹn:** Trường hợp khách thuê đồng ý chốt cọc căn hộ thay thế thứ 2, Bên B vẫn được **hệ thống ghi nhận và chi trả 100% thù lao lượt dẫn và 100% hoa hồng chốt cọc thành công** theo đúng cơ chế Attribution Lock quy định tại Điều 3 Hợp đồng này.
 
----
-
-### ĐIỀU 6: QUY TẮC TƯ VẤN MINH BẠCH ALL-IN COST, KHÔNG ÉP CỌC & HƯỚNG DẪN HỘ CHIẾU BÀN GIAO SỐ
-1. **Trung thực tuyệt đối về bảng tính All-in Cost trọn gói:**
-   * Bên B có nghĩa vụ tư vấn chính xác, công khai và minh bạch toàn bộ các cấu phần chi phí hàng tháng theo Bảng tính All-in Cost thời gian thực trên ứng dụng VinStay AI (bao gồm: Giá thuê cơ bản + Phí quản lý BQL Vinhomes từ 8.000 – 11.000 VNĐ/m² + Phí gửi xe máy/ô tô + Dự toán điện nước EVN sinh hoạt).
-   * Nghiêm cấm hành vi báo "giá mồi" thấp hơn thực tế để dụ dỗ khách, giấu giếm các khoản phí dịch vụ khiến khách bị sốc chi phí ẩn khi vào ở.
-2. **Văn hóa tiếp đón 5 sao — Tuyệt đối không ép cọc:**
-   * Định vị vai trò của Bên B là **"Đại sứ trải nghiệm & Chuyên gia thổ địa"** thân thiện, văn minh tại Ocean Park;
-   * Nghiêm cấm hành vi chèo kéo, nài ép, gây áp lực tâm lý buộc khách phải đặt cọc gấp; không tạo thông tin ảo về việc "sắp có người khác cọc mất căn" nếu không đúng thực tế hệ thống.
-3. **Giới thiệu quyền lợi Hộ chiếu bàn giao số 10 hạng mục:**
-   * Bên B chủ động giới thiệu cho khách thuê về quy trình nghiệm thu Hộ chiếu bàn giao số nhúng Timestamp + GPS Geofence của VinStay AI;
-   * Giải thích rõ cơ chế phân định minh bạch giữa hao mòn tự nhiên (Chủ nhà chịu) và hư hỏng bất cẩn (Khách bồi thường), giúp khách thuê an tâm 100% về tính công bằng, loại bỏ nỗi sợ bị trừ cọc oan khi trả phòng.
+  * 5. **Quy chế kích hoạt ưu đãi chốt nhanh trong Biên độ Giá Sàn (Fast-Close Floor Price Corridor):**
+    * Đối với căn hộ được Chủ nhà kích hoạt tùy chọn *"Ủy quyền AI Chốt Nhanh & Giá Sàn An Toàn"*, ứng dụng VinStay AI Partner tự động hiển thị mức giá chiết khấu ưu đãi cho phép khi khách cam kết thanh toán trước từ 06 đến 12 tháng hoặc cam kết cọc trong vòng 24 giờ kể từ thời điểm kết thúc ca xem phòng.
+    * Bên B (Field Host) được trao quyền chủ động kích hoạt mức giá ưu đãi nằm trong biên độ từ Giá sàn đến Giá chào thuê để chốt cọc khách ngay tại phòng mà không cần gọi điện xin phê duyệt từng lần của Chủ nhà.
+    * **Kỷ luật bảo vệ Giá Sàn:** Bên B tuyệt đối không được tự ý thương lượng hoặc chốt mức giá thấp hơn Giá sàn ủy quyền hiển thị trên ứng dụng. Hệ thống tự động từ chối khởi tạo mã VietQR động nếu mức giá nằm ngoài biên độ ủy quyền. Trường hợp Bên B cố ý thỏa thuận mức giá vi phạm Giá sàn, Bên B sẽ bị hủy bỏ toàn bộ quyền lợi hoa hồng chốt cọc và chịu chế tài xử lý theo quy định tại Điều 9 Hợp đồng này.
 
 ---
 

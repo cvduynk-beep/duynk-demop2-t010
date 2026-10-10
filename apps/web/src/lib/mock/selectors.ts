@@ -1,6 +1,6 @@
-import { MANDATE_TERM_MONTHS, TENANT_MODIFY_LEAD_MS } from "./cost";
+import { allInCost, MANDATE_TERM_MONTHS, TENANT_MODIFY_LEAD_MS } from "./cost";
 import { ALL_SLOT_TIMES, MIN_LEAD_MS, slotDate } from "./slots";
-import type { Booking, BookingDispatch, BookingStatus, DepositPolicy, FeeConfig, Mandate, MockState, Notice } from "./types";
+import type { Booking, BookingDispatch, BookingStatus, FeeConfig, Mandate, MockState, Notice } from "./types";
 import {
   HOSTS,
   UNITS,
@@ -10,6 +10,7 @@ import {
   zoneOfBuilding,
   type FieldHost,
   type HostRole,
+  type HostStatus,
   type Unit,
   type UnitDisplayStatus,
   type UnitStatus,
@@ -25,6 +26,9 @@ export const isOpenBooking = (b: Booking) => OPEN_STATUSES.includes(b.status);
 
 export function unitStatus(state: MockState, unitOrId: Unit | string, now: number = Date.now()): UnitStatus {
   const id = typeof unitOrId === "string" ? unitOrId : unitOrId.id;
+  if (state.archivedUnits && state.archivedUnits[id]) {
+    return "archived";
+  }
   const base = typeof unitOrId === "string" ? (unitById(unitOrId)?.baseStatus ?? "available") : unitOrId.baseStatus;
   const override = state.unitState[id];
   if (!override) return base;
@@ -44,37 +48,6 @@ export function unitStatus(state: MockState, unitOrId: Unit | string, now: numbe
 
 export function holdHoursFor(state: MockState, unitId: string): number {
   return state.holdPolicy?.byUnit?.[unitId] ?? state.holdPolicy?.defaultHours ?? 48;
-}
-
-export function depositPolicyFor(state: MockState): DepositPolicy {
-  return state.depositPolicy ?? { minRatio: 0.5, maxRatio: 4.0, defaultRatio: 1.0 };
-}
-
-export function validateDepositAmount(
-  state: MockState,
-  monthlyRent: number,
-  depositAmount: number,
-): { ok: boolean; min: number; max: number; error?: string } {
-  const policy = depositPolicyFor(state);
-  const min = Math.round(monthlyRent * policy.minRatio);
-  const max = Math.round(monthlyRent * policy.maxRatio);
-  if (depositAmount < min) {
-    return {
-      ok: false,
-      min,
-      max,
-      error: `Tiền cọc không được nhỏ hơn ${Math.round(policy.minRatio * 100)}% giá thuê tháng (${min.toLocaleString("vi-VN")}đ).`,
-    };
-  }
-  if (depositAmount > max) {
-    return {
-      ok: false,
-      min,
-      max,
-      error: `Tiền cọc không được lớn hơn ${policy.maxRatio} lần giá thuê tháng (${max.toLocaleString("vi-VN")}đ).`,
-    };
-  }
-  return { ok: true, min, max };
 }
 
 export function holdEndsAt(b: Booking): number | undefined {
@@ -154,12 +127,36 @@ export function unitDisplayStatus(state: MockState, unit: Unit): UnitDisplayStat
   return hasOpen ? "viewing" : "available";
 }
 
+export function hostStatus(state: MockState, hostId: string): HostStatus {
+  if (state.hostStatuses && state.hostStatuses[hostId]) {
+    return state.hostStatuses[hostId];
+  }
+  const host = hostById(hostId);
+  return host?.status ?? "active";
+}
+
+export function isHostSuspended(state: MockState, hostId: string): boolean {
+  return hostStatus(state, hostId) === "suspended";
+}
+
 export function hostRoles(state: MockState, hostId: string): HostRole[] {
+  // Khi bị tạm đóng, Field Host mất tất cả các quyền!
+  if (isHostSuspended(state, hostId)) {
+    return [];
+  }
   if (state.hostRoles && state.hostRoles[hostId]) {
     return state.hostRoles[hostId];
   }
   const host = hostById(hostId);
   return host?.roles ?? ["sale"];
+}
+
+export function hostZones(state: MockState, hostId: string): ZoneId[] {
+  if (state.hostZones && state.hostZones[hostId]) {
+    return state.hostZones[hostId];
+  }
+  const host = hostById(hostId);
+  return host?.zones ?? [];
 }
 
 export function pickHostFor(
@@ -168,41 +165,60 @@ export function pickHostFor(
   role: HostRole
 ): { hostId: string; fallback: boolean } {
   const z = zoneById(zoneId);
-  if (z && hostRoles(state, z.hostId).includes(role)) {
+  if (
+    z &&
+    !isHostSuspended(state, z.hostId) &&
+    hostZones(state, z.hostId).includes(zoneId) &&
+    hostRoles(state, z.hostId).includes(role)
+  ) {
     return { hostId: z.hostId, fallback: false };
   }
 
-  // Lấy Host đầu tiên trong HOSTS có zones chứa zoneId, có role và status !== "off_duty"
+  // Lấy Host đầu tiên trong HOSTS có zones chứa zoneId, có role và không off_duty, không suspended
   const candidateOnDuty = HOSTS.find(
     (h) =>
-      h.zones.includes(zoneId) &&
-      hostRoles(state, h.id).includes(role) &&
-      h.status !== "off_duty"
+      !isHostSuspended(state, h.id) &&
+      hostStatus(state, h.id) !== "off_duty" &&
+      hostZones(state, h.id).includes(zoneId) &&
+      hostRoles(state, h.id).includes(role)
   );
   if (candidateOnDuty) {
     return { hostId: candidateOnDuty.id, fallback: false };
   }
 
-  // Bỏ điều kiện status
+  // Bỏ điều kiện off_duty, nhưng vẫn LOẠI BỎ suspended
   const candidateAny = HOSTS.find(
-    (h) => h.zones.includes(zoneId) && hostRoles(state, h.id).includes(role)
+    (h) =>
+      !isHostSuspended(state, h.id) &&
+      hostZones(state, h.id).includes(zoneId) &&
+      hostRoles(state, h.id).includes(role)
   );
   if (candidateAny) {
     return { hostId: candidateAny.id, fallback: false };
   }
 
-  // Không có ai => fallback Host mặc định
-  return { hostId: z ? z.hostId : "H01", fallback: true };
+  // Không có ai => fallback Host mặc định còn hoạt động (không bị suspended)
+  const defaultHost = HOSTS.find((h) => !isHostSuspended(state, h.id));
+  return { hostId: defaultHost ? defaultHost.id : (z ? z.hostId : "H01"), fallback: true };
+}
+
+/** Số khách đang quan tâm căn (≥3 → gắn cờ HOT). */
+export function unitInterest(state: MockState, unit: Unit): number {
+  const open = state.bookings.filter((b) => b.unitId === unit.id && isOpenBooking(b)).length;
+  return Math.max(unit.interest24h, open);
 }
 
 export const HOT_THRESHOLD = 3;
 
 export function bookingByRef(state: MockState, ref: string): Booking | undefined {
-  const key = ref.trim().toUpperCase();
-  return state.bookings.find((b) => b.ref === key);
+  const key = (ref || "").trim().toUpperCase();
+  return state.bookings.find((b) => (b.ref || "").toUpperCase() === key);
 }
 
-export const bookingById = (state: MockState, id: string) => state.bookings.find((b) => b.id === id);
+export const bookingById = (state: MockState, id: string) =>
+  state.bookings.find((b) => b.id === id || b.ref === id || b.ref.toLowerCase() === id.toLowerCase());
+
+export const bookingsOfPhone = (state: MockState, phone: string) => state.bookings.filter((b) => b.tenant.phone === phone);
 
 export function hostBookings(state: MockState, hostId: string): Booking[] {
   return state.bookings.filter((b) => b.hostId === hostId && b.dispatch?.state !== "open");
@@ -227,9 +243,10 @@ export function freeAt(state: MockState, hostId: string, slotIso: string, ignore
 
 export function saleCandidates(state: MockState, zoneId: ZoneId | null): FieldHost[] {
   return HOSTS.filter((h) => {
-    if (h.status === "off_duty") return false;
+    const st = hostStatus(state, h.id);
+    if (st === "off_duty" || st === "suspended") return false;
     if (!hostRoles(state, h.id).includes("sale")) return false;
-    if (zoneId !== null && !h.zones.includes(zoneId)) return false;
+    if (zoneId !== null && !hostZones(state, h.id).includes(zoneId)) return false;
     return true;
   }).sort((a, b) => {
     if (b.rating !== a.rating) return b.rating - a.rating;
@@ -288,9 +305,16 @@ export function dispatchSale(
     };
   }
 
-  // 4. không ai ⇒ { hostId: top?.id ?? zone?.hostId ?? "H01", state:"open", tier:"wide_pool", offeredTo:[], escalated:true }
+  // 4. không ai ⇒ chọn host còn hoạt động (không bị suspended)
+  const defaultActive = HOSTS.find((h) => !isHostSuspended(state, h.id))?.id ?? "H01";
+  const fallbackHost = (top && !isHostSuspended(state, top.id))
+    ? top.id
+    : (zone && !isHostSuspended(state, zone.hostId))
+    ? zone.hostId
+    : defaultActive;
+
   return {
-    hostId: top?.id ?? zone?.hostId ?? "H01",
+    hostId: fallbackHost,
     state: "open",
     tier: "wide_pool",
     offeredTo: [],
@@ -316,16 +340,14 @@ export interface SlotOption {
   time: string;
   iso: string;
   available: boolean;
-  reason?: "past" | "busy";
+  reason?: "past";
 }
 
-/** Khung giờ của một ngày: quá gần giờ ⇒ "past"; trùng ca đã có người đặt (từ API busy-slots) ⇒ "busy". */
-export function slotsForDay(day: Date, now: number, busySlots: readonly string[] = []): SlotOption[] {
+export function slotsForDay(_state: MockState, day: Date, now: number): SlotOption[] {
   return ALL_SLOT_TIMES.map((time) => {
     const d = slotDate(day, time);
     const iso = d.toISOString();
     if (d.getTime() < now + MIN_LEAD_MS) return { time, iso, available: false, reason: "past" as const };
-    if (busySlots.includes(iso)) return { time, iso, available: false, reason: "busy" as const };
     return { time, iso, available: true };
   });
 }
@@ -335,6 +357,28 @@ export function similarUnits(state: MockState, unit: Unit, n = 2): Unit[] {
   return UNITS.filter((u) => u.id !== unit.id && u.layout === unit.layout && unitStatus(state, u) === "available")
     .sort((a, b) => Math.abs(a.rent - unit.rent) - Math.abs(b.rent - unit.rent))
     .slice(0, n);
+}
+
+/** 3 căn gợi ý xem ngay tại chỗ (Chain Viewing): cùng toà/phân khu, còn trống, ưu tiên khoá điện tử PIN tức thì */
+export function chainViewingUnits(state: MockState, unit: Unit, n = 3): Unit[] {
+  const available = UNITS.filter((u) => u.id !== unit.id && unitStatus(state, u) === "available");
+  return available
+    .map((u) => {
+      let score = 0;
+      if (u.building === unit.building) score += 100;
+      else if (u.zoneId === unit.zoneId) score += 50;
+
+      if (u.layout === unit.layout) score += 30;
+      if (u.lock === "smart") score += 20;
+
+      const priceDiff = Math.abs(u.rent - unit.rent);
+      score -= Math.min(priceDiff / 100_000, 30);
+
+      return { unit: u, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, n)
+    .map((x) => x.unit);
 }
 
 export function noticesFor(state: MockState, audience: Notice["audience"], toKey?: string): Notice[] {
@@ -373,7 +417,7 @@ export function hostEarnings(state: MockState, host: FieldHost, fees: FeeConfig)
 export interface FunnelStep {
   key: string;
   label: string;
-  value: number | null;
+  value: number;
 }
 
 /** Phễu 6 giai đoạn (PRD AC 4.3.1): số nền của tuần + số thực phát sinh trong phiên demo. */
@@ -419,9 +463,23 @@ export function monthlyRent(state: MockState, landlordId: string): number {
 
 export function occupancy(state: MockState, units: Unit[]): { rented: number; holding: number; available: number } {
   const acc = { rented: 0, holding: 0, available: 0 };
-  for (const u of units) acc[unitStatus(state, u)]++;
+  for (const u of units) {
+    const s = unitStatus(state, u);
+    if (s === "rented" || s === "holding" || s === "available") {
+      acc[s]++;
+    }
+  }
   return acc;
 }
 
 export const hostName = (id: string) => HOSTS.find((h) => h.id === id)?.name ?? "—";
 
+export function bookingUnit(b: Booking): Unit {
+  return unitById(b.unitId)!;
+}
+
+export const tenantAllIn = (unit: Unit, persons = 1) => allInCost(unit, { persons, motorbikes: 1, cars: 0 });
+
+export function landlordPayoutAccount(state: MockState) {
+  return state.landlordPayoutAccount;
+}

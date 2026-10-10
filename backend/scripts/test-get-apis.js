@@ -4,7 +4,7 @@ const endpoints = [
   'landlord/dashboard',
   'landlord/units',
   'landlord/finance',
-  'host/board', // hồ sơ 15: cần phiên Sale (401 nếu không đăng nhập) — thay cho /dispatch/tickets đã xoá
+  'dispatch/tickets',
   'host/inspections',
   'host/earnings',
   'me/profile',

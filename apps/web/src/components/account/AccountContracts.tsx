@@ -1,17 +1,15 @@
 "use client";
 
-import { FileText } from "lucide-react";
 import { DataTable } from "@/components/ui/DataTable";
 import { KeyValue } from "@/components/ui/KeyValue";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
-import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
-import { fmtDate, maskPhone, vnd } from "@/lib/format";
-import { useApiQuery } from "@/lib/query/useApiQuery";
-import { tenantQueries } from "@/lib/tenant/queries";
-import { tenantApi } from "@/lib/tenant/api";
-import { toUnit } from "@/lib/tenant/adapters";
-import { unitAddress } from "@/lib/units";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { fmtDate, maskPhone, vnd } from "@/lib/mock/format";
+import { bookingUnit } from "@/lib/mock/selectors";
+import { tenantContracts } from "@/lib/mock/selectors-tenant";
+import { useMock } from "@/lib/mock/store";
+import { unitAddress } from "@/lib/mock/units";
 import styles from "./AccountContracts.module.css";
 
 const HANDOVER_ITEMS = ["Tường", "Sàn", "Sofa", "Điều hoà", "Tủ lạnh", "Bếp", "Máy giặt", "Giường", "Rèm", "Công tơ điện nước"];
@@ -29,20 +27,12 @@ const TECHNICIANS: Technician[] = [
   { name: "Chị Lan", trade: "Vệ sinh công nghiệp", phone: "0966789123" },
 ];
 
-const CONTRACT_STATUS_MAP: Record<"active" | "expiring" | "ended", { label: string; tone: StatusTone }> = {
-  active: { label: "Đang hiệu lực", tone: "ok" },
-  expiring: { label: "Sắp hết hạn", tone: "warn" },
-  ended: { label: "Đã kết thúc", tone: "neutral" },
-};
-
 export function AccountContracts() {
-  const { state: contractsState } = useApiQuery(tenantQueries.contracts());
+  const state = useMock();
+  if (!state.ready) return <div className="skeleton" style={{ height: 320 }} />;
 
-  if (contractsState.status === "loading") {
-    return <div className="skeleton" style={{ height: 320 }} />;
-  }
-
-  const contracts = contractsState.status === "ready" ? contractsState.data : [];
+  const phone = state.tenantProfile?.phone ?? "";
+  const bookings = tenantContracts(state, phone);
 
   return (
     <div>
@@ -56,61 +46,42 @@ export function AccountContracts() {
         }
       />
 
-      {contracts.length === 0 ? (
+      {bookings.length === 0 ? (
         <Section>
-          <p className="muted">Chưa có hợp đồng hoặc khoản cọc nào trong tài khoản.</p>
+          <p className="muted">Chưa có khoản cọc nào</p>
         </Section>
       ) : (
-        contracts.map((c) => {
-          const unit = toUnit(c.unit);
-          const statusInfo = CONTRACT_STATUS_MAP[c.status] || CONTRACT_STATUS_MAP.active;
+        bookings.map((b) => {
+          const unit = bookingUnit(b);
           return (
-            <Section
-              key={c.id}
-              title={unitAddress(unit)}
-              description={`Số hợp đồng ${c.contractNumber} · Lịch hẹn ${c.bookingRef}`}
-              actions={
-                <a
-                  href={tenantApi.contractPdfUrl(c.id)}
-                  download
-                  className="btn btn-quiet btn-sm"
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-                >
-                  <FileText size={15} /> Tải PDF hợp đồng
-                </a>
-              }
-            >
+            <Section key={b.id} title={unitAddress(unit)} description={`Mã lịch hẹn ${b.ref}`}>
               <KeyValue
                 items={[
-                  { label: "Căn hộ", value: unitAddress(unit) },
+                  { label: "Căn", value: unitAddress(unit) },
                   {
-                    label: "Trạng thái",
-                    value: <StatusBadge tone={statusInfo.tone}>{statusInfo.label}</StatusBadge>,
+                    label: "Tiền giữ chỗ",
+                    value: b.deposit ? (
+                      <>
+                        {vnd(b.deposit.amount)}đ · <StatusBadge tone={b.deposit.paidAt ? "ok" : "warn"}>{b.deposit.paidAt ? "Đã thanh toán" : "Chờ thanh toán"}</StatusBadge>
+                      </>
+                    ) : (
+                      "Chưa phát sinh"
+                    ),
                   },
+                  { label: "Điều khoản cọc", value: b.depositConsentAt ? `Đã đồng ý ngày ${fmtDate(b.depositConsentAt)}` : "Chưa xác nhận" },
                   {
-                    label: "Thời hạn thuê",
-                    value: `Từ ${fmtDate(c.startDate)} đến ${fmtDate(c.endDate)} (${c.months} tháng)`,
-                  },
-                  {
-                    label: "Giá thuê mỗi tháng",
-                    value: `${vnd(c.monthlyRent)}đ/tháng (Kỳ thanh toán: ${c.paymentCycle} tháng/lần)`,
-                  },
-                  {
-                    label: "Tiền cọc bảo đảm tài sản",
-                    value: `${vnd(c.securityDeposit)}đ (gồm 2.000.000đ cọc giữ chỗ chuyển đổi 100%)`,
-                  },
-                  {
-                    label: "Số tiền kỳ đầu cần thanh toán",
-                    value: `${vnd(c.firstPaymentDue.total)}đ (Tiền thuê kỳ 1: ${vnd(c.firstPaymentDue.rent)}đ + bù cọc bảo đảm: ${vnd(c.firstPaymentDue.depositTopUp)}đ)`,
+                    label: "Hợp đồng thuê",
+                    value: b.lease ? `Từ ${fmtDate(b.lease.startDate)} · ${b.lease.months} tháng · ${vnd(b.lease.rent)}đ/tháng` : "Chưa ký",
                   },
                 ]}
               />
+              {b.deposit && (
+                <p className={`muted small ${styles.note}`}>
+                  Khi ký hợp đồng thuê, 2.000.000 đ này chuyển toàn bộ thành tiền cọc bảo đảm tài sản, không trừ vào tiền thuê tháng đầu.
+                </p>
+              )}
 
-              <p className={`muted small ${styles.note}`}>
-                Khoản cọc giữ chỗ 2.000.000đ đã chuyển 100% thành tiền cọc bảo đảm tài sản (Security Deposit), tuyệt đối không trừ vào tiền thuê tháng đầu tiên.
-              </p>
-
-              <h3 className={styles.handoverTitle}>Hộ chiếu bàn giao số (10 hạng mục)</h3>
+              <h3 className={styles.handoverTitle}>Hộ chiếu bàn giao</h3>
               <ul className={styles.handoverList}>
                 {HANDOVER_ITEMS.map((item) => (
                   <li key={item}>
@@ -136,7 +107,7 @@ export function AccountContracts() {
             empty={<p className="muted">Chưa có thợ nào</p>}
           />
         </Section>
-        <p className={`muted small ${styles.techNote}`}>VinStay chỉ giới thiệu danh bạ thợ uy tín tại Ocean Park. Bạn và thợ tự thoả thuận chi phí và chịu trách nhiệm trực tiếp.</p>
+        <p className={`muted small ${styles.techNote}`}>VinStay chỉ giới thiệu. Bạn và thợ tự thoả thuận chi phí.</p>
       </div>
     </div>
   );

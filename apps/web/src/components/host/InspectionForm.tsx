@@ -1,95 +1,1748 @@
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { notFound, useRouter } from "next/navigation";
+import { notFound } from "next/navigation";
+import { Camera, Check, ChevronDown, ChevronUp, Clock, ExternalLink, Maximize2, Plus, Sparkles, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { Section } from "@/components/ui/Section";
+import { KeyValue } from "@/components/ui/KeyValue";
+import { toast } from "@/components/ui/Toast";
 import { ConsignTimeline } from "@/components/consign/ConsignTimeline";
-import { InspectionReportPanel } from "@/components/consign/InspectionReportPanel";
-import { inspectionApi, useInspection } from "@/lib/inspection/api";
-import { useInspectionAction } from "@/lib/inspection/useInspectionAction";
-import type { InspectionDetail } from "@/lib/inspection/types";
+import { InspectionReportView } from "@/components/consign/InspectionReportView";
+import { hostAcceptInspection, submitInspection, approveConsignment } from "@/lib/mock/actions";
+import { DEMO_USERS } from "@/lib/mock/actors";
+import { fmtTime, vnd } from "@/lib/mock/format";
+import { compressInspectionPhoto } from "@/lib/host/inspectionPhotos";
+import { validateInspectionPhoto } from "@/lib/host/aiVisionValidator";
+import { InspectionPhotoModal } from "./InspectionPhotoModal";
+import {
+  DECLARED_LABEL,
+  declaredValue,
+  LOW_CONDITION,
+} from "@/lib/mock/selectors-inspection";
+import { consignmentById } from "@/lib/mock/selectors-admin";
+import { setMockState, useMock } from "@/lib/mock/store";
+import type {
+  Consignment,
+  DeclaredField,
+  InspectionDraft,
+  InspectionReport,
+  InventoryGroup,
+  InventoryLine,
+} from "@/lib/mock/types";
+import {
+  INVENTORY_CATALOG,
+  INVENTORY_GROUP_LABEL,
+  MAX_EXTRA_LINES,
+  blankInventory,
+  passportSummary,
+  resolveInventoryCodesFromLandlord,
+} from "@/lib/mock/inventory";
+import {
+  landlordById,
+  PASSPORT_ITEMS,
+  createAndPublishUnitFromConsignment,
+  defaultLivingFeesForZone,
+  zoneOfBuilding,
+  type Furnishing,
+  type LayoutKind,
+  type PassportItem,
+} from "@/lib/mock/units";
+import { publishUnitToCatalog } from "@/lib/property/useUnits";
 import { useNow } from "@/lib/useNow";
 import styles from "@/components/consign/Consign.module.css";
-import { InspectionWorkspace } from "./inspection/InspectionWorkspace";
 
-/** `/host/inspections/[id]` — chi tiết thẩm định trên API thật (hồ sơ 16). */
-export function InspectionForm({ id }: { id: string }) {
-  const { state, reload } = useInspection(id);
-  if (state.status === "loading") return <div className="skeleton" style={{ height: 420 }} />;
-  if (state.status === "error") {
-    if (state.httpStatus === 404 || state.httpStatus === 403) notFound();
-    return <EmptyState title="Không tải được hồ sơ" description={state.message} action={<button type="button" className="btn btn-primary" onClick={reload}>Thử lại</button>} />;
-  }
-  // `key` theo stage: sau khi nhận ca / nộp, phiếu dựng lại từ dữ liệu mới.
-  return <InspectionBody key={state.data.stage} detail={state.data} />;
+import { hostRoles } from "@/lib/mock/selectors";
+import { useSession } from "@/lib/auth/client";
+
+const DEFAULT_HOST_ID = DEMO_USERS.host.refId!;
+const DECLARED_FIELDS: DeclaredField[] = [
+  "identity",
+  "layout",
+  "areaM2",
+  "furnishing",
+  "lock",
+];
+
+const GROUPS: InventoryGroup[] = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+
+function parseLayoutKind(layout: string | undefined): LayoutKind {
+  if (!layout) return "2PN";
+  if (layout === "STUDIO" || layout === "Studio") return "Studio";
+  if (layout === "ONE_BED_PLUS" || layout === "1PN") return "1PN";
+  if (layout === "TWO_BED_ONE_BATH" || layout === "TWO_BED_TWO_BATH" || layout === "2PN") return "2PN";
+  if (layout === "THREE_BED" || layout === "3PN") return "3PN";
+  return "2PN";
 }
 
-function InspectionBody({ detail }: { detail: InspectionDetail }) {
-  const router = useRouter();
+export function InspectionForm({ id }: { id: string }) {
+  const state = useMock();
+  const session = useSession();
   const now = useNow(10_000);
-  const { busy, run } = useInspectionAction(detail.id);
-  const can = `${detail.building} · Tầng ${detail.floor} · Căn ${detail.door ?? "—"}`;
+  const existingConsignment = consignmentById(state, id);
+  const [dbConsignment, setDbConsignment] = useState<Consignment | null>(null);
+  const [loadingDb, setLoadingDb] = useState<boolean>(() => !existingConsignment);
 
-  const timeline = {
-    status: detail.stage,
-    signedAt: detail.signedAt,
-    hostAcceptedAt: detail.hostAcceptedAt ?? undefined,
-    decidedAt: detail.decidedAt ?? undefined,
-    note: detail.report?.recommendation === "reject" ? detail.report.note : undefined,
-    inspectDueAt: detail.inspectDueAt,
-    report: detail.report ? { submittedAt: detail.report.submittedAt } : undefined,
+  const c = dbConsignment || existingConsignment;
+
+  // Tự động tải từ Backend DB để đồng bộ trạng thái thực tế
+  useEffect(() => {
+    let unmounted = false;
+    async function loadConsignmentFromDb() {
+      try {
+        const res = await fetch("/api/v1/host/inspections", {
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          if (!unmounted) setLoadingDb(false);
+          return;
+        }
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data?.data;
+        if (!Array.isArray(list)) {
+          if (!unmounted) setLoadingDb(false);
+          return;
+        }
+        const item = list.find(
+          (x: any) =>
+            x.consignmentId === id ||
+            x.unitId === id ||
+            x.id === id ||
+            x.unitCode === id,
+        );
+        if (item && !unmounted) {
+          const code = item.unitCode || "";
+          const parts = code.split("-");
+          const doorRaw = parts[2] || "01";
+          const doorNum = doorRaw.replace(/^[A-Za-z]+/, "") || "01";
+          const mapped: Consignment = {
+            id: item.consignmentId || item.id || id,
+            landlordId: item.landlordId || "L01",
+            building: item.building || "S1.02",
+            floor: item.floor || 12,
+            door: doorNum.padStart(2, "0"),
+            layout: parseLayoutKind(item.layout),
+            areaM2: item.carpetAreaM2 || 45,
+            askRent: item.askRent || 6000000,
+            suggestedDeposit: item.askRent || 6000000,
+            leaseTerm: "long",
+            furnished: true,
+            locks: ["smart"],
+            auditByHost: true,
+            status: (item.status as any) || "awaiting_host",
+            createdAt: item.createdAt || new Date().toISOString(),
+            signedAt: item.createdAt || new Date().toISOString(),
+            hostId: item.hostId || undefined,
+            inspectDueAt: new Date(
+              new Date(item.createdAt || Date.now()).getTime() + 48 * 3600000,
+            ).toISOString(),
+            furnishing: item.report?.furnishing || "full",
+            lock: "smart",
+            items: [],
+            note: item.note || undefined,
+            report: item.report
+              ? {
+                  furnishing: item.report.furnishing || "full",
+                  netAreaM2: item.report.netAreaM2 || item.carpetAreaM2 || 45,
+                  inventory: Array.isArray(item.report.inventory) ? item.report.inventory : [],
+                  declared: Array.isArray(item.report.declared)
+                    ? item.report.declared
+                    : [
+                        { field: "identity", ok: true },
+                        { field: "layout", ok: true },
+                        { field: "areaM2", ok: true },
+                        { field: "furnishing", ok: true },
+                        { field: "lock", ok: true },
+                      ],
+                  recommendation: item.report.recommendation || "approve",
+                  note: item.report.note || "",
+                  submittedAt: item.report.submittedAt || new Date().toISOString(),
+                  hostId: item.report.hostId || item.hostId || "host-s2",
+                }
+              : undefined,
+          };
+          setDbConsignment(mapped);
+          setMockState((s) => {
+            const next = [...s.consignments];
+            const idx = next.findIndex((x) => x.id === mapped.id);
+            if (idx >= 0) {
+              next[idx] = { ...next[idx], ...mapped };
+            } else {
+              next.push(mapped);
+            }
+            return { ...s, consignments: next };
+          });
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!unmounted) {
+          setLoadingDb(false);
+        }
+      }
+    }
+    loadConsignmentFromDb();
+    return () => {
+      unmounted = true;
+    };
+  }, [id]);
+
+  const currentHostId = session.user?.pendingHostId || DEFAULT_HOST_ID;
+  const isInspector = hostRoles(state, currentHostId).includes("inspector");
+  // Host được phép mở phiếu nếu được gán c.hostId hoặc c.hostId là currentHostId hoặc Host có quyền inspector
+  const activeHostId = c?.hostId || currentHostId;
+
+  // ─── 1. Đối chiếu khai báo ──────────────────────────────────────────────
+  const [declared, setDeclared] = useState<
+    Record<DeclaredField, { ok: boolean; actual: string }>
+  >({
+    identity: { ok: true, actual: "" },
+    layout: { ok: true, actual: "" },
+    areaM2: { ok: true, actual: "" },
+    furnishing: { ok: true, actual: "" },
+    lock: { ok: true, actual: "" },
+  });
+
+  // ─── 2. Số đo & Phân loại ───────────────────────────────────────────────
+  const [netAreaM2, setNetAreaM2] = useState<string>(() => (c ? String(c.areaM2) : ""));
+  const [furnishing, setFurnishing] = useState<Furnishing>(() =>
+    c ? (c.furnished ? "full" : "empty") : "full",
+  );
+
+  // ─── 3. Bảng kê 32 dòng catalog — Tự động liên kết từ khai báo chủ nhà ──────
+  const { codes: resolvedCodes, landlordCodes, declaredKeys } = useMemo(() => {
+    return resolveInventoryCodesFromLandlord(c?.items, c?.furnished, c?.note);
+  }, [c?.items, c?.furnished, c?.note]);
+
+  const [inventory, setInventory] = useState<InventoryLine[]>(() => {
+    if (c?.report?.inventory && c.report.inventory.length >= 32) {
+      return c.report.inventory.slice(0, 32);
+    }
+    const blank = blankInventory();
+    if (!c) return blank;
+    const { codes } = resolveInventoryCodesFromLandlord(c.items, c.furnished, c.note);
+    return blank.map((line) => ({
+      ...line,
+      present: codes.has(line.code),
+      qty: 1,
+    }));
+  });
+
+  // ─── 4. Hạng mục thêm (X1..X10) ─────────────────────────────────────────
+  const [extraLines, setExtraLines] = useState<InventoryLine[]>(() => {
+    if (c?.report?.inventory && c.report.inventory.length > 32) {
+      return c.report.inventory.slice(32);
+    }
+    return [];
+  });
+
+  // ─── 5. Kiểm tra công năng ──────────────────────────────────────────────
+  const [functionsChecked, setFunctionsChecked] = useState<Record<string, boolean>>({
+    ac: true,
+    kitchen: true,
+    waterHeater: true,
+    drainage: true,
+  });
+
+  // ─── 6. Accordion groups mở/thu gọn ─────────────────────────────────────
+  const [openGroups, setOpenGroups] = useState<Record<InventoryGroup, boolean>>({
+    I: true,
+    II: true,
+    III: false,
+    IV: false,
+    V: false,
+    VI: false,
+    VII: false,
+    VIII: false,
+  });
+
+  // ─── 7. Biểu phí sinh hoạt thực tế do Host & Chủ nhà xác minh ────────────
+  const defaultZoneFees = defaultLivingFeesForZone(c?.building ? zoneOfBuilding(c.building).id : "sapphire1");
+  const [mgmtFeePerM2, setMgmtFeePerM2] = useState<number>(
+    c?.report?.livingFees?.managementFeePerM2 ?? defaultZoneFees.managementFeePerM2
+  );
+  const [motorbikeFee, setMotorbikeFee] = useState<number>(
+    c?.report?.livingFees?.motorbikeFee ?? defaultZoneFees.motorbikeFee
+  );
+  const [carFee, setCarFee] = useState<number>(
+    c?.report?.livingFees?.carFee ?? defaultZoneFees.carFee
+  );
+  const [otherFeesNote, setOtherFeesNote] = useState<string>(
+    c?.report?.livingFees?.otherFeesNote ?? ""
+  );
+
+  // ─── 8. Đề xuất & Ghi chú ────────────────────────────────────────────────
+  const [recommendation, setRecommendation] = useState<"approve" | "reject">("approve");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  // ─── Tính toán thống kê trực tiếp ────────────────────────────────────────
+  const allLines = useMemo(() => [...inventory, ...extraLines], [inventory, extraLines]);
+  const presentLines = useMemo(() => allLines.filter((l) => l.present), [allLines]);
+  const completedLines = useMemo(
+    () =>
+      presentLines.filter(
+        (l) => typeof l.condition === "number" && Boolean(l.photoAt) && (l.qty ?? 0) >= 1,
+      ),
+    [presentLines],
+  );
+  const photoCount = useMemo(() => presentLines.filter((l) => Boolean(l.photoAt)).length, [presentLines]);
+  const lowLines = useMemo(
+    () => presentLines.filter((l) => typeof l.condition === "number" && l.condition < LOW_CONDITION),
+    [presentLines],
+  );
+  const passportSum = useMemo(() => passportSummary(allLines), [allLines]);
+
+  const liveAvg = useMemo(() => {
+    const scored = presentLines.filter((l) => typeof l.condition === "number");
+    if (scored.length === 0) return 0;
+    const sum = scored.reduce((acc, curr) => acc + (curr.condition ?? 0), 0);
+    return Math.round(sum / scored.length);
+  }, [presentLines]);
+
+  // ─── Quản lý tải & chụp ảnh hiện trạng nội thất ─────────────────────────
+  // Hook phải đứng TRƯỚC mọi `return` sớm (rules-of-hooks).
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activePhotoTarget, setActivePhotoTarget] = useState<{ code: string; isExtra: boolean } | null>(null);
+  const [processingCode, setProcessingCode] = useState<string | null>(null);
+  const [previewModal, setPreviewModal] = useState<{
+    url: string;
+    title: string;
+    time?: string;
+    aiDetected?: string;
+    aiConfidence?: number;
+    aiStatus?: "match" | "warning" | "unclear";
+    locationTag?: string;
+  } | null>(null);
+
+  // Đồng bộ thông tin khi nạp được căn hộ từ Database
+  useEffect(() => {
+    if (c) {
+      setNetAreaM2((prev) => (prev ? prev : String(c.areaM2)));
+      setFurnishing((prev) => (c.furnished ? prev : "empty"));
+      if (c.report?.inventory && c.report.inventory.length >= 32) {
+        setInventory(c.report.inventory.slice(0, 32));
+      } else {
+        const { codes } = resolveInventoryCodesFromLandlord(c.items, c.furnished, c.note);
+        setInventory((prev) =>
+          prev.map((line) => ({
+            ...line,
+            present: codes.has(line.code),
+            qty: 1,
+          }))
+        );
+      }
+    }
+  }, [c]);
+
+  if (!state.ready || !now || loadingDb) {
+    return <div className="skeleton" style={{ height: 420 }} />;
+  }
+
+  if (!c) {
+    notFound();
+  }
+
+  const landlord = landlordById(c.landlordId);
+  const can = `${c.building} · Tầng ${c.floor} · Căn ${c.door}`;
+
+  // Helper cập nhật 1 dòng trong inventory
+  const updateLine = (code: string, patch: Partial<InventoryLine>) => {
+    setInventory((prev) =>
+      prev.map((line) => (line.code === code ? { ...line, ...patch } : line)),
+    );
   };
 
-  async function take() {
-    const open = detail.tier === "open";
-    const res = await run(() => (open ? inspectionApi.claim(detail.id) : inspectionApi.accept(detail.id)), open ? "Đã nhận ticket. Mở phiếu khi tới căn." : "Đã nhận ca. Mở phiếu khi tới căn.", (d) => d);
-    if (!res.ok && (res.code === "inspection_taken" || res.code === "inspection_not_found")) router.push("/host/inspections");
-  }
+  // Helper cập nhật 1 dòng extra
+  const updateExtra = (code: string, patch: Partial<InventoryLine>) => {
+    setExtraLines((prev) =>
+      prev.map((line) => (line.code === code ? { ...line, ...patch } : line)),
+    );
+  };
+
+  // Thêm dòng extra mới
+  const handleAddExtra = () => {
+    if (extraLines.length >= MAX_EXTRA_LINES) {
+      toast(`Tối đa ${MAX_EXTRA_LINES} hạng mục phát sinh ngoài catalog.`, "info");
+      return;
+    }
+    const nextCode = `X${extraLines.length + 1}`;
+    const newLine: InventoryLine = {
+      code: nextCode,
+      group: "I",
+      name: "",
+      passport: "Sofa & bàn ghế",
+      present: true,
+      liability: "misuse",
+      qty: 1,
+      condition: 80,
+      photoAt: "",
+      spec: "",
+      note: "",
+    };
+    setExtraLines((prev) => [...prev, newLine]);
+  };
+
+  // Xóa dòng extra
+  const handleRemoveExtra = (code: string) => {
+    setExtraLines((prev) => prev.filter((l) => l.code !== code));
+  };
+
+  // Toggle group accordion
+  const toggleGroup = (grp: InventoryGroup) => {
+    setOpenGroups((prev) => ({ ...prev, [grp]: !prev[grp] }));
+  };
+
+  const handleTriggerPhoto = (code: string, isExtra = false) => {
+    setActivePhotoTarget({ code, isExtra });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activePhotoTarget) return;
+
+    const targetCode = activePhotoTarget.code;
+    const targetIsExtra = activePhotoTarget.isExtra;
+
+    try {
+      setProcessingCode(targetCode);
+      const dataUrl = await compressInspectionPhoto(file);
+      const ts = new Date().toISOString();
+
+      // ─── Lớp 1 & Lớp 2: AI Vision Validation & Geofence Metadata ───
+      const targetItem = !targetIsExtra ? INVENTORY_CATALOG.find((it) => it.code === targetCode) : null;
+      const itemName = targetItem?.name || (targetIsExtra ? extraLines.find((x) => x.code === targetCode)?.name || "Hạng mục phát sinh" : "Trang thiết bị");
+      const locHint = `Vinhomes Ocean Park · ${c.building} · Tầng ${c.floor} · Căn ${c.door}`;
+
+      const aiRes = await validateInspectionPhoto(dataUrl, targetCode, itemName, locHint);
+
+      const photoPatch: Partial<InventoryLine> = {
+        photoUrl: dataUrl,
+        photoAt: ts,
+        aiValidated: true,
+        aiDetected: aiRes.detectedLabel,
+        aiConfidence: aiRes.confidence,
+        aiStatus: aiRes.status,
+        locationTag: aiRes.locationTag,
+      };
+
+      if (targetIsExtra) {
+        updateExtra(targetCode, photoPatch);
+      } else {
+        updateLine(targetCode, photoPatch);
+      }
+
+      if (aiRes.status === "match") {
+        toast(`✓ AI Vision xác thực: ${aiRes.detectedLabel} (${aiRes.confidence}%)`, "success");
+      } else if (aiRes.status === "warning") {
+        toast(`⚠️ ${aiRes.message}`, "info");
+      } else {
+        toast(`⚠️ ${aiRes.message}`, "info");
+      }
+    } catch (err: unknown) {
+      toast((err instanceof Error && err.message) || "Không thể tải và lưu ảnh, vui lòng thử lại.", "info");
+    } finally {
+      setProcessingCode(null);
+      setActivePhotoTarget(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemovePhoto = (code: string, isExtra = false) => {
+    if (isExtra) {
+      updateExtra(code, {
+        photoUrl: undefined,
+        photoAt: undefined,
+        aiValidated: undefined,
+        aiDetected: undefined,
+        aiConfidence: undefined,
+        aiStatus: undefined,
+      });
+    } else {
+      updateLine(code, {
+        photoUrl: undefined,
+        photoAt: undefined,
+        aiValidated: undefined,
+        aiDetected: undefined,
+        aiConfidence: undefined,
+        aiStatus: undefined,
+      });
+    }
+    toast(`Đã gỡ ảnh mục ${code}.`, "info");
+  };
+
+  const renderPhotoCell = (line: InventoryLine, isExtra = false) => {
+    const isProcessing = processingCode === line.code;
+
+    if (isProcessing) {
+      return (
+        <div className={styles.photoCell}>
+          <span className={styles.photoBtn} style={{ opacity: 0.85, cursor: "wait" }}>
+            <Clock size={12} /> Đang quét AI & nén...
+          </span>
+        </div>
+      );
+    }
+
+    if (line.photoUrl) {
+      return (
+        <div className={styles.photoCell}>
+          <div className={styles.photoThumbCard}>
+            <button
+              type="button"
+              className={styles.photoThumbBtn}
+              onClick={() =>
+                setPreviewModal({
+                  url: line.photoUrl!,
+                  title: `${line.code}. ${line.name}`,
+                  time: line.photoAt ? fmtTime(line.photoAt) : undefined,
+                  aiDetected: line.aiDetected,
+                  aiConfidence: line.aiConfidence,
+                  aiStatus: line.aiStatus,
+                  locationTag: line.locationTag || `Vinhomes Ocean Park · ${c.building}`,
+                })
+              }
+              title="Bấm để xem ảnh phóng to & kết quả xác thực AI"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={line.photoUrl} alt={line.name} className={styles.photoThumbImg} />
+              <span className={styles.photoThumbZoom}>
+                <Maximize2 size={12} />
+              </span>
+            </button>
+            <div className={styles.photoMeta}>
+              <span className={styles.photoTimeText}>
+                <Check size={11} /> {line.photoAt ? fmtTime(line.photoAt) : "Đã chụp"}
+              </span>
+              {line.aiDetected && (
+                <span
+                  className={`${styles.aiBadgePill} ${
+                    line.aiStatus === "match"
+                      ? styles.aiBadgeMatch
+                      : line.aiStatus === "warning"
+                      ? styles.aiBadgeWarning
+                      : styles.aiBadgeUnclear
+                  }`}
+                  style={{ fontSize: "10px", padding: "1px 5px", marginTop: "2px" }}
+                  title={`AI Vision: ${line.aiDetected} (${line.aiConfidence ?? 94}%)`}
+                >
+                  🤖 {line.aiStatus === "match" ? "✓" : "⚠️"} {line.aiDetected}
+                </span>
+              )}
+              <div className={styles.photoActions}>
+                <button
+                  type="button"
+                  className={styles.photoActionBtn}
+                  onClick={() => handleTriggerPhoto(line.code, isExtra)}
+                  title="Chụp lại hoặc chọn ảnh khác"
+                >
+                  <Camera size={11} /> Đổi
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.photoActionBtn} ${styles.photoActionBtnDanger}`}
+                  onClick={() => handleRemovePhoto(line.code, isExtra)}
+                  title="Xoá ảnh này"
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (line.photoAt) {
+      return (
+        <div className={styles.photoCell}>
+          <div className={styles.photoMockWrap}>
+            <button
+              type="button"
+              className={`${styles.photoBtn} ${styles.photoBtnDone}`}
+              onClick={() => handleTriggerPhoto(line.code, isExtra)}
+              title="Đã lưu giờ — bấm để tải ảnh chụp thật"
+            >
+              <Check size={13} /> {fmtTime(line.photoAt)}
+            </button>
+            <button
+              type="button"
+              className={styles.photoUploadRealBtn}
+              onClick={() => handleTriggerPhoto(line.code, isExtra)}
+              title="Tải ảnh chụp thật tại căn"
+            >
+              <Camera size={12} /> Tải ảnh thật
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className={styles.photoCell}>
+        <button
+          type="button"
+          className={styles.photoBtn}
+          onClick={() => handleTriggerPhoto(line.code, isExtra)}
+        >
+          <Camera size={13} /> Chụp ảnh *
+        </button>
+      </div>
+    );
+  };
+
+  // ─── Xử lý nộp báo cáo ─────────────────────────────────────────────────
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    const netArea = Number(netAreaM2);
+    if (!netArea || netArea <= 0) {
+      setError("Vui lòng nhập diện tích thông thuỷ đo thực tế (> 0).");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    if (netArea > c.areaM2) {
+      setError(`Diện tích thông thuỷ (${netArea} m²) không thể lớn hơn diện tích tim tường (${c.areaM2} m²).`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    // Kiểm tra các dòng có mặt
+    for (const l of presentLines) {
+      if (l.condition === undefined || l.condition === null) {
+        setError(`Hạng mục "${l.code}. ${l.name}" chưa chọn % độ mới.`);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      if (!l.photoAt) {
+        setError(`Hạng mục "${l.code}. ${l.name}" chưa chụp ảnh xác thực tại căn.`);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      if (l.code.startsWith("X") && !l.name.trim()) {
+        setError(`Hạng mục phát sinh ${l.code} chưa nhập tên.`);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+    }
+
+    // Nối công năng vào note nếu có
+    let finalNote = note.trim();
+    const fnTexts: string[] = [];
+    if (functionsChecked.ac) fnTexts.push("ĐH mát sau 5p");
+    if (functionsChecked.kitchen) fnTexts.push("Bếp nhận nồi sau 15s");
+    if (functionsChecked.waterHeater) fnTexts.push("Nóng lạnh & ELCB tốt");
+    if (functionsChecked.drainage) fnTexts.push("Cấp thoát nước kín");
+    if (fnTexts.length > 0 && !finalNote.includes("Công năng:")) {
+      finalNote = finalNote
+        ? `${finalNote}. Công năng: ${fnTexts.join(", ")}`
+        : `Công năng: ${fnTexts.join(", ")}`;
+    }
+
+    const draft: InspectionDraft = {
+      declared: DECLARED_FIELDS.map((f) => ({
+        field: f,
+        ok: declared[f].ok,
+        actual: declared[f].ok ? undefined : declared[f].actual.trim(),
+      })),
+      inventory: allLines,
+      netAreaM2: netArea,
+      furnishing,
+      recommendation,
+      note: finalNote || undefined,
+      livingFees: {
+        managementFeePerM2: Number(mgmtFeePerM2) || defaultZoneFees.managementFeePerM2,
+        motorbikeFee: Number(motorbikeFee) || defaultZoneFees.motorbikeFee,
+        carFee: Number(carFee) || defaultZoneFees.carFee,
+        electricityNote: "Theo biểu giá bậc thang EVN Hà Nội",
+        waterNote: "Theo đơn giá nước sạch sinh hoạt BQL",
+        otherFeesNote: otherFeesNote.trim() || undefined,
+        verifiedByHost: true,
+      },
+    };
+
+    const res = submitInspection(c.id, activeHostId, draft);
+    if (!res.ok) {
+      setError(res.reason);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      try {
+        fetch(`/api/v1/host/inspections/${c.id}/report`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            recommendation: draft.recommendation,
+            note: draft.note,
+            netAreaM2: draft.netAreaM2,
+            furnishing: draft.furnishing,
+            inventory: draft.inventory,
+            declared: draft.declared,
+            hostId: activeHostId,
+          }),
+        }).catch(() => {});
+      } catch {
+        // ignore fetch error
+      }
+
+      const isApproved = draft.recommendation === "approve";
+      if (isApproved) {
+        try {
+          approveConsignment(c.id, `Field Host ${activeHostId}`);
+        } catch {
+          // fallback
+        }
+      }
+
+      const fullReport: InspectionReport = {
+        ...draft,
+        declared: draft.declared,
+        inventory: allLines,
+        netAreaM2: netArea,
+        furnishing,
+        recommendation,
+        note: finalNote || undefined,
+        hostId: activeHostId,
+        submittedAt: new Date().toISOString(),
+      };
+
+      const updatedC: Consignment = {
+        ...c,
+        status: isApproved ? "approved" : "reviewing",
+        report: fullReport,
+        decidedAt: isApproved ? fullReport.submittedAt : undefined,
+        decidedBy: isApproved ? `Field Host ${activeHostId}` : undefined,
+      };
+
+      // Đẩy trực tiếp căn hộ lên trang chủ để khách thuê có thể xem căn ngay lập tức
+      if (isApproved) {
+        try {
+          const published = createAndPublishUnitFromConsignment(updatedC);
+          publishUnitToCatalog(published);
+        } catch {
+          // fallback
+        }
+      }
+
+      setDbConsignment((prev) => (prev ? updatedC : null));
+
+      if (isApproved) {
+        toast("Thẩm định thành công! Căn hộ đã được niêm yết trực tiếp lên trang chủ cho khách thuê.", "success");
+      } else {
+        toast("Đã nộp báo cáo thẩm định. Admin sẽ rà soát hồ sơ.", "info");
+      }
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-5)" }}>
       <PageHeader
         title={`Phiếu thẩm định · ${can}`}
-        description={`Chủ nhà: ${detail.landlordName} · Phân khu ${detail.zone} · ${detail.unitCode}`}
+        description={`Chủ nhà: ${landlord?.name ?? c.landlordId} · Phân khu ${c.building}`}
         back={{ href: "/host/inspections", label: "Danh sách thẩm định" }}
       />
 
-      <ConsignTimeline c={timeline} now={now} />
+      <ConsignTimeline c={c} now={now} />
 
-      {detail.stage === "awaiting_host" && (
-        <div className={styles.formCard} style={{ textAlign: "center", padding: "var(--s-7) var(--s-5)" }}>
-          <h3 style={{ margin: 0 }}>{detail.tier === "open" ? "Ticket đang mở cho mọi Inspector" : "Bạn chưa nhận ca thẩm định này"}</h3>
-          <p style={{ margin: "var(--s-2) 0 var(--s-5)", color: "var(--ink-2)", fontSize: "var(--fs-13)" }}>Nhận ca trước khi tới kiểm tra thực tế căn hộ.</p>
+      {/* Case 1: awaiting_host */}
+      {c.status === "awaiting_host" && (
+        <div
+          className={styles.formCard}
+          style={{ textAlign: "center", padding: "var(--s-7) var(--s-5)" }}
+        >
+          <h3 style={{ margin: 0, color: "var(--ink)" }}>Bạn chưa nhận thẩm định này</h3>
+          <p
+            style={{
+              margin: "var(--s-2) 0 var(--s-5)",
+              color: "var(--ink-2)",
+              fontSize: "var(--fs-13)",
+            }}
+          >
+            Vui lòng nhận ticket trước khi tới kiểm tra thực tế căn hộ.
+          </p>
           <div>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void take()}>
-              {detail.tier === "open" ? "Nhận ticket" : "Nhận ca thẩm định"}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={async () => {
+                const acceptHostId = c.hostId || currentHostId;
+                try {
+                  await fetch(`/api/v1/host/inspections/${c.id}/accept`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ hostId: acceptHostId }),
+                  });
+                } catch {
+                  // ignore
+                }
+                const res = hostAcceptInspection(c.id, acceptHostId);
+                if (res.ok) {
+                  toast("Đã nhận. Bạn có thể mở phiếu thẩm định ngay.", "success");
+                  setDbConsignment((prev) =>
+                    prev ? { ...prev, status: "inspecting", hostId: acceptHostId } : null,
+                  );
+                } else {
+                  toast(res.reason, "info");
+                }
+              }}
+            >
+              Nhận thẩm định
             </button>
           </div>
         </div>
       )}
 
-      {detail.stage === "inspecting" && <InspectionWorkspace detail={detail} />}
-
-      {detail.stage === "awaiting_landlord" && (
-        <div className={styles.formCard} role="status">
-          <h3 style={{ margin: 0 }}>Đã gửi đề xuất giá cho chủ nhà</h3>
-          <p className="small muted" style={{ margin: 0 }}>
-            Căn chưa được đăng — chờ chủ nhà đồng ý giá mới. Chủ nhà không đồng ý thì hồ sơ đóng lại.
-          </p>
+      {/* Case 2: reviewing | approved | rejected -> Xem báo cáo chỉ đọc */}
+      {c.status === "approved" && (
+        <div
+          style={{
+            background: "linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.08) 100%)",
+            border: "1px solid var(--kelp-500, #10b981)",
+            borderRadius: 12,
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                background: "var(--kelp-500, #10b981)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Check size={20} strokeWidth={2.5} />
+            </div>
+            <div>
+              <b style={{ color: "var(--kelp-800, #065f46)", fontSize: 15 }}>
+                Căn hộ đã được niêm yết trực tiếp lên Trang chủ VinStay AI
+              </b>
+              <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--ink-2)" }}>
+                Hồ sơ thẩm định đạt chuẩn 100%. Khách thuê hiện đã có thể xem chi tiết, bảng All-in Cost và đặt lịch xem phòng ngay.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/units/${c.id}`}
+            className="btn btn-primary btn-sm"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Xem căn trên Trang chủ <ExternalLink size={14} />
+          </Link>
         </div>
       )}
 
-      {(detail.stage === "approved" || detail.stage === "rejected" || detail.stage === "awaiting_landlord") &&
-        (detail.report ? (
-          <InspectionReportPanel unit={detail} report={detail.report} photos={detail.photos} />
-        ) : (
-          <EmptyState title="Chưa có phiếu" description="Hồ sơ đã đóng nhưng chưa có dữ liệu phiếu." />
-        ))}
-      {detail.stage === "approved" && (
-        <p className="small" style={{ margin: 0 }}>
-          Căn đã lên danh sách — <Link href={`/units/${encodeURIComponent(detail.unitCode)}`} className="link">xem tin đăng</Link>.
-        </p>
+      {(c.status === "reviewing" ||
+        c.status === "approved" ||
+        c.status === "rejected") &&
+        c.report && <InspectionReportView c={c as Consignment & { report: InspectionReport }} />}
+
+      {/* Case 3: inspecting -> Form điền thông tin */}
+      {c.status === "inspecting" && (
+        <form onSubmit={handleSubmit} className={styles.inspectionGrid}>
+          {/* Cột chính: Form thẩm định */}
+          <div className={styles.mainFormCol}>
+            {error && <div className={styles.errorBanner}>{error}</div>}
+
+            {/* 1. Đối chiếu thông tin chủ kê khai */}
+            <div className={styles.formCard}>
+              <h3 className={styles.formCardTitle}>1. Đối chiếu thông tin chủ kê khai</h3>
+              <p
+                style={{
+                  margin: "0 0 var(--s-2)",
+                  fontSize: "var(--fs-13)",
+                  color: "var(--ink-2)",
+                }}
+              >
+                Kiểm tra tính chính xác của 5 trường thông tin do chủ nhà khai báo ban đầu.
+              </p>
+
+              <div>
+                {DECLARED_FIELDS.map((f) => {
+                  const check = declared[f];
+                  return (
+                    <div key={f} className={`${styles.declaredRow} ${!check.ok ? styles.declaredRowDiff : ""}`}>
+                      <div className={styles.declaredHead}>
+                        <div>
+                          <span className={styles.declaredLabel}>{DECLARED_LABEL[f]}: </span>
+                          <span className={styles.declaredVal}>{declaredValue(c, f)}</span>
+                        </div>
+                        <div className={styles.segmentedWrap}>
+                          <button
+                            type="button"
+                            className={`${styles.segmentedBtn} ${
+                              check.ok ? styles.segmentedActive : ""
+                            }`}
+                            onClick={() =>
+                              setDeclared((prev) => ({
+                                ...prev,
+                                [f]: { ...prev[f], ok: true },
+                              }))
+                            }
+                          >
+                            <Check size={14} strokeWidth={2.8} /> Khớp
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.segmentedBtn} ${
+                              !check.ok ? styles.segmentedDanger : ""
+                            }`}
+                            onClick={() =>
+                              setDeclared((prev) => ({
+                                ...prev,
+                                [f]: { ...prev[f], ok: false },
+                              }))
+                            }
+                          >
+                            Sai lệch
+                          </button>
+                        </div>
+                      </div>
+
+                      {!check.ok && (
+                        <input
+                          type="text"
+                          className="input"
+                          maxLength={80}
+                          placeholder={`Nhập giá trị thực tế của ${DECLARED_LABEL[f].toLowerCase()}...`}
+                          value={check.actual}
+                          onChange={(e) =>
+                            setDeclared((prev) => ({
+                              ...prev,
+                              [f]: { ...prev[f], actual: e.target.value },
+                            }))
+                          }
+                          required
+                          style={{ marginTop: "var(--s-1)" }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. Số đo & Phân loại thực tế */}
+            <div className={styles.formCard}>
+              <h3 className={styles.formCardTitle}>2. Số đo & Phân loại thực tế</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "var(--s-4)" }}>
+                <label className="field">
+                  <span className="label">
+                    Diện tích thông thuỷ đo thực tế (m²) <b style={{ color: "var(--danger)" }}>*</b>
+                  </span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    max={c.areaM2}
+                    className="input"
+                    value={netAreaM2}
+                    placeholder={`Đo theo hiện trạng (≤ ${c.areaM2} m²)`}
+                    onChange={(e) => setNetAreaM2(e.target.value)}
+                    required
+                  />
+                  <span className="muted xs" style={{ marginTop: 4 }}>
+                    Chủ nhà khai tim tường: <b>{c.areaM2} m²</b>. Host đo kích thước lọt lòng trong nhà.
+                  </span>
+                </label>
+
+                <div className="field">
+                  <span className="label">
+                    Nội thất thực tế chốt sau thẩm định <b style={{ color: "var(--danger)" }}>*</b>
+                  </span>
+                  <div className={styles.chipGroup} style={{ marginTop: 6 }}>
+                    {(
+                      [
+                        ["full", "Full nội thất"],
+                        ["basic", "Nội thất cơ bản"],
+                        ["empty", "Nhà trống"],
+                      ] as [Furnishing, string][]
+                    ).map(([k, label]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        className={`${styles.chipItem} ${
+                          furnishing === k ? styles.chipItemActive : ""
+                        }`}
+                        onClick={() => setFurnishing(k)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Bảng kê trang thiết bị nội thất (Điều 5) */}
+            <div className={styles.formCard}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h3 className={styles.formCardTitle}>3. Bảng kê trang thiết bị (Điều 5)</h3>
+                  <p
+                    style={{
+                      margin: "var(--s-1) 0 0",
+                      fontSize: "var(--fs-13)",
+                      color: "var(--ink-2)",
+                    }}
+                  >
+                    32 hạng mục chuẩn chia theo 8 phân khu sinh hoạt theo HĐ thuê chính thức.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-quiet btn-sm"
+                  onClick={() => {
+                    const allOpen = Object.values(openGroups).every(Boolean);
+                    const nextVal = !allOpen;
+                    const nextObj = {} as Record<InventoryGroup, boolean>;
+                    for (const g of GROUPS) nextObj[g] = nextVal;
+                    setOpenGroups(nextObj);
+                  }}
+                >
+                  {Object.values(openGroups).every(Boolean) ? "Thu gọn tất cả" : "Mở tất cả"}
+                </button>
+              </div>
+
+              {landlordCodes.size > 0 && (
+                <div className={styles.landlordSyncBanner}>
+                  <Sparkles size={16} style={{ flexShrink: 0, color: "#059669" }} />
+                  <span>
+                    <b>Đã tự động liên kết từ hồ sơ ký gửi:</b> Hệ thống đã đối chiếu và tích sẵn <b>{landlordCodes.size} món</b> theo kê khai của chủ nhà ({Array.from(declaredKeys).join(", ")}). Host kiểm tra hiện trạng thực tế và chụp ảnh xác nhận.
+                  </span>
+                </div>
+              )}
+
+              {GROUPS.map((grp) => {
+                const groupLines = inventory.filter((l) => l.group === grp);
+                const groupPresent = groupLines.filter((l) => l.present);
+                const groupDone = groupPresent.filter(
+                  (l) => typeof l.condition === "number" && Boolean(l.photoAt),
+                );
+                const isOpen = openGroups[grp];
+                const isComplete = groupPresent.length > 0 && groupDone.length === groupPresent.length;
+
+                return (
+                  <div key={grp} className={styles.groupCard}>
+                    <div
+                      className={`${styles.groupHeader} ${isOpen ? styles.groupHeaderOpen : ""}`}
+                      onClick={() => toggleGroup(grp)}
+                    >
+                      <div className={styles.groupTitle}>
+                        <span>
+                          {grp}. {INVENTORY_GROUP_LABEL[grp]}
+                        </span>
+                        <span
+                          className={`${styles.groupBadge} ${
+                            isComplete ? styles.groupBadgeComplete : ""
+                          }`}
+                        >
+                          {groupDone.length}/{groupPresent.length} món
+                        </span>
+                      </div>
+                      {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+
+                    {isOpen && (
+                      <div className={styles.groupBody}>
+                        {groupLines.map((line) => {
+                          const catalog = INVENTORY_CATALOG.find((cat) => cat.code === line.code);
+                          return (
+                            <div
+                              key={line.code}
+                              className={line.present ? styles.invRow : styles.invRowUnchecked}
+                            >
+                              <div className={styles.invHead}>
+                                <label className={styles.invCheckLabel}>
+                                  <input
+                                    type="checkbox"
+                                    checked={line.present}
+                                    onChange={(e) =>
+                                      updateLine(line.code, { present: e.target.checked })
+                                    }
+                                  />
+                                  <span>
+                                    {line.code}. {line.name}
+                                  </span>
+                                  {landlordCodes.has(line.code) ? (
+                                    <span className={styles.landlordDeclaredBadge}>
+                                      ✓ Chủ nhà khai: Có
+                                    </span>
+                                  ) : (
+                                    !line.present && (
+                                      <span className={styles.landlordUndeclaredBadge}>
+                                        (Chủ nhà không kê khai)
+                                      </span>
+                                    )
+                                  )}
+                                </label>
+                              </div>
+
+                              {line.present && (
+                                <>
+                                  <div className={styles.invFields}>
+                                    <input
+                                      type="text"
+                                      className="input"
+                                      maxLength={80}
+                                      placeholder={catalog?.specHint ?? "Nhãn hiệu / model / quy cách..."}
+                                      value={line.spec ?? ""}
+                                      onChange={(e) =>
+                                        updateLine(line.code, { spec: e.target.value })
+                                      }
+                                      style={{ fontSize: "var(--fs-13)" }}
+                                    />
+
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      className="input"
+                                      title="Số lượng"
+                                      value={line.qty ?? 1}
+                                      onChange={(e) =>
+                                        updateLine(line.code, {
+                                          qty: Math.max(1, Number(e.target.value) || 1),
+                                        })
+                                      }
+                                      style={{ fontSize: "var(--fs-13)" }}
+                                    />
+
+                                    <select
+                                      className="select"
+                                      value={line.condition !== undefined ? line.condition : ""}
+                                      onChange={(e) => {
+                                        const v =
+                                          e.target.value === "" ? undefined : Number(e.target.value);
+                                        updateLine(line.code, { condition: v });
+                                      }}
+                                      required={line.present}
+                                      style={{ fontSize: "var(--fs-13)" }}
+                                    >
+                                      <option value="">Độ mới</option>
+                                      {[100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0].map((num) => (
+                                        <option key={num} value={num}>
+                                          {num}%
+                                        </option>
+                                      ))}
+                                    </select>
+
+                                    {renderPhotoCell(line, false)}
+                                  </div>
+
+                                  <div className={styles.invFieldsExtra}>
+                                    <input
+                                      type="text"
+                                      className="input"
+                                      maxLength={120}
+                                      placeholder="Ghi chú chi tiết hiện trạng..."
+                                      value={line.note ?? ""}
+                                      onChange={(e) =>
+                                        updateLine(line.code, { note: e.target.value })
+                                      }
+                                      style={{ fontSize: "var(--fs-12)" }}
+                                    />
+                                    <div className={styles.priceWrap}>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        step="100000"
+                                        className="input"
+                                        placeholder={
+                                          catalog?.defaultPrice
+                                            ? `Định mức: ${vnd(catalog.defaultPrice)}đ (hoặc tự nhập)`
+                                            : "Giá mua gốc (VNĐ) · tuỳ chọn"
+                                        }
+                                        title="Giá mua gốc / định mức chuẩn của tài sản. Nếu hỏng nát hoàn toàn: bồi thường = Giá gốc × % Độ mới. Nếu hỏng bộ phận: sửa chữa thực chi theo thợ mộc/kỹ thuật."
+                                        value={line.compensation ?? ""}
+                                        onChange={(e) =>
+                                          updateLine(line.code, {
+                                            compensation: e.target.value
+                                              ? Number(e.target.value)
+                                              : undefined,
+                                          })
+                                        }
+                                        style={{ fontSize: "var(--fs-12)" }}
+                                      />
+                                      {!line.compensation && catalog?.defaultPrice && (
+                                        <button
+                                          type="button"
+                                          className={styles.benchmarkPillBtn}
+                                          title={`Điền nhanh định mức chuẩn hệ thống (${vnd(catalog.defaultPrice)}đ)`}
+                                          onClick={() =>
+                                            updateLine(line.code, { compensation: catalog.defaultPrice })
+                                          }
+                                        >
+                                          ⚡ Áp dụng chuẩn: <b>{vnd(catalog.defaultPrice)}đ</b>
+                                        </button>
+                                      )}
+                                      {Boolean(line.compensation) && (
+                                        <div className={styles.residualTag}>
+                                          {line.condition !== undefined ? (
+                                            <>
+                                              <span>Trần hỏng hoàn toàn ({line.condition}%):</span>
+                                              <strong>{vnd(Math.round(((line.compensation ?? 0) * line.condition) / 100))}đ</strong>
+                                            </>
+                                          ) : (
+                                            <span style={{ fontSize: "11px", color: "var(--ink-2)" }}>Chọn độ mới để tính giá trị</span>
+                                          )}
+                                        </div>
+                                      )}
+                                      {catalog?.category === "furniture" && (
+                                        <div className={styles.repairMethodHint}>
+                                          ↳ Đồ gỗ: Sửa chữa thực chi theo thợ mộc. Giá trên là trần đền bù nếu hỏng nát hoàn toàn.
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {catalog?.checkHint && (
+                                    <div className={styles.checkHint}>
+                                      ↳ Kiểm tra: {catalog.checkHint}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 4. Hạng mục phát sinh ngoài catalog (Điều 5 khoản 1) */}
+            <div className={styles.formCard}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h3 className={styles.formCardTitle}>4. Hạng mục phát sinh ngoài catalog</h3>
+                  <p
+                    style={{
+                      margin: "var(--s-1) 0 0",
+                      fontSize: "var(--fs-13)",
+                      color: "var(--ink-2)",
+                    }}
+                  >
+                    Kê khai thêm tối đa {MAX_EXTRA_LINES} món đồ đặc thù (két sắt, cây cảnh, máy chiếu...)
+                  </p>
+                </div>
+                {extraLines.length < MAX_EXTRA_LINES && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleAddExtra}
+                  >
+                    <Plus size={14} /> Thêm hạng mục
+                  </button>
+                )}
+              </div>
+
+              {extraLines.length === 0 ? (
+                <p style={{ color: "var(--ink-3)", fontSize: "var(--fs-13)", margin: 0 }}>
+                  Không có trang thiết bị phát sinh ngoài catalog 32 món chuẩn.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+                  {extraLines.map((line) => (
+                    <div key={line.code} className={styles.invRow}>
+                      <div className={styles.invHead}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "var(--s-2)", flex: 1 }}>
+                          <strong style={{ color: "var(--ink)", minWidth: 28 }}>{line.code}</strong>
+                          <input
+                            type="text"
+                            className="input"
+                            maxLength={60}
+                            placeholder="Tên trang thiết bị phát sinh..."
+                            value={line.name}
+                            onChange={(e) => updateExtra(line.code, { name: e.target.value })}
+                            required
+                            style={{ flex: 1, fontWeight: 600 }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-quiet btn-sm"
+                          style={{ color: "var(--danger)" }}
+                          onClick={() => handleRemoveExtra(line.code)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--s-2)" }}>
+                        <label className="field">
+                          <span className="label" style={{ fontSize: "var(--fs-11)" }}>Khu vực</span>
+                          <select
+                            className="select"
+                            value={line.group}
+                            onChange={(e) =>
+                              updateExtra(line.code, { group: e.target.value as InventoryGroup })
+                            }
+                            style={{ fontSize: "var(--fs-12)" }}
+                          >
+                            {GROUPS.map((g) => (
+                              <option key={g} value={g}>
+                                {g}. {INVENTORY_GROUP_LABEL[g]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="field">
+                          <span className="label" style={{ fontSize: "var(--fs-11)" }}>Nhóm hộ chiếu</span>
+                          <select
+                            className="select"
+                            value={line.passport}
+                            onChange={(e) =>
+                              updateExtra(line.code, { passport: e.target.value as PassportItem })
+                            }
+                            style={{ fontSize: "var(--fs-12)" }}
+                          >
+                            {PASSPORT_ITEMS.map((p) => (
+                              <option key={p} value={p}>
+                                {p}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className={styles.invFields}>
+                        <input
+                          type="text"
+                          className="input"
+                          maxLength={80}
+                          placeholder="Nhãn hiệu / model..."
+                          value={line.spec ?? ""}
+                          onChange={(e) => updateExtra(line.code, { spec: e.target.value })}
+                          style={{ fontSize: "var(--fs-13)" }}
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          className="input"
+                          value={line.qty ?? 1}
+                          onChange={(e) =>
+                            updateExtra(line.code, {
+                              qty: Math.max(1, Number(e.target.value) || 1),
+                            })
+                          }
+                          style={{ fontSize: "var(--fs-13)" }}
+                        />
+                        <select
+                          className="select"
+                          value={line.condition !== undefined ? line.condition : ""}
+                          onChange={(e) => {
+                            const v = e.target.value === "" ? undefined : Number(e.target.value);
+                            updateExtra(line.code, { condition: v });
+                          }}
+                          required
+                          style={{ fontSize: "var(--fs-13)" }}
+                        >
+                          <option value="">Độ mới</option>
+                          {[100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0].map((num) => (
+                            <option key={num} value={num}>
+                              {num}%
+                            </option>
+                          ))}
+                        </select>
+                        {renderPhotoCell(line, true)}
+                      </div>
+
+                      <div className={styles.invFieldsExtra}>
+                        <input
+                          type="text"
+                          className="input"
+                          maxLength={120}
+                          placeholder="Ghi chú chi tiết hiện trạng..."
+                          value={line.note ?? ""}
+                          onChange={(e) => updateExtra(line.code, { note: e.target.value })}
+                          style={{ fontSize: "var(--fs-12)" }}
+                        />
+                        <div className={styles.priceWrap}>
+                          <input
+                            type="number"
+                            min={0}
+                            step="100000"
+                            className="input"
+                            placeholder="Giá mua gốc (VNĐ) · tuỳ chọn"
+                            title="Giá mua ban đầu của tài sản (tuỳ chọn cho đồ lớn). Nếu hỏng hoàn toàn: bồi thường = Giá mua × % Độ mới"
+                            value={line.compensation ?? ""}
+                            onChange={(e) =>
+                              updateExtra(line.code, {
+                                compensation: e.target.value ? Number(e.target.value) : undefined,
+                              })
+                            }
+                            style={{ fontSize: "var(--fs-12)" }}
+                          />
+                          {Boolean(line.compensation) && (
+                            <div className={styles.residualTag}>
+                              {line.condition !== undefined ? (
+                                <>
+                                  <span>Còn lại ({line.condition}%):</span>
+                                  <strong>{vnd(Math.round(((line.compensation ?? 0) * line.condition) / 100))}đ</strong>
+                                </>
+                              ) : (
+                                <span style={{ fontSize: "11px", color: "var(--ink-2)" }}>Chọn độ mới để tính giá trị</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 5. Kiểm tra công năng thiết bị (Điều 5 khoản 3) */}
+            <div className={styles.formCard}>
+              <h3 className={styles.formCardTitle}>5. Kiểm tra công năng thiết bị</h3>
+              <p
+                style={{
+                  margin: "0 0 var(--s-2)",
+                  fontSize: "var(--fs-13)",
+                  color: "var(--ink-2)",
+                }}
+              >
+                Quy trình vận hành thử các thiết bị điện máy chính theo quy chuẩn bàn giao.
+              </p>
+
+              <div className={styles.fnList}>
+                <label className={styles.fnItem}>
+                  <input
+                    type="checkbox"
+                    checked={functionsChecked.ac}
+                    onChange={(e) =>
+                      setFunctionsChecked((prev) => ({ ...prev, ac: e.target.checked }))
+                    }
+                  />
+                  <span>Điều hòa làm lạnh tốt, không rò nước sau 5 phút khởi động</span>
+                </label>
+                <label className={styles.fnItem}>
+                  <input
+                    type="checkbox"
+                    checked={functionsChecked.kitchen}
+                    onChange={(e) =>
+                      setFunctionsChecked((prev) => ({ ...prev, kitchen: e.target.checked }))
+                    }
+                  />
+                  <span>Bếp từ / hồng ngoại nhận nồi sau 15 giây, phím cảm ứng nhạy</span>
+                </label>
+                <label className={styles.fnItem}>
+                  <input
+                    type="checkbox"
+                    checked={functionsChecked.waterHeater}
+                    onChange={(e) =>
+                      setFunctionsChecked((prev) => ({ ...prev, waterHeater: e.target.checked }))
+                    }
+                  />
+                  <span>Bình nước nóng hoạt động, nút ELCB chống giật nhảy bình thường</span>
+                </label>
+                <label className={styles.fnItem}>
+                  <input
+                    type="checkbox"
+                    checked={functionsChecked.drainage}
+                    onChange={(e) =>
+                      setFunctionsChecked((prev) => ({ ...prev, drainage: e.target.checked }))
+                    }
+                  />
+                  <span>Hệ thống cấp thoát nước, vòi rửa, lavabo kín, không rò rỉ ngấm tường</span>
+                </label>
+              </div>
+            </div>
+
+            {/* 6. Biểu phí sinh hoạt thực tế tại tòa */}
+            <div className={styles.formCard}>
+              <h3 className={styles.formCardTitle}>6. Biểu phí sinh hoạt thực tế tại tòa (Xác minh cùng Chủ nhà & Lễ tân sảnh)</h3>
+              <p className="muted small" style={{ marginBottom: "var(--s-3)" }}>
+                Sale / Field Host xác nhận biểu phí thực tế với Chủ nhà hoặc Lễ tân sảnh để hiển thị minh bạch cho khách thuê. Khách tự chuẩn bị ngân sách đóng tại sảnh và không bị nhầm lẫn với tiền thuê trả cho chủ nhà.
+              </p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "var(--s-3)", marginBottom: "var(--s-3)" }}>
+                <div>
+                  <label className="label" style={{ fontWeight: 600 }}>Phí quản lý BQL (đ/m²/tháng)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={mgmtFeePerM2}
+                    onChange={(e) => setMgmtFeePerM2(Number(e.target.value))}
+                    min={0}
+                    step={1000}
+                  />
+                  <span className="muted xs">
+                    Căn {Number(netAreaM2) || (c ? c.areaM2 : 0)}m²: ~{vnd(Math.round((Number(netAreaM2) || (c ? c.areaM2 : 0)) * (mgmtFeePerM2 || 0)))}/tháng (Khách tự đóng BQL)
+                  </span>
+                </div>
+
+                <div>
+                  <label className="label" style={{ fontWeight: 600 }}>Phí gửi xe máy (đ/xe/tháng)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={motorbikeFee}
+                    onChange={(e) => setMotorbikeFee(Number(e.target.value))}
+                    min={0}
+                    step={10000}
+                  />
+                  <span className="muted xs">Tiêu chuẩn BQL: 90.000 đ/tháng</span>
+                </div>
+
+                <div>
+                  <label className="label" style={{ fontWeight: 600 }}>Phí gửi ô tô (đ/xe/tháng)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={carFee}
+                    onChange={(e) => setCarFee(Number(e.target.value))}
+                    min={0}
+                    step={50000}
+                  />
+                  <span className="muted xs">Tiêu chuẩn BQL: 1.250.000 đ/tháng</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="label" style={{ fontWeight: 600 }}>Ghi chú phí khác / Tiện ích nội khu (nếu có)</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Ví dụ: Miễn phí bể bơi 4 mùa & gym nội khu, nước theo biểu giá BQL..."
+                  value={otherFeesNote}
+                  onChange={(e) => setOtherFeesNote(e.target.value)}
+                  maxLength={150}
+                />
+              </div>
+            </div>
+
+            {/* 7. Đề xuất & Ghi chú của Host */}
+            <div className={styles.formCard}>
+              <h3 className={styles.formCardTitle}>7. Đề xuất của Field Host</h3>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "var(--s-5)",
+                  margin: "var(--s-1) 0 var(--s-3)",
+                }}
+              >
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--s-2)",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="recommendation"
+                    value="approve"
+                    checked={recommendation === "approve"}
+                    onChange={() => setRecommendation("approve")}
+                  />
+                  <span>Đề xuất duyệt</span>
+                </label>
+
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--s-2)",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="recommendation"
+                    value="reject"
+                    checked={recommendation === "reject"}
+                    onChange={() => setRecommendation("reject")}
+                  />
+                  <span>Đề xuất không duyệt</span>
+                </label>
+              </div>
+
+              <textarea
+                className="input"
+                rows={3}
+                maxLength={300}
+                placeholder={
+                  recommendation === "reject"
+                    ? "Nhập lý do đề xuất không duyệt (Bắt buộc)..."
+                    : "Ghi chú thêm cho Admin về tình trạng căn hộ (Tùy chọn)..."
+                }
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                required={recommendation === "reject"}
+                style={{ resize: "vertical" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="submit" className="btn btn-primary" style={{ padding: "10px 24px" }}>
+                Nộp báo cáo cho Admin
+              </button>
+            </div>
+          </div>
+
+          {/* Cột phụ: Tóm tắt thông tin & Tiến độ */}
+          <div className={styles.sideSummaryCol}>
+            <Section title="Thông tin chủ kê khai">
+              <KeyValue
+                items={[
+                  { label: "Căn hộ", value: can },
+                  { label: "Chủ nhà", value: landlord?.name ?? c.landlordId },
+                  { label: "Loại căn", value: c.layout },
+                  { label: "Diện tích tim tường", value: `${c.areaM2} m²` },
+                  { label: "Giá thuê", value: `${vnd(c.askRent)}đ/tháng` },
+                  {
+                    label: "Nội thất",
+                    value: c.furnished ? "Có nội thất" : "Không nội thất",
+                  },
+                  {
+                    label: "Loại khoá",
+                    value:
+                      c.locks && c.locks.includes("smart") && c.locks.includes("physical")
+                        ? "Khoá điện tử + chìa cơ"
+                        : c.locks?.includes("physical")
+                        ? "Khoá cơ"
+                        : "Khoá điện tử",
+                  },
+                ]}
+              />
+            </Section>
+
+            <Section title="Tổng hợp trực tiếp">
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--s-3)",
+                  fontSize: "var(--fs-13)",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "var(--s-3)",
+                    background: "var(--surface-2)",
+                    borderRadius: "var(--r-control)",
+                    border: "1px solid var(--line)",
+                  }}
+                >
+                  <div style={{ color: "var(--ink-2)", marginBottom: "4px" }}>
+                    Tiến độ hoàn thành:
+                  </div>
+                  <strong style={{ fontSize: "var(--fs-15)", color: "var(--ink)" }}>
+                    Đã kiểm tra: {completedLines.length}/{presentLines.length} món
+                  </strong>
+                  <div style={{ fontSize: "var(--fs-12)", color: "var(--ink-3)", marginTop: 4 }}>
+                    Đã chụp ảnh: {photoCount}/{presentLines.length}
+                  </div>
+                </div>
+
+                <KeyValue
+                  items={[
+                    {
+                      label: "Độ mới TB",
+                      value: `${liveAvg}%`,
+                    },
+                    {
+                      label: "Món độ mới < 60%",
+                      value: `${lowLines.length} món`,
+                    },
+                    {
+                      label: "Số món phát sinh",
+                      value: `${extraLines.length} món`,
+                    },
+                  ]}
+                />
+
+                <div
+                  style={{
+                    borderTop: "1px solid var(--line)",
+                    paddingTop: "var(--s-3)",
+                  }}
+                >
+                  <strong style={{ fontSize: "var(--fs-13)", display: "block", marginBottom: 8 }}>
+                    10 Hạng mục Hộ chiếu số
+                  </strong>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {passportSum.map((p) => (
+                      <div
+                        key={p.item}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: "var(--fs-12)",
+                        }}
+                      >
+                        <span style={{ color: "var(--ink-2)" }}>{p.item}</span>
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            color:
+                              p.avg !== null && p.avg < LOW_CONDITION
+                                ? "var(--danger)"
+                                : "var(--ink)",
+                          }}
+                        >
+                          {p.avg !== null ? `${p.avg}% (${p.count})` : "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Section>
+          </div>
+        </form>
+      )}
+
+      {/* Input tệp ẩn kích hoạt chụp hoặc chọn ảnh (ưu tiên camera thực địa) */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+      />
+
+      {/* Hộp xem phóng to ảnh kiểm định (Mô hình kiểm soát 3 lớp) */}
+      {previewModal && (
+        <InspectionPhotoModal
+          url={previewModal.url}
+          title={previewModal.title}
+          time={previewModal.time}
+          aiDetected={previewModal.aiDetected}
+          aiConfidence={previewModal.aiConfidence}
+          aiStatus={previewModal.aiStatus}
+          locationTag={previewModal.locationTag}
+          onClose={() => setPreviewModal(null)}
+        />
       )}
     </div>
   );

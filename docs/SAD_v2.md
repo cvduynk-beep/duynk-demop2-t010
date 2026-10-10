@@ -137,6 +137,16 @@ All-in Cost = base_rent + management_fee + parking_fee_estimate + utility_cost_e
 | Phí gửi xe         | 150.000 đ/xe máy; 1.250.000 đ/ô tô                                                                  |
 | Điện nước ước tính | 300.000 đ/người/tháng                                                                               |
 
+#### 3.1.1 Nguyên tắc Giá Niêm Yết Cố Định & Chu Kỳ Thanh Toán Tiêu Chuẩn (✅)
+1. **Giá Niêm Yết Cố Định — Không Mặc Cả (Fixed-Price Transparency):**
+   - Mức giá thuê gốc (`base_rent`) và `All-in Cost` niêm yết trên hệ thống là mức giá chốt cuối cùng theo Hợp đồng Ký gửi Độc quyền.
+   - Field Host tuyệt đối không làm trung gian thương lượng, ép giá chủ nhà hoặc ăn chênh lệch tại hiện trường xem phòng. Khách đồng ý thuê tiến hành quét VietQR 2.000.000 VNĐ giữ chỗ ngay lập tức ("First-to-Pay Wins").
+   - Nhu cầu tối ưu chi phí của khách thuê được giải quyết tự động qua: Bộ lọc trần ngân sách All-in Cost, Thuật toán gắn nhãn "Căn hời phân khu" (tiết kiệm $\ge 10\%$) hoặc tính năng "Flash Deal 1-chạm" do chủ nhà chủ động kích hoạt khi nhà trống lâu ngày.
+2. **Quy chuẩn Chu kỳ Thanh toán Tiêu chuẩn & Thời hạn Hợp đồng:**
+   - Thời hạn hợp đồng thuê tiêu chuẩn: Từ 06 tháng đến 12 tháng trở lên (cấm tuyệt đối cho thuê ngắn hạn/homestay/sublease vi phạm quy chế cư dân BQL).
+   - Chu kỳ thanh toán chuẩn: Thanh toán 01 hoặc 03 tháng/lần; Tiền cọc bảo đảm tài sản & nội thất (Security Deposit) từ 01 đến 02 tháng tiền thuê.
+   - Khoản cọc giữ chỗ 2.000.000 VNĐ chuyển đổi 100% thành một phần của Tiền Cọc Bảo Đảm Tài Sản, tuyệt đối không cấn trừ vào tiền thuê tháng đầu tiên. Các chính sách chiết khấu khi thanh toán dài hạn (6–12 tháng) được ghi nhận minh bạch vào Hợp đồng thuê chính thức mà không làm xáo trộn giá niêm yết cơ sở.
+
 ### 3.2 Biến phí Host (Dynamic Commission) — cấu hình qua Admin, không sửa mã
 
 Tham số (khoảng giá trị đề xuất, 🔵 cần chốt với Ops): `base_viewing_fee` (30–100k), `deal_commission` (200k–1.000k), `rating_multiplier_5star` (1,1–1,5x), `peak_hour_multiplier` (1,1–1,5x), `slow_inventory_bonus` (100–500k), `handover_inspection_fee` (50–100k), `no_show_wait_allowance_pct` (50%), `penalty_late_cancel` (50k). Thay đổi ghi audit (old/new/actor/lý do). 🔵 Maker–Checker cho điều chỉnh > 50 triệu và Financial Simulator: giai đoạn sau pilot.
@@ -178,6 +188,10 @@ Tường/sơn · sàn · cửa & khóa · điều hòa · tủ lạnh · bếp &
 | 23  | PWA offline-tolerant cho Host                                          |                                                                           | 🔵           | **Tuyệt đối không cache mã khóa** (§8)                                                                           |
 | 24  | Bóc tách công tơ tự động / tích hợp EVN                                |                                                                           | ❌ Ngoài MVP | Host nhập tay                                                                                                    |
 | 25  | Danh bạ thợ giới thiệu (Handyman Referral)                             |                                                                           | 🔵           | Không phải trách nhiệm nền tảng                                                                                  |
+| 26  | Ngừng niêm yết & Lưu trữ căn hộ (Delist & Archive Unit)                | Thay nút xóa cứng: Pre-flight check (holding/rented/open bookings), Failsafe confirmation (DELIST), lưu trữ hồ sơ và cho phép Relist | ✅           | Chuẩn PropTech cao cấp, bảo toàn 100% dữ liệu kế toán & pháp lý                                                  |
+| 27  | 3 Khung giá tham chiếu & Bảng tính Trống phòng (Vacancy Bleed)         | 3 Thẻ giá (Cạnh tranh, Thị trường, Cao hơn `[Không khuyến nghị]`) + Mô phỏng thiệt hại tài chính kép và thời gian hòa vốn              | ✅           | Giải quyết bài toán chủ nhà neo giá cao bằng toán học tài chính, không ép giá cảm tính                           |
+| 28  | Hệ thống phòng thủ 4 lớp (4-Tier Anti-Abuse & Data Guardrail)          | Chốt chặn trần layout (Studio 18M, 1PN 25M, 2PN 35M, 3PN 50M, max 80M) + Lọc ngoại lai IQR/Median + Shadow Review + Chế tài pháp lý  | ✅           | Ngăn chặn đầu độc dữ liệu định giá AI và chống phá hoại khi người dùng cố ý nhập khống giá siêu cao               |
+| 29  | Giá Niêm Yết Cố Định & Chu Kỳ Thanh Toán Tiêu Chuẩn                    | Giá chốt Take-it-or-Leave-it, cấm Host mặc cả ép giá tại phòng; Chu kỳ thanh toán chuẩn 1-3 tháng, HĐ tối thiểu 6-12 tháng, cọc 1-2 tháng | ✅           | Chuẩn hóa trải nghiệm PropTech văn minh, loại bỏ hoàn toàn văn hóa cò kè mặc cả và xung đột giá sau xem phòng     |
 
 ```mermaid
 flowchart TD
@@ -305,6 +319,39 @@ vinstay-backend/src/
 
 Không dùng vector search/pgvector trừ khi có yêu cầu tìm kiếm ngữ nghĩa được duyệt.
 
+#### 6.1.1 Hệ thống Phòng Thủ 4 Lớp & Bảo Vệ Toàn Vẹn Dữ Liệu Định Giá (4-Tier Anti-Abuse & Data Guardrail) ✅
+
+Nhằm triệt tiêu rủi ro người dùng cố ý nhập khống giá thuê siêu cao (ví dụ căn Studio chào 500 triệu/tháng) nhằm làm méo mó thuật toán AI, gây sai lệch thống kê `market_avg`, hoặc quấy rối hạ tầng vận hành:
+
+1. **Lớp 1 — Chốt chặn trần giá kỹ thuật (Hard Constraint Validation):**
+   * Form ký gửi (`ConsignWizard.tsx`) áp đặt trần cứng theo phân loại layout: Studio $\le$ 18.000.000 VNĐ; 1PN $\le$ 25.000.000 VNĐ; 2PN $\le$ 35.000.000 VNĐ; 3PN $\le$ 50.000.000 VNĐ; Trần tuyệt đối toàn hệ thống $\le$ 80.000.000 VNĐ.
+   * Giao diện hiển thị cảnh báo đỏ và khóa nút gửi hồ sơ (`disabled`). Backend DTO (`@Max(80_000_000)`) và Service Guardrail ném `BadRequestException` lập tức nếu giá vượt trần.
+2. **Lớp 2 — Chống đầu độc dữ liệu thuật toán (Anti-Data Poisoning & Statistical Insulation):**
+   * Thuật toán tính toán giá tham chiếu thị trường (`market_avg`) chỉ truy vấn tập dữ liệu đã qua xác thực (`status: rented` - hợp đồng thuê thực tế, hoặc `status: verified` - đã được Field Host kiểm định hiện trạng). Cách ly 100% hồ sơ nháp (`pending_review`) hoặc dữ liệu tự khai của chủ nhà.
+   * Sử dụng hàm Trung vị (Median) kết hợp kỹ thuật lọc phân vị ngoại lai (Interquartile Range - IQR: cắt bỏ 5% cực đại và 5% cực tiểu), bảo đảm giá trị trung bình hoàn toàn miễn nhiễm trước các giá trị ngoại lai (outliers).
+3. **Lớp 3 — Nhận diện dị thường & Kiểm duyệt bóng (Anomaly Detection & Shadow Review):**
+   * Nếu giá chào thuê nằm trong trần kỹ thuật nhưng cao hơn $\ge 40\%$ so với giá thị trường trung bình cùng layout, hồ sơ tự động được gắn cờ `suspicious_high_rent`.
+   * Hồ sơ rơi vào trạng thái *Shadow Review*: Ẩn hoàn toàn khỏi bộ lọc khách thuê và AI Matchmaker; đồng thời tạm dừng kích hoạt ticket cho Field Host nhằm tiết kiệm chi phí OpEx và thời gian di chuyển, chuyển giao CSKH/Admin liên hệ tư vấn chủ nhà.
+4. **Lớp 4 — Rào cản định danh & Chế tài pháp lý (Legal Deterrence & Rate Limiting):**
+   * Bắt buộc xác thực SĐT qua Zalo OTP trước khi nộp hồ sơ; áp dụng Rate Limit tối đa 3 lần ký gửi/SĐT/24h.
+   * Ràng buộc pháp lý tại Điều 2 Khoản 5 Hợp đồng Ký gửi Độc quyền: chủ nhà cam đoan giá thực tế; hành vi cố tình nhập giá ảo quấy rối sẽ bị khóa tài khoản/CCCD vĩnh viễn và chuyển giao cơ quan thẩm quyền xử lý theo Luật An ninh mạng.
+
+#### 6.1.2 Hệ thống Bảo Vệ & Vận Hành AI Chatbot 3 Lớp (AI Cost & Anti-Spam Defense-in-Depth) ✅
+
+Nhằm kiểm soát rủi ro spam, bot vét cạn token và tối ưu hóa chi phí API công cộng cho đối tượng khách vãng lai:
+
+1. **Lớp 1 — Giới hạn tần suất & Hạn mức khách vãng lai (Rate Limiting & Guest Quota):**
+   * *In-Memory Sliding Window Rate Limiting:* Tối đa 8 requests / 60s / IP; phản hồi HTTP 429 nếu vượt ngưỡng.
+   * *Giới hạn Input:* Cắt cứng tối đa 250 ký tự trên `Composer.tsx` và API route `/api/chat` để chống nhồi prompt (Prompt Injection).
+   * *Hạn mức khách vãng lai (Guest Quota = 15 tin):* Khách chưa đăng nhập được trò chuyện tối đa 15 lượt. Khi đạt mốc 15, giao diện chuyển trạng thái Locked, hướng dẫn khách xác thực SĐT/Zalo OTP để tiếp tục trò chuyện và bảo lưu rổ hàng đã chọn.
+   * *Frontend Debounce:* Khóa nút gửi khi request đang chờ xử lý, chống spam phím Enter.
+2. **Lớp 2 — Bộ lọc nhanh không tốn token (Zero-Cost Local Fast-Path FAQ Cache):**
+   * Tự động bắt pattern các câu hỏi nội quy Vinhomes Ocean Park phổ biến: Phí gửi xe máy/ô tô, Phí quản lý BQL (Sapphire, Zenpark), Quy định nuôi thú cưng, Công thức All-in Cost, Quy trình cọc 2 triệu VietQR, Thẻ cư dân thang máy của Field Host.
+   * Trả lời trực tiếp bằng logic tất định với thời gian phản hồi ≤ 10ms, tiết kiệm 100% token cho hơn 50% câu hỏi chung.
+3. **Lớp 3 — Khóa chủ đề & Giới hạn Token đầu ra (Topic Guardrail & Max Output Ceiling):**
+   * System Prompt siết chặt phạm vi: AI Quản gia Vinny chỉ tư vấn thuê nhà và tiện ích tại Vinhomes Ocean Park; lập tức từ chối lịch sự bằng 1 câu ngắn đối với mọi câu hỏi ngoài lề (toán, code, văn thơ, chính trị...).
+   * Áp trần `maxOutputTokens: 200` (dưới 80 từ), tập trung vào All-in Cost và nút bấm chuyển đổi, giảm 75% chi phí token đầu ra.
+
 ### 6.2 Engine 2 — Dispatcher Field Host (✅ rule engine, ADR-01)
 
 | Tầng  | Điều kiện                                                              | SLA nhận   | Khi hết SLA     |
@@ -317,6 +364,16 @@ Không dùng vector search/pgvector trừ khi có yêu cầu tìm kiếm ngữ n
 - Worker đếm ngược SLA theo từng ticket; ghi `dispatch_tickets(tier, sla_seconds, status)`.
 - Hệ thống đẩy ticket cho Host trong ≤ 30 giây sau khi lịch được xác nhận (🔵 chỉ tiêu).
 - Sau khi Host nhận: Zalo xác nhận lịch cho khách kèm **tên/SĐT Host**.
+
+#### 6.2.2 Điều phối Tiếp nhận Hồ sơ Ký gửi (Consignment Auto-Escalation & Admin Override)
+
+| Mốc thời gian | Trạng thái điều phối | Quy tắc thực thi | Hành vi hệ thống |
+| :--- | :--- | :--- | :--- |
+| **0 – 30 phút** | **Tầng 1:** Host phân khu | Ưu tiên độc quyền Field Host quản lý toà/phân khu | Gửi thông báo tiếp nhận hồ sơ |
+| **30 phút – 2 giờ** | **Tầng 2:** Open Pool | Mở quyền nhận tự do cho Field Host liên phân khu | Cơ chế *First-to-Claim Wins* |
+| **Quá 2 giờ** | **Tầng 3:** SLA Breach | Chuyển thẳng Area Lead giải trình & còi đỏ Admin | Gán ticket cho Area Lead, kích hoạt alert đỏ |
+| **Mọi thời điểm** | **Admin Override** | Quản trị viên can thiệp thủ công (Manual Dispatch) | Admin ép gán cho bất kỳ Host/Sale trực ca |
+
 
 ### 6.3 Engine 3 — Conflict Resolver & Khóa căn (✅)
 
