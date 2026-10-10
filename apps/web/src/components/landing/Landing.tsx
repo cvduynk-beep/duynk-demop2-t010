@@ -1,22 +1,17 @@
+"use client";
+
+// VinStay AI - Landing Component (Clean & Refreshed)
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, EyeOff, FileCheck2, KeyRound, Star } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
-import { UnitCard } from "@/components/unit/UnitCard";
 import { VerifiedPhoto } from "@/components/unit/VerifiedPhoto";
-import { allInCost, DEFAULT_HOUSEHOLD, isBargain, RATES } from "@/lib/mock/cost";
+import { allInCost, DEFAULT_HOUSEHOLD, RATES } from "@/lib/mock/cost";
 import { vnd, vndShort } from "@/lib/mock/format";
 import { UNITS, ZONES, hostById, unitById } from "@/lib/mock/units";
+import { chatSetSearch } from "@/lib/mock/actions";
 import { AllInDemo } from "./AllInDemo";
+import { ProcessFlow } from "./ProcessFlow";
 import styles from "./Landing.module.css";
-
-const FLOW = [
-  { time: "30 giây", title: "Nói nhu cầu với AI", body: "Ngân sách, số người, loại căn. AI loại bỏ mọi căn có tổng chi phí vượt trần và trả về top 3." },
-  { time: "≤ 3 phút", title: "Đặt lịch, xác thực Zalo", body: "Chọn khung giờ khớp ca trực của Host, nhập mã 4 số gửi qua Zalo. Host của khu nhận lịch trong 3 phút." },
-  { time: "T-10 phút", title: "Nhắc hẹn có nút bấm", body: "Zalo nhắn kèm nút “Tôi đã có mặt tại sảnh”. Không cần quét mã QR nào ở sảnh, không cần đứng chờ." },
-  { time: "60 giây", title: "Host đón và mở cửa", body: "Host có thẻ cư dân quẹt thang máy đưa bạn lên phòng, mở cửa bằng mã trong ứng dụng. Không hộp khoá treo cửa." },
-  { time: "48 giờ", title: "Cọc giữ căn 2.000.000đ", body: "Quét VietQR ngay tại chỗ, căn được khoá giữ chỗ (mặc định 48 giờ, tuỳ căn 12–72 giờ) cho riêng bạn. Không chuyển tiền qua tài khoản cá nhân." },
-  { time: "OTP Zalo", title: "Xác minh CCCD, ký số", body: "Chụp CCCD một lần, AI tự điền thỏa thuận. Bạn ký bằng OTP, hợp đồng thuê ký số ngay sau đó." },
-];
 
 const FAQ = [
   { q: "All-in Cost gồm những khoản nào?", a: `Tiền thuê, phí quản lý Vinhomes (diện tích × ${vnd(RATES.mgmtPerM2)}đ/m²), phí gửi xe (${vnd(RATES.motorbike)}đ/xe máy, ${vnd(RATES.car)}đ/ô tô) và dự toán điện nước (${vnd(RATES.utilityPerPerson)}đ/người). Bốn khoản này luôn hiển thị trước khi bạn đặt lịch.` },
@@ -27,30 +22,34 @@ const FAQ = [
   { q: "Ai sửa chữa khi có hỏng hóc?", a: "VinStay và Field Host không nhận sửa chữa. Host giới thiệu danh bạ thợ ngoài uy tín tại Ocean Park để bạn tự thoả thuận giá và trách nhiệm." },
 ];
 
-const bargains = UNITS.filter((u) => u.baseStatus === "available" && isBargain(u)).slice(0, 4);
 const photoUnit = unitById("s2-16-2216")!;
 
-export function Landing() {
+export interface LandingProps {
+  onViewAll?: () => void;
+}
+
+export function Landing({ onViewAll }: LandingProps = {}) {
+  const handleViewAll = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onViewAll) {
+      onViewAll();
+    } else {
+      chatSetSearch({ layouts: [], zones: [], buildings: [], items: [], household: { ...DEFAULT_HOUSEHOLD } });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("vinstay:view-all-units"));
+        try {
+          window.history.pushState(null, "", "/?view=all");
+        } catch {}
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+  };
+
   return (
     <>
       <section className={styles.section} id="quy-trinh">
-        <div className={`wrap ${styles.flow}`}>
-          <div className={styles.flowHead}>
-            <h2 className={styles.h2}>Từ tin nhắn đầu tiên đến chìa khoá</h2>
-            <p className="muted">Sáu bước, phần lớn do hệ thống và Field Host lo. Bạn chỉ cần có mặt đúng giờ.</p>
-          </div>
-          <ol className={styles.flowList}>
-            {FLOW.map((s, i) => (
-              <li key={s.title}>
-                <span className={styles.flowNo}>{i + 1}</span>
-                <div>
-                  <h3>{s.title}</h3>
-                  <p className="muted">{s.body}</p>
-                </div>
-                <span className={`badge badge-plain ${styles.flowTime}`}>{s.time}</span>
-              </li>
-            ))}
-          </ol>
+        <div className="wrap">
+          <ProcessFlow />
         </div>
       </section>
 
@@ -94,24 +93,6 @@ export function Landing() {
         </div>
       </section>
 
-      <section className={`${styles.section} ${styles.tint}`}>
-        <div className="wrap">
-          <div className={styles.rowHead}>
-            <div>
-              <h2 className={styles.h2}>Căn hời tuần này</h2>
-              <p className="muted">Rẻ hơn giá trung bình toà từ 10% cho cùng layout, đã tính đủ mọi khoản phí.</p>
-            </div>
-            <Link href="/" className="btn btn-quiet">
-              Xem tất cả căn <ArrowRight size={16} />
-            </Link>
-          </div>
-          <div className={styles.cards}>
-            {bargains.map((u) => (
-              <UnitCard key={u.id} unit={u} cost={allInCost(u, DEFAULT_HOUSEHOLD)} />
-            ))}
-          </div>
-        </div>
-      </section>
 
       <section className={styles.section}>
         <div className={`wrap ${styles.split}`}>

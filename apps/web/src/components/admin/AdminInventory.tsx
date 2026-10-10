@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, KeyRound, Smartphone, Timer, X } from "lucide-react";
+import { AlertTriangle, Check, KeyRound, Smartphone, Timer, UserCheck, X } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { toast } from "@/components/ui/Toast";
 import { CONSIGN_STATUS_META } from "@/components/consign/status";
-import { approveConsignment, rejectConsignment } from "@/lib/mock/actions";
+import { approveConsignment, rejectConsignment, adminAssignConsignment, autoEscalateConsignments } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
 import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/mock/cost";
 import { fmtDate, vnd } from "@/lib/mock/format";
@@ -41,7 +41,14 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
   const [rejecting, setRejecting] = useState<Consignment | null>(null);
   const [note, setNote] = useState("Ảnh hiện trạng chưa rõ, cần bổ sung");
   const [rejectError, setRejectError] = useState("");
+  const [overrideConsignment, setOverrideConsignment] = useState<Consignment | null>(null);
+  const [targetHostId, setTargetHostId] = useState("H01");
   const [dbItems, setDbItems] = useState<Consignment[]>([]);
+
+  // Tự động kiểm tra và leo thang SLA cho các hồ sơ ký gửi
+  useEffect(() => {
+    autoEscalateConsignments(now);
+  }, [now]);
 
   // Tự động kéo các căn đã ký gửi thực tế từ Backend Database về
   useEffect(() => {
@@ -77,9 +84,30 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
             signedAt: item.createdAt || new Date().toISOString(),
             hostId: item.hostId || undefined,
             inspectDueAt: new Date(new Date(item.createdAt || Date.now()).getTime() + 48 * 3600000).toISOString(),
-            furnishing: "full",
+            furnishing: item.report?.furnishing || "full",
             lock: "smart",
             items: [],
+            note: item.note || undefined,
+            report: item.report
+              ? {
+                  furnishing: item.report.furnishing || "full",
+                  netAreaM2: item.report.netAreaM2 || item.carpetAreaM2 || 45,
+                  inventory: Array.isArray(item.report.inventory) ? item.report.inventory : [],
+                  declared: Array.isArray(item.report.declared)
+                    ? item.report.declared
+                    : [
+                        { field: "identity", ok: true },
+                        { field: "layout", ok: true },
+                        { field: "areaM2", ok: true },
+                        { field: "furnishing", ok: true },
+                        { field: "lock", ok: true },
+                      ],
+                  recommendation: item.report.recommendation || "approve",
+                  note: item.report.note || "",
+                  submittedAt: item.report.submittedAt || new Date().toISOString(),
+                  hostId: item.report.hostId || item.hostId || "host-s2",
+                }
+              : undefined,
           };
         });
 
@@ -96,10 +124,15 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
 
   if (!state.ready || !now) return <div className="skeleton" style={{ height: 360 }} />;
 
-  // Hợp nhất dữ liệu mock và dữ liệu thực từ Database (không trùng id)
+  // Hợp nhất dữ liệu mock và dữ liệu thực từ Database (ưu tiên dữ liệu từ DB)
   const allConsignments = [...state.consignments];
   for (const dbItem of dbItems) {
-    if (!allConsignments.some((c) => c.id === dbItem.id || (c.building === dbItem.building && c.floor === dbItem.floor && c.door === dbItem.door))) {
+    const existingIdx = allConsignments.findIndex(
+      (c) => c.id === dbItem.id || (c.building === dbItem.building && c.floor === dbItem.floor && c.door === dbItem.door)
+    );
+    if (existingIdx >= 0) {
+      allConsignments[existingIdx] = { ...allConsignments[existingIdx], ...dbItem };
+    } else {
       allConsignments.push(dbItem);
     }
   }
@@ -143,6 +176,7 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
               <option value="viewing">Có khách xem</option>
               <option value="holding">Đang giữ căn</option>
               <option value="rented">Đã cho thuê</option>
+              <option value="archived">Đã lưu trữ / Ngừng niêm yết</option>
             </select>
             <select className="select" value={lock} onChange={(e) => setLock(e.target.value as "all" | "smart" | "physical")} aria-label="Lọc theo loại khoá">
               <option value="all">Mọi loại khoá</option>
@@ -194,6 +228,8 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
                       badgeEl = <span className="badge badge-amber-soft">Đang giữ căn</span>;
                     } else if (s === "rented") {
                       badgeEl = <span className="badge badge-ink">Đã cho thuê</span>;
+                    } else if (s === "archived") {
+                      badgeEl = <span className="badge badge-plain" style={{ background: "var(--neutral-100)", color: "var(--neutral-600)" }}>📁 Đã lưu trữ</span>;
                     }
                     return (
                       <>
@@ -245,9 +281,13 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
             {allConsignments.map((c) => {
               const summary = c.report ? inspectionSummary(c.report) : null;
               const host = c.hostId ? hostById(c.hostId) : null;
+              const elapsedMin = Math.round((now - new Date(c.signedAt || c.createdAt).getTime()) / 60000);
+              const isSlaBreached = c.slaBreached || (c.status === "awaiting_host" && elapsedMin >= 120);
+              const isOpenPool = c.openPoolAt || (c.status === "awaiting_host" && elapsedMin >= 30);
+
               return (
                 <article key={c.id} className={`card ${styles.req}`}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
                     <div>
                       <h3>
                         <Link href={`/admin/inventory/${c.id}`} className="link" style={{ textDecoration: "none" }}>
@@ -256,7 +296,19 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
                       </h3>
                       <p className="muted small">{landlordById(c.landlordId)?.name}</p>
                     </div>
-                    <StatusBadge tone={CONSIGN_STATUS_META[c.status].tone}>{CONSIGN_STATUS_META[c.status].label}</StatusBadge>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                      {isSlaBreached && (
+                        <span className="badge badge-coral-soft" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 700 }} title="Quá 2 giờ chưa có Host nhận, hệ thống đã leo thang sang Area Lead">
+                          <AlertTriangle size={12} /> Quá SLA 2h
+                        </span>
+                      )}
+                      {!isSlaBreached && isOpenPool && (
+                        <span className="badge badge-amber-soft" style={{ display: "inline-flex", alignItems: "center", gap: 4 }} title="Đã quá 30 phút, mở quyền nhận tự do cho các Host phân khu lân cận">
+                          🌐 Open Pool (&gt;30p)
+                        </span>
+                      )}
+                      <StatusBadge tone={CONSIGN_STATUS_META[c.status].tone}>{CONSIGN_STATUS_META[c.status].label}</StatusBadge>
+                    </div>
                   </div>
                   <dl className={styles.reqMeta}>
                     <div>
@@ -279,7 +331,10 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
                     </div>
                     <div>
                       <dt>Host phụ trách</dt>
-                      <dd>{host ? host.name : "Chưa gán"}</dd>
+                      <dd>
+                        {host ? host.name : "Chưa gán"}
+                        {c.adminOverriddenBy ? <span className="muted small"> (Admin chỉ định)</span> : ""}
+                      </dd>
                     </div>
                     <div>
                       <dt>Độ mới TB</dt>
@@ -317,10 +372,21 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
                         type="button"
                         className="btn btn-success"
                         style={{ flex: 1 }}
-                        onClick={() => {
+                        onClick={async () => {
+                          try {
+                            await fetch(`/api/v1/admin/consignments/${c.id}/approve`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              credentials: "same-origin",
+                              body: JSON.stringify({ note: "Admin đã duyệt ký gửi" }),
+                            });
+                          } catch {
+                            // ignore
+                          }
                           const res = approveConsignment(c.id, DEMO_USERS.admin.name);
                           if (res.ok) {
-                            toast("Đã nhận ký gửi. Zalo báo chủ nhà, push báo Host.", "success");
+                            setDbItems((prev) => prev.map((item) => (item.id === c.id ? { ...item, status: "approved" } : item)));
+                            toast("Đã nhận ký gửi và niêm yết căn hộ lên hệ thống cho thuê.", "success");
                           } else {
                             toast(`Không thể duyệt: ${res.reason}`);
                           }
@@ -331,7 +397,7 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
                     </div>
                   )}
                   {(c.status === "awaiting_host" || c.status === "inspecting") && (
-                    <div className={styles.reqActions}>
+                    <div className={styles.reqActions} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <button
                         type="button"
                         className="btn btn-quiet"
@@ -343,8 +409,20 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
                       >
                         <X size={16} /> Từ chối
                       </button>
-                      <span className="muted small" style={{ alignSelf: "center", marginLeft: "auto" }}>
-                        Chờ Field Host nộp báo cáo
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                        onClick={() => {
+                          setOverrideConsignment(c);
+                          setTargetHostId(c.hostId || "H01");
+                        }}
+                        title="Admin có quyền can thiệp thủ công chỉ định Host phụ trách"
+                      >
+                        <UserCheck size={14} /> Chỉ định Host (Override)
+                      </button>
+                      <span className="muted small" style={{ marginLeft: "auto" }}>
+                        {c.status === "awaiting_host" ? "Chờ Host nhận ca" : "Đang thẩm định thực tế"}
                       </span>
                     </div>
                   )}
@@ -412,8 +490,18 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
           <button
             type="button"
             className="btn btn-danger btn-block"
-            onClick={() => {
+            onClick={async () => {
               if (!rejecting) return;
+              try {
+                await fetch(`/api/v1/admin/consignments/${rejecting.id}/reject`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
+                  body: JSON.stringify({ note: note || "Từ chối ký gửi" }),
+                });
+              } catch {
+                // ignore
+              }
               const res = rejectConsignment(rejecting.id, note, DEMO_USERS.admin.name);
               if (!res.ok) {
                 if (res.reason === "invalid_note") {
@@ -423,6 +511,7 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
                 }
                 return;
               }
+              setDbItems((prev) => prev.map((item) => (item.id === rejecting.id ? { ...item, status: "rejected", note } : item)));
               setRejecting(null);
               setRejectError("");
               toast("Đã từ chối và báo chủ nhà qua Zalo", "success");
@@ -446,6 +535,57 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
           {rejectError && <span className="field-error">{rejectError}</span>}
         </label>
       </Modal>
+
+      {overrideConsignment && (
+        <Modal
+          open={!!overrideConsignment}
+          onClose={() => setOverrideConsignment(null)}
+          title="Chỉ định Field Host (Manual Override)"
+          footer={
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                const res = adminAssignConsignment(overrideConsignment.id, targetHostId, DEMO_USERS.admin.name);
+                if (res.ok) {
+                  setDbItems((prev) =>
+                    prev.map((item) =>
+                      item.id === overrideConsignment.id ? { ...item, hostId: targetHostId, adminOverriddenBy: DEMO_USERS.admin.name } : item
+                    )
+                  );
+                  toast(`Đã chỉ định hồ sơ cho Host ${hostById(targetHostId)?.name || targetHostId}`, "success");
+                  setOverrideConsignment(null);
+                } else {
+                  toast(`Lỗi: ${res.reason}`);
+                }
+              }}
+            >
+              Xác nhận chỉ định
+            </button>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+            <p className="small muted" style={{ margin: 0 }}>
+              Hồ sơ: <b>{overrideConsignment.building} · Tầng {overrideConsignment.floor} · Căn {overrideConsignment.door}</b>.
+              Quản trị viên có toàn quyền can thiệp chỉ định Field Host trực ca để giải phóng tình trạng trễ hẹn thẩm định của chủ nhà.
+            </p>
+            <label className="field">
+              <span className="label">Chọn Field Host phụ trách</span>
+              <select
+                className="select"
+                value={targetHostId}
+                onChange={(e) => setTargetHostId(e.target.value)}
+              >
+                {ZONES.map((z) => (
+                  <option key={z.hostId} value={z.hostId}>
+                    {hostById(z.hostId)?.name} ({z.name} - {z.hostId})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

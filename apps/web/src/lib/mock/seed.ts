@@ -44,6 +44,7 @@ export const EMPTY_STATE: MockState = {
   verifiedPhones: [],
   holdPolicy: { defaultHours: 48, byUnit: {} },
   holdAudit: [],
+  archivedUnits: {},
 };
 
 export const todayKey = (now: number) => {
@@ -91,17 +92,6 @@ export function seedState(now: number): MockState {
   const t = (name: string, phone: string, persons = 1, note?: string) => ({ name, phone, persons, note });
 
   const bookings: Booking[] = [
-    // Ticket mới đang chờ Host duyệt (SLA 3 phút)
-    {
-      id: "bk-101", ref: "VS-7K2QA", unitId: "s2-12-1608", hostId: "H01",
-      tenant: t("Phạm Thu Trang", "0987654321", 2, "Đi cùng bạn, muốn xem ban công."),
-      slot: at(0), status: "pending", createdAt: iso(now - 50_000),
-    },
-    {
-      id: "bk-102", ref: "VS-M4XN8", unitId: "s2-02-1004", hostId: "H01",
-      tenant: t("Lê Hoài Nam", "0903111222"),
-      slot: at(2), status: "pending", createdAt: iso(now - 20_000),
-    },
     // Đã cọc giữ căn còn hạn (cho demo luồng HĐ thuê của khách TENANT_DEMO — SPEC-P01 §6, SPEC-P04)
     {
       id: "bk-103", ref: "VS-4F7K2", unitId: "s2-12-1608", hostId: "H01",
@@ -309,18 +299,6 @@ export function seedState(now: number): MockState {
       tenant: t("Dương Minh Châu", "0915666777"),
       slot: at(4), status: "confirmed", createdAt: iso(now - 3 * HOUR), confirmedAt: iso(now - 3 * HOUR + 45_000),
     },
-    // Ticket mở cho H01 (Sapphire 2) khi primary H02 bận (Hồ sơ 10 WP2)
-    {
-      id: "bk-119", ref: "VS-OPEN1", unitId: "s2-02-1004", hostId: "H02",
-      tenant: t("Vũ Hải Đăng", "0981999888", 1, "Muốn xem căn vào buổi chiều."),
-      slot: at(4), status: "pending", createdAt: iso(now - 5 * MIN),
-      dispatch: {
-        state: "open",
-        tier: "zone_pool",
-        offeredTo: ["H01"],
-        openedAt: iso(now - 2 * MIN),
-      },
-    },
   ];
 
   const zn = (n: Partial<Notice> & Pick<Notice, "audience" | "title" | "body" | "at">): Notice => ({
@@ -342,9 +320,6 @@ export function seedState(now: number): MockState {
     zn({ audience: "landlord", toKey: "L1", at: iso(now - 9 * DAY + 22 * MIN), unitId: "s1-03-1512", bookingId: "bk-109", tone: "success",
       title: "Căn hộ đã có người thuê",
       body: "Hợp đồng thuê 12 tháng căn VHOP-S1.03-1512 đã được ký số. Tiền cọc bảo đảm được giữ theo hợp đồng." }),
-    zn({ audience: "host", toKey: "H01", channel: "push", at: iso(now - 50_000), bookingId: "bk-101", unitId: "s2-12-1608", tone: "alert",
-      title: "Ticket mới — cần nhận trong 3 phút",
-      body: "Phạm Thu Trang · S2.12 Tầng 16 Căn 08 · hẹn " + hm(new Date(slots[0]).getTime()) + "." }),
     zn({ audience: "admin", channel: "system", at: iso(now - 4 * MIN - 10_000), bookingId: "bk-113", unitId: "m3-22-2210", tone: "alert",
       title: "Ticket quá SLA 3 phút",
       body: "Ticket VS-U8HS3 (Masteri Waterfront · M3 Tầng 22) chưa có Host nhận. Đã chuyển Open Pool 500m." }),
@@ -588,6 +563,7 @@ export function seedState(now: number): MockState {
         to: 24,
       },
     ],
+    archivedUnits: {},
   };
 }
 

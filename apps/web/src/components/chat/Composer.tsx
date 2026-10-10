@@ -54,15 +54,19 @@ export function Composer({ criteria, onCriteria, onSend, onTyping, busy, locked,
           <Lock size={18} />
         </span>
         <div>
-          <strong>Bạn đã dùng lượt nhắn miễn phí</strong>
-          <p className="muted small">Đăng nhập để chat không giới hạn với VinStay AI. Xem căn, đổi bộ lọc và đặt lịch vẫn dùng được mà không cần tài khoản.</p>
+          <strong>Bạn đã dùng 15 câu tư vấn miễn phí</strong>
+          <p className="muted small">
+            Đăng nhập bằng Zalo OTP hoặc SĐT để tiếp tục trò chuyện không giới hạn với Quản gia Vinny và lưu các căn bạn ưng ý. Bạn vẫn xem chi tiết và đặt lịch xem phòng bình thường!
+          </p>
           <Link href="/login?as=tenant" className="btn btn-primary btn-sm">
-            <LogIn size={15} /> Đăng nhập để tiếp tục
+            <LogIn size={15} /> Xác thực nhanh qua SĐT
           </Link>
         </div>
       </div>
     );
   }
+
+  const charLength = text.length;
 
   return (
     <div className={styles.wrap}>
@@ -81,6 +85,7 @@ export function Composer({ criteria, onCriteria, onSend, onTyping, busy, locked,
           ref={area}
           className={styles.area}
           rows={1}
+          maxLength={250}
           placeholder={variant === "hero" ? "Ví dụ: Studio dưới 8 triệu, có điều hòa, gần VinUni…" : "Hỏi tiếp hoặc chỉnh yêu cầu…"}
           value={text}
           disabled={busy}
@@ -114,6 +119,13 @@ export function Composer({ criteria, onCriteria, onSend, onTyping, busy, locked,
             }
           }}
         />
+
+        {charLength >= 150 && (
+          <span className={`${styles.charCounter} ${charLength >= 230 ? styles.charCounterWarning : ""}`}>
+            {charLength}/250
+          </span>
+        )}
+
         <button
           type="submit"
           className={`${styles.send} ${canSubmit ? styles.ready : ""}`}
@@ -151,7 +163,7 @@ export function Composer({ criteria, onCriteria, onSend, onTyping, busy, locked,
           ))}
         </div>
       )}
-      {guestNotice && <p className={`muted xs ${styles.guest}`}>💡 VinStay AI hỗ trợ tìm căn và tư vấn miễn phí 24/7 · Không tin ảo, không phí ẩn.</p>}
+      {guestNotice && <p className={`muted xs ${styles.guest}`}>✨ <strong>VinStay AI Copilot (Powered by Gemini 2.0 Flash)</strong> · Tư vấn căn & giải đáp BQL 24/7 · Không tin ảo, không phí ẩn.</p>}
     </div>
   );
 }

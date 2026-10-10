@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { BadgeCheck, CalendarClock, Plus, ReceiptText, Footprints, MapPin, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
+import { ArrowRight, BadgeCheck, CalendarClock, Plus, ReceiptText, Footprints, MapPin, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
 import { LogoMark } from "@/components/brand/Logo";
 import { matchmakerApi } from "@/lib/apiClient";
 import { chatAppend, chatReset, chatSetCriteria, chatSetSearch, countGuestMessage } from "@/lib/mock/actions";
+import { DEFAULT_HOUSEHOLD, isBargain } from "@/lib/mock/cost";
 import { vndShort } from "@/lib/mock/format";
 import { interpret, searchUnits } from "@/lib/mock/matchmaker";
 import { unitStatus } from "@/lib/mock/selectors";
@@ -16,6 +17,7 @@ import { useUnits } from "@/lib/property/useUnits";
 import { useRole, useSession } from "@/lib/auth/client";
 import { ButlerMascot, VINNY_GREETINGS, type MascotMood } from "@/components/mascot/ButlerMascot";
 import { Composer } from "./Composer";
+import { InlineChatUnits } from "./InlineChatUnits";
 import { Messages } from "./Messages";
 import { ResultsPanel } from "./ResultsPanel";
 import styles from "./ChatExperience.module.css";
@@ -128,7 +130,8 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   };
 
   const isDemo = process.env.NEXT_PUBLIC_DEMO_LOGIN === "true";
-  const locked = false;
+  const GUEST_QUOTA = 15;
+  const locked = !isDemo && role === null && (state.guestSent || 0) >= GUEST_QUOTA;
   const { user } = useSession();
   const first = role === "tenant" ? (user?.fullName?.split(" ").slice(-1)[0] ?? null) : null;
   const [greetingIdx, setGreetingIdx] = useState(0);
@@ -141,61 +144,139 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   const activeGreeting = VINNY_GREETINGS[greetingIdx];
   const greeting = first ? `Chào ${first}! ${activeGreeting}` : activeGreeting;
 
-  const onSend = (text: string) => {
+  const initialBargainUnitIds = UNITS.filter((u) => u.baseStatus === "available" && isBargain(u))
+    .slice(0, 4)
+    .map((u) => u.id);
+
+  const onSend = async (text: string) => {
     if (busy.current || locked) return;
     busy.current = true;
     try {
       chatAppend({ role: "user", text });
       if (role === null) countGuestMessage();
 
-      const result = interpret(text, chat.criteria, chat.searched, statusOf);
+      const result = interpret(text, chat.criteria, chat.searched, statusOf, units);
       const isSearch = result.kind === "search";
       const budget = isSearch ? result.criteria.budget : undefined;
 
-      if (isSearch && budget) {
-        matchmakerApi
-          .recommend({
-            maxAllInBudget: budget,
-            preferredLayout: result.criteria.layouts?.[0],
-            occupants: result.criteria.household?.persons,
-            motorbikes: result.criteria.household?.motorbikes,
-            cars: result.criteria.household?.cars,
-            prompt: text,
-          })
-          .catch(() => null);
-      }
-
       setThinking({
         steps: isSearch
-          ? [`Quét ${openCount} căn đang mở tại Ocean Park 1`, budget ? `Loại căn có All-in vượt ${vndShort(budget)}` : "Áp dụng bộ lọc của bạn", "Xếp hạng theo mức tiết kiệm"]
-          : ["Đang tìm câu trả lời"],
+          ? [
+              `Quét ${openCount} căn đang mở tại Ocean Park 1`,
+              budget ? `Loại căn có All-in vượt ${vndShort(budget)}` : "Áp dụng bộ lọc của bạn",
+              "AI Gemini Flash phân tích All-in Cost & xếp hạng Top 3",
+            ]
+          : ["AI Gemini Flash tra cứu quy chế & giải đáp"],
       });
 
-      setTimeout(
-        () => {
-          try {
-            if (result.kind === "search") {
-              chatSetSearch(result.criteria);
-              setFreshId(chatAppend({ role: "assistant", text: result.reply, resultIds: result.results.slice(0, 3).map((r) => r.unit.id), criteria: result.criteria }));
-              setTab("results");
-            } else {
-              setFreshId(chatAppend({ role: "assistant", text: result.reply }));
-            }
-          } catch (err) {
-            console.error("Chat response error:", err);
-          } finally {
-            setThinking(null);
-            busy.current = false;
-          }
-        },
-        isSearch ? 1200 : 700,
-      );
+      // Gọi đồng thời API /api/chat (LangGraph + Gemini Flash) với thời gian chờ tối ưu
+      let aiResponseText: string | null = null;
+      try {
+        const chatPromise = fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            budget_ceiling: budget,
+            occupants: isSearch ? result.criteria.household?.persons : undefined,
+            motorbikes: isSearch ? result.criteria.household?.motorbikes : undefined,
+            cars: isSearch ? result.criteria.household?.cars : undefined,
+          }),
+        })
+          .then((res) => res.json())
+          .catch(() => null);
+
+        if (isSearch && budget && budget >= 3000000) {
+          const rawLayout = result.criteria.layouts?.[0]?.toLowerCase() || "";
+          let prismaLayout: any = undefined;
+          if (rawLayout.includes("studio")) prismaLayout = "STUDIO";
+          else if (rawLayout.includes("1pn") || rawLayout.includes("one")) prismaLayout = "ONE_BED_PLUS";
+          else if (rawLayout.includes("3pn") || rawLayout.includes("three")) prismaLayout = "THREE_BED";
+          else if (rawLayout.includes("2pn") || rawLayout.includes("two")) prismaLayout = "TWO_BED_TWO_BATH";
+
+          matchmakerApi
+            .recommend({
+              maxAllInBudget: budget,
+              preferredLayout: prismaLayout,
+              occupants: result.criteria.household?.persons ?? 2,
+              motorbikes: result.criteria.household?.motorbikes ?? 1,
+              cars: result.criteria.household?.cars ?? 0,
+            })
+            .catch(() => null);
+        }
+
+        const chatData = (await Promise.race([
+          chatPromise,
+          new Promise((resolve) => setTimeout(() => resolve(null), 1600)),
+        ])) as any;
+
+        if (chatData?.ok && chatData?.response) {
+          aiResponseText = chatData.response;
+        }
+      } catch {
+        // Tự động dùng fallback engine
+      }
+
+      const finalReply = aiResponseText || result.reply;
+
+      if (result.kind === "search") {
+        chatSetCriteria(result.criteria);
+        setFreshId(
+          chatAppend({
+            role: "assistant",
+            text: finalReply,
+            resultIds: result.results.slice(0, 3).map((r) => r.unit.id),
+            criteria: result.criteria,
+          })
+        );
+        // Nếu đã ở màn hình workspace thì chuyển tab kết quả; nếu đang ở trang đầu (Hero), giữ nguyên để khách xem Băng chuyền ngang ngay trong khung chat Hero!
+        if (workspace) {
+          setTab("results");
+        }
+      } else {
+        setFreshId(chatAppend({ role: "assistant", text: finalReply }));
+      }
     } catch (err) {
       console.error("Chat send error:", err);
-      busy.current = false;
+    } finally {
       setThinking(null);
+      busy.current = false;
     }
   };
+
+  const handleViewAllUnits = () => {
+    chatSetSearch({ layouts: [], zones: [], buildings: [], items: [], household: { ...DEFAULT_HOUSEHOLD } });
+    setTab("results");
+    if (typeof window !== "undefined") {
+      try {
+        window.history.pushState(null, "", "/?view=all");
+      } catch {}
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  useEffect(() => {
+    const handleEvent = () => {
+      handleViewAllUnits();
+    };
+    window.addEventListener("vinstay:view-all-units", handleEvent);
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("view") === "all" || params.get("catalog") === "1" || params.get("tab") === "results") {
+        chatSetSearch({ layouts: [], zones: [], buildings: [], items: [], household: { ...DEFAULT_HOUSEHOLD } });
+        setTab("results");
+      }
+    }
+
+    return () => {
+      window.removeEventListener("vinstay:view-all-units", handleEvent);
+    };
+  }, []);
+
+  const renderedBelow = isValidElement(below)
+    ? cloneElement(below as any, { onViewAll: handleViewAllUnits })
+    : below;
 
   const onCriteria = (c: CriteriaState) => chatSetCriteria(c);
   const workspace = chat.searched;
@@ -240,14 +321,12 @@ export function ChatExperience({ below }: { below: ReactNode }) {
             </div>
 
             <div className={styles.chatWrapper}>
-              {/* Linh vật thỉnh thoảng di chuyển tuần tra quanh khung chat tổng */}
-              <div className={`${styles.wanderingMascot} ${styles[mascotPos]} ${isCruising ? styles.cruising : ""}`}>
+              {/* Linh vật Mascot đứng cố định tự nhiên ở góc trên bên phải khung chat, không đè lên chữ */}
+              <div className={styles.fixedHeroMascot}>
                 <ButlerMascot
                   size="hero"
                   mood={mascotMood}
                   autoSpeak={!isTyping && !thinking}
-                  customMessage={mascotCustomSpeech || (isCruising ? "Đang bay lượn tuần tra rổ hàng... 🚀" : undefined)}
-                  onClick={cycleMascotPosition}
                 />
               </div>
 
@@ -262,7 +341,14 @@ export function ChatExperience({ below }: { below: ReactNode }) {
                   </div>
                 </div>
                 <div className={styles.convo}>
-                  <Messages greeting={greeting} messages={chat.messages} thinking={thinking} freshId={freshId} onFreshDone={() => setFreshId(null)} />
+                  <Messages
+                    greeting={greeting}
+                    messages={chat.messages}
+                    thinking={thinking}
+                    freshId={freshId}
+                    onFreshDone={() => setFreshId(null)}
+                    onShowResults={handleViewAllUnits}
+                  />
                 </div>
                 <div className={styles.chatFoot}>
                   <Composer
@@ -280,6 +366,31 @@ export function ChatExperience({ below }: { below: ReactNode }) {
               </div>
             </div>
 
+            {/* BĂNG CHUYỀN NẰM RIÊNG BÊN DƯỚI (PHƯƠNG ÁN 1) */}
+            <div className={styles.showcaseSection}>
+              <div className={styles.showcaseHead}>
+                <div className={styles.showcaseTitle}>
+                  <Sparkles size={15} />
+                  <span>Căn hời phân khu nổi bật hôm nay (Tiết kiệm ≥ 10%)</span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.showcaseAllBtn}
+                  onClick={handleViewAllUnits}
+                  aria-label="Xem toàn bộ rổ hàng"
+                >
+                  <span>Xem tất cả {openCount} căn</span>
+                  <ArrowRight size={13} />
+                </button>
+              </div>
+
+              <InlineChatUnits
+                unitIds={initialBargainUnitIds}
+                onShowResults={handleViewAllUnits}
+                title="Top deals mở thuê tại Ocean Park"
+              />
+            </div>
+
             <ul className={styles.trust}>
               {TRUST.map(({ icon: Icon, text }) => (
                 <li key={text}>
@@ -289,7 +400,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
             </ul>
           </div>
         </section>
-        {below}
+        {renderedBelow}
       </>
     );
   }
@@ -368,6 +479,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
               freshId={freshId}
               onFreshDone={() => setFreshId(null)}
               onShowResults={() => setTab("results")}
+              hideInlineUnits={true}
             />
           </div>
           <div className={styles.railFoot}>

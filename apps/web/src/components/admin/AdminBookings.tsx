@@ -8,10 +8,12 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
 import { adminReassign } from "@/lib/mock/actions";
 import { dayLabel, fmtTime, maskPhone } from "@/lib/mock/format";
-import { useMock } from "@/lib/mock/store";
+import { setMockState, useMock } from "@/lib/mock/store";
 import { HOSTS, hostById, unitAddress, unitById } from "@/lib/mock/units";
 import type { Booking } from "@/lib/mock/types";
+import { dispatchApi } from "@/lib/apiClient";
 import { useNow } from "@/lib/useNow";
+import { useEffect } from "react";
 import styles from "./Admin.module.css";
 
 const SLA_MS = 180_000;
@@ -22,6 +24,60 @@ export function AdminBookings() {
   const now = useNow(1000);
   const [filter, setFilter] = useState<Filter>("open");
   const [pick, setPick] = useState<Record<string, string>>({});
+
+  // Tải danh sách dispatch ticket thật từ Database để Admin điều phối
+  useEffect(() => {
+    let unmounted = false;
+    async function loadDbTickets() {
+      try {
+        const res = await dispatchApi.getTickets();
+        if (res.ok && Array.isArray(res.data) && !unmounted) {
+          const tickets = res.data;
+          setMockState((s) => {
+            const nextBookings = [...s.bookings];
+            for (const t of tickets) {
+              if (!t.viewing) continue;
+              const v = t.viewing;
+              const ref = v.bookingRefCode || `VIEW-${t.id.slice(-6)}`;
+              const existingIdx = nextBookings.findIndex((b) => b.ref === ref || b.id === v.id);
+              const mappedBooking: Booking = {
+                id: v.id,
+                ref,
+                unitId: v.unitId || v.unit?.id || "u1",
+                hostId: t.hostId || "H01",
+                tenant: {
+                  name: v.tenant?.fullName || "Khách thuê Ocean Park",
+                  phone: v.tenant?.phoneHash?.replace("hash_", "") || "0912345678",
+                  persons: 2,
+                },
+                slot: v.viewingSlot || new Date().toISOString(),
+                status: t.status === "OFFERED" ? "pending" : t.status === "ACCEPTED" ? "confirmed" : "pending",
+                createdAt: t.offeredAt || v.createdAt || new Date().toISOString(),
+                dispatch: {
+                  state: t.status === "OFFERED" ? "open" : "assigned",
+                  tier: t.tier === 1 ? "top" : "zone_pool",
+                  offeredTo: [t.hostId || "H01"],
+                  openedAt: t.offeredAt || new Date().toISOString(),
+                },
+              };
+              if (existingIdx >= 0) {
+                nextBookings[existingIdx] = { ...nextBookings[existingIdx], ...mappedBooking };
+              } else {
+                nextBookings.push(mappedBooking);
+              }
+            }
+            return { ...s, bookings: nextBookings };
+          });
+        }
+      } catch {
+        // ignore offline
+      }
+    }
+    loadDbTickets();
+    return () => {
+      unmounted = true;
+    };
+  }, []);
   if (!state.ready || !now) return <div className="skeleton" style={{ height: 360 }} />;
 
   const all = [...state.bookings].sort((a, b) => a.slot.localeCompare(b.slot));

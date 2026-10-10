@@ -15,7 +15,7 @@ vi.stubGlobal("window", {
 
 const actions = await import("@/lib/mock/actions");
 const { getMockState, resetMockState } = await import("@/lib/mock/store");
-const { noticesFor } = await import("@/lib/mock/selectors");
+const { noticesFor, landlordPayoutAccount } = await import("@/lib/mock/selectors");
 const inspectionSelectors = await import("@/lib/mock/selectors-inspection");
 
 beforeEach(() => {
@@ -285,4 +285,285 @@ describe("Consign & Inspection - WP1", () => {
       }
     }
   });
+
+  // Case 13: Auto-Escalation: quá 30p vào Open Pool, quá 2h kích hoạt SLA Breach và gán Area Lead.
+  it("13. Auto-Escalation: quá 30p vào Open Pool, quá 2h SLA Breach và chuyển Area Lead", () => {
+    const s = getMockState();
+    const c2 = s.consignments.find((x) => x.id === "cs-2")!; // awaiting_host
+    expect(c2.status).toBe("awaiting_host");
+
+    const createdTime = new Date(c2.signedAt || c2.createdAt).getTime();
+
+    // Giả lập sau 35 phút (quá 30p)
+    actions.autoEscalateConsignments(createdTime + 35 * 60 * 1000);
+    const s35 = getMockState();
+    const c2_35 = s35.consignments.find((x) => x.id === "cs-2")!;
+    expect(c2_35.openPoolAt).toBeDefined();
+
+    // Host khác (H02) lúc này có thể nhận thẩm định do đã vào Open Pool
+    const acceptRes = actions.hostAcceptInspection("cs-2", "H02");
+    expect(acceptRes.ok).toBe(true);
+
+    // Reset lại và kiểm tra mốc 2h10 phút (SLA Breach)
+    resetMockState();
+    actions.autoEscalateConsignments(createdTime + 130 * 60 * 1000);
+    const s130 = getMockState();
+    const c2_130 = s130.consignments.find((x) => x.id === "cs-2")!;
+    expect(c2_130.slaBreached).toBe(true);
+    expect(c2_130.escalatedToAreaLead).toBe(true);
+    expect(c2_130.hostId).toBe("H01"); // Area lead S1/S2
+
+    // Admin nhận thông báo còi đỏ
+    const aNotices = noticesFor(s130, "admin");
+    expect(aNotices.some((n) => n.title.includes("BÁO ĐỘNG SLA"))).toBe(true);
+  });
+
+  // Case 14: Admin Manual Override: chỉ định tay Host phụ trách hồ sơ ký gửi
+  it("14. Admin Manual Override: chỉ định tay Host phụ trách hồ sơ ký gửi", () => {
+    const res = actions.adminAssignConsignment("cs-2", "H03", "Phạm Thu Hà");
+    expect(res.ok).toBe(true);
+
+    const s = getMockState();
+    const c2 = s.consignments.find((x) => x.id === "cs-2")!;
+    expect(c2.hostId).toBe("H03");
+    expect(c2.adminOverriddenBy).toBe("Phạm Thu Hà");
+
+    // Host H03 nhận thông báo phân công
+    const hNotices = noticesFor(s, "host", "H03");
+    expect(hNotices.some((n) => n.title.includes("Admin giao hồ sơ thẩm định"))).toBe(true);
+  });
+
+  // Case 15: Fast-Close Floor Price Corridor: Lưu trữ và bảo vệ giá sàn ủy quyền
+  it("15. Fast-Close Floor Price Corridor lưu trữ giá sàn và ủy quyền chiết khấu chốt nhanh", () => {
+    const c = actions.submitConsignment(
+      {
+        landlordId: "L1",
+        building: "S1.02",
+        floor: 15,
+        door: "08",
+        layout: "1PN",
+        areaM2: 48,
+        askRent: 8_000_000,
+        suggestedDeposit: 8_000_000,
+        allowFastClose: true,
+        floorRent: 7_500_000,
+        furnishing: "full",
+        locks: ["smart"],
+      },
+      false,
+    );
+
+    expect(c.askRent).toBe(8_000_000);
+    expect(c.allowFastClose).toBe(true);
+    expect(c.floorRent).toBe(7_500_000);
+    // Giá sàn phải luôn thấp hơn giá chào thuê
+    expect(c.floorRent!).toBeLessThan(c.askRent);
+  });
+
+  // Case 16: Smart Onboarding: Định danh và lưu tài khoản thụ hưởng mặc định khi ký gửi căn 1
+  it("16. Smart Onboarding: Tự động lưu tài khoản thụ hưởng mặc định cho Chủ nhà", () => {
+    const c = actions.submitConsignment(
+      {
+        landlordId: "L1",
+        building: "S1.02",
+        floor: 12,
+        door: "05",
+        layout: "Studio",
+        areaM2: 32,
+        askRent: 6_000_000,
+        suggestedDeposit: 6_000_000,
+        bankName: "Techcombank",
+        bankAccount: "190388889999",
+        bankAccountHolder: "NGUYỄN VĂN AN",
+        saveAsDefaultPayout: true,
+      },
+      false,
+    );
+
+    expect(c.bankAccount).toBe("190388889999");
+    const payout = landlordPayoutAccount(getMockState());
+    expect(payout).toBeDefined();
+    expect(payout?.bankName).toBe("Techcombank");
+    expect(payout?.bankAccount).toBe("190388889999");
+    expect(payout?.bankAccountHolder).toBe("NGUYỄN VĂN AN");
+    expect(payout?.isVerified).toBe(true);
+  });
+
+  // Case 17: Căn thứ 2 tự động kế thừa tài khoản thụ hưởng định danh từ Profile
+  it("17. Smart Onboarding: Căn thứ hai kế thừa tài khoản thụ hưởng đã định danh", () => {
+    // Đã có tài khoản từ trước
+    actions.saveLandlordPayoutAccount({
+      bankName: "Vietcombank",
+      bankAccount: "001100223344",
+      bankAccountHolder: "TRẦN THỊ MAI",
+    });
+
+    const state = getMockState();
+    const existing = landlordPayoutAccount(state);
+    expect(existing?.bankName).toBe("Vietcombank");
+    expect(existing?.bankAccount).toBe("001100223344");
+
+    // Ký gửi căn mới không cần nhập lại
+    const c2 = actions.submitConsignment(
+      {
+        landlordId: "L1",
+        building: "S2.05",
+        floor: 8,
+        door: "12",
+        layout: "2PN",
+        areaM2: 65,
+        askRent: 10_000_000,
+        bankName: existing?.bankName,
+        bankAccount: existing?.bankAccount,
+        bankAccountHolder: existing?.bankAccountHolder,
+      },
+      false,
+    );
+
+    expect(c2.bankName).toBe("Vietcombank");
+    expect(c2.bankAccount).toBe("001100223344");
+    expect(c2.bankAccountHolder).toBe("TRẦN THỊ MAI");
+  });
+
+  // Case 18: Validation chặn số tài khoản dưới 6 số hoặc thiếu tên chủ tài khoản khi không phải draft
+  it("18. Smart Onboarding: Chặn số tài khoản không hợp lệ (< 6 chữ số) và tên chủ tài khoản rỗng", () => {
+    expect(() =>
+      actions.submitConsignment(
+        {
+          landlordId: "L1",
+          building: "S1.02",
+          floor: 10,
+          door: "02",
+          layout: "Studio",
+          areaM2: 32,
+          askRent: 5_500_000,
+          bankName: "MBBank",
+          bankAccount: "123", // Quá ngắn (< 6 số)
+          bankAccountHolder: "LE VAN B",
+        },
+        false,
+      ),
+    ).toThrow("Số tài khoản ngân hàng không hợp lệ (tối thiểu 6 chữ số).");
+
+    expect(() =>
+      actions.submitConsignment(
+        {
+          landlordId: "L1",
+          building: "S1.02",
+          floor: 10,
+          door: "02",
+          layout: "Studio",
+          areaM2: 32,
+          askRent: 5_500_000,
+          bankName: "MBBank",
+          bankAccount: "123456789",
+          bankAccountHolder: "A", // Quá ngắn (< 3 ký tự)
+        },
+        false,
+      ),
+    ).toThrow("Tên chủ tài khoản phải có ít nhất 3 ký tự.");
+  });
+
+  // Case 19: Cờ saveAsDefaultPayout = false không ghi đè tài khoản mặc định cũ
+  it("19. Smart Onboarding: Khi saveAsDefaultPayout = false thì không ghi đè tài khoản mặc định của Profile", () => {
+    // Lưu tài khoản chính
+    actions.saveLandlordPayoutAccount({
+      bankName: "Techcombank",
+      bankAccount: "190311112222",
+      bankAccountHolder: "CHỦ NHÀ CHÍNH",
+    });
+
+    // Ký gửi căn hộ riêng với tài khoản khác nhưng không lưu mặc định
+    const c = actions.submitConsignment(
+      {
+        landlordId: "L1",
+        building: "S1.02",
+        floor: 14,
+        door: "06",
+        layout: "1PN",
+        areaM2: 45,
+        askRent: 7_000_000,
+        bankName: "ACB",
+        bankAccount: "987654321",
+        bankAccountHolder: "TÀI KHOẢN PHỤ",
+        saveAsDefaultPayout: false,
+      },
+      false,
+    );
+
+    expect(c.bankName).toBe("ACB");
+    expect(c.bankAccount).toBe("987654321");
+
+    // Tài khoản mặc định trong Store Profile vẫn là Techcombank
+    const payout = landlordPayoutAccount(getMockState());
+    expect(payout?.bankName).toBe("Techcombank");
+    expect(payout?.bankAccount).toBe("190311112222");
+    expect(payout?.bankAccountHolder).toBe("CHỦ NHÀ CHÍNH");
+  });
+
+  // Case 20: Tự động liên kết trang thiết bị chủ nhà kê khai sang 32 danh mục thẩm định của Host
+  it("20. Tự động liên kết trang thiết bị chủ nhà kê khai sang 32 danh mục thẩm định của Host", async () => {
+    const { resolveInventoryCodesFromLandlord } = await import("@/lib/mock/inventory");
+
+    // Chủ nhà kê khai: sofa, kitchen, fridge
+    const c = actions.submitConsignment(
+      {
+        landlordId: "L1",
+        building: "S1.02",
+        floor: 15,
+        door: "08",
+        layout: "2PN",
+        areaM2: 65,
+        askRent: 9_000_000,
+        furnished: true,
+        items: ["sofa", "kitchen", "fridge"],
+      },
+      false,
+    );
+
+    expect(c.items).toContain("sofa");
+    expect(c.items).toContain("kitchen");
+    expect(c.items).toContain("fridge");
+
+    const { codes, landlordCodes } = resolveInventoryCodesFromLandlord(c.items, c.furnished, c.note);
+
+    // Sofa -> Mã 1, 2, 3
+    expect(codes.has("1")).toBe(true);
+    expect(codes.has("2")).toBe(true);
+    expect(codes.has("3")).toBe(true);
+    expect(landlordCodes.has("1")).toBe(true);
+
+    // Bếp -> Mã 6, 7, 9, 10, 11
+    expect(codes.has("6")).toBe(true);
+    expect(codes.has("7")).toBe(true);
+
+    // Tủ lạnh -> Mã 8
+    expect(codes.has("8")).toBe(true);
+
+    // Tivi và Điều khiển TV/Điều hòa không được khai -> không nằm trong codes
+    expect(codes.has("4")).toBe(false);
+    expect(codes.has("30")).toBe(false);
+    expect(codes.has("31")).toBe(false);
+
+    // Kiểm tra trường hợp căn hộ chủ nhà KHÔNG kê khai món nào:
+    const emptyConsign = actions.submitConsignment(
+      {
+        landlordId: "L1",
+        building: "S1.02",
+        floor: 10,
+        door: "02",
+        layout: "Studio",
+        areaM2: 32,
+        askRent: 5_000_000,
+        furnished: false,
+        items: [],
+      },
+      false,
+    );
+    const emptyResult = resolveInventoryCodesFromLandlord(emptyConsign.items, emptyConsign.furnished, emptyConsign.note);
+    // Không có ô nào bị tự tick
+    expect(emptyResult.codes.size).toBe(0);
+    expect(emptyResult.landlordCodes.size).toBe(0);
+  });
 });
+

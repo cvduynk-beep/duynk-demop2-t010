@@ -1,18 +1,18 @@
 import Link from "next/link";
 
-/** Ký hiệu: một toà nhà, một ô cửa sáng đèn — cùng ngôn ngữ với ảnh mặt tiền ở trang chủ. */
+/**
+ * Biểu tượng Tối giản: Khối toà nhà hiện đại với duy nhất 1 ô cửa sổ ấm áp sáng đèn.
+ * Mang thông điệp: "VinStay AI tìm ra đúng căn nhà hoàn hảo sáng đèn đón bạn".
+ */
 export function LogoMark({ size = 30, inverse = false }: { size?: number; inverse?: boolean }) {
-  const body = inverse ? "#f2f7f6" : "#0b2530";
-  const dim = inverse ? "#c5d6d3" : "#3a6472";
+  const body = inverse ? "#ffffff" : "#0a3d4a";
+  const lit = "#e0a03c";
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden focusable="false">
-      <rect x="4" y="2" width="24" height="28" rx="5" fill={body} />
-      {[0, 1, 2].map((r) =>
-        [0, 1].map((c) => {
-          const lit = r === 0 && c === 1;
-          return <rect key={`${r}-${c}`} x={9 + c * 8} y={7 + r * 7} width="5" height="4" rx="1.2" fill={lit ? "#e0a03c" : dim} />;
-        }),
-      )}
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden focusable="false">
+      {/* Khối toà nhà tối giản bo góc mềm mại */}
+      <rect x="5.5" y="3" width="21" height="26" rx="6" fill={body} />
+      {/* Duy nhất 1 ô cửa sổ ấm áp sáng đèn ở tầng cao */}
+      <rect x="15.5" y="7.5" width="7" height="7" rx="2" fill={lit} />
     </svg>
   );
 }
@@ -21,7 +21,7 @@ export function Logo({
   href = "/",
   inverse = false,
   sub,
-  size = 30,
+  size = 28,
   compact = false,
 }: {
   href?: string;
@@ -30,8 +30,9 @@ export function Logo({
   size?: number;
   compact?: boolean;
 }) {
-  const markSize = compact ? 26 : size;
-  const fontSize = compact ? 17.5 : (size === 30 ? 20 : Math.round(size * 0.65));
+  const markSize = compact ? 24 : size;
+  const fontSize = compact ? 17 : (size === 28 ? 19.5 : Math.round(size * 0.68));
+
   return (
     <Link
       href={href}
@@ -44,23 +45,18 @@ export function Logo({
       }}
     >
       <LogoMark size={markSize} inverse={inverse} />
-      <span style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-        <span
-          style={{
-            fontFamily: "var(--font-head)",
-            fontWeight: 700,
-            fontSize,
-            letterSpacing: "-0.03em",
-            color: inverse ? "#fff" : "var(--ink)",
-          }}
-        >
-          VinStay<span style={{ color: "var(--amber)" }}> AI</span>
-        </span>
-        {!compact && sub && (
-          <span style={{ fontSize: 11.5, marginTop: 4, color: inverse ? "#9fb9bf" : "var(--slate)" }}>
-            {sub}
-          </span>
-        )}
+      <span
+        style={{
+          fontFamily: "var(--font-head)",
+          fontWeight: 800,
+          fontSize,
+          letterSpacing: "-0.03em",
+          color: inverse ? "#ffffff" : "var(--ink)",
+          whiteSpace: "nowrap",
+          lineHeight: 1,
+        }}
+      >
+        VinStay<span style={{ color: "var(--amber)", marginLeft: 2 }}>AI</span>
       </span>
     </Link>
   );

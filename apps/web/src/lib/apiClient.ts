@@ -146,6 +146,27 @@ export const bookingApi = {
     api.post<{ success: boolean; message: string }>(`/bookings/${id}/rating`, { stars, comment }),
 };
 
+export const dispatchApi = {
+  getTickets: (hostId?: string) =>
+    api.get<any[]>(hostId ? `/dispatch/tickets?hostId=${encodeURIComponent(hostId)}` : "/dispatch/tickets"),
+  acceptTicket: (ticketId: string, hostId?: string) =>
+    api.post<any>(`/dispatch/tickets/${encodeURIComponent(ticketId)}/accept`, { hostId }),
+  rejectTicket: (ticketId: string, reason?: string) =>
+    api.post<any>(`/dispatch/tickets/${encodeURIComponent(ticketId)}/reject`, { reason }),
+  claimTicket: (ticketId: string, hostId?: string) =>
+    api.post<any>(`/dispatch/tickets/${encodeURIComponent(ticketId)}/claim`, { hostId }),
+  swipeElevatorRfid: (ticketId: string) =>
+    api.post<any>(`/dispatch/tickets/${encodeURIComponent(ticketId)}/elevator-rfid`),
+  revealDoorKey: (ticketId: string) =>
+    api.post<any>(`/dispatch/tickets/${encodeURIComponent(ticketId)}/reveal-key`),
+  emergency: (ticketId: string, reason: string) =>
+    api.post<any>(`/dispatch/tickets/${encodeURIComponent(ticketId)}/emergency`, { reason }),
+  noShow: (ticketId: string, note?: string) =>
+    api.post<any>(`/dispatch/tickets/${encodeURIComponent(ticketId)}/no-show`, { note }),
+  notInterested: (ticketId: string, feedback?: string) =>
+    api.post<any>(`/dispatch/tickets/${encodeURIComponent(ticketId)}/not-interested`, { feedback }),
+};
+
 export const depositApi = {
   generateVietQr: (dto: { viewingId: string; unitId?: string; hostId?: string; amount?: number }) =>
     api.post<any>("/deposits/generate-vietqr", dto),
@@ -194,3 +215,97 @@ export const accountApi = {
   getNotifications: () =>
     api.get<any[]>("/me/notifications"),
 };
+
+export const adminApi = {
+  getBiFunnel: () =>
+    api.get<{
+      funnel: {
+        stages: { stage: string; count: number; dropRate: string }[];
+        noShowRate: string;
+        avgDecisionTimeMinutes: number;
+      };
+      occupancyHeatmap: {
+        buildingCode: string;
+        zone: string;
+        total: number;
+        rented: number;
+        occupancyRate: string;
+        alert: string;
+      }[];
+      portfolioStatus: {
+        totalUnits: number;
+        rentedUnits: number;
+        holdingUnits: number;
+        availableUnits: number;
+      };
+    }>("/admin/bi-funnel"),
+  getInventory: () =>
+    api.get<any[]>("/admin/exclusive-inventory"),
+  getDispatchSla: () =>
+    api.get<any[]>("/admin/dispatch-sla"),
+  reassignBooking: (bookingId: string, hostId: string) =>
+    api.post<any>(`/admin/bookings/${encodeURIComponent(bookingId)}/reassign`, { hostId }),
+  getFieldHosts: () =>
+    api.get<any[]>("/admin/hosts"),
+  getFieldHostById: (id: string) =>
+    api.get<any>(`/admin/hosts/${encodeURIComponent(id)}`),
+  createFieldHost: (dto: any) =>
+    api.post<any>("/admin/hosts", dto),
+  updateFieldHost: (id: string, dto: any) =>
+    api.patch<any>(`/admin/hosts/${encodeURIComponent(id)}`, dto),
+  getContracts: () =>
+    api.get<any[]>("/admin/contracts"),
+  getContractById: (id: string) =>
+    api.get<any>(`/admin/contracts/${encodeURIComponent(id)}`),
+  voidHold: (depositId: string, dto: { reason: string; note: string }) =>
+    api.post<any>(`/admin/contracts/${encodeURIComponent(depositId)}/void-hold`, dto),
+  completeExit: (mandateId: string) =>
+    api.post<any>(`/admin/contracts/${encodeURIComponent(mandateId)}/complete-exit`),
+  remindRenewal: (contractId: string) =>
+    api.post<any>(`/admin/contracts/${encodeURIComponent(contractId)}/remind-renewal`),
+  getCommissionEngine: () =>
+    api.get<{ configs: { id?: string; configKey: string; paramValue: number; paramUnit: string; updatedAt?: string }[] }>("/admin/commission-engine"),
+  updateCommissionParam: (dto: { configKey: string; paramValue: number; reason: string }) =>
+    api.post<any>("/admin/commission-engine/config", dto),
+  getHoldPolicy: () =>
+    api.get<{ defaultHours: number; byUnit: Record<string, number> }>("/admin/settings/hold-policy"),
+  updateHoldPolicy: (dto: { hours: number; unitId?: string }) =>
+    api.post<any>("/admin/settings/hold-policy", dto),
+  approveConsignment: (id: string, note?: string) =>
+    api.post<any>(`/admin/consignments/${encodeURIComponent(id)}/approve`, { note }),
+  rejectConsignment: (id: string, note: string) =>
+    api.post<any>(`/admin/consignments/${encodeURIComponent(id)}/reject`, { note }),
+};
+
+export const hostApi = {
+  getEarnings: (hostId?: string) =>
+    api.get<{
+      hostId: string;
+      fullName: string;
+      rating: number;
+      walletBalance: number;
+      stats: {
+        totalViewings: number;
+        totalDeals: number;
+        dealCommissionTotal: number;
+        viewingFeeTotal: number;
+        ratingBonus: number;
+        totalEarnings: number;
+      };
+      currentPeriod: string;
+      payouts: {
+        id: string;
+        amount: number;
+        period: string;
+        status: string;
+        createdAt: string;
+      }[];
+    }>(hostId ? `/host/earnings?hostId=${encodeURIComponent(hostId)}` : "/host/earnings"),
+  getInspections: (hostId?: string) =>
+    api.get<any[]>(hostId ? `/host/inspections?hostId=${encodeURIComponent(hostId)}` : "/host/inspections"),
+  acceptInspection: (consignmentId: string, hostId?: string) =>
+    api.post<any>(`/host/inspections/${encodeURIComponent(consignmentId)}/accept`, { hostId }),
+  submitInspectionReport: (consignmentId: string, dto: any) =>
+    api.post<any>(`/host/inspections/${encodeURIComponent(consignmentId)}/report`, dto),
+};
+

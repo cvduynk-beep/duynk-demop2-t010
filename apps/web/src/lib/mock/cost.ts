@@ -40,19 +40,56 @@ export interface CostBreakdown {
   total: number;
 }
 
-export function allInCost(unit: { rent: number; areaM2: number }, hh: Household = DEFAULT_HOUSEHOLD): CostBreakdown {
-  const rent = unit.rent;
-  const mgmt = Math.round(unit.areaM2 * RATES.mgmtPerM2);
-  const parking = hh.motorbikes * RATES.motorbike + hh.cars * RATES.car;
-  const utility = hh.persons * RATES.utilityPerPerson;
+import type { UnitLivingFees } from "./types";
+
+export function allInCost(
+  unit?: { rent?: number; areaM2?: number; livingFees?: UnitLivingFees } | null,
+  hh: Household = DEFAULT_HOUSEHOLD,
+): CostBreakdown {
+  const rent = unit?.rent ?? 6_500_000;
+  const areaM2 = unit?.areaM2 ?? 45;
+  const mgmtRate = unit?.livingFees?.managementFeePerM2 ?? RATES.mgmtPerM2;
+  const mgmt = Math.round(areaM2 * mgmtRate);
+  const motorbikeRate = unit?.livingFees?.motorbikeFee ?? RATES.motorbike;
+  const carRate = unit?.livingFees?.carFee ?? RATES.car;
+  const parking = (hh.motorbikes ?? 1) * motorbikeRate + (hh.cars ?? 0) * carRate;
+  const utility = (hh.persons ?? 2) * RATES.utilityPerPerson;
   return { rent, mgmt, parking, utility, total: rent + mgmt + parking + utility };
 }
 
 /** Tỷ lệ tiết kiệm so với giá trung bình toà (0.125 = rẻ hơn 12,5%). Âm nếu đắt hơn. */
-export function savingsRatio(unit: { rent: number; marketAvg: number }): number {
-  return (unit.marketAvg - unit.rent) / unit.marketAvg;
+export function savingsRatio(unit?: { rent?: number; marketAvg?: number } | null): number {
+  if (!unit || !unit.marketAvg) return 0;
+  return (unit.marketAvg - (unit.rent ?? 0)) / unit.marketAvg;
 }
 
-export const isBargain = (unit: { rent: number; marketAvg: number }) => savingsRatio(unit) >= RATES.bargainThreshold - 1e-9;
+export const isBargain = (unit?: { rent?: number; marketAvg?: number } | null) => savingsRatio(unit) >= RATES.bargainThreshold - 1e-9;
 
-export const savingsPct = (unit: { rent: number; marketAvg: number }) => Math.round(savingsRatio(unit) * 100);
+export const savingsPct = (unit?: { rent?: number; marketAvg?: number } | null) => Math.round(savingsRatio(unit) * 100);
+
+/**
+ * Biểu phí phụ phí kỳ hạn thuê của VinStay AI:
+ * - Dưới 3 tháng (ngắn hạn): +15% (bù chi phí bàn giao Hộ chiếu & rủi ro trống phòng giữa chu kỳ)
+ * - 3 đến dưới 6 tháng (trung hạn ngắn): +8% (học kỳ ngắn / thực tập sinh)
+ * - 6 đến dưới 12 tháng (trung hạn dài): +4% (học kỳ chính VinUni / dự án TechnoPark)
+ * - Từ 12 tháng trở lên (cố định dài hạn): 100% Giá chuẩn (dòng tiền ổn định 1 năm)
+ */
+export const TERM_PREMIUM_RATES = {
+  short: 0.15,    // < 3 tháng
+  midShort: 0.08, // 3 - < 6 tháng
+  midLong: 0.04,  // 6 - < 12 tháng
+  long: 0.0,      // >= 12 tháng
+} as const;
+
+export function getTermPremiumRate(months: number): number {
+  if (months < 3) return TERM_PREMIUM_RATES.short;
+  if (months < 6) return TERM_PREMIUM_RATES.midShort;
+  if (months < 12) return TERM_PREMIUM_RATES.midLong;
+  return TERM_PREMIUM_RATES.long;
+}
+
+export function calculateRentForDuration(baseRent: number, months: number): number {
+  if (!baseRent || baseRent <= 0) return 0;
+  const premium = getTermPremiumRate(months);
+  return Math.round((baseRent * (1 + premium)) / 50_000) * 50_000;
+}

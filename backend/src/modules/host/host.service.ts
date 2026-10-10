@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { MandateStatus, UnitStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AcceptInspectionDto, SubmitInspectionReportDto } from './dto/host.dto';
 
@@ -17,20 +18,41 @@ export class HostService {
         orderBy: { createdAt: 'desc' },
       });
       if (mandates.length > 0) {
-        return mandates.map((m) => ({
-          consignmentId: m.id,
-          unitId: m.unitId,
-          unitCode: m.unit.unitCode,
-          building: m.unit.building.buildingCode,
-          zone: m.unit.building.zoneName,
-          floor: m.unit.floorNumber,
-          layout: m.unit.layoutType,
-          carpetAreaM2: Number(m.unit.carpetAreaM2),
-          askRent: Number(m.unit.baseRentPrice),
-          status: 'awaiting_host',
-          createdAt: m.createdAt.toISOString(),
-          landlordName: m.unit.landlord?.fullName || 'Chủ nhà Ocean Park',
-        }));
+        return mandates.map((m) => {
+          const config = (m.doorAccessConfig as any) || {};
+          const consignment = config.consignment || {};
+          const status = consignment.stage || 'awaiting_host';
+          const hostId = consignment.hostId || undefined;
+          return {
+            consignmentId: m.id,
+            unitId: m.unitId,
+            unitCode: m.unit.unitCode,
+            building: m.unit.building.buildingCode,
+            zone: m.unit.building.zoneName,
+            floor: m.unit.floorNumber,
+            layout: m.unit.layoutType,
+            carpetAreaM2: Number(consignment.netAreaM2 || m.unit.carpetAreaM2),
+            askRent: Number(m.unit.baseRentPrice),
+            status,
+            hostId,
+            report:
+              consignment.stage === 'reviewing' ||
+              consignment.stage === 'approved' ||
+              consignment.stage === 'rejected'
+                ? {
+                    recommendation: consignment.recommendation || 'approve',
+                    note: consignment.note || '',
+                    submittedAt: consignment.reportSubmittedAt,
+                    netAreaM2: consignment.netAreaM2,
+                    furnishing: consignment.furnishing,
+                    inventory: consignment.inventory,
+                    declared: consignment.declared,
+                  }
+                : undefined,
+            createdAt: m.createdAt.toISOString(),
+            landlordName: m.unit.landlord?.fullName || 'Chủ nhà Ocean Park',
+          };
+        });
       }
     } catch (err) {
       this.logger.warn(`Inspections DB fallback: ${err.message}`);
@@ -100,21 +122,47 @@ export class HostService {
 
   async submitInspectionReport(consignmentId: string, dto: SubmitInspectionReportDto) {
     this.logger.log(`[HOST INSPECTION] Đã nộp báo cáo thẩm định cho hồ sơ: ${consignmentId}, đề xuất: ${dto.recommendation}`);
+    const isApproved = dto.recommendation === 'approve';
     try {
       const mandate = await this.prisma.exclusiveMandate.findFirst({
         where: { OR: [{ id: consignmentId }, { unit: { unitCode: consignmentId } }] },
+        include: { unit: true },
       });
       if (mandate) {
         const config = (mandate.doorAccessConfig as any) || {};
         const consignment = config.consignment || {};
-        consignment.stage = 'reviewing';
+        consignment.stage = isApproved ? 'approved' : 'reviewing';
         consignment.reportSubmittedAt = new Date().toISOString();
         consignment.recommendation = dto.recommendation;
-        consignment.note = dto.note || 'Báo cáo thẩm định đã hoàn tất và chuyển Admin phê duyệt.';
-        await this.prisma.exclusiveMandate.update({
-          where: { id: mandate.id },
-          data: { doorAccessConfig: { ...config, consignment } },
-        });
+        consignment.note = dto.note || (isApproved ? 'Đã thẩm định đạt chuẩn và kích hoạt lên trang chủ.' : 'Báo cáo thẩm định đã hoàn tất và chuyển Admin phê duyệt.');
+        if (dto.netAreaM2) consignment.netAreaM2 = dto.netAreaM2;
+        if (dto.furnishing) consignment.furnishing = dto.furnishing;
+        if (dto.inventory) consignment.inventory = dto.inventory;
+        if (dto.declared) consignment.declared = dto.declared;
+        if (dto.hostId) consignment.hostId = dto.hostId;
+
+        if (isApproved) {
+          await this.prisma.unit.update({
+            where: { id: mandate.unitId },
+            data: {
+              status: UnitStatus.AVAILABLE,
+              isVerified: true,
+              ...(dto.netAreaM2 ? { carpetAreaM2: dto.netAreaM2 } : {}),
+            },
+          });
+          await this.prisma.exclusiveMandate.update({
+            where: { id: mandate.id },
+            data: {
+              status: MandateStatus.ACTIVE,
+              doorAccessConfig: { ...config, consignment },
+            },
+          });
+        } else {
+          await this.prisma.exclusiveMandate.update({
+            where: { id: mandate.id },
+            data: { doorAccessConfig: { ...config, consignment } },
+          });
+        }
       }
     } catch (err) {
       this.logger.warn(`Lỗi DB submitInspectionReport: ${(err as Error).message}`);
@@ -122,10 +170,10 @@ export class HostService {
     return {
       success: true,
       consignmentId,
-      status: 'reviewing',
+      status: isApproved ? 'approved' : 'reviewing',
       submittedAt: new Date().toISOString(),
       recommendation: dto.recommendation,
-      note: dto.note || 'Báo cáo thẩm định đã hoàn tất và chuyển Admin phê duyệt.',
+      note: dto.note || (isApproved ? 'Đã thẩm định đạt chuẩn và niêm yết trực tiếp lên trang chủ cho khách thuê.' : 'Báo cáo thẩm định đã hoàn tất và chuyển Admin phê duyệt.'),
       payoutBonus: 100000, // Thưởng 100k cho lượt thẩm định
     };
   }

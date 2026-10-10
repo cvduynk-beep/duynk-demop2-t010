@@ -1,12 +1,13 @@
 "use client";
 
-import { Building2, FileSignature, Gauge, Radar, Settings, SlidersHorizontal, Users } from "lucide-react";
+import { BarChart3, Building2, FileSignature, Gauge, Radar, Settings, SlidersHorizontal, Users } from "lucide-react";
 import { loginPathFor } from "@/lib/auth/portals";
 import { useSession } from "@/lib/auth/client";
 import { DEMO_USERS } from "@/lib/mock/actors";
 import { contractKpis, contractRows } from "@/lib/mock/contracts";
 import { useMock } from "@/lib/mock/store";
 import { useNow } from "@/lib/useNow";
+import { AdminVinnyCopilot } from "@/components/admin/AdminVinnyCopilot";
 import { PortalShell } from "./PortalShell";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       settingsHref="/admin/settings"
       nav={[
         { href: "/admin/dashboard", label: "Tổng quan", icon: Gauge },
+        { href: "/admin/reports", label: "Báo cáo & KPI", icon: BarChart3 },
         { href: "/admin/inventory", label: "Căn hộ & ký gửi", icon: Building2, badge: pendingCs },
         { href: "/admin/bookings", label: "Điều phối lịch", icon: Radar, badge: pendingBk },
         { href: "/admin/contracts", label: "Hợp đồng", icon: FileSignature, badge: contractBadge },
@@ -56,6 +58,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       ]}
     >
       {children}
+      <AdminVinnyCopilot />
     </PortalShell>
   );
 }

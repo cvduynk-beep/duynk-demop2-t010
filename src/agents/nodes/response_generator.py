@@ -5,15 +5,26 @@ Sinh câu trả lời tự nhiên, chuyên nghiệp, minh bạch 100% chi phí A
 
 from typing import Any
 
+from ..llm import generate_response_with_gemini
 from ..state import AgentState
 
 
 def response_generator_node(state: AgentState) -> dict[str, Any]:
+    query = state.get("query", "")
     intent = state.get("intent", "search_unit")
     policy_answer = state.get("policy_answer")
     matched_units = state.get("matched_units", [])
     criteria = state.get("criteria", {})
     budget_ceiling = criteria.get("budget_ceiling")
+
+    # Thử sinh câu trả lời bằng Gemini Flash nếu có
+    if matched_units:
+        gemini_reply = generate_response_with_gemini(matched_units, criteria, policy_answer, query)
+        if gemini_reply:
+            return {
+                "response": gemini_reply,
+                "metadata": {"llm_generator": "gemini-flash"},
+            }
 
     # Trường hợp 1: Hỏi về quy chế BQL / Chính sách cọc
     if intent == "policy_faq" or (policy_answer and not matched_units):

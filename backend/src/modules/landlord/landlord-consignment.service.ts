@@ -75,6 +75,20 @@ export class LandlordConsignmentService {
     const layout = toLayoutType(dto.layout);
     if (!layout) throw new BadRequestException(`Loại căn không hợp lệ: ${dto.layout}`);
 
+    const LAYOUT_MAX_CEILING: Record<string, number> = {
+      STUDIO: 18_000_000,
+      ONE_BED_PLUS: 25_000_000,
+      TWO_BED_ONE_BATH: 35_000_000,
+      TWO_BED_TWO_BATH: 35_000_000,
+      THREE_BED: 50_000_000,
+    };
+    const maxAllowed = LAYOUT_MAX_CEILING[layout] ?? 80_000_000;
+    if (dto.askRent > maxAllowed) {
+      throw new BadRequestException(
+        `Mức giá ${dto.askRent.toLocaleString('vi-VN')}đ vượt quá ngưỡng trần cho phép đối với loại layout này tại Vinhomes Ocean Park (tối đa ${maxAllowed.toLocaleString('vi-VN')}đ/tháng).`,
+      );
+    }
+
     const locks = this.parseLocks(dto.locks);
     const suggestedDeposit = dto.suggestedDeposit ?? dto.askRent;
     if (!dto.draft && (suggestedDeposit < 2_000_000 || suggestedDeposit > 3 * dto.askRent)) {
@@ -107,6 +121,10 @@ export class LandlordConsignmentService {
         furnished: dto.furnished ?? null,
         locks,
         note: dto.note?.trim() || null,
+        bankName: dto.bankName?.trim() || null,
+        bankAccount: dto.bankAccount?.trim() || null,
+        bankAccountHolder: dto.bankAccountHolder?.trim() || null,
+        saveAsDefaultPayout: dto.saveAsDefaultPayout ?? true,
       },
     };
 
@@ -280,6 +298,10 @@ export class LandlordConsignmentService {
       furnished: form?.furnished ?? null,
       locks: form?.locks ?? [toLockKind(unit.doorLockType)],
       note: form?.note ?? null,
+      bankName: form?.bankName ?? null,
+      bankAccount: form?.bankAccount ?? null,
+      bankAccountHolder: form?.bankAccountHolder ?? null,
+      saveAsDefaultPayout: form?.saveAsDefaultPayout ?? null,
       photoCount: meta?.photos?.length ?? 0,
       createdAt: mandate.createdAt,
       signedAt: mandate.signedAt,

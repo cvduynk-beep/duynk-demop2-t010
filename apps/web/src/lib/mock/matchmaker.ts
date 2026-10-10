@@ -7,6 +7,7 @@ import {
   LAYOUT_LABEL,
   UNITS,
   ZONES,
+  getUnitCondition,
   unitAddress,
   zoneById,
   type Furnishing,
@@ -176,6 +177,41 @@ export function parseQuery(text: string, base: CriteriaState): ParsedQuery {
   if (bikes) c.household.motorbikes = Math.min(4, Number(bikes[1]));
   if (/o to|oto|xe hoi/.test(t)) c.household.cars = Math.max(1, c.household.cars);
 
+  // Nhận diện câu hỏi có yếu tố giá (rẻ nhất, thấp nhất, tiết kiệm, ưu thế về giá...)
+  const PRICE_PRIORITY_RE = /\b(gia\s*re|re\s*nhat|thap\s*nhat|gia\s*thap|gia\s*tot|tiet\s*kiem|uu\s*the\s*ve\s*gia|re\b|it\s*tien|chi\s*phi\s*thap|ngan\s*sach\s*thap|gia\s*mem|can\s*hoi)\b/;
+  if (PRICE_PRIORITY_RE.test(t)) {
+    c.sortByPrice = true;
+    signal = true;
+  }
+
+  // Nhận diện câu hỏi cần nội thất mới (tình trạng >= 85%, mới tinh, mới nhận...)
+  const NEW_FURNISHING_RE = /\b(noi\s*that\s*moi|do\s*moi|moi\s*tinh|nha\s*moi|moi\s*nhan|do\s*moi\s*cao|noi\s*that\s*xin|noi\s*that\s*dep|85%|85\s*phan\s*tram|moi\s*100%|moi\s*hoan\s*toan)\b/;
+  if (NEW_FURNISHING_RE.test(t)) {
+    c.preferNewFurnishing = true;
+    signal = true;
+  }
+
+  // Nhận diện yêu cầu gần vị trí / tiện ích cụ thể
+  const NEAR_PATTERNS: [string, RegExp, ZoneId[]][] = [
+    ["Biển hồ Ocean Park", /gan\s*(bien\s*ho|ho\b|bien\s*nuoc\s*man|bien)|view\s*bien\s*ho/, ["sapphire1", "masteri"]],
+    ["Vincom Mega Mall", /gan\s*(vincom|mega\s*mall|trung\s*tam\s*thuong\s*mai|tttm)/, ["sapphire2", "sapphire1"]],
+    ["Đại học VinUni", /gan\s*(vinuni|vin\s*uni|dai\s*hoc|truong\s*dai\s*hoc)/, ["sapphire2", "zenpark"]],
+    ["Công viên Nhật Bản", /gan\s*(cong\s*vien\s*nhat|vuon\s*nhat|zenpark|zen\s*park)/, ["zenpark"]],
+    ["Trạm VinBus", /gan\s*(vinbus|vin\s*bus|tram\s*xe\s*bus|ben\s*xe)/, ["zenpark", "sapphire2"]],
+    ["Trường Vinschool", /gan\s*(vinschool|vin\s*school|truong\s*hoc)/, ["sapphire1"]],
+    ["Bến du thuyền", /gan\s*(ben\s*du\s*thuyen|du\s*thuyen|pho\s*di\s*bo\s*ven\s*ho)/, ["masteri"]],
+  ];
+  for (const [name, re, zones] of NEAR_PATTERNS) {
+    if (re.test(t)) {
+      c.nearLocation = name;
+      signal = true;
+      if (c.zones.length === 0) {
+        c.zones = zones;
+      }
+      break;
+    }
+  }
+
   // Nhận diện từ khoá tìm kiếm chung (tìm căn, thuê căn, xem phòng, rổ hàng, giá rẻ...)
   if (!signal && GENERAL_SEARCH_RE.test(t)) {
     signal = true;
@@ -195,7 +231,19 @@ export interface MatchResult {
 }
 
 export function hasCriteria(c: CriteriaState): boolean {
-  return !!(c.budget || c.layouts.length || c.zones.length || c.buildings.length || c.floor || c.furnishing || c.items.length || c.pets);
+  return !!(
+    c.budget ||
+    c.layouts.length ||
+    c.zones.length ||
+    c.buildings.length ||
+    c.floor ||
+    c.furnishing ||
+    c.items.length ||
+    c.pets ||
+    c.sortByPrice ||
+    c.preferNewFurnishing ||
+    c.nearLocation
+  );
 }
 
 export interface StatusLookup {
@@ -223,7 +271,9 @@ export function searchUnits(c: CriteriaState, statusOf: StatusLookup, unitsList?
     if (!passes(unit, c)) continue;
     const cost = allInCost(unit, c.household);
     const sv = savingsPct(unit);
+    const cond = getUnitCondition(unit);
     const reasons: string[] = [];
+
     if (isBargain(unit)) reasons.push(`Rẻ hơn mặt bằng toà ${sv}% cùng layout`);
     else if (sv > 0) reasons.push(`Thấp hơn giá trung bình toà ${sv}%`);
     if (c.budget) reasons.push(`All-in ${vndShort(cost.total)}, dưới ngân sách ${vndShort(c.budget - cost.total)}`);
@@ -231,10 +281,77 @@ export function searchUnits(c: CriteriaState, statusOf: StatusLookup, unitsList?
     if (matched.length) reasons.push(`Có ${matched.map((i) => ITEM_LABEL[i].toLowerCase()).join(", ")} như bạn cần`);
     if (c.pets && unit.petFriendly) reasons.push("Chủ nhà cho nuôi thú cưng");
     if (c.floor) reasons.push(`${FLOOR_LABEL[c.floor]} — tầng ${unit.floor}`);
+
+    // Thêm lý do nội thất mới (>= 85%)
+    if (c.preferNewFurnishing && cond >= 85) {
+      reasons.push(`Nội thất đạt độ mới ${cond}% (chuẩn mới ≥ 85%) theo Hộ chiếu kiểm định`);
+    }
+
+    // Thêm lý do vị trí gần nhất
+    if (c.nearLocation) {
+      reasons.push(`Vị trí gần ${c.nearLocation} — chỉ 2–4 phút di chuyển`);
+    } else if (c.buildings.length && c.buildings.includes(unit.building)) {
+      reasons.push(`Đúng toà ${unit.building} bạn yêu cầu`);
+    }
+
     reasons.push(`${unit.view} · hướng ${unit.direction}`);
-    const score = sv * 1.2 + (c.budget ? 10 * (1 - cost.total / c.budget) : 0) + matched.length * 2 + (isBargain(unit) ? 6 : 0) + (unit.interest24h >= 3 ? 1 : 0);
+
+    let score =
+      sv * 1.2 +
+      (c.budget ? 10 * (1 - cost.total / c.budget) : 0) +
+      matched.length * 2 +
+      (isBargain(unit) ? 6 : 0) +
+      (unit.interest24h >= 3 ? 1 : 0);
+
+    // Trọng số ưu tiên nội thất mới
+    if (c.preferNewFurnishing) {
+      score += cond >= 85 ? 150 + (cond - 85) * 5 : -50;
+    }
+
+    // Trọng số ưu tiên vị trí gần
+    if (c.nearLocation) {
+      score += 80;
+    }
+    if (c.buildings.length && c.buildings.includes(unit.building)) {
+      score += 100;
+    }
+
     out.push({ unit, cost, savings: sv, score, reasons });
   }
+
+  // 1. Nếu ưu tiên nội thất mới: xếp các căn >= 85% lên đầu tiên (độ mới cao nhất trước)
+  if (c.preferNewFurnishing) {
+    return out.sort((a, b) => {
+      const condA = getUnitCondition(a.unit);
+      const condB = getUnitCondition(b.unit);
+      const aIsNew = condA >= 85;
+      const bIsNew = condB >= 85;
+      if (aIsNew !== bIsNew) {
+        return aIsNew ? -1 : 1;
+      }
+      if (condA !== condB) {
+        return condB - condA; // Độ mới giảm dần
+      }
+      return b.score - a.score;
+    });
+  }
+
+  // 2. Khi có yếu tố giá: Gợi ý căn giá thấp nhất lên đầu tiên, sau đó đến các điều kiện khác
+  if (c.sortByPrice) {
+    return out.sort((a, b) => {
+      // 1. Ưu tiên All-in Cost thấp nhất lên đầu
+      if (a.cost.total !== b.cost.total) {
+        return a.cost.total - b.cost.total;
+      }
+      // 2. Nếu bằng giá, ưu tiên mức tiết kiệm so với phân khu (Căn hời do chủ nhà cập nhật giá tốt)
+      if (b.savings !== a.savings) {
+        return b.savings - a.savings;
+      }
+      // 3. Sau đó mới xét đến các tiêu chí tiện nghi, tầng, điểm khớp khác
+      return b.score - a.score;
+    });
+  }
+
   return out.sort((a, b) => b.score - a.score);
 }
 
@@ -351,9 +468,20 @@ export function searchReply(total: number, kept: number, c: CriteriaState, top: 
   const lead = hasSpecific
     ? `Mình đã quét ${total} căn đang mở tại Ocean Park 1 và giữ lại ${kept} căn${budgetText}.`
     : `Mình gửi bạn danh sách ${kept} căn hộ thật đang mở tại Ocean Park 1.`;
-  const pick = top
-    ? ` Gợi ý nổi bật nhất là ${unitAddress(top.unit)}: All-in ${vnd(top.cost.total)}đ/tháng${top.savings > 0 ? `, thấp hơn mặt bằng toà ${top.savings}%` : ""}. Danh sách bên cạnh đã xếp theo độ khớp và mức tiết kiệm — bạn có thể đặt lịch xem ngay trong thẻ căn.`
-    : "";
+
+  let pick = "";
+  if (top) {
+    if (c.preferNewFurnishing) {
+      const topCond = getUnitCondition(top.unit);
+      pick = ` Để đáp ứng yêu cầu nội thất mới, mình đã ưu tiên các căn có tình trạng kiểm định từ 85% trở lên. Nổi bật nhất là ${unitAddress(top.unit)} đạt độ mới ${topCond}% theo Hộ chiếu bàn giao số, All-in ${vnd(top.cost.total)}đ/tháng.`;
+    } else if (c.nearLocation) {
+      pick = ` Ưu tiên theo vị trí gần ${c.nearLocation}, nổi bật nhất là ${unitAddress(top.unit)} (chỉ 2–4 phút di chuyển), All-in ${vnd(top.cost.total)}đ/tháng.`;
+    } else if (c.sortByPrice) {
+      pick = ` Căn có giá All-in thấp nhất hiện tại là ${unitAddress(top.unit)}: chỉ ${vnd(top.cost.total)}đ/tháng${top.savings > 0 ? `, tiết kiệm ${top.savings}% so với mặt bằng cùng phân khu` : ""}. Mình đã xếp căn giá thấp nhất lên đầu tiên, các căn phía sau được sắp xếp dần theo mức giá và mức độ tiện nghi nâng cao để bạn dễ đối chiếu.`;
+    } else {
+      pick = ` Gợi ý nổi bật nhất là ${unitAddress(top.unit)}: All-in ${vnd(top.cost.total)}đ/tháng${top.savings > 0 ? `, thấp hơn mặt bằng toà ${top.savings}%` : ""}. Danh sách bên cạnh đã xếp theo độ khớp và mức tiết kiệm — bạn có thể đặt lịch xem ngay trong thẻ căn.`;
+    }
+  }
   return lead + pick;
 }
 
@@ -364,7 +492,7 @@ export type Interpretation =
   | { kind: "answer"; reply: string };
 
 /** Hiểu một tin nhắn: tìm căn (kèm kết quả) hoặc trả lời câu hỏi thường gặp, hoặc hỏi lại cho rõ. */
-export function interpret(text: string, base: CriteriaState, searched: boolean, statusOf: StatusLookup): Interpretation {
+export function interpret(text: string, base: CriteriaState, searched: boolean, statusOf: StatusLookup, unitsList?: Unit[]): Interpretation {
   const { patch, hasSearchSignal } = parseQuery(text, base);
   let signal = hasSearchSignal;
   const t = fold(text);
@@ -385,8 +513,9 @@ export function interpret(text: string, base: CriteriaState, searched: boolean, 
 
   if (!wantsSearch) return { kind: "answer", reply: faq ?? CLARIFY_REPLY };
 
-  const total = UNITS.filter((u) => statusOf(u) === "available").length;
-  const results = searchUnits(patch, statusOf);
+  const list = unitsList && unitsList.length > 0 ? unitsList : UNITS;
+  const total = list.filter((u) => statusOf(u) === "available").length;
+  const results = searchUnits(patch, statusOf, list);
   const reply = results.length ? searchReply(total, results.length, patch, results[0]) : `Mình đã quét ${total} căn đang mở nhưng chưa có căn nào khớp. ${relaxHint(patch, statusOf)}`;
   return { kind: "search", criteria: patch, results, total, reply };
 }

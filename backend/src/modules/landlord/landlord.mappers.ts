@@ -70,10 +70,14 @@ export interface ConsignmentForm {
   areaM2: number;
   askRent: number;
   suggestedDeposit: number;
-  leaseTerm: 'mid' | 'long' | 'fixed' | null;
+  leaseTerm: 'flexible' | 'mid' | 'long' | 'fixed' | null;
   furnished: boolean | null;
   locks: ('smart' | 'physical')[];
   note: string | null;
+  bankName?: string | null;
+  bankAccount?: string | null;
+  bankAccountHolder?: string | null;
+  saveAsDefaultPayout?: boolean | null;
 }
 
 /**

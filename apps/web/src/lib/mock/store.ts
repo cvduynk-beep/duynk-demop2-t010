@@ -8,7 +8,8 @@ import type { MockState } from "./types";
  * Store mock dùng chung cho cả 4 vai trò. Không có backend: toàn bộ dữ liệu nằm trong localStorage của
  * trình duyệt nên khi đổi vai trò (khách → Host → chủ nhà → Admin) vẫn thấy cùng một dòng sự kiện.
  */
-const KEY = "vinstay.mock.v7";
+const KEY = "vinstay.mock.v8";
+const VIRTUAL_TICKET_IDS = new Set(["bk-101", "bk-102", "bk-119", "t-demo-001"]);
 
 let state: MockState = EMPTY_STATE;
 let loaded = false;
@@ -19,6 +20,12 @@ function readStorage(): MockState | null {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as MockState;
+    if (Array.isArray(parsed.bookings)) {
+      parsed.bookings = parsed.bookings.filter((b) => !VIRTUAL_TICKET_IDS.has(b.id));
+    }
+    if (Array.isArray(parsed.notices)) {
+      parsed.notices = parsed.notices.filter((n) => !n.bookingId || !VIRTUAL_TICKET_IDS.has(n.bookingId));
+    }
     if (!parsed.hostRoles) {
       parsed.hostRoles = {};
     }
@@ -33,6 +40,9 @@ function readStorage(): MockState | null {
     }
     if (!parsed.holdAudit) {
       parsed.holdAudit = [];
+    }
+    if (!parsed.archivedUnits) {
+      parsed.archivedUnits = {};
     }
     return { ...parsed, ready: true };
   } catch {
@@ -61,6 +71,7 @@ function ensureLoaded(): MockState {
     window.localStorage.removeItem("vinstay.mock.v4");
     window.localStorage.removeItem("vinstay.mock.v5");
     window.localStorage.removeItem("vinstay.mock.v6");
+    window.localStorage.removeItem("vinstay.mock.v7");
   } catch {
     // Trình duyệt chặn storage
   }

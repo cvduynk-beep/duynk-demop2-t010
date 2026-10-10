@@ -65,9 +65,10 @@ export class CreateConsignmentDto {
   @Max(300)
   areaM2: number;
 
-  @ApiProperty({ example: 6500000, description: 'Giá thuê kỳ vọng (VNĐ/tháng, tối thiểu 3.000.000)' })
+  @ApiProperty({ example: 6500000, description: 'Giá thuê kỳ vọng (VNĐ/tháng, 3.000.000 → 80.000.000)' })
   @IsNumber()
   @Min(3_000_000)
+  @Max(80_000_000, { message: 'Giá thuê kỳ vọng không được vượt quá 80.000.000 VNĐ/tháng' })
   askRent: number;
 
   @ApiPropertyOptional({ example: 6500000, description: 'Tiền cọc bảo đảm đề xuất: 2.000.000 → 3 lần giá thuê. Mặc định = giá thuê' })
@@ -75,10 +76,10 @@ export class CreateConsignmentDto {
   @IsNumber()
   suggestedDeposit?: number;
 
-  @ApiPropertyOptional({ example: 'long', description: 'Thời gian thuê mong muốn: mid (1–6 tháng) | long (12 tháng) | fixed (cố định 12 tháng)' })
+  @ApiPropertyOptional({ example: 'flexible', description: 'Thời gian thuê mong muốn: flexible (từ 1 tháng) | mid (3–12 tháng) | long (từ 12 tháng) | fixed (cố định 12 tháng)' })
   @IsOptional()
-  @IsIn(['mid', 'long', 'fixed'])
-  leaseTerm?: 'mid' | 'long' | 'fixed';
+  @IsIn(['flexible', 'mid', 'long', 'fixed'])
+  leaseTerm?: 'flexible' | 'mid' | 'long' | 'fixed';
 
   @ApiPropertyOptional({ example: true, description: 'Đã có đầy đủ nội thất' })
   @IsOptional()
@@ -98,6 +99,29 @@ export class CreateConsignmentDto {
   @IsString()
   @MaxLength(20)
   doorCode?: string;
+
+  @ApiPropertyOptional({ example: 'Techcombank', description: 'Ngân hàng thụ hưởng nhận tiền thuê hàng tháng (Smart Onboarding)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  bankName?: string;
+
+  @ApiPropertyOptional({ example: '190388889999', description: 'Số tài khoản ngân hàng thụ hưởng' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  bankAccount?: string;
+
+  @ApiPropertyOptional({ example: 'NGUYEN VAN A', description: 'Tên chủ tài khoản thụ hưởng' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  bankAccountHolder?: string;
+
+  @ApiPropertyOptional({ default: true, description: 'Lưu làm tài khoản thụ hưởng mặc định cấp Profile cho toàn bộ căn hộ của chủ nhà' })
+  @IsOptional()
+  @IsBoolean()
+  saveAsDefaultPayout?: boolean;
 
   @ApiPropertyOptional({ example: 'Ưu tiên khách ở lâu dài, giữ gìn vệ sinh' })
   @IsOptional()

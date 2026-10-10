@@ -5,6 +5,7 @@ import { LayoutList, Sparkles } from "lucide-react";
 import { Facade } from "@/components/brand/Facade";
 import { fmtTime } from "@/lib/mock/format";
 import type { ChatMessage } from "@/lib/mock/types";
+import { InlineChatUnits } from "./InlineChatUnits";
 import styles from "./Messages.module.css";
 
 function highlightKeywords(str: string): ReactNode {
@@ -80,9 +81,11 @@ interface MessagesProps {
   freshId: string | null;
   onFreshDone: () => void;
   onShowResults?: (count: number) => void;
+  initialUnitIds?: string[];
+  hideInlineUnits?: boolean;
 }
 
-export function Messages({ greeting, messages, thinking, freshId, onFreshDone, onShowResults }: MessagesProps) {
+export function Messages({ greeting, messages, thinking, freshId, onFreshDone, onShowResults, initialUnitIds, hideInlineUnits }: MessagesProps) {
   const end = useRef<HTMLDivElement>(null);
   const scroll = () => {
     end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
@@ -124,19 +127,12 @@ export function Messages({ greeting, messages, thinking, freshId, onFreshDone, o
                 )}
               </div>
 
-              {!mine && m.resultIds && m.resultIds.length > 0 && onShowResults && !fresh && (
-                <div className={styles.highlightBox}>
-                  <div className={styles.highlightHeader}>
-                    <Sparkles size={13} /> Đề xuất tối ưu ngân sách
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.resultsBtn}
-                    onClick={() => onShowResults(m.resultIds!.length)}
-                  >
-                    <LayoutList size={15} /> Xem {m.resultIds.length} căn khớp đề xuất →
-                  </button>
-                </div>
+              {!mine && m.resultIds && m.resultIds.length > 0 && !fresh && !hideInlineUnits && (
+                <InlineChatUnits
+                  unitIds={m.resultIds}
+                  criteria={m.criteria}
+                  onShowResults={onShowResults}
+                />
               )}
               <span className={styles.time}>{fmtTime(m.at)}</span>
             </div>

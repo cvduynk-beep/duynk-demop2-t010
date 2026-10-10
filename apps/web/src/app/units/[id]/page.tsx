@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteNav } from "@/components/nav/SiteNav";
 import { UnitDetail } from "@/components/unit/UnitDetail";
-import { UNITS, unitAddress, unitById, zoneById, type Unit } from "@/lib/mock/units";
+import { registerDynamicUnits, UNITS, unitAddress, unitById, zoneById, type Unit } from "@/lib/mock/units";
 import { mapDbUnitToFrontendUnit } from "@/lib/property/unitAdapter";
 
 const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:4001").replace(/\/+$/, "");
@@ -19,8 +19,9 @@ async function getUnitOrFetch(id: string): Promise<Unit | undefined> {
     if (!res.ok) return undefined;
     const json = await res.json();
     const data = json.data || json;
-    if (!data || !data.id) return undefined;
-    return mapDbUnitToFrontendUnit(data);
+    const mapped = mapDbUnitToFrontendUnit(data);
+    registerDynamicUnits([mapped]);
+    return mapped;
   } catch {
     return undefined;
   }

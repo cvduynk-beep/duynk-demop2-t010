@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, Check, ImagePlus, RefreshCw, ScanFace, ScanText, ShieldCheck, TriangleAlert } from "lucide-react";
 import { saveKyc } from "@/lib/mock/actions";
+import { identityApi } from "@/lib/apiClient";
 import type { Booking, IdCardData } from "@/lib/mock/types";
 import styles from "./Deal.module.css";
 
@@ -151,6 +152,15 @@ export function KycCapture({ booking, onDone }: KycCaptureProps) {
 
   const handleConfirm = () => {
     setError(null);
+    identityApi
+      .verifyEkyc({
+        depositId: booking.id,
+        consentVersion: "v1.0",
+        hasConsent: consent,
+        idCardFrontUrl: photos.front || undefined,
+      })
+      .catch(() => null);
+
     const res = saveKyc(booking.id, {
       ...fields,
       confidence: conf,

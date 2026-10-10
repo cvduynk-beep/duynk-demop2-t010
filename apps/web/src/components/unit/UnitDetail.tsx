@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Bath, BedDouble, Building2, CalendarPlus, Check, Compass, Layers, LockKeyhole, MessageCircle, Minus, Plus, Ruler, Share2, ShieldCheck, Sofa, Star } from "lucide-react";
+import { Bath, BedDouble, Bot, Building2, CalendarPlus, Check, Compass, Layers, LockKeyhole, Minus, Plus, Ruler, Share2, ShieldCheck, Sofa, Star } from "lucide-react";
 import { BookingSheet } from "@/components/booking/BookingSheet";
 import { toast } from "@/components/ui/Toast";
 import { allInCost, DEFAULT_HOUSEHOLD, isBargain, RATES, savingsPct, type Household } from "@/lib/mock/cost";
@@ -14,20 +14,22 @@ import {
   FURNISHING_LABEL,
   ITEM_LABEL,
   PASSPORT_ITEMS,
+  getUnitLivingFees,
   hostForUnit,
   unitAddress,
   zoneById,
   type Unit,
 } from "@/lib/mock/units";
+import { getBuildingPerks } from "@/lib/property/livingIntelligence";
 import { AllInBar } from "./AllInBar";
 import { FavoriteButton } from "./FavoriteButton";
 import { Gallery } from "./Gallery";
+import { LivingExperience } from "./LivingExperience";
 import { LocationMap } from "./LocationMap";
 import { UnitBadges } from "./UnitBadges";
 import { UnitCard } from "./UnitCard";
+import { UnitConciergeDrawer } from "./UnitConciergeDrawer";
 import styles from "./UnitDetail.module.css";
-
-const BUILDING_PERKS = ["Bảo vệ 24/7", "Thang máy quẹt thẻ cư dân", "Hầm gửi xe máy và ô tô", "Công viên và biển hồ nội khu", "Hồ bơi, phòng gym (tuỳ toà)", "Vinmart và phố đi bộ dưới chân toà"];
 
 function Stepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
   return (
@@ -53,6 +55,9 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
   const status = unitStatus(state, unit);
   const [hh, setHh] = useState<Household>(state.chat.criteria.household ?? DEFAULT_HOUSEHOLD);
   const [booking, setBooking] = useState(autoOpenBooking);
+  const [conciergeOpen, setConciergeOpen] = useState(false);
+  const livingFees = getUnitLivingFees(unit);
+  const buildingPerks = getBuildingPerks(unit.building, unit.zoneId);
   const cost = allInCost(unit, hh);
   const sv = savingsPct(unit);
   const bookable = status === "available";
@@ -125,18 +130,21 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
           </ul>
 
           <section className={styles.block}>
-            <h2>Giới thiệu căn hộ</h2>
-            <p>{unit.title}. {unit.description}</p>
+            <h2>Trải nghiệm sống &amp; Kết nối thực tế</h2>
+            <LivingExperience unit={unit} criteria={state.chat.criteria} />
           </section>
 
           <section className={styles.block} aria-labelledby="allin">
-            <h2 id="allin">Chi phí mỗi tháng (All-in Cost)</h2>
+            <h2 id="allin">Minh bạch chi phí sinh hoạt (Xác thực thực địa)</h2>
             <div className={styles.cost}>
               <div>
                 <div className={styles.costTotal}>
-                  <span className={`num ${styles.costNum}`}>{vnd(cost.total)}</span>
-                  <span className="muted">đ/tháng</span>
+                  <span className={`num ${styles.costNum}`}>{vnd(unit.rent)}</span>
+                  <span className="muted">đ/tháng (tiền thuê)</span>
                 </div>
+                <p className="muted small" style={{ marginBottom: 12 }}>
+                  Tiền thuê cố định thanh toán cho Chủ nhà. Các khoản phí quản lý, xe, điện nước khách nộp trực tiếp cho BQL và EVN (Sale/Host hỗ trợ hướng dẫn đăng ký tại Lễ tân sảnh tầng 1 lúc nhận nhà).
+                </p>
                 <AllInBar cost={cost} variant="table" />
                 {isBargain(unit) && (
                   <p className={`small ${styles.deal}`}>
@@ -145,34 +153,62 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
                 )}
               </div>
               <div className={styles.steppers}>
-                <p className="label">Tính theo hộ của bạn</p>
+                <p className="label">Dự toán theo nhu cầu sinh hoạt của bạn</p>
                 <Stepper label="Số người ở" value={hh.persons} min={1} max={6} onChange={(n) => setHh({ ...hh, persons: n })} />
                 <Stepper label="Xe máy" value={hh.motorbikes} min={0} max={4} onChange={(n) => setHh({ ...hh, motorbikes: n })} />
                 <Stepper label="Ô tô" value={hh.cars} min={0} max={2} onChange={(n) => setHh({ ...hh, cars: n })} />
                 <p className="muted xs">
-                  Phí quản lý {vnd(RATES.mgmtPerM2)}đ/m² · xe máy {vndShort(RATES.motorbike)} · ô tô {vndShort(RATES.car)} · điện nước {vndShort(RATES.utilityPerPerson)}/người.
+                  Biểu phí thực tế toà {unit.building}: Phí quản lý {vnd(livingFees.managementFeePerM2)}đ/m² · xe máy {vndShort(livingFees.motorbikeFee)}/xe · ô tô {vndShort(livingFees.carFee)}/xe · điện nước EVN tính theo công tơ thực tế{livingFees.otherFeesNote ? ` (${livingFees.otherFeesNote})` : ""}.
                 </p>
               </div>
             </div>
           </section>
 
           <section className={styles.block}>
-            <h2>Nội thất và tiện nghi</h2>
-            <ul className={styles.items}>
-              {unit.items.map((i) => (
-                <li key={i}>
-                  <Check size={16} /> {ITEM_LABEL[i]}
-                </li>
-              ))}
-              {unit.petFriendly && (
-                <li>
-                  <Check size={16} /> Cho nuôi thú cưng nhỏ
-                </li>
-              )}
-            </ul>
-            <h3>Tiện ích toà nhà</h3>
+            <div>
+              <h2>Nội thất và trang thiết bị thực tế</h2>
+              <p className="muted xs">
+                Dữ liệu đối chiếu từ Biên bản thẩm định của Field Host nội khu · Hiện trạng {FURNISHING_LABEL[unit.furnishing]}
+              </p>
+            </div>
+
+            {unit.inventory && Array.isArray(unit.inventory) && unit.inventory.filter((l: any) => l.present).length > 0 ? (
+              <ul className={styles.items}>
+                {unit.inventory
+                  .filter((l: any) => l.present)
+                  .map((item: any) => (
+                    <li key={item.code || item.name}>
+                      <Check size={16} />
+                      <span>{item.name}</span>
+                      {typeof item.condition === "number" && (
+                        <b className="muted xs" style={{ marginLeft: 4 }}>({item.condition}% mới)</b>
+                      )}
+                    </li>
+                  ))}
+                {unit.petFriendly && (
+                  <li>
+                    <Check size={16} /> Cho nuôi thú cưng nhỏ
+                  </li>
+                )}
+              </ul>
+            ) : (
+              <ul className={styles.items}>
+                {unit.items.map((i) => (
+                  <li key={i}>
+                    <Check size={16} /> {ITEM_LABEL[i]}
+                  </li>
+                ))}
+                {unit.petFriendly && (
+                  <li>
+                    <Check size={16} /> Cho nuôi thú cưng nhỏ
+                  </li>
+                )}
+              </ul>
+            )}
+
+            <h3>Tiện ích toà nhà {unit.building}</h3>
             <ul className={`${styles.items} ${styles.perks}`}>
-              {BUILDING_PERKS.map((p) => (
+              {buildingPerks.map((p) => (
                 <li key={p}>
                   <Building2 size={15} /> {p}
                 </li>
@@ -258,12 +294,11 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
         <aside className={styles.side} aria-label="Đặt lịch xem phòng">
           <div className={`card ${styles.book}`}>
             <div className={styles.bookPrice}>
-              <span className={`num ${styles.bookNum}`}>{vnd(cost.total)}</span>
-              <span className="muted small">đ/tháng · All-in</span>
+              <span className={`num ${styles.bookNum}`}>{vnd(unit.rent)}</span>
+              <span className="muted small">đ/tháng (thuê)</span>
             </div>
             <p className="muted small">
-              Thuê {vndShort(unit.rent)} + phí {vndShort(cost.total - unit.rent)} cho {hh.persons} người, {hh.motorbikes} xe máy
-              {hh.cars ? `, ${hh.cars} ô tô` : ""}.
+              Thanh toán cho Chủ nhà theo hợp đồng (chưa bao gồm phí quản lý &amp; dịch vụ).
             </p>
 
             {bookable ? (
@@ -271,9 +306,13 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
                 <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => setBooking(true)}>
                   <CalendarPlus size={19} /> Đặt lịch xem phòng
                 </button>
-                <Link href="/" className="btn btn-quiet btn-block">
-                  <MessageCircle size={17} /> Hỏi AI thêm về căn này
-                </Link>
+                <button
+                  type="button"
+                  className="btn btn-quiet btn-block"
+                  onClick={() => setConciergeOpen(true)}
+                >
+                  <Bot size={17} /> Hỏi Quản gia Vinny về căn này
+                </button>
                 <ul className={styles.promises}>
                   <li>
                     <Check size={15} /> Xem phòng miễn phí, Host đón tại sảnh
@@ -313,8 +352,8 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
       {bookable && (
         <div className={`${styles.bar} no-print`}>
           <div>
-            <b className="num">{vnd(cost.total)}đ</b>
-            <span className="muted xs"> /tháng · All-in</span>
+            <b className="num">{vnd(unit.rent)}đ</b>
+            <span className="muted xs"> /tháng (thuê) · Chưa bao gồm phí quản lý</span>
           </div>
           <button type="button" className="btn btn-primary" onClick={() => setBooking(true)}>
             Đặt lịch xem
@@ -323,6 +362,13 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
       )}
 
       <BookingSheet unit={unit} open={booking} onClose={() => setBooking(false)} />
+      <UnitConciergeDrawer
+        unit={unit}
+        open={conciergeOpen}
+        onOpen={() => setConciergeOpen(true)}
+        onClose={() => setConciergeOpen(false)}
+        onBook={() => setBooking(true)}
+      />
     </div>
   );
 }

@@ -220,6 +220,16 @@ export interface InventoryLine {
 export type DeclaredField = "identity" | "layout" | "areaM2" | "furnishing" | "lock";
 export interface DeclaredCheck { field: DeclaredField; ok: boolean; /** bắt buộc khi ok=false, ≤80 ký tự */ actual?: string }
 
+export interface UnitLivingFees {
+  managementFeePerM2: number; // Phí quản lý (đ/m²/tháng do Host thẩm định nhập hoặc xác nhận)
+  motorbikeFee: number;       // Phí gửi xe máy (đ/xe/tháng)
+  carFee: number;             // Phí gửi ô tô (đ/xe/tháng)
+  electricityNote?: string;   // Ghi chú tiền điện (theo biểu giá EVN Hà Nội)
+  waterNote?: string;         // Ghi chú tiền nước (theo biểu giá BQL)
+  otherFeesNote?: string;     // Phí tiện ích khác nếu có
+  verifiedByHost?: boolean;   // Đã xác thực thực địa bởi Host
+}
+
 export interface InspectionReport {
   hostId: string;
   submittedAt: string;
@@ -229,6 +239,7 @@ export interface InspectionReport {
   furnishing: Furnishing; // nội thất thực tế: full | basic | empty
   recommendation: "approve" | "reject";
   note?: string; // ≤300 ký tự
+  livingFees?: UnitLivingFees; // Biểu phí sinh hoạt thực tế do Host thẩm định nhập
   // Compatibility fields for un-refactored UI components (WP3/4/7)
   items?: { key: ItemKey; present: boolean }[];
   equipment?: { item: PassportItem; condition: number; photoAt: string; note?: string }[];
@@ -237,6 +248,7 @@ export type InspectionDraft = Omit<InspectionReport, "hostId" | "submittedAt" | 
   inventory?: InventoryLine[];
   netAreaM2?: number;
   furnishing?: Furnishing;
+  livingFees?: UnitLivingFees;
 };
 
 export interface ConsignInput {
@@ -251,9 +263,15 @@ export interface ConsignInput {
   leaseTerm?: LeaseTermPref;
   furnished?: boolean;
   locks?: LockType[];
+  allowFastClose?: boolean;
+  floorRent?: number;
   auditByHost?: boolean;
   doorCode?: string;
   note?: string;
+  bankName?: string;
+  bankAccount?: string;
+  bankAccountHolder?: string;
+  saveAsDefaultPayout?: boolean;
   // Compatibility fields for un-refactored UI components (WP3)
   furnishing?: Furnishing;
   lock?: LockType;
@@ -273,6 +291,11 @@ export interface Consignment {
   leaseTerm: LeaseTermPref; // +
   furnished: boolean; // ~ thay furnishing: Furnishing
   locks: LockType[]; // ~ thay lock; 1–2 phần tử
+  allowFastClose?: boolean;
+  floorRent?: number;
+  bankName?: string;
+  bankAccount?: string;
+  bankAccountHolder?: string;
   auditByHost: boolean;
   status: ConsignmentStatus;
   createdAt: string;
@@ -285,6 +308,12 @@ export interface Consignment {
   decidedAt?: string;
   decidedBy?: string; // tên Admin
   ownershipWarrantedAt?: string; // MỚI — tick cam đoan Điều 2 legal/01, set trong signConsignment
+  // Cơ chế Auto-Escalation & SLA 2h + Admin Override
+  openPoolAt?: string; // mốc thời gian tự động mở vào Open Pool (>30p)
+  slaBreached?: boolean; // mốc thời gian quá 2h chưa có host nhận (SLA Breach)
+  escalatedToAreaLead?: boolean; // tự động chuyển cho Area Lead
+  adminOverriddenBy?: string; // lưu vết Admin chỉ định tay
+  adminOverriddenAt?: string;
   // Compatibility fields for un-refactored UI components (WP3/4/7)
   furnishing: Furnishing;
   lock: LockType;
@@ -330,6 +359,12 @@ export interface CriteriaState {
   pets?: boolean;
   household: Household;
   moveIn?: string;
+  /** Khách ưu tiên tìm căn giá thấp nhất / tối ưu chi phí */
+  sortByPrice?: boolean;
+  /** Khách ưu tiên căn nội thất mới (tình trạng >= 85%) */
+  preferNewFurnishing?: boolean;
+  /** Khách yêu cầu gần một địa điểm / tiện ích cụ thể */
+  nearLocation?: string;
 }
 
 export interface ChatMessage {
@@ -350,6 +385,23 @@ export interface ChatState {
 }
 
 // ─── State tổng ───────────────────────────────────────────────────────────────────────────────
+
+export type DelistReason =
+  | "landlord_exit"
+  | "personal_use"
+  | "unit_sold"
+  | "maintenance"
+  | "data_cleanup"
+  | "other";
+
+export interface ArchivedUnitRecord {
+  unitId: string;
+  archivedAt: string;
+  archivedBy: string;
+  reason: DelistReason;
+  reasonLabel: string;
+  note?: string;
+}
 
 export interface UnitOverride {
   status: UnitStatus;
@@ -387,4 +439,8 @@ export interface MockState {
   holdPolicy: HoldPolicy;
   /** Lịch sử thay đổi thời hạn giữ chỗ (SPEC-P01 §3) */
   holdAudit: HoldAudit[];
+  /** Danh sách căn hộ đã ngừng niêm yết & lưu trữ an toàn bởi Admin (Delist & Archive) */
+  archivedUnits?: Record<string, ArchivedUnitRecord>;
+  /** Tài khoản thụ hưởng mặc định của Chủ nhà (Smart Onboarding) */
+  landlordPayoutAccount?: { bankName: string; bankAccount: string; bankAccountHolder: string; isVerified: boolean };
 }

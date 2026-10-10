@@ -43,9 +43,10 @@ Nhằm triệt tiêu triệt để tình trạng tranh giành khách (Lead Canni
 ```
 
 * **Chỉ số SLA Bắt buộc đối với Field Host:**
-  * Thời gian phản hồi tiếp nhận ticket: **$\le 03$ phút** kể từ thời điểm nhận thông báo.
+  * Thời gian phản hồi tiếp nhận ticket ca dẫn: **$\le 03$ phút** kể từ thời điểm nhận thông báo.
   * Tỷ lệ nhận ticket thành công (Acceptance Rate): Duy trì tối thiểu **$\ge 80\%$** trong tháng.
   * Tỷ lệ hoàn thành buổi xem phòng (Completion Rate): Đạt tối thiểu **$\ge 95\%$**.
+  * **Tiếp nhận & Thẩm định Hồ sơ Ký gửi (Consignment SLA 2h):** Hồ sơ ký gửi căn hộ mới được ưu tiên cho Host phụ trách phân khu (0–30p), sau đó tự động chuyển sang Open Pool liên phân khu (30p–2h) cho bất kỳ Host nào nhận trước (First-to-Claim). Quá 2h chưa ai nhận sẽ tự động chuyển cấp cho Area Lead và kích hoạt cảnh báo còi đỏ trên Admin; Quản trị viên (Admin) có toàn quyền Override chỉ định Host bất kỳ lúc nào.
 
 ---
 
@@ -85,6 +86,10 @@ Field Host có nghĩa vụ thực hiện đúng 5 quy chuẩn tiếp đón văn 
 1. **Thao tác bấm chốt cọc trên ứng dụng:**
    - Khi khách thuê ưng ý căn hộ, Field Host mở Host Mobile PWA và bấm nút **"Khách Chốt Cọc"**.
    - Hệ thống lập tức sinh mã **VietQR động 2.000.000 VNĐ** (chứa mã căn và SĐT khách thuê) hiển thị trực tiếp trên màn hình.
+   - **1.1. Kích hoạt Ưu đãi Chốt Nhanh trong Biên độ Giá Sàn (Fast-Close Authorization):**
+     * Trường hợp căn hộ được Chủ nhà bật tùy chọn *"Ủy quyền AI Chốt Nhanh & Giá Sàn An Toàn"*, ứng dụng Host tự động hiển thị mức giá chiết khấu cho phép khi khách cam kết thanh toán trước từ 06 đến 12 tháng hoặc cam kết cọc trong vòng 24 giờ.
+     * Field Host được chủ động kích hoạt mức giá ưu đãi này để chốt cọc khách ngay tại phòng mà không cần gọi xin phép chủ nhà.
+     * **Kỷ luật bảo vệ Giá Sàn:** Field Host tuyệt đối không được tự ý thương lượng hoặc chốt mức giá thấp hơn Giá sàn ủy quyền hiển thị trên ứng dụng. Hệ thống tự động khóa và từ chối tạo mã VietQR nếu phát hiện mức giá vượt ra ngoài biên độ ủy quyền.
 2. **Quy định thanh toán độc quyền qua VietQR động:**
    - Field Host hướng dẫn khách quét mã QR để chuyển khoản trực tiếp vào **Tài khoản Ký quỹ 3 bên bảo chứng ngân hàng** của VinStay AI.
    - **ĐIỀU CẤM KỶ LUẬT TUYỆT ĐỐI:** Field Host tuyệt đối **KHÔNG ĐƯỢC THU TIỀN MẶT**, không nhận chuyển khoản vào tài khoản cá nhân của Host dưới bất kỳ hình thức nào. Vi phạm quy định này sẽ bị chấm dứt hợp đồng ngay lập tức và chuyển hồ sơ cơ quan pháp luật xử lý hành vi lạm dụng tín nhiệm chiếm đoạt tài sản.

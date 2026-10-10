@@ -73,9 +73,30 @@ export function InspectionList() {
             signedAt: item.createdAt || new Date().toISOString(),
             hostId: item.hostId || undefined,
             inspectDueAt: new Date(new Date(item.createdAt || Date.now()).getTime() + 48 * 3600000).toISOString(),
-            furnishing: "full",
+            furnishing: item.report?.furnishing || "full",
             lock: "smart",
             items: [],
+            note: item.note || undefined,
+            report: item.report
+              ? {
+                  furnishing: item.report.furnishing || "full",
+                  netAreaM2: item.report.netAreaM2 || item.carpetAreaM2 || 45,
+                  inventory: Array.isArray(item.report.inventory) ? item.report.inventory : [],
+                  declared: Array.isArray(item.report.declared)
+                    ? item.report.declared
+                    : [
+                        { field: "identity", ok: true },
+                        { field: "layout", ok: true },
+                        { field: "areaM2", ok: true },
+                        { field: "furnishing", ok: true },
+                        { field: "lock", ok: true },
+                      ],
+                  recommendation: item.report.recommendation || "approve",
+                  note: item.report.note || "",
+                  submittedAt: item.report.submittedAt || new Date().toISOString(),
+                  hostId: item.report.hostId || item.hostId || "host-s2",
+                }
+              : undefined,
           };
         });
 
@@ -118,10 +139,15 @@ export function InspectionList() {
     "rejected",
   ]);
 
-  // Hợp nhất dữ liệu mock và dữ liệu thực từ Database (không trùng id)
+  // Hợp nhất dữ liệu mock và dữ liệu thực từ Database (ưu tiên DB thực)
   const allConsignments = [...state.consignments];
   for (const dbItem of dbItems) {
-    if (!allConsignments.some((c) => c.id === dbItem.id || (c.building === dbItem.building && c.floor === dbItem.floor && c.door === dbItem.door))) {
+    const existingIdx = allConsignments.findIndex(
+      (c) => c.id === dbItem.id || (c.building === dbItem.building && c.floor === dbItem.floor && c.door === dbItem.door)
+    );
+    if (existingIdx >= 0) {
+      allConsignments[existingIdx] = { ...allConsignments[existingIdx], ...dbItem };
+    } else {
       allConsignments.push(dbItem);
     }
   }

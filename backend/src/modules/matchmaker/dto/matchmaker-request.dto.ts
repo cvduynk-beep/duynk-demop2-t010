@@ -13,15 +13,18 @@ export class MatchmakerRequestDto {
   @IsEnum(LayoutType)
   preferredLayout?: LayoutType;
 
-  @ApiProperty({ default: 1, description: 'Số lượng xe máy' })
+  @ApiPropertyOptional({ default: 1, description: 'Số lượng xe máy' })
+  @IsOptional()
   @IsNumber()
-  motorbikes: number = 1;
+  motorbikes?: number = 1;
 
-  @ApiProperty({ default: 0, description: 'Số lượng ô tô' })
+  @ApiPropertyOptional({ default: 0, description: 'Số lượng ô tô' })
+  @IsOptional()
   @IsNumber()
-  cars: number = 0;
+  cars?: number = 0;
 
-  @ApiProperty({ default: 2, description: 'Số lượng người ở' })
+  @ApiPropertyOptional({ default: 2, description: 'Số lượng người ở' })
+  @IsOptional()
   @IsNumber()
-  occupants: number = 2;
+  occupants?: number = 2;
 }

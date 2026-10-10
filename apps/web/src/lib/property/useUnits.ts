@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { UNITS, type Unit } from "@/lib/mock/units";
+import { registerDynamicUnits, UNITS, type Unit } from "@/lib/mock/units";
 import { fetchUnitsFromApi } from "./unitAdapter";
 
 // In-memory cache cho session client
@@ -13,6 +13,18 @@ function notify(units: Unit[]) {
   for (const listener of listeners) {
     listener(units);
   }
+}
+
+/**
+ * Đẩy một căn hộ mới (vừa ký gửi / thẩm định) trực tiếp lên trang chủ và danh mục giỏ hàng.
+ */
+export function publishUnitToCatalog(unit: Unit) {
+  registerDynamicUnits([unit]);
+  const base = cachedUnits || UNITS;
+  const filtered = base.filter((u) => u.id !== unit.id);
+  const updated = [unit, ...filtered];
+  cachedUnits = updated;
+  notify(updated);
 }
 
 /**
@@ -47,6 +59,7 @@ export function useUnits(): { units: Unit[]; isLoadingDb: boolean } {
       fetchUnitsFromApi()
         .then((dbUnits) => {
           if (dbUnits && dbUnits.length > 0) {
+            registerDynamicUnits(dbUnits);
             // Hợp nhất dữ liệu: Các căn từ DB thật được ưu tiên hiển thị trước
             const dbIds = new Set(dbUnits.map((u) => u.id));
             const merged = [...dbUnits, ...UNITS.filter((u) => !dbIds.has(u.id))];

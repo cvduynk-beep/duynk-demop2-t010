@@ -1,4 +1,4 @@
-import { bookingApi, depositApi, identityApi, contractApi } from "@/lib/apiClient";
+import { bookingApi, depositApi, identityApi, contractApi, dispatchApi } from "@/lib/apiClient";
 import { HOUR_MS, OCCUPANTS_MAX, PAYMENT_CYCLES, RATES, type PaymentCycle } from "./cost";
 import { fmtTime, dayLabel, normalizePhone, vnd } from "./format";
 import {
@@ -34,6 +34,8 @@ import type {
   Occupant,
   OtpChallenge,
   RefundAccount,
+  DelistReason,
+  ArchivedUnitRecord,
 } from "./types";
 import {
   hostById,
@@ -44,10 +46,13 @@ import {
   type HostRole,
   type HostStatus,
   type ZoneId,
+  type ItemKey,
   ZONES,
   zoneById,
   zoneOfBuilding,
+  createAndPublishUnitFromConsignment,
 } from "./units";
+import { publishUnitToCatalog } from "@/lib/property/useUnits";
 import { inspectionSummary } from "./selectors-inspection";
 import { contractByKey } from "./contracts";
 
@@ -491,6 +496,7 @@ export function hostClaimBooking(id: string, hostId: string): DealResult {
 
 export function hostAccept(id: string) {
   const b = requireBooking(id);
+  dispatchApi.acceptTicket(b.ref || id, b.hostId).catch(() => null);
   if (b.dispatch?.state === "open") {
     hostClaimBooking(id, b.hostId);
     return;
@@ -515,6 +521,7 @@ export function hostAccept(id: string) {
 
 export function hostReject(id: string, reason: string) {
   const b = requireBooking(id);
+  dispatchApi.rejectTicket(b.ref || id, reason).catch(() => null);
   const unit = unitById(b.unitId)!;
   const zone = zoneOfBuilding(unit.building);
   const now = Date.now();
@@ -645,6 +652,7 @@ export function sendReminder(id: string) {
 export function hostStartReceiving(id: string) {
   const b = requireBooking(id);
   if (!["confirmed", "lobby"].includes(b.status)) return;
+  dispatchApi.swipeElevatorRfid(b.ref || id).catch(() => null);
   const unit = unitById(b.unitId)!;
   const host = hostById(b.hostId) ?? hostForUnit(unit);
   const now = Date.now();
@@ -678,6 +686,7 @@ export function hostStartReceiving(id: string) {
 export function hostConfirmViewing(id: string): string | undefined {
   const b = requireBooking(id);
   if (b.status !== "receiving") return b.doorCode;
+  dispatchApi.revealDoorKey(b.ref || id).catch(() => null);
   const unit = unitById(b.unitId)!;
   const host = hostById(b.hostId)!;
   const now = Date.now();
@@ -712,6 +721,7 @@ export function hostEmergency(id: string, kind: "smart_lock" | "physical_key") {
     kind === "smart_lock"
       ? `Khoá điện tử căn ${unit.code} không mở được. Đang kết nối cuộc gọi bảo mật giữa Host ${host.name} và chủ nhà để lấy mã khẩn cấp.`
       : `Chìa cơ căn ${unit.code} không dùng được. Area Lead phân khu mang chìa dự phòng tới trong ≤ 5 phút.`;
+  dispatchApi.emergency(b.ref || id, text).catch(() => null);
   setMockState((s) =>
     withNotices(
       s,
@@ -742,6 +752,7 @@ export function adminReassign(id: string, hostId: string) {
 
 export function hostNotInterested(id: string, reason: string) {
   const b = requireBooking(id);
+  dispatchApi.notInterested(b.ref || id, reason).catch(() => null);
   const unit = unitById(b.unitId)!;
   const similar = similarUnits(getMockState(), unit, 2);
   const now = Date.now();
@@ -858,6 +869,7 @@ export function hostImmediateViewing(previousBookingId: string, targetUnitId: st
 
 export function hostMarkNoShow(id: string) {
   const b = requireBooking(id);
+  dispatchApi.noShow(b.ref || id, "Khách không có mặt sau 15 phút").catch(() => null);
   const unit = unitById(b.unitId)!;
   setMockState((s) =>
     withNotices(
@@ -881,6 +893,14 @@ export function hostStartDeposit(id: string) {
   const b = requireBooking(id);
   if (b.status !== "viewing") return;
   const unit = unitById(b.unitId)!;
+  depositApi
+    .generateVietQr({
+      viewingId: b.ref || id,
+      unitId: unit.id,
+      hostId: b.hostId,
+      amount: RATES.holdingDeposit,
+    })
+    .catch(() => null);
   const now = Date.now();
   setMockState((s) =>
     withNotices(
@@ -1682,6 +1702,12 @@ export function submitConsignment(input: ConsignInput, asDraft = false): Consign
     if (input.locks && (!Array.isArray(input.locks) || input.locks.length < 1 || input.locks.length > 2)) {
       throw new Error("Chọn ít nhất một hình thức khoá cửa.");
     }
+    if (input.bankAccount && input.bankAccount.replace(/\D/g, "").length < 6) {
+      throw new Error("Số tài khoản ngân hàng không hợp lệ (tối thiểu 6 chữ số).");
+    }
+    if (input.bankAccountHolder && input.bankAccountHolder.trim().length < 3) {
+      throw new Error("Tên chủ tài khoản phải có ít nhất 3 ký tự.");
+    }
   }
 
   const nowMs = Date.now();
@@ -1694,6 +1720,17 @@ export function submitConsignment(input: ConsignInput, asDraft = false): Consign
 
   const furnished = input.furnished ?? (input.furnishing !== "empty");
   const locks = input.locks ?? (input.lock ? [input.lock] : ["smart"]);
+
+  let resolvedItems: ItemKey[] = input.items && input.items.length > 0 ? input.items : [];
+  if (resolvedItems.length === 0 && input.note && input.note.includes("Nội thất:")) {
+    const match = input.note.match(/Nội thất:\s*([^|]+)/i);
+    if (match && match[1]) {
+      resolvedItems = match[1]
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean) as ItemKey[];
+    }
+  }
 
   const cs: Consignment = {
     ...input,
@@ -1710,7 +1747,7 @@ export function submitConsignment(input: ConsignInput, asDraft = false): Consign
     auditByHost: input.auditByHost ?? true,
     furnishing: input.furnishing ?? (furnished ? "full" : "basic"),
     lock: locks[0] ?? "smart",
-    items: input.items ?? [],
+    items: resolvedItems,
   };
 
   const extraNotices: Notice[] = [];
@@ -1746,12 +1783,21 @@ export function submitConsignment(input: ConsignInput, asDraft = false): Consign
     }
   }
 
-  setMockState((s) =>
-    withNotices(
-      { ...s, consignments: [cs, ...s.consignments] },
+  setMockState((s) => {
+    const updatedPayout =
+      input.bankName && input.bankAccount && input.bankAccountHolder && input.saveAsDefaultPayout !== false
+        ? {
+            bankName: input.bankName,
+            bankAccount: input.bankAccount,
+            bankAccountHolder: input.bankAccountHolder,
+            isVerified: true,
+          }
+        : s.landlordPayoutAccount;
+    return withNotices(
+      { ...s, consignments: [cs, ...s.consignments], landlordPayoutAccount: updatedPayout },
       ...extraNotices,
-    ),
-  );
+    );
+  });
 
   return cs;
 }
@@ -1836,7 +1882,7 @@ export function hostAcceptInspection(id: string, hostId: string): ConsignResult 
   if (cs.status !== "awaiting_host") {
     return { ok: false, code: "bad_status", reason: "Hồ sơ không ở trạng thái chờ Field Host nhận." };
   }
-  if (cs.hostId && cs.hostId !== hostId) {
+  if (cs.hostId && cs.hostId !== hostId && !cs.openPoolAt && !cs.slaBreached) {
     return { ok: false, code: "wrong_host", reason: "Bạn không phải Field Host phụ trách căn này." };
   }
 
@@ -1851,7 +1897,7 @@ export function hostAcceptInspection(id: string, hostId: string): ConsignResult 
         ...s,
         consignments: s.consignments.map((c) =>
           c.id === id
-            ? { ...c, status: "inspecting", hostAcceptedAt, hostId: c.hostId || hostId }
+            ? { ...c, status: "inspecting", hostAcceptedAt, hostId: hostId }
             : c,
         ),
       },
@@ -1870,6 +1916,112 @@ export function hostAcceptInspection(id: string, hostId: string): ConsignResult 
 
   return { ok: true };
 }
+
+/** Admin chỉ định thủ công (Manual Override) một hồ sơ ký gửi cho Host khác */
+export function adminAssignConsignment(id: string, hostId: string, by: string = "Admin"): ConsignResult {
+  const state = getMockState();
+  const cs = state.consignments.find((c) => c.id === id);
+  if (!cs) {
+    return { ok: false, code: "not_found", reason: "Không tìm thấy hồ sơ ký gửi." };
+  }
+  if (cs.status !== "awaiting_host" && cs.status !== "inspecting") {
+    return { ok: false, code: "bad_status", reason: "Chỉ chỉ định được hồ sơ đang chờ hoặc đang thẩm định." };
+  }
+
+  const host = hostById(hostId);
+  if (!host) {
+    return { ok: false, code: "not_found", reason: "Không tìm thấy Field Host được chọn." };
+  }
+
+  const nowMs = Date.now();
+  const can = `${cs.building} · Tầng ${cs.floor} · Căn ${cs.door}`;
+
+  const updatedConsignment: Consignment = {
+    ...cs,
+    hostId,
+    adminOverriddenBy: by,
+    adminOverriddenAt: iso(nowMs),
+  };
+
+  setMockState((s) =>
+    withNotices(
+      {
+        ...s,
+        consignments: s.consignments.map((c) => (c.id === id ? updatedConsignment : c)),
+      },
+      pushToHost(hostId, {
+        tone: "alert",
+        title: "Admin giao hồ sơ thẩm định (Manual Override)",
+        body: `Admin ${by} đã chỉ định bạn phụ trách thẩm định căn ${can}. Vui lòng tiếp nhận trong ca trực.`,
+      }),
+      toAdmin({
+        tone: "info",
+        title: "Đã chỉ định Host thủ công (Manual Override)",
+        body: `Căn ${can} được chuyển cho Host ${host.name} xử lý.`,
+      }),
+    ),
+  );
+
+  return { ok: true };
+}
+
+/** Tự động kiểm tra và leo thang SLA cho các hồ sơ ký gửi chờ quá 30p (Open Pool) và quá 2h (Area Lead) */
+export function autoEscalateConsignments(nowMs: number = Date.now()) {
+  const state = getMockState();
+  let changed = false;
+  const notices: Notice[] = [];
+
+  const updatedConsignments = state.consignments.map((cs) => {
+    if (cs.status !== "awaiting_host") return cs;
+
+    const createdMs = new Date(cs.signedAt || cs.createdAt).getTime();
+    const elapsedMinutes = (nowMs - createdMs) / 60000;
+    const can = `${cs.building} · Tầng ${cs.floor} · Căn ${cs.door}`;
+    let updated = { ...cs };
+
+    // Mốc 1: Quá 30 phút -> Đổ về Open Pool liên phân khu
+    if (elapsedMinutes >= 30 && !cs.openPoolAt) {
+      updated.openPoolAt = iso(nowMs);
+      changed = true;
+      notices.push(
+        toAdmin({
+          tone: "warning",
+          title: "Hồ sơ vào Open Pool (>30p)",
+          body: `Căn ${can} chưa có Host nhận sau 30 phút, đã tự động mở quyền nhận cho các Host liên phân khu.`,
+        }),
+      );
+    }
+
+    // Mốc 2: Quá 2 giờ (120 phút) -> SLA Breach, tự động chuyển về Area Lead và còi đỏ Admin
+    if (elapsedMinutes >= 120 && !cs.slaBreached) {
+      updated.slaBreached = true;
+      updated.escalatedToAreaLead = true;
+      // Gán về Area Lead của phân khu (H01 cho Sapphire, H03 cho Zenpark...)
+      const defaultLead = zoneOfBuilding(cs.building)?.hostId || "H01";
+      updated.hostId = defaultLead;
+      changed = true;
+      notices.push(
+        toAdmin({
+          tone: "alert",
+          title: "🚨 BÁO ĐỘNG SLA: Quá 2h chưa nhận thẩm định",
+          body: `Căn ${can} đã chờ quá 2 giờ! Hệ thống đã tự động gán cho Area Lead ${defaultLead}. Admin có thể can thiệp thủ công nếu cần.`,
+        }),
+        pushToHost(defaultLead, {
+          tone: "alert",
+          title: "🚨 Khẩn cấp: Hồ sơ quá hạn 2h tự động đổ về Lead",
+          body: `Căn ${can} quá 2h không có Host nhận. Hệ thống tự động chuyển ticket cho bạn xử lý khẩn cấp.`,
+        }),
+      );
+    }
+
+    return updated;
+  });
+
+  if (changed) {
+    setMockState((s) => withNotices({ ...s, consignments: updatedConsignments }, ...notices));
+  }
+}
+
 
 export function submitInspection(id: string, hostId: string, draft: InspectionDraft): ConsignResult {
   const state = getMockState();
@@ -2004,15 +2156,33 @@ export function submitInspection(id: string, hostId: string, draft: InspectionDr
 
   const summary = inspectionSummary(report);
   const can = `${cs.building} · Tầng ${cs.floor} · Căn ${cs.door}`;
+  const isApproved = draft.recommendation === "approve";
+
+  const updatedConsignment: Consignment = {
+    ...cs,
+    status: "reviewing",
+    report,
+  };
+
+  // Đẩy trực tiếp căn hộ lên trang chủ để khách thuê xem phòng ngay nếu đề xuất duyệt
+  if (isApproved) {
+    try {
+      const published = createAndPublishUnitFromConsignment({
+        ...updatedConsignment,
+        status: "approved",
+      });
+      publishUnitToCatalog(published);
+    } catch {
+      // fallback
+    }
+  }
 
   setMockState((s) =>
     withNotices(
       {
         ...s,
         consignments: s.consignments.map((c) =>
-          c.id === id
-            ? { ...c, status: "reviewing", report }
-            : c,
+          c.id === id ? updatedConsignment : c,
         ),
       },
       zaloToLandlord(cs.landlordId, {
@@ -2021,9 +2191,9 @@ export function submitInspection(id: string, hostId: string, draft: InspectionDr
         body: `Căn ${can} đã được thẩm định xong, độ mới TB ${summary.avgCondition}%. Đang chờ Admin chốt duyệt ký gửi.`,
       }),
       toAdmin({
-        tone: "warning",
+        tone: isApproved ? "success" : "warning",
         title: "Báo cáo thẩm định chờ duyệt",
-        body: `${can}, TB ${summary.avgCondition}%, ${summary.mismatches.length} sai lệch, đề xuất ${draft.recommendation === "approve" ? "Duyệt" : "Không duyệt"}.`,
+        body: `${can}, TB ${summary.avgCondition}%, ${summary.mismatches.length} sai lệch, đề xuất ${isApproved ? "Duyệt & Niêm yết ngay" : "Không duyệt"}.`,
       }),
     ),
   );
@@ -2045,11 +2215,26 @@ export function approveConsignment(id: string, by: string): ConsignResult {
   const decidedAt = iso(nowMs);
   const can = `${cs.building} · Tầng ${cs.floor} · Căn ${cs.door}`;
 
+  const updatedConsignment: Consignment = {
+    ...cs,
+    status: "approved",
+    decidedAt,
+    decidedBy: by,
+  };
+
+  // Đẩy trực tiếp lên trang chủ cho khách thuê
+  try {
+    const published = createAndPublishUnitFromConsignment(updatedConsignment);
+    publishUnitToCatalog(published);
+  } catch {
+    // fallback
+  }
+
   const notices: Notice[] = [
     zaloToLandlord(cs.landlordId, {
       tone: "success",
       title: "Căn đã được nhận ký gửi",
-      body: `Căn ${can} đã được Admin ${by} duyệt nhận ký gửi chính thức.`,
+      body: `Căn ${can} đã được Admin ${by} duyệt và đẩy trực tiếp lên trang chủ để khách thuê xem phòng.`,
     }),
   ];
 
@@ -2067,10 +2252,16 @@ export function approveConsignment(id: string, by: string): ConsignResult {
     withNotices(
       {
         ...s,
+        mandates: {
+          ...s.mandates,
+          [cs.id]: {
+            unitId: cs.id,
+            status: "active",
+            signedAt: cs.signedAt || decidedAt,
+          },
+        },
         consignments: s.consignments.map((c) =>
-          c.id === id
-            ? { ...c, status: "approved", decidedAt, decidedBy: by }
-            : c,
+          c.id === id ? updatedConsignment : c,
         ),
       },
       ...notices,
@@ -2394,3 +2585,144 @@ export function remindLeaseRenewal(bookingId: string, by: string): ContractResul
 
   return { ok: true };
 }
+
+export const DELIST_REASON_LABELS: Record<DelistReason, string> = {
+  landlord_exit: "Chủ nhà thanh lý hợp đồng ủy quyền (Exit Request)",
+  personal_use: "Chủ nhà lấy lại căn để ở / cho người thân",
+  unit_sold: "Căn hộ đã chuyển nhượng / sang nhượng chủ mới",
+  maintenance: "Căn hộ cần đại tu sửa chữa / Tạm ngừng khai thác",
+  data_cleanup: "Dữ liệu trùng lặp / Dọn dẹp thử nghiệm",
+  other: "Lý do vận hành khác",
+};
+
+/**
+ * Ngừng niêm yết & Lưu trữ căn hộ (Delist & Archive Unit) cho Admin.
+ * Tuân thủ pre-flight checks: không cọc holding, không đang thuê rented, không có ca xem active.
+ */
+export function adminDelistUnit(
+  unitId: string,
+  reason: DelistReason,
+  note: string,
+  adminName: string
+): { ok: boolean; reason?: string } {
+  const current = getMockState();
+  const unit = unitById(unitId);
+  if (!unit) {
+    return { ok: false, reason: "Không tìm thấy thông tin căn hộ trên hệ thống." };
+  }
+
+  const status = unitStatus(current, unit);
+  if (status === "holding") {
+    return {
+      ok: false,
+      reason: "Không thể ngừng niêm yết: Căn hộ đang có khách cọc giữ chỗ 2.000.000đ qua VietQR. Vui lòng đợi hết hạn giữ cọc hoặc giải tỏa cọc trước.",
+    };
+  }
+  if (status === "rented") {
+    return {
+      ok: false,
+      reason: "Không thể ngừng niêm yết: Căn hộ đang có hợp đồng thuê có hiệu lực. Cần làm thủ tục thanh lý hợp đồng thuê và nghiệm thu trả phòng trước.",
+    };
+  }
+  const hasActiveViewing = current.bookings.some((b) => b.unitId === unitId && isOpenBooking(b));
+  if (hasActiveViewing) {
+    return {
+      ok: false,
+      reason: "Không thể ngừng niêm yết: Căn hộ đang có ca xem phòng đang diễn ra hoặc đã lên lịch hẹn. Vui lòng xử lý ca xem trước.",
+    };
+  }
+
+  const record: ArchivedUnitRecord = {
+    unitId,
+    archivedAt: new Date().toISOString(),
+    archivedBy: adminName,
+    reason,
+    reasonLabel: DELIST_REASON_LABELS[reason] || reason,
+    note: note.trim() || undefined,
+  };
+
+  setMockState((s) => ({
+    ...s,
+    archivedUnits: {
+      ...(s.archivedUnits || {}),
+      [unitId]: record,
+    },
+    unitState: {
+      ...s.unitState,
+      [unitId]: { status: "archived" },
+    },
+    notices: [
+      {
+        id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        at: new Date().toISOString(),
+        channel: "system",
+        audience: "landlord",
+        title: `Căn hộ ${unitAddress(unit)} đã ngừng niêm yết & lưu trữ`,
+        body: `Quản trị viên ${adminName} đã lưu trữ căn hộ. Lý do: ${DELIST_REASON_LABELS[reason] || reason}. Mọi hồ sơ kiểm định và lịch sử hợp đồng được bảo lưu an toàn.`,
+      },
+      {
+        id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        at: new Date().toISOString(),
+        channel: "system",
+        audience: "admin",
+        title: `Đã ngừng niêm yết & lưu trữ căn ${unitAddress(unit)}`,
+        body: `Thực hiện bởi: ${adminName}. Lý do: ${DELIST_REASON_LABELS[reason] || reason}. ${note ? `Ghi chú: ${note}` : ""}`,
+      },
+      ...s.notices,
+    ],
+  }));
+
+  return { ok: true };
+}
+
+/**
+ * Khôi phục niêm yết căn hộ (Relist Unit) cho Admin.
+ * Đưa căn hộ trở lại trạng thái khả dụng trên sàn giao dịch.
+ */
+export function adminRelistUnit(
+  unitId: string,
+  adminName: string
+): { ok: boolean; reason?: string } {
+  const current = getMockState();
+  const unit = unitById(unitId);
+  if (!unit) {
+    return { ok: false, reason: "Không tìm thấy thông tin căn hộ." };
+  }
+
+  setMockState((s) => {
+    const nextArchived = { ...(s.archivedUnits || {}) };
+    delete nextArchived[unitId];
+
+    const nextUnitState = { ...s.unitState };
+    if (nextUnitState[unitId]?.status === "archived") {
+      delete nextUnitState[unitId];
+    }
+
+    return {
+      ...s,
+      archivedUnits: nextArchived,
+      unitState: nextUnitState,
+      notices: [
+        {
+          id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          at: new Date().toISOString(),
+          channel: "system",
+          audience: "landlord",
+          title: `Căn hộ ${unitAddress(unit)} đã được khôi phục niêm yết`,
+          body: `Quản trị viên ${adminName} đã khôi phục trạng thái niêm yết khả dụng cho căn hộ trên sàn giao dịch.`,
+        },
+        ...s.notices,
+      ],
+    };
+  });
+
+  return { ok: true };
+}
+
+export function saveLandlordPayoutAccount(account: { bankName: string; bankAccount: string; bankAccountHolder: string }) {
+  setMockState((s) => ({
+    ...s,
+    landlordPayoutAccount: { ...account, isVerified: true },
+  }));
+}
+

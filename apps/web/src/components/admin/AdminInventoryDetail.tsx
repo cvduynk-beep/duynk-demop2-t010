@@ -16,24 +16,26 @@ import { STATUS_META } from "@/components/booking/status";
 import { ConsignTimeline } from "@/components/consign/ConsignTimeline";
 import { InspectionReportView } from "@/components/consign/InspectionReportView";
 import { CONSIGN_STATUS_META } from "@/components/consign/status";
-import { approveConsignment, rejectConsignment, setHoldHours } from "@/lib/mock/actions";
+import { approveConsignment, rejectConsignment, setHoldHours, adminDelistUnit, adminRelistUnit, DELIST_REASON_LABELS } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
 import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/mock/cost";
 import { fmtDate, fmtDateTime, fmtPhone, fmtTime, vnd } from "@/lib/mock/format";
-import { unitDisplayStatus } from "@/lib/mock/selectors";
+import { unitDisplayStatus, unitStatus, isOpenBooking } from "@/lib/mock/selectors";
 import { consignmentById, unitBookings } from "@/lib/mock/selectors-admin";
 import { isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { viewingLog, type ViewingLogEntry } from "@/lib/mock/selectors-viewing";
 import { setMockState, useMock } from "@/lib/mock/store";
-import type { Booking, Consignment, InspectionReport } from "@/lib/mock/types";
-import { FURNISHING_LABEL, LAYOUT_LABEL, hostById, hostForUnit, landlordById, unitAddress, unitById, zoneById, type LayoutKind, type UnitStatus } from "@/lib/mock/units";
+import type { Booking, Consignment, InspectionReport, DelistReason } from "@/lib/mock/types";
+import { FURNISHING_LABEL, LAYOUT_LABEL, hostById, hostForUnit, landlordById, unitAddress, unitById, zoneById, type LayoutKind, type UnitStatus, type Unit } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
+import { Archive, RotateCcw, AlertTriangle } from "lucide-react";
 import styles from "./Admin.module.css";
 
 const UNIT_STATUS_META: Record<UnitStatus, { label: string; tone: StatusTone }> = {
   available: { label: "Còn trống", tone: "ok" },
   holding: { label: "Đang giữ căn", tone: "warn" },
   rented: { label: "Đã cho thuê", tone: "neutral" },
+  archived: { label: "Đã lưu trữ / Ngừng niêm yết", tone: "neutral" },
 };
 
 const OUTCOME_LABEL: Record<ViewingLogEntry["outcome"], { label: string; badge: string }> = {
@@ -185,6 +187,8 @@ export function AdminInventoryDetail({ id }: { id: string }) {
         </Section>
 
         <UnitHoldPolicySection unitId={unit.id} />
+
+        <UnitArchiveSection unit={unit} />
 
         <Section title={`Nhật ký xem phòng (${logs.length})`} flush>
           <DataTable<ViewingLogEntry>
@@ -343,10 +347,21 @@ export function AdminInventoryDetail({ id }: { id: string }) {
             type="button"
             className="btn btn-success"
             style={{ flex: 1 }}
-            onClick={() => {
+            onClick={async () => {
+              try {
+                await fetch(`/api/v1/admin/consignments/${c.id}/approve`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
+                  body: JSON.stringify({ note: "Admin đã duyệt ký gửi" }),
+                });
+              } catch {
+                // ignore
+              }
               const res = approveConsignment(c.id, DEMO_USERS.admin.name);
               if (res.ok) {
-                toast("Đã nhận ký gửi. Zalo báo chủ nhà, push báo Host.", "success");
+                toast("Đã nhận ký gửi và niêm yết căn hộ lên hệ thống cho thuê.", "success");
+                setDbConsignment((prev) => (prev ? { ...prev, status: "approved" } : null));
               } else {
                 toast(`Không thể duyệt: ${res.reason}`);
               }
@@ -406,7 +421,17 @@ export function AdminInventoryDetail({ id }: { id: string }) {
           <button
             type="button"
             className="btn btn-danger btn-block"
-            onClick={() => {
+            onClick={async () => {
+              try {
+                await fetch(`/api/v1/admin/consignments/${c.id}/reject`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "same-origin",
+                  body: JSON.stringify({ note: note || "Từ chối ký gửi" }),
+                });
+              } catch {
+                // ignore
+              }
               const res = rejectConsignment(c.id, note, DEMO_USERS.admin.name);
               if (!res.ok) {
                 if (res.reason === "invalid_note") {
@@ -416,6 +441,7 @@ export function AdminInventoryDetail({ id }: { id: string }) {
                 }
                 return;
               }
+              setDbConsignment((prev) => (prev ? { ...prev, status: "rejected", note } : null));
               setRejecting(false);
               setRejectError("");
               toast("Đã từ chối và báo chủ nhà qua Zalo", "success");
@@ -539,6 +565,263 @@ function UnitHoldPolicySection({ unitId }: { unitId: string }) {
           adminName={DEMO_USERS.admin.name}
         />
       </div>
+    </Section>
+  );
+}
+
+function UnitArchiveSection({ unit }: { unit: Unit }) {
+  const state = useMock();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [reason, setReason] = useState<DelistReason>("landlord_exit");
+  const [note, setNote] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const isArchived = Boolean(state.archivedUnits?.[unit.id]);
+  const archiveRecord = state.archivedUnits?.[unit.id];
+  const currentStatus = unitStatus(state, unit.id);
+  const hasActiveViewing = state.bookings.some((b) => b.unitId === unit.id && isOpenBooking(b));
+
+  const isHolding = currentStatus === "holding";
+  const isRented = currentStatus === "rented";
+  const canDelist = !isHolding && !isRented && !hasActiveViewing;
+
+  const handleDelist = () => {
+    if (!canDelist) return;
+    if (confirmText.trim() !== "DELIST") return;
+    setSubmitting(true);
+    const res = adminDelistUnit(unit.id, reason, note, DEMO_USERS.admin.name);
+    setSubmitting(false);
+    if (!res.ok) {
+      toast(res.reason ?? "Không thể ngừng niêm yết căn hộ");
+      return;
+    }
+    toast("Đã ngừng niêm yết và chuyển căn hộ vào kho lưu trữ hồ sơ", "success");
+    setModalOpen(false);
+    setConfirmText("");
+    setNote("");
+  };
+
+  const handleRelist = () => {
+    const res = adminRelistUnit(unit.id, DEMO_USERS.admin.name);
+    if (!res.ok) {
+      toast(res.reason ?? "Không thể khôi phục niêm yết căn hộ");
+      return;
+    }
+    toast("Đã khôi phục niêm yết căn hộ thành công. Căn đã hiển thị lại trên rổ hàng.", "success");
+  };
+
+  return (
+    <Section
+      title="Ngừng niêm yết / Lưu trữ căn hộ (Delist & Archive)"
+      description="Chuẩn nghiệp vụ PropTech cao cấp: Bảo toàn 100% lịch sử giao dịch, hợp đồng & biên bản kiểm định pháp lý."
+    >
+      {isArchived && archiveRecord ? (
+        <div
+          className="card"
+          style={{
+            background: "var(--neutral-050, #f8fafc)",
+            border: "1px solid var(--neutral-200, #e2e8f0)",
+            padding: 16,
+            borderRadius: 8,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                background: "var(--neutral-200, #e2e8f0)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Archive size={18} style={{ color: "var(--neutral-700, #334155)" }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 700, color: "var(--ink)" }}>Căn hộ đang được lưu trữ hồ sơ (Đã ngừng niêm yết)</span>
+                <span className="badge badge-plain" style={{ background: "var(--neutral-200)", color: "var(--neutral-700)" }}>
+                  📁 Đã lưu trữ
+                </span>
+              </div>
+              <p className="small muted" style={{ margin: "4px 0 0" }}>
+                Căn hộ đã được ẩn hoàn toàn khỏi Trang chủ, AI Matchmaker và cổng tìm kiếm của khách thuê. Toàn bộ nhật ký xem phòng, hợp đồng và hộ chiếu bàn giao số được bảo lưu nguyên vẹn.
+              </p>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: 12,
+              background: "#fff",
+              padding: 12,
+              borderRadius: 6,
+              border: "1px solid var(--border)",
+              marginBottom: 16,
+            }}
+          >
+            <div>
+              <span className="xs muted" style={{ display: "block" }}>Thời gian lưu trữ</span>
+              <span className="small font-medium">{fmtDateTime(archiveRecord.archivedAt)}</span>
+            </div>
+            <div>
+              <span className="xs muted" style={{ display: "block" }}>Người thực hiện</span>
+              <span className="small font-medium">{archiveRecord.archivedBy}</span>
+            </div>
+            <div>
+              <span className="xs muted" style={{ display: "block" }}>Lý do</span>
+              <span className="small font-medium" style={{ color: "var(--primary)" }}>{archiveRecord.reasonLabel}</span>
+            </div>
+            <div>
+              <span className="xs muted" style={{ display: "block" }}>Ghi chú lưu trữ</span>
+              <span className="small font-medium">{archiveRecord.note || "—"}</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            onClick={handleRelist}
+          >
+            <RotateCcw size={14} /> Khôi phục niêm yết (Relist Unit)
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {!canDelist ? (
+            <div
+              className="card"
+              style={{
+                background: "var(--warn-050, #fffbeb)",
+                borderColor: "var(--warn-200, #fde68a)",
+                padding: 14,
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+              }}
+            >
+              <AlertTriangle size={18} style={{ color: "var(--warn-700, #b45309)", flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <b style={{ color: "var(--warn-800, #92400e)", display: "block", fontSize: "0.875rem" }}>
+                  Chưa thể ngừng niêm yết căn hộ này do ràng buộc an toàn giao dịch:
+                </b>
+                <ul className="small muted" style={{ margin: "4px 0 0", paddingLeft: 16 }}>
+                  {isHolding && <li>Căn đang được giữ chỗ qua cọc VietQR 2.000.000 VNĐ. Cần hết thời hạn giữ chỗ hoặc xử lý giải tỏa cọc trước.</li>}
+                  {isRented && <li>Căn đang trong chu kỳ hợp đồng thuê có hiệu lực với Tiền cọc bảo đảm tài sản. Cần hoàn tất thủ tục thanh lý hợp đồng và bàn giao nhà trước.</li>}
+                  {hasActiveViewing && <li>Đang có ca xem phòng đang diễn ra hoặc đã lên lịch của Field Host. Cần hoàn tất hoặc hủy ca xem trước khi lưu trữ.</li>}
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ maxWidth: 520 }}>
+                <p className="small muted" style={{ margin: 0 }}>
+                  Chức năng này thay thế thao tác xóa cứng dữ liệu: Căn hộ sẽ được đưa vào trạng thái lưu trữ hồ sơ, ẩn khỏi toàn bộ rổ hàng công khai và AI Matchmaker nhưng bảo lưu toàn bộ chứng từ kiểm toán pháp lý.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-quiet btn-sm"
+                style={{ color: "var(--danger)", borderColor: "var(--danger-200)", display: "inline-flex", alignItems: "center", gap: 6 }}
+                onClick={() => {
+                  setConfirmText("");
+                  setNote("");
+                  setReason("landlord_exit");
+                  setModalOpen(true);
+                }}
+              >
+                <Archive size={14} /> Ngừng niêm yết & Lưu trữ căn hộ
+              </button>
+            </div>
+          )}
+
+          <Modal
+            open={modalOpen}
+            onClose={() => setModalOpen(false)}
+            title="Xác nhận Ngừng niêm yết & Lưu trữ căn hộ"
+            variant="sheet"
+            footer={
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button type="button" className="btn btn-quiet" onClick={() => setModalOpen(false)}>
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={confirmText.trim() !== "DELIST" || submitting}
+                  onClick={handleDelist}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <Archive size={16} /> Xác nhận lưu trữ
+                </button>
+              </div>
+            }
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div
+                style={{
+                  background: "var(--danger-050, #fef2f2)",
+                  border: "1px solid var(--danger-200, #fecaca)",
+                  padding: 12,
+                  borderRadius: 6,
+                  color: "var(--danger-800, #991b1b)",
+                  fontSize: "0.85rem",
+                  lineHeight: 1.5,
+                }}
+              >
+                <b>Lưu ý quan trọng:</b> Thao tác này sẽ ngừng hiển thị căn hộ <b>{unit.code}</b> ({unitAddress(unit)}) trên toàn hệ thống công khai (Trang chủ, AI Matchmaker, giỏ hàng). Căn hộ được chuyển vào kho lưu trữ hồ sơ nhưng không làm mất dữ liệu lịch sử.
+              </div>
+
+              <label className="field">
+                <span className="label">Lý do ngừng niêm yết *</span>
+                <select
+                  className="select"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value as DelistReason)}
+                >
+                  {Object.entries(DELIST_REASON_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span className="label">Ghi chú nghiệp vụ / Biên bản trao đổi</span>
+                <textarea
+                  className="textarea"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Ghi rõ thông tin trao đổi với chủ nhà, số văn bản hoặc biên bản thanh lý ủy quyền (nếu có)..."
+                  rows={3}
+                />
+              </label>
+
+              <label className="field">
+                <span className="label">
+                  Cơ chế bảo vệ (Type-to-Confirm): Gõ chính xác chữ <b style={{ color: "var(--danger)" }}>DELIST</b> để mở khóa
+                </span>
+                <input
+                  type="text"
+                  className="input"
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder="Nhập DELIST"
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+          </Modal>
+        </div>
+      )}
     </Section>
   );
 }

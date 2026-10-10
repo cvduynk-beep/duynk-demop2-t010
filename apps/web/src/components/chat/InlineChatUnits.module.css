@@ -1,0 +1,233 @@
+.wrapper {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #b6801e;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.swipeCue {
+  font-size: 11px;
+  color: #63777d;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Horizontal scroll track (Băng chuyền ngang siêu mượt) */
+.carouselTrack {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 4px 8px 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.carouselTrack::-webkit-scrollbar {
+  display: none;
+}
+
+/* Thẻ căn siêu tinh gọn: clickable toàn bộ */
+.miniCard {
+  flex: 0 0 205px;
+  width: 205px;
+  max-width: 205px;
+  scroll-snap-align: start;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid rgba(10, 61, 74, 0.1);
+  box-shadow: 0 4px 14px rgba(10, 61, 74, 0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  cursor: pointer;
+}
+
+.miniCard:hover {
+  transform: translateY(-3px);
+  border-color: rgba(10, 61, 74, 0.25);
+  box-shadow: 0 10px 24px rgba(10, 61, 74, 0.12);
+}
+
+.photoWrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 11;
+  background: #e9eff1;
+  overflow: hidden;
+}
+
+.photoFrame {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.badgesOverlay {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.rankBadge {
+  background: rgba(10, 61, 74, 0.88);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.bargainBadge {
+  background: linear-gradient(135deg, #e65100 0%, #f57c00 100%);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 2px 6px rgba(230, 81, 0, 0.35);
+}
+
+.cardBody {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.unitCode {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0a3d4a;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.miniCard:hover .unitCode {
+  color: #0e5b6e;
+}
+
+.specsLine {
+  font-size: 11px;
+  color: #63777d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.priceAmount {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0a3d4a;
+  letter-spacing: -0.01em;
+}
+
+.priceUnit {
+  font-size: 10.5px;
+  color: #63777d;
+  font-weight: 600;
+}
+
+.priceDetail {
+  font-size: 10px;
+  color: #83979d;
+  line-height: 1.25;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(10, 61, 74, 0.1);
+  font-size: 11px;
+  font-weight: 700;
+  color: #0a3d4a;
+  transition: color 0.15s ease;
+}
+
+.miniCard:hover .cardFooter {
+  color: #0e5b6e;
+}
+
+.arrowIcon {
+  transition: transform 0.15s ease;
+}
+
+.miniCard:hover .arrowIcon {
+  transform: translateX(3px);
+}
+
+.viewAllStrip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(10, 61, 74, 0.03);
+  border: 1px dashed rgba(10, 61, 74, 0.18);
+  border-radius: 10px;
+  color: #0a3d4a;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.viewAllStrip:hover {
+  background: rgba(10, 61, 74, 0.08);
+  border-color: #0a3d4a;
+}

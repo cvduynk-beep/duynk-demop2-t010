@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function UnitsPage() {
-  redirect("/");
+  redirect("/?view=all");
 }

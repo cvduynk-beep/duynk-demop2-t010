@@ -4,7 +4,7 @@ export type UnitStatus = "available" | "viewing" | "holding" | "rented" | "unlis
 export type MandateStatus = "pending_inspection" | "active" | "exiting" | "ended";
 export type LayoutKind = "Studio" | "1PN" | "2PN" | "3PN";
 export type LockKind = "smart" | "physical";
-export type LeaseTermPref = "mid" | "long" | "fixed";
+export type LeaseTermPref = "flexible" | "long" | "mid" | "fixed";
 export type ConsignmentStatus = "draft" | "awaiting_host" | "inspecting" | "reviewing" | "approved" | "rejected";
 
 export interface MandateSummary {
@@ -128,6 +128,8 @@ export interface Consignment {
   photoCount: number;
   /** Chỉ có ở `GET /landlord/consignments/:id` (danh sách chỉ có `photoCount`). */
   photos?: ConsignmentPhoto[];
+  allowFastClose?: boolean;
+  floorRent?: number | null;
   createdAt: string;
   signedAt: string | null;
   ownershipWarrantedAt: string | null;
@@ -152,7 +154,14 @@ export interface CreateConsignmentInput {
   leaseTerm: LeaseTermPref;
   furnished: boolean;
   locks: LockKind[];
+  allowFastClose?: boolean;
+  floorRent?: number;
   doorCode?: string;
+  bankName?: string;
+  bankAccount?: string;
+  bankAccountHolder?: string;
+  saveAsDefaultPayout?: boolean;
+  items?: string[];
   note?: string;
   draft?: boolean;
 }
@@ -210,10 +219,19 @@ export interface BuildingOption {
   totalFloors: number;
 }
 
+export interface BankPayoutAccount {
+  bankName: string;
+  bankAccount: string;
+  bankAccountHolder: string;
+  isVerified: boolean;
+  verifiedAt?: string;
+}
+
 export interface MyProfile {
   id: string;
   fullName: string | null;
   email: string | null;
   isPhoneVerified: boolean;
   createdAt: string;
+  payoutAccount?: BankPayoutAccount | null;
 }

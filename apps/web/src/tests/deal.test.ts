@@ -12,7 +12,7 @@ vi.stubGlobal("window", {
 });
 
 import * as actions from "@/lib/mock/actions";
-import { HOLD_HOURS_DEFAULT, HOUR_MS } from "@/lib/mock/cost";
+import { HOLD_HOURS_DEFAULT, HOUR_MS, calculateRentForDuration, getTermPremiumRate } from "@/lib/mock/cost";
 import { getMockState, resetMockState } from "@/lib/mock/store";
 import {
   bookingById,
@@ -677,6 +677,30 @@ describe("Deal Flow - SPEC-P01 §7 / deal.test.ts", () => {
 
     // Kiểm tra không còn tài khoản tự động điền
     expect(tenantLatestRefundAccount(getMockState(), phone)).toBeUndefined();
+  });
+
+  it("(16) Biểu phí phụ phí kỳ hạn thuê 4 nấc (ngắn hạn <3th +15%, 3-<6th +8%, 6-<12th +4%, >=12th 0%)", () => {
+    const baseRent = 5_900_000;
+
+    // Nấc 1: Dưới 3 tháng (1-2 tháng): +15%
+    expect(getTermPremiumRate(1)).toBe(0.15);
+    expect(getTermPremiumRate(2)).toBe(0.15);
+    expect(calculateRentForDuration(baseRent, 2)).toBe(6_800_000); // 5.9M * 1.15 = 6.785M -> 6.8M
+
+    // Nấc 2: Từ 3 đến dưới 6 tháng (3-5 tháng): +8%
+    expect(getTermPremiumRate(3)).toBe(0.08);
+    expect(getTermPremiumRate(5)).toBe(0.08);
+    expect(calculateRentForDuration(baseRent, 4)).toBe(6_350_000); // 5.9M * 1.08 = 6.372M -> 6.35M
+
+    // Nấc 3: Từ 6 đến dưới 12 tháng (6-11 tháng): +4%
+    expect(getTermPremiumRate(6)).toBe(0.04);
+    expect(getTermPremiumRate(11)).toBe(0.04);
+    expect(calculateRentForDuration(baseRent, 6)).toBe(6_150_000); // 5.9M * 1.04 = 6.136M -> 6.15M
+
+    // Nấc 4: Từ 12 tháng trở lên (dài hạn): 0%
+    expect(getTermPremiumRate(12)).toBe(0.0);
+    expect(getTermPremiumRate(24)).toBe(0.0);
+    expect(calculateRentForDuration(baseRent, 12)).toBe(5_900_000);
   });
 });
 

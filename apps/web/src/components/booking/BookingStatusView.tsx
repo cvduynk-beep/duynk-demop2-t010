@@ -68,14 +68,37 @@ import {
   similarUnits,
 } from "@/lib/mock/selectors";
 import { HOUSE_RULES } from "@/lib/mock/house-rules";
-import { ownsBooking, tenantLatestKyc } from "@/lib/mock/selectors-tenant";
-import { useMock } from "@/lib/mock/store";
-import type { Booking, Occupant } from "@/lib/mock/types";
+import { accountPhone, ownsBooking, tenantLatestKyc } from "@/lib/mock/selectors-tenant";
+import { setMockState, useMock } from "@/lib/mock/store";
+import type { Booking, BookingStatus, Occupant } from "@/lib/mock/types";
 import { hostById, unitAddress, unitById, zoneById, type Unit } from "@/lib/mock/units";
+import { bookingApi } from "@/lib/apiClient";
 import { useNow } from "@/lib/useNow";
 import { SlotPicker } from "./SlotPicker";
 import { STATUS_META, TERMINAL, buildTimeline } from "./status";
 import styles from "./Booking.module.css";
+
+function mapDbViewingStatus(status?: string): BookingStatus {
+  switch (status?.toUpperCase()) {
+    case "PENDING_CONFIRMATION":
+      return "pending";
+    case "CONFIRMED":
+      return "confirmed";
+    case "LOBBY_ARRIVED":
+    case "CHECKED_IN":
+      return "lobby";
+    case "IN_PROGRESS":
+      return "viewing";
+    case "COMPLETED":
+      return "completed";
+    case "CANCELLED":
+      return "cancelled";
+    case "NO_SHOW":
+      return "no_show";
+    default:
+      return "confirmed";
+  }
+}
 
 function duration(ms: number): string {
   const m = Math.max(0, Math.floor(ms / 60_000));
@@ -95,12 +118,63 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
   const state = useMock();
   const now = useNow(1000);
   const [modal, setModal] = useState<"cancel" | "reschedule" | "expireConfirm" | "leaseWizard" | "occupants" | null>(null);
+  const [dbBooking, setDbBooking] = useState<Booking | null>(null);
+  const existingBooking = state.ready ? bookingByRef(state, refCode) : undefined;
+  const [loadingDb, setLoadingDb] = useState(() => !existingBooking);
+
+  // Tự động tải từ backend DB nếu mã tham chiếu chưa có trong mock memory
+  useEffect(() => {
+    if (existingBooking) {
+      setLoadingDb(false);
+      return;
+    }
+    let unmounted = false;
+    async function fetchBooking() {
+      try {
+        const res = await bookingApi.getByRef(refCode);
+        if (res.ok && res.data && !unmounted) {
+          const v = res.data;
+          const uId = v.unitId || v.unit?.id || "u1";
+          const mapped: Booking = {
+            id: v.id,
+            ref: v.bookingRefCode || refCode,
+            unitId: uId,
+            hostId: v.tickets?.[0]?.hostId || v.host?.id || "H01",
+            tenant: {
+              name: v.tenant?.fullName || "Khách thuê Ocean Park",
+              phone: v.tenant?.phoneHash?.replace("hash_", "") || "0912345678",
+              persons: 2,
+            },
+            slot: v.viewingSlot || new Date().toISOString(),
+            status: mapDbViewingStatus(v.status),
+            createdAt: v.createdAt || new Date().toISOString(),
+            lobbyAt: v.lobbyCheckInAt || undefined,
+          };
+          setDbBooking(mapped);
+          setMockState((s) => ({
+            ...s,
+            bookings: [mapped, ...s.bookings.filter((b) => b.ref !== mapped.ref)],
+          }));
+        }
+      } catch {
+        // ignore offline
+      } finally {
+        if (!unmounted) setLoadingDb(false);
+      }
+    }
+    fetchBooking();
+    return () => {
+      unmounted = true;
+    };
+  }, [refCode, existingBooking]);
+
+  const booking = existingBooking || dbBooking;
 
   // Tự động liên kết eKYC nếu tài khoản đã từng xác thực trước đó.
   // Hook phải đứng TRƯỚC mọi `return` sớm (rules-of-hooks).
-  const kycBooking = state.ready ? bookingByRef(state, refCode) : undefined;
+  const kycBooking = booking;
   useEffect(() => {
-    if (!kycBooking || !ownsBooking(state, kycBooking)) return;
+    if (!kycBooking || (accountPhone(state) && !ownsBooking(state, kycBooking))) return;
     if (kycBooking.status !== "closing" || kycBooking.kyc) return;
     const existing = tenantLatestKyc(state, kycBooking.tenant.phone);
     if (!existing) return;
@@ -116,15 +190,13 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
     });
   }, [kycBooking, state]);
 
-  if (!state.ready || !now) {
+  if (!state.ready || !now || loadingDb) {
     return (
       <div className={`wrap ${styles.page}`}>
         <div className="skeleton" style={{ height: 220 }} />
       </div>
     );
   }
-
-  const booking = bookingByRef(state, refCode);
 
   if (!booking) {
     return (
@@ -140,7 +212,7 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
     );
   }
 
-  if (!ownsBooking(state, booking)) {
+  if (accountPhone(state) && !ownsBooking(state, booking)) {
     return (
       <div className={`wrap ${styles.notFound}`}>
         <h1 className={styles.h1}>Lịch hẹn không thuộc tài khoản này</h1>

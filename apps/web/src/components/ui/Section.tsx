@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import styles from "./Section.module.css";
 
 interface SectionProps {
-  title?: string;
+  title?: ReactNode;
   description?: string;
   actions?: ReactNode;
   children: ReactNode;

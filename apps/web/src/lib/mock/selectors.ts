@@ -26,6 +26,9 @@ export const isOpenBooking = (b: Booking) => OPEN_STATUSES.includes(b.status);
 
 export function unitStatus(state: MockState, unitOrId: Unit | string, now: number = Date.now()): UnitStatus {
   const id = typeof unitOrId === "string" ? unitOrId : unitOrId.id;
+  if (state.archivedUnits && state.archivedUnits[id]) {
+    return "archived";
+  }
   const base = typeof unitOrId === "string" ? (unitById(unitOrId)?.baseStatus ?? "available") : unitOrId.baseStatus;
   const override = state.unitState[id];
   if (!override) return base;
@@ -460,7 +463,12 @@ export function monthlyRent(state: MockState, landlordId: string): number {
 
 export function occupancy(state: MockState, units: Unit[]): { rented: number; holding: number; available: number } {
   const acc = { rented: 0, holding: 0, available: 0 };
-  for (const u of units) acc[unitStatus(state, u)]++;
+  for (const u of units) {
+    const s = unitStatus(state, u);
+    if (s === "rented" || s === "holding" || s === "available") {
+      acc[s]++;
+    }
+  }
   return acc;
 }
 
@@ -471,3 +479,7 @@ export function bookingUnit(b: Booking): Unit {
 }
 
 export const tenantAllIn = (unit: Unit, persons = 1) => allInCost(unit, { persons, motorbikes: 1, cars: 0 });
+
+export function landlordPayoutAccount(state: MockState) {
+  return state.landlordPayoutAccount;
+}

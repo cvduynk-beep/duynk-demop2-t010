@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, ClipboardCheck, Clock3, Timer } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Clock3, Database, Timer } from "lucide-react";
 import { BarList } from "@/components/charts/BarList";
 import { Funnel } from "@/components/charts/Funnel";
 import { Heatmap } from "@/components/charts/Heatmap";
@@ -10,6 +11,7 @@ import { StatTile } from "@/components/charts/StatTile";
 import { Trend } from "@/components/charts/Trend";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
+import { adminApi } from "@/lib/apiClient";
 import { dayLabel, fmtTime, relTime } from "@/lib/mock/format";
 import { funnel, noShowRate, noticesFor, unitStatus } from "@/lib/mock/selectors";
 import { dailyBookings, heatRows, occupancyOverall } from "@/lib/mock/stats";
@@ -21,9 +23,55 @@ import styles from "./Admin.module.css";
 
 const SLA = 180;
 
+interface LiveBiData {
+  funnel?: {
+    stages: { stage: string; count: number; dropRate: string }[];
+    noShowRate: string;
+    avgDecisionTimeMinutes: number;
+  };
+  occupancyHeatmap?: {
+    buildingCode: string;
+    zone: string;
+    total: number;
+    rented: number;
+    occupancyRate: string;
+    alert: string;
+  }[];
+  portfolioStatus?: {
+    totalUnits: number;
+    rentedUnits: number;
+    holdingUnits: number;
+    availableUnits: number;
+  };
+}
+
 export function AdminDashboard() {
   const state = useMock();
   const now = useNow(1000);
+  const [liveBi, setLiveBi] = useState<LiveBiData | null>(null);
+  const [liveSlaTickets, setLiveSlaTickets] = useState<any[]>([]);
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      adminApi.getBiFunnel(),
+      adminApi.getDispatchSla(),
+    ]).then(([biRes, slaRes]) => {
+      if (!active) return;
+      if (biRes.ok && biRes.data) {
+        setLiveBi(biRes.data);
+        setIsLiveConnected(true);
+      }
+      if (slaRes.ok && Array.isArray(slaRes.data)) {
+        setLiveSlaTickets(slaRes.data);
+      }
+    }).catch(() => {
+      // Seamless fallback to client state
+    });
+    return () => { active = false; };
+  }, []);
+
   if (!state.ready || !now) return <div className="skeleton" style={{ height: 480 }} />;
 
   const occ = occupancyOverall(state);
@@ -36,8 +84,32 @@ export function AdminDashboard() {
   const todayCount = state.bookings.filter((b) => dayLabel(b.slot, now) === "Hôm nay" && !["cancelled", "rejected"].includes(b.status)).length;
   const avgAccept = Math.round(HOSTS.reduce((s, h) => s + h.avgAcceptSec, 0) / HOSTS.length);
   const holding = UNITS.filter((u) => unitStatus(state, u) === "holding").length;
-  const counts = { rented: Math.max(0, occ.used - holding), holding, available: occ.total - occ.used };
+
+  // Hợp nhất số liệu giỏ hàng với Live Portfolio nếu có
+  const totalUnitsCount = liveBi?.portfolioStatus?.totalUnits ?? occ.total;
+  const rentedUnitsCount = liveBi?.portfolioStatus?.rentedUnits ?? Math.max(0, occ.used - holding);
+  const holdingUnitsCount = liveBi?.portfolioStatus?.holdingUnits ?? holding;
+  const availableUnitsCount = liveBi?.portfolioStatus?.availableUnits ?? (occ.total - occ.used);
+  const displayOccRate = totalUnitsCount > 0
+    ? Math.round((rentedUnitsCount / totalUnitsCount) * 100)
+    : Math.round(occ.rate * 100);
+
+  const counts = {
+    rented: rentedUnitsCount,
+    holding: holdingUnitsCount,
+    available: availableUnitsCount,
+  };
   const feed = noticesFor(state, "admin").slice(0, 8);
+
+  // Phễu 6 bước: nếu có số liệu từ Backend BI Funnel thì kết hợp với tương tác realtime của phiên
+  const funnelSteps = (liveBi?.funnel?.stages && liveBi.funnel.stages.length >= 6) ? [
+    { key: "visit", label: "Lượt truy cập web", value: liveBi.funnel.stages[0].count },
+    { key: "chat", label: "Chat AI Matchmaker", value: liveBi.funnel.stages[1].count + state.chat.messages.filter((m) => m.role === "user").length },
+    { key: "book", label: "Đặt lịch xem (đã OTP)", value: liveBi.funnel.stages[2].count + state.bookings.filter((b) => !["rejected"].includes(b.status)).length },
+    { key: "checkin", label: "Check-in sảnh", value: liveBi.funnel.stages[3].count + state.bookings.filter((b) => !!b.lobbyAt).length },
+    { key: "deposit", label: "Quét VietQR cọc", value: liveBi.funnel.stages[4].count + state.bookings.filter((b) => !!b.deposit?.paidAt).length },
+    { key: "sign", label: "Ký thỏa thuận số", value: liveBi.funnel.stages[5].count + state.bookings.filter((b) => ["leased"].includes(b.status)).length },
+  ] : funnel(state);
 
   const cRows = contractRows(state, now);
   const cKpis = contractKpis(cRows);
@@ -92,7 +164,22 @@ export function AdminDashboard() {
 
   return (
     <div className={styles.page}>
-      <PageHeader title="Tổng quan vận hành" description="Vinhomes Ocean Park 1 · dữ liệu tuần này, cập nhật theo thời gian thực" />
+      <PageHeader
+        title="Tổng quan vận hành"
+        description="Vinhomes Ocean Park 1 · dữ liệu tuần này, cập nhật theo thời gian thực"
+        actions={
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              className={`badge ${isLiveConnected ? "badge-kelp" : "badge-plain"}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 12 }}
+              title={isLiveConnected ? "Kết nối trực tiếp PostgreSQL Backend (/api/v1/admin/bi-funnel)" : "Chế độ dự phòng client-side"}
+            >
+              <Database size={13} />
+              {isLiveConnected ? "Live DB Synced" : "Client Fallback"}
+            </span>
+          </div>
+        }
+      />
 
       {workItems.length > 0 && (
         <Section title="Việc cần xử lý" flush>
@@ -115,7 +202,7 @@ export function AdminDashboard() {
 
       <Section flush>
         <div className={styles.kpis}>
-          <StatTile hero label="Tỷ lệ lấp đầy" value={`${Math.round(occ.rate * 100)}`} unit="%" delta={{ text: "+2 điểm so với tuần trước", tone: "good", dir: "up" }} spark={[71, 72, 72, 74, 73, 75, 76, 76, 77, 78, 78, Math.round(occ.rate * 100)]} />
+          <StatTile hero label="Tỷ lệ lấp đầy" value={`${displayOccRate}`} unit="%" delta={{ text: "+2 điểm so với tuần trước", tone: "good", dir: "up" }} spark={[71, 72, 72, 74, 73, 75, 76, 76, 77, 78, 78, displayOccRate]} />
           <StatTile label="Lịch xem hôm nay" value={String(todayCount)} delta={{ text: "so với 11 hôm qua", tone: "flat" }} spark={daily.slice(-12).map((d) => d.value)} />
           <StatTile label="Tỷ lệ khách bỏ hẹn" value={`${Math.round(nsr * 100)}`} unit="%" delta={{ text: "mục tiêu ≤ 5%", tone: nsr <= 0.05 ? "good" : "bad", dir: nsr <= 0.05 ? "down" : "up" }} />
           <StatTile label="Host nhận ca trung bình" value={`${Math.floor(avgAccept / 60)}′${String(avgAccept % 60).padStart(2, "0")}″`} delta={{ text: `SLA 3′00″ · ${HOSTS.filter((h) => h.avgAcceptSec > SLA).length} Host vượt`, tone: "bad", dir: "up" }} />
@@ -123,7 +210,7 @@ export function AdminDashboard() {
       </Section>
 
       <div className={styles.two}>
-        <Funnel steps={funnel(state)} />
+        <Funnel steps={funnelSteps} />
         <Trend title="Lịch xem đặt mới mỗi ngày" subtitle="14 ngày gần nhất, đã xác thực OTP Zalo" data={daily} seriesName="Lịch xem" />
       </div>
 
@@ -131,7 +218,7 @@ export function AdminDashboard() {
         <Heatmap rows={heatRows(state)} />
         <div className={styles.stackCol}>
           <div className={`card ${styles.padCard}`}>
-            <StackBar title={`Rổ hàng ký gửi ${occ.total} căn`} segments={[{ label: "Đã cho thuê", value: counts.rented }, { label: "Đang giữ căn", value: counts.holding }, { label: "Còn trống", value: counts.available }]} />
+            <StackBar title={`Rổ hàng ký gửi ${totalUnitsCount} căn`} segments={[{ label: "Đã cho thuê", value: counts.rented }, { label: "Đang giữ căn", value: counts.holding }, { label: "Còn trống", value: counts.available }]} />
           </div>
           <div className={`card ${styles.padCard}`}>
             <h3 className={styles.feedTitle}>

@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiCookieAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import {
   UpdateCommissionParamDto,
+  CreateFieldHostDto,
+  UpdateFieldHostDto,
   ApproveConsignmentDto,
   RejectConsignmentDto,
   ReassignBookingDto,
@@ -61,6 +63,30 @@ export class AdminController {
   @ApiOperation({ summary: 'Điều phối tay lịch hẹn sang Field Host khác' })
   async reassignBooking(@Param('id') id: string, @Body() dto: ReassignBookingDto) {
     return this.adminService.reassignBooking(id, dto);
+  }
+
+  @Get('hosts')
+  @ApiOperation({ summary: 'Danh sách Field Host và trạng thái ca trực' })
+  async getFieldHosts() {
+    return this.adminService.getFieldHosts();
+  }
+
+  @Get('hosts/:id')
+  @ApiOperation({ summary: 'Chi tiết Field Host và hiệu suất' })
+  async getFieldHostById(@Param('id') id: string) {
+    return this.adminService.getFieldHostById(id);
+  }
+
+  @Post('hosts')
+  @ApiOperation({ summary: 'Tạo mới hồ sơ Field Host' })
+  async createFieldHost(@Body() dto: CreateFieldHostDto) {
+    return this.adminService.createFieldHost(dto);
+  }
+
+  @Patch('hosts/:id')
+  @ApiOperation({ summary: 'Cập nhật thông tin Field Host' })
+  async updateFieldHost(@Param('id') id: string, @Body() dto: UpdateFieldHostDto) {
+    return this.adminService.updateFieldHost(id, dto);
   }
 
   @Get('contracts')

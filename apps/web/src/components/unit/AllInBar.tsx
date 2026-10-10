@@ -3,10 +3,10 @@ import type { CostBreakdown } from "@/lib/mock/cost";
 import styles from "./AllInBar.module.css";
 
 const PARTS = [
-  { key: "rent", label: "Tiền thuê", cls: "rent" },
-  { key: "mgmt", label: "Phí quản lý", cls: "mgmt" },
-  { key: "parking", label: "Gửi xe", cls: "parking" },
-  { key: "utility", label: "Điện nước", cls: "utility" },
+  { key: "rent", label: "Tiền thuê nhà", recipient: "Trả Chủ nhà", cls: "rent" },
+  { key: "mgmt", label: "Phí quản lý BQL", recipient: "Tự đóng BQL", cls: "mgmt" },
+  { key: "parking", label: "Phí gửi xe", recipient: "Tự đóng BQL", cls: "parking" },
+  { key: "utility", label: "Điện nước dự trù", recipient: "Tự đóng EVN", cls: "utility" },
 ] as const;
 
 interface AllInBarProps {
@@ -15,7 +15,7 @@ interface AllInBarProps {
   variant?: "bar" | "legend" | "table";
 }
 
-/** Thanh All-in Cost: bốn khoản chi cố định mỗi tháng, mỗi khoản một mảng màu xanh hồ đậm dần. */
+/** Thanh All-in Cost: bốn khoản chi mỗi tháng phân định rõ đối tượng nhận. */
 export function AllInBar({ cost, variant = "bar" }: AllInBarProps) {
   const parts = PARTS.map((p) => ({ ...p, value: cost[p.key] })).filter((p) => p.value > 0);
   return (
@@ -46,6 +46,7 @@ export function AllInBar({ cost, variant = "bar" }: AllInBarProps) {
               <span>
                 <i className={`${styles.dot} ${styles[p.cls]}`} />
                 {p.label}
+                <small className="muted xs" style={{ marginLeft: 6 }}>({p.recipient})</small>
               </span>
               <b className="tnum">{vnd(p.value)}đ</b>
             </li>

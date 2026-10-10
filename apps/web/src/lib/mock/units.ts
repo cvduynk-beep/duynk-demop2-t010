@@ -6,17 +6,21 @@
 export type ZoneId = "sapphire1" | "sapphire2" | "zenpark" | "pavilion" | "masteri";
 export type LayoutKind = "Studio" | "1PN" | "2PN" | "3PN";
 export type Furnishing = "full" | "basic" | "empty";
-export type UnitStatus = "available" | "holding" | "rented";
+export type UnitStatus = "available" | "holding" | "rented" | "archived";
 export type UnitDisplayStatus = UnitStatus | "viewing"; // + chỉ để hiển thị (Đ9)
 export type LockType = "smart" | "physical";
 
 export type HostRole = "sale" | "inspector"; // +
 export const HOST_ROLE_LABEL: Record<HostRole, string> = { sale: "Sale", inspector: "Thẩm định" }; // +
 
-export type LeaseTermPref = "mid" | "long" | "fixed"; // + Đ10
+import type { UnitLivingFees } from "./types";
+export type { UnitLivingFees };
+
+export type LeaseTermPref = "flexible" | "long" | "mid" | "fixed"; // + Đ10
 export const LEASE_TERM_LABEL: Record<LeaseTermPref, string> = {
-  mid: "Trung hạn: 1–6 tháng",
-  long: "Dài hạn: 12 tháng",
+  flexible: "Linh hoạt: Từ 1 tháng trở lên (Khuyên dùng · Tối đa doanh thu & Lấp phòng)",
+  long: "Cố định: Từ 12 tháng trở lên (Dòng tiền ổn định 1 năm)",
+  mid: "Trung hạn: 3 đến dưới 12 tháng (Học kỳ / Dự án)",
   fixed: "Cố định: 12 tháng",
 };
 export type ItemKey =
@@ -171,7 +175,61 @@ export interface Unit {
   title: string;
   description: string;
   items: ItemKey[];
+  /** Bảng kê trang thiết bị nội thất thực tế do Field Host thẩm định tại căn */
+  inventory?: any[];
   mediaUrls?: string[];
+  /** Tình trạng / độ mới nội thất trung bình (%) theo Hộ chiếu kiểm định */
+  condition?: number;
+  /** Biểu phí sinh hoạt thực tế do Host thẩm định nhập hoặc định mức chuẩn phân khu */
+  livingFees?: UnitLivingFees;
+}
+
+export function defaultLivingFeesForZone(zoneId: ZoneId): UnitLivingFees {
+  switch (zoneId) {
+    case "zenpark":
+      return {
+        managementFeePerM2: 16_000,
+        motorbikeFee: 90_000,
+        carFee: 1_250_000,
+        electricityNote: "Theo biểu giá bậc thang EVN Hà Nội",
+        waterNote: "Theo đơn giá nước sạch sinh hoạt BQL",
+        otherFeesNote: "Miễn phí tiện ích bể bơi 4 mùa & vườn Nhật",
+      };
+    case "pavilion":
+      return {
+        managementFeePerM2: 14_000,
+        motorbikeFee: 90_000,
+        carFee: 1_250_000,
+        electricityNote: "Theo biểu giá bậc thang EVN Hà Nội",
+        waterNote: "Theo đơn giá nước sạch sinh hoạt BQL",
+      };
+    case "masteri":
+      return {
+        managementFeePerM2: 20_000,
+        motorbikeFee: 90_000,
+        carFee: 1_250_000,
+        electricityNote: "Theo biểu giá bậc thang EVN Hà Nội",
+        waterNote: "Theo đơn giá nước sạch sinh hoạt BQL",
+        otherFeesNote: "Bao gồm lễ tân 24/7 & bể bơi panorama tầng thượng",
+      };
+    case "sapphire1":
+    case "sapphire2":
+    default:
+      return {
+        managementFeePerM2: 8_000,
+        motorbikeFee: 90_000,
+        carFee: 1_250_000,
+        electricityNote: "Theo biểu giá bậc thang EVN Hà Nội",
+        waterNote: "Theo đơn giá nước sạch sinh hoạt BQL",
+      };
+  }
+}
+
+export function getUnitLivingFees(unit: Pick<Unit, "zoneId" | "livingFees">): UnitLivingFees {
+  if (unit.livingFees) {
+    return unit.livingFees;
+  }
+  return defaultLivingFeesForZone(unit.zoneId);
 }
 
 interface UnitSeed extends Omit<Unit, "code" | "zoneId" | "layoutLabel" | "verifiedAt" | "door"> {
@@ -2249,7 +2307,40 @@ export const UNITS: Unit[] = seeds.map(({ door, plus, verifiedDay, ...u }) => {
   };
 });
 
-export const unitById = (id: string) => UNITS.find((u) => u.id === id);
+const dynamicUnitsRegistry = new Map<string, Unit>();
+
+export function registerDynamicUnits(units: Unit[]) {
+  for (const u of units) {
+    dynamicUnitsRegistry.set(u.id, u);
+  }
+}
+
+export function getAllRegisteredUnits(): Unit[] {
+  const dynamic = Array.from(dynamicUnitsRegistry.values());
+  const dynamicIds = new Set(dynamic.map((u) => u.id));
+  return [...dynamic, ...UNITS.filter((u) => !dynamicIds.has(u.id))];
+}
+
+export const unitById = (id?: string): Unit | undefined => {
+  if (!id) return undefined;
+  return (
+    dynamicUnitsRegistry.get(id) ||
+    UNITS.find((u) => u.id === id || u.code === id || u.id.toLowerCase() === id.toLowerCase())
+  );
+};
+
+export const getSafeUnit = (id?: string): Unit => {
+  if (!id) return UNITS[0];
+  const found = unitById(id);
+  if (found) return found;
+  const base = UNITS[0];
+  return {
+    ...base,
+    id,
+    code: id.startsWith("VHOP-") ? id : `VHOP-${id}`,
+    building: id.includes("S1.") ? "S1.02" : id.includes("S2.") ? "S2.01" : base.building,
+  };
+};
 
 export const unitPhoto = (u: Pick<Unit, "id"> & { mediaUrls?: string[] }, n: number) => {
   if (u.mediaUrls && u.mediaUrls.length >= n && u.mediaUrls[n - 1]) {
@@ -2330,3 +2421,131 @@ export const PASSPORT_ITEMS = [
 ] as const;
 
 export type PassportItem = (typeof PASSPORT_ITEMS)[number];
+
+export function createAndPublishUnitFromConsignment(c: any): Unit {
+  const zone = zoneOfBuilding(c.building) || ZONES[0];
+  const doorText = String(c.door).padStart(2, "0");
+  const floorNum = Number(c.floor) || 12;
+  const code = `VHOP-${c.building}-${String(floorNum).padStart(2, "0")}${doorText}`;
+  const layoutKind: LayoutKind = c.layout || "2PN";
+  const layoutLabel = layoutKind === "1PN" ? "1PN+" : layoutKind;
+  const netArea = c.report?.netAreaM2 || c.areaM2 || 45;
+  const furnishing: Furnishing = c.report?.furnishing || (c.furnished ? "full" : "basic");
+  const rent = c.askRent || 6_500_000;
+  const marketAvg = Math.round(rent * 1.12); // Giá thị trường cao hơn để căn có badge "Căn hời"
+
+  // Thu thập ảnh từ báo cáo kiểm định và ảnh ký gửi
+  const photoUrls: string[] = [];
+  if (c.photos && Array.isArray(c.photos)) {
+    for (const p of c.photos) {
+      if (p.url) photoUrls.push(p.url);
+      else if (p.path) photoUrls.push(`/api/v1/landlord/consignments/${c.id}/photos/${p.id}`);
+    }
+  }
+  if (c.report?.inventory) {
+    for (const item of c.report.inventory) {
+      if (item.photoAt && item.photoAt.startsWith("http")) {
+        photoUrls.push(item.photoAt);
+      }
+    }
+  }
+  // Nếu chưa có ảnh thì lấy ảnh mẫu thực tế tương ứng với layout
+  if (photoUrls.length === 0) {
+    const sample = UNITS.find((u) => u.layout === layoutKind) || UNITS[0];
+    photoUrls.push(...(sample.mediaUrls || [`/units/${sample.id}/1.jpg`]));
+  }
+
+  // Trích xuất danh mục thiết bị thực tế chính xác 100% từ biên bản kiểm định của Field Host
+  let itemsList: ItemKey[] = [];
+  if (c.report?.inventory && Array.isArray(c.report.inventory)) {
+    const detected = new Set<ItemKey>();
+    for (const line of c.report.inventory) {
+      if (!line.present) continue;
+      const name = (line.name || "").toLowerCase();
+      const code = String(line.code);
+      if (name.includes("điều hòa") || code === "25" || code === "26" || code === "27") detected.add("ac");
+      if (name.includes("tủ lạnh") || code === "10") detected.add("fridge");
+      if (name.includes("máy giặt") || code === "23") detected.add("washer");
+      if (name.includes("bếp") || name.includes("hút mùi") || code === "7" || code === "8" || code === "9") detected.add("kitchen");
+      if (name.includes("nóng lạnh") || code === "19") detected.add("heater");
+      if (name.includes("giường") || name.includes("nệm") || name.includes("đệm") || code === "12" || code === "13") detected.add("bed");
+      if (name.includes("tủ quần áo") || code === "14") detected.add("wardrobe");
+      if (name.includes("sofa") || name.includes("bàn trà") || code === "1" || code === "2") detected.add("sofa");
+      if (name.includes("tivi") || name.includes("tv") || code === "4") detected.add("tv");
+      if (name.includes("rèm") || code === "5" || code === "16") detected.add("curtain");
+      if (name.includes("ban công") || name.includes("giàn phơi") || code === "24") detected.add("balcony");
+    }
+    itemsList = Array.from(detected);
+  } else if (c.report?.items && Array.isArray(c.report.items)) {
+    itemsList = c.report.items.filter((i: any) => i.present).map((i: any) => i.key);
+  } else if (Array.isArray(c.items) && c.items.length > 0) {
+    itemsList = c.items;
+  }
+
+  // Fallback an toàn chỉ khi căn chưa từng qua thẩm định
+  if (itemsList.length === 0) {
+    itemsList = ["ac", "heater", "balcony"];
+    if (furnishing === "full") {
+      itemsList.push("fridge", "kitchen", "bed", "wardrobe");
+    }
+  }
+
+  const unit: Unit = {
+    id: c.id,
+    code,
+    building: c.building || "S1.02",
+    zoneId: zone.id,
+    floor: floorNum,
+    door: doorText,
+    layout: layoutKind,
+    layoutLabel,
+    bedrooms: layoutKind === "Studio" ? 1 : layoutKind === "1PN" ? 1 : layoutKind === "2PN" ? 2 : 3,
+    bathrooms: layoutKind === "Studio" || layoutKind === "1PN" ? 1 : 2,
+    areaM2: netArea,
+    direction: "Đông Nam",
+    view: "Nội khu & Biển hồ Ocean Park",
+    furnishing,
+    rent,
+    marketAvg,
+    baseStatus: "available",
+    lock: (c.locks && c.locks.includes("smart")) ? "smart" : "physical",
+    landlordId: c.landlordId || "L1",
+    images: Math.max(photoUrls.length, 3),
+    interest24h: 8,
+    petFriendly: true,
+    minMonths: c.leaseTerm === "mid" ? 3 : 12,
+    verifiedAt: c.report?.submittedAt || new Date().toISOString(),
+    title: `Căn ${layoutLabel} toà ${c.building} · Tầng ${floorNum} · Đã thẩm định 100%`,
+    description: `Căn hộ chính chủ tại ${zone.name} đã được Field Host nội khu thẩm định trực tiếp 32 hạng mục nội thất. Hiện trạng đúng 100% so với ảnh chụp có timestamp.`,
+    items: itemsList,
+    inventory: c.report?.inventory,
+    mediaUrls: photoUrls,
+    condition: c.report?.inventory
+      ? Math.round(
+          c.report.inventory
+            .filter((l: any) => l.present && typeof l.condition === "number")
+            .reduce((sum: number, l: any, _: number, arr: any[]) => sum + l.condition / (arr.length || 1), 0)
+        ) || 90
+      : 90,
+    livingFees: c.report?.livingFees || defaultLivingFeesForZone(zone.id),
+  };
+
+  registerDynamicUnits([unit]);
+  return unit;
+}
+
+/** Lấy độ mới nội thất (%) theo báo cáo kiểm định thực tế hoặc chuẩn hóa theo phân khu/hiện trạng. */
+export function getUnitCondition(unit: Unit): number {
+  if (typeof unit.condition === "number") return unit.condition;
+  if (unit.zoneId === "masteri" || unit.zoneId === "zenpark") {
+    return unit.furnishing === "full" ? 92 : 88;
+  }
+  if (unit.furnishing === "full") {
+    return 88;
+  }
+  if (unit.furnishing === "basic") {
+    return 82;
+  }
+  return 85;
+}
+

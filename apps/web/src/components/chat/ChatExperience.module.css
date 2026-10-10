@@ -69,104 +69,92 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 118px;
+  margin-top: 54px;
 }
 
-/* Linh vật tuần tra quanh khung chat tổng */
-.wanderingMascot {
+/* Linh vật đứng cố định tự nhiên ở góc trên bên phải khung chat, không đè lên chữ */
+.fixedHeroMascot {
   position: absolute;
-  z-index: 25;
+  top: -64px;
+  right: 20px;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: center;
   pointer-events: auto;
-  transition: top 1.35s cubic-bezier(0.34, 1.25, 0.64, 1),
-              left 1.35s cubic-bezier(0.34, 1.25, 0.64, 1),
-              transform 1.35s cubic-bezier(0.34, 1.25, 0.64, 1),
-              filter 0.4s ease;
-  will-change: top, left, transform;
+  filter: drop-shadow(0 12px 24px rgba(10, 61, 74, 0.16));
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* 1. Vị trí trung tâm trên đỉnh khung chat */
-.pos_top_center {
-  top: -64px;
-  left: 50%;
-  transform: translateX(-50%) rotate(0deg);
+.fixedHeroMascot:hover {
+  transform: translateY(-4px) scale(1.04);
 }
 
-/* 2. Vị trí góc trên bên phải khung chat */
-.pos_top_right {
-  top: -56px;
-  left: calc(100% - 140px);
-  transform: rotate(5deg);
+@media (max-width: 640px) {
+  .fixedHeroMascot {
+    top: -56px;
+    right: 10px;
+    transform: scale(0.85);
+    transform-origin: bottom right;
+  }
 }
 
-/* 3. Vị trí mép ngoài sườn phải khung chat */
-.pos_side_right {
-  top: 130px;
-  left: calc(100% - 32px);
-  transform: rotate(-6deg);
+/* Băng chuyền hiển thị riêng bên dưới khung chat (Phương án 1) */
+.showcaseSection {
+  width: 100%;
+  max-width: 900px;
+  margin-top: 18px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 24px;
+  padding: 16px 20px;
+  box-shadow: 0 12px 36px -8px rgba(10, 61, 74, 0.1);
 }
 
-/* 4. Vị trí góc trên bên trái khung chat */
-.pos_top_left {
-  top: -56px;
-  left: 20px;
-  transform: rotate(-5deg);
+.showcaseHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 0 2px;
 }
 
-/* 5. Vị trí mép ngoài sườn trái khung chat */
-.pos_side_left {
-  top: 130px;
-  left: -58px;
-  transform: rotate(6deg);
+.showcaseTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0a3d4a;
+  letter-spacing: -0.01em;
 }
 
-/* Hiệu ứng hào quang lướt bay khi chuyển góc tuần tra */
-.cruising {
-  filter: drop-shadow(0 14px 28px rgba(14, 165, 233, 0.45));
+.showcaseTitle svg {
+  color: #d97706;
 }
 
-.mascotPromptBadge {
+.showcaseAllBtn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin-top: 4px;
-  padding: 4px 13px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(14, 165, 233, 0.32);
-  box-shadow: 0 6px 16px -3px rgba(14, 165, 233, 0.18);
+  gap: 4px;
+  background: rgba(10, 61, 74, 0.05);
+  border: 1px solid rgba(10, 61, 74, 0.12);
+  color: #0a3d4a;
   font-size: 11.5px;
-  font-weight: 600;
-  color: #0369a1;
+  font-weight: 700;
   cursor: pointer;
-  white-space: nowrap;
-  user-select: none;
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  padding: 5px 12px;
+  border-radius: 999px;
+  transition: all 0.18s ease;
 }
 
-.mascotPromptBadge:hover {
-  background: #ffffff;
-  border-color: #0ea5e9;
-  transform: translateY(-2px) scale(1.04);
-  box-shadow: 0 8px 22px -3px rgba(14, 165, 233, 0.28);
-}
-
-/* Giới hạn an toàn trên thiết bị màn hình nhỏ (< 960px) để không tràn mép màn hình */
-@media (max-width: 960px) {
-  .pos_side_right {
-    top: -76px;
-    left: calc(100% - 120px);
-    transform: rotate(3deg);
-  }
-  .pos_side_left {
-    top: -76px;
-    left: 15px;
-    transform: rotate(-3deg);
-  }
+.showcaseAllBtn:hover {
+  background: #0a3d4a;
+  color: #ffffff;
+  border-color: #0a3d4a;
 }
 
 /* Khung chat là trọng tâm của hero: bóng nổi rõ hơn phần còn lại của trang. */

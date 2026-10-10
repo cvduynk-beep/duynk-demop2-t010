@@ -4,7 +4,7 @@ import { emptyCriteria, interpret, parseQuery, searchUnits } from "@/lib/mock/ma
 import { bookableDays, upcomingSlots, MIN_LEAD_MS, BOOKING_WINDOW_DAYS } from "@/lib/mock/slots";
 import { seedState } from "@/lib/mock/seed";
 import { similarUnits, slotTaken, unitStatus } from "@/lib/mock/selectors";
-import { UNITS, unitById } from "@/lib/mock/units";
+import { UNITS, unitById, getUnitCondition } from "@/lib/mock/units";
 import { isValidVnPhone, normalizePhone, vndShort } from "@/lib/mock/format";
 
 const available = (u: (typeof UNITS)[number]) => u.baseStatus;
@@ -74,6 +74,38 @@ describe("searchUnits", () => {
     expect(interpret("căn 1 phòng", emptyCriteria(), false, available).kind).toBe("search");
     expect(interpret("rổ hàng", emptyCriteria(), false, available).kind).toBe("search");
   });
+  it("khi khách hỏi câu có yếu tố giá: gợi ý căn giá thấp nhất lên đầu tiên rồi dần đến các căn khác", () => {
+    const r = interpret("tìm căn giá rẻ nhất", emptyCriteria(), false, available);
+    expect(r.kind).toBe("search");
+    if (r.kind === "search") {
+      expect(r.criteria.sortByPrice).toBe(true);
+      expect(r.results.length).toBeGreaterThan(1);
+      const firstPrice = r.results[0].cost.total;
+      const secondPrice = r.results[1].cost.total;
+      expect(firstPrice).toBeLessThanOrEqual(secondPrice);
+      expect(r.reply).toContain("giá All-in thấp nhất");
+    }
+  });
+  it("khi khách hỏi cần nội thất mới: ưu tiên tư vấn căn có tình trạng nội thất từ 85% trở lên", () => {
+    const r = interpret("cần căn nội thất mới tinh", emptyCriteria(), false, available);
+    expect(r.kind).toBe("search");
+    if (r.kind === "search") {
+      expect(r.criteria.preferNewFurnishing).toBe(true);
+      expect(r.results.length).toBeGreaterThan(0);
+      const topCond = getUnitCondition(r.results[0].unit);
+      expect(topCond).toBeGreaterThanOrEqual(85);
+      expect(r.reply).toContain("85% trở lên");
+    }
+  });
+  it("khi khách hỏi gần vị trí cụ thể (ví dụ gần biển hồ): ưu tiên tư vấn căn gần vị trí đó", () => {
+    const r = interpret("tìm căn gần biển hồ", emptyCriteria(), false, available);
+    expect(r.kind).toBe("search");
+    if (r.kind === "search") {
+      expect(r.criteria.nearLocation).toBe("Biển hồ Ocean Park");
+      expect(r.results.length).toBeGreaterThan(0);
+      expect(r.reply).toContain("Biển hồ Ocean Park");
+    }
+  });
 });
 
 describe("lịch xem & seed", () => {
@@ -101,7 +133,7 @@ describe("lịch xem & seed", () => {
     const s = seedState(seedTime);
     expect(unitStatus(s, unitById("s2-16-2216")!, seedTime)).toBe("holding");
     expect(unitStatus(s, unitById("s1-03-1512")!, seedTime)).toBe("rented");
-    const b = s.bookings.find((x) => x.id === "bk-101")!;
+    const b = s.bookings.find((x) => x.id === "bk-104")!;
     expect(slotTaken(s, b.hostId, b.slot, b.id)).toBe(false);
   });
   it("gợi ý căn tương đương cùng layout, còn trống", () => {
@@ -270,4 +302,19 @@ describe("Calendar Date Picker helpers", () => {
     expect(formatMonthTitle(2026, 9)).toBe("Tháng 10, 2026");
     expect(formatSelectedDateLong(new Date("2026-09-27T00:00:00+07:00"), now)).toContain("Hôm nay, 27/09/2026");
   });
+
+  it("Xem tất cả căn: searchUnits với criteria trống trả về 100% căn hộ available", () => {
+    const s = seedState(Date.now());
+    const statusOf = (u: any) => unitStatus(s, u);
+    const availableUnits = UNITS.filter((u) => statusOf(u) === "available");
+    const allMatches = searchUnits(
+      { layouts: [], zones: [], buildings: [], items: [], household: { persons: 1, motorbikes: 1, cars: 0 } },
+      statusOf,
+      UNITS
+    );
+    expect(allMatches.length).toBe(availableUnits.length);
+    expect(allMatches.length).toBeGreaterThanOrEqual(10);
+  });
 });
+
+

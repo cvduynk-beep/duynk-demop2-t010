@@ -433,3 +433,73 @@ export function passportSummary(
     };
   });
 }
+
+/**
+ * Ánh xạ danh sách trang thiết bị chủ nhà kê khai (preInventory/items)
+ * sang tập hợp mã code trong 32 danh mục chuẩn (INVENTORY_CATALOG).
+ */
+export const LANDLORD_ITEM_TO_CATALOG_CODES: Record<string, string[]> = {
+  sofa: ["1", "2", "3"],
+  tv: ["4", "31"],
+  curtains: ["5", "20"],
+  curtain: ["5", "20"],
+  kitchen: ["6", "7", "9", "10", "11"],
+  fridge: ["8"],
+  dining: ["12"],
+  bed: ["13", "14"],
+  wardrobe: ["15"],
+  heater: ["17"],
+  washer: ["19"],
+  ac: ["21", "22", "23", "24"],
+  balcony: ["20"],
+};
+
+export const FIXED_DEVELOPER_CODES: string[] = [];
+
+/**
+ * Phân giải các mã danh mục trong 32 dòng được tự động đánh dấu present dựa trên khai báo của chủ nhà.
+ * NGUYÊN TẮC BẤT BIẾN: Chỉ tự động đánh dấu các món mà chủ nhà THỰC SỰ CÓ KÊ KHAI.
+ * Tuyệt đối không tự động tick bất kỳ món nào mà chủ nhà không khai báo, tránh ép Sale phải chụp ảnh những món không tồn tại.
+ */
+export function resolveInventoryCodesFromLandlord(
+  items?: string[] | null,
+  furnished?: boolean,
+  note?: string | null
+): { codes: Set<string>; declaredKeys: Set<string>; landlordCodes: Set<string> } {
+  const declaredKeys = new Set<string>();
+
+  // 1. Đọc từ mảng items
+  if (Array.isArray(items)) {
+    for (const it of items) declaredKeys.add(it.toLowerCase());
+  }
+
+  // 2. Fallback trích xuất từ note nếu mảng items chưa có (VD: "Nội thất: ac, fridge, washer...")
+  if (note && note.includes("Nội thất:")) {
+    const match = note.match(/Nội thất:\s*([^|]+)/i);
+    if (match && match[1]) {
+      const parts = match[1].split(",").map((s) => s.trim().toLowerCase());
+      for (const p of parts) {
+        if (p) declaredKeys.add(p);
+      }
+    }
+  }
+
+  const codes = new Set<string>();
+  const landlordCodes = new Set<string>();
+
+  // CHỈ tự động tick các món khi chủ nhà CÓ THỰC SỰ KÊ KHAI
+  if (declaredKeys.size > 0) {
+    for (const key of declaredKeys) {
+      const mapped = LANDLORD_ITEM_TO_CATALOG_CODES[key];
+      if (mapped) {
+        for (const code of mapped) {
+          codes.add(code);
+          landlordCodes.add(code);
+        }
+      }
+    }
+  }
+
+  return { codes, declaredKeys, landlordCodes };
+}
+

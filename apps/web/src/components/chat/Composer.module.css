@@ -41,6 +41,19 @@
   color: var(--ink-3);
 }
 
+.charCounter {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b9ea3;
+  margin-right: 4px;
+  align-self: center;
+  user-select: none;
+}
+
+.charCounterWarning {
+  color: #d97706;
+}
+
 /* Nút gửi dùng màu chính (lagoon) — hổ phách chỉ dành cho tín hiệu như badge "Căn hời" (SPEC-P01 §0/§4). */
 .send {
   display: grid;

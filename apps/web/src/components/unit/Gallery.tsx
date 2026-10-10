@@ -19,7 +19,15 @@ export function Gallery({ unit }: { unit: Unit }) {
       <div className={`${styles.grid} ${styles[`n${shown}`]}`}>
         {idx.slice(0, shown).map((i) => (
           <button key={i} type="button" className={styles.cell} onClick={() => setOpen(i)} aria-label={`Xem ảnh ${i} trên ${n}`}>
-            <VerifiedPhoto unit={unit} index={i} sizes={i === 1 ? "(max-width: 900px) 100vw, 640px" : "(max-width: 900px) 50vw, 320px"} priority={i === 1} stamp={i === 1 ? "full" : "none"} className={styles.fill} />
+            <VerifiedPhoto
+              unit={unit}
+              index={i}
+              sizes={i === 1 ? "(max-width: 900px) 100vw, 640px" : "(max-width: 900px) 50vw, 320px"}
+              priority={i === 1}
+              stamp={i === 1 ? "full" : "none"}
+              className={styles.fill}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+            />
           </button>
         ))}
         <button type="button" className={styles.all} onClick={() => setOpen(1)}>
@@ -30,7 +38,15 @@ export function Gallery({ unit }: { unit: Unit }) {
       <div className={styles.rail} aria-label="Ảnh căn hộ">
         {idx.map((i) => (
           <button key={i} type="button" className={styles.slide} onClick={() => setOpen(i)} aria-label={`Xem ảnh ${i} trên ${n}`}>
-            <VerifiedPhoto unit={unit} index={i} sizes="100vw" priority={i === 1} stamp={i === 1 ? "full" : "none"} className={styles.fill} />
+            <VerifiedPhoto
+              unit={unit}
+              index={i}
+              sizes="100vw"
+              priority={i === 1}
+              stamp={i === 1 ? "full" : "none"}
+              className={styles.fill}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+            />
             <span className={styles.count}>
               {i}/{n}
             </span>

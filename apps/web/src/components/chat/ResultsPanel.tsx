@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Compass, ExternalLink, LayoutGrid, Map, SearchX, Sparkles, X } from "lucide-react";
+import { ExternalLink, LayoutGrid, Map, SearchX, Sparkles, X } from "lucide-react";
 import { Facade } from "@/components/brand/Facade";
 import { UnitCard } from "@/components/unit/UnitCard";
 import { OceanParkInteractiveMap } from "@/components/map/OceanParkInteractiveMap";
@@ -53,7 +53,9 @@ export function ResultsPanel({ results, criteria, onCriteria, state, totalOpen }
       <header className={styles.head}>
         <div className={styles.headTop}>
           <div>
-            <h2 className={styles.title}>{results.length ? `${results.length} căn khớp yêu cầu` : "Chưa có căn khớp"}</h2>
+            <h2 className={styles.title}>
+              {results.length ? (chips.length === 0 ? `Tất cả ${results.length} căn hộ đang mở` : `${results.length} căn khớp yêu cầu`) : "Chưa có căn khớp"}
+            </h2>
             <p className="muted small">
               Đã quét {totalOpen} căn đang mở · tính cho {hh.persons} người, {hh.motorbikes} xe máy{hh.cars ? `, ${hh.cars} ô tô` : ""}
             </p>
@@ -160,26 +162,8 @@ export function ResultsPanel({ results, criteria, onCriteria, state, totalOpen }
           </div>
         </div>
       ) : (
-        /* ─── Chế độ hiển thị Danh sách kèm Banner bản đồ ─── */
+        /* ─── Chế độ hiển thị Danh sách ─── */
         <>
-          <button
-            type="button"
-            className={styles.mapBannerBtn}
-            onClick={() => setViewMode("map")}
-            aria-label="Xem trên bản đồ Ocean Park 1"
-          >
-            <div className={styles.mapBannerIcon}>
-              <Compass size={22} />
-            </div>
-            <div className={styles.mapBannerText}>
-              <strong>Khám phá {results.length} căn trên Bản đồ tương tác Ocean Park 1</strong>
-              <span>Xem vị trí biển hồ nước mặn, phân khu Sapphire, Zenpark, Pavilion kèm ghim giá thực tế</span>
-            </div>
-            <span className={styles.mapBannerAction}>
-              Mở bản đồ <ArrowRight size={14} />
-            </span>
-          </button>
-
           {sort === "best" && (
             <section aria-label="AI chọn cho bạn">
               <h3 className={styles.section}>

@@ -1004,3 +1004,39 @@
   to { transform: scale(1); opacity: 1; }
 }
 
+.landlordSyncBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: #166534;
+  margin-top: 10px;
+}
+
+.landlordDeclaredBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #059669;
+  background: #ecfdf5;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 6px;
+}
+
+.landlordUndeclaredBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  color: #94a3b8;
+  margin-left: 6px;
+}
+
+

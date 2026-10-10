@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Camera, Check, ChevronDown, ChevronUp, Clock, Maximize2, Plus, Trash2 } from "lucide-react";
+import { Camera, Check, ChevronDown, ChevronUp, Clock, ExternalLink, Maximize2, Plus, Sparkles, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { KeyValue } from "@/components/ui/KeyValue";
 import { toast } from "@/components/ui/Toast";
 import { ConsignTimeline } from "@/components/consign/ConsignTimeline";
 import { InspectionReportView } from "@/components/consign/InspectionReportView";
-import { hostAcceptInspection, submitInspection } from "@/lib/mock/actions";
+import { hostAcceptInspection, submitInspection, approveConsignment } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
 import { fmtTime, vnd } from "@/lib/mock/format";
 import { compressInspectionPhoto } from "@/lib/host/inspectionPhotos";
@@ -36,14 +37,19 @@ import {
   MAX_EXTRA_LINES,
   blankInventory,
   passportSummary,
+  resolveInventoryCodesFromLandlord,
 } from "@/lib/mock/inventory";
 import {
   landlordById,
   PASSPORT_ITEMS,
+  createAndPublishUnitFromConsignment,
+  defaultLivingFeesForZone,
+  zoneOfBuilding,
   type Furnishing,
   type LayoutKind,
   type PassportItem,
 } from "@/lib/mock/units";
+import { publishUnitToCatalog } from "@/lib/property/useUnits";
 import { useNow } from "@/lib/useNow";
 import styles from "@/components/consign/Consign.module.css";
 
@@ -78,14 +84,10 @@ export function InspectionForm({ id }: { id: string }) {
   const [dbConsignment, setDbConsignment] = useState<Consignment | null>(null);
   const [loadingDb, setLoadingDb] = useState<boolean>(() => !existingConsignment);
 
-  const c = existingConsignment || dbConsignment;
+  const c = dbConsignment || existingConsignment;
 
-  // Tự động tải từ Backend DB nếu căn hộ chưa có trong mock state
+  // Tự động tải từ Backend DB để đồng bộ trạng thái thực tế
   useEffect(() => {
-    if (existingConsignment) {
-      setLoadingDb(false);
-      return;
-    }
     let unmounted = false;
     async function loadConsignmentFromDb() {
       try {
@@ -97,11 +99,12 @@ export function InspectionForm({ id }: { id: string }) {
           return;
         }
         const data = await res.json();
-        if (!Array.isArray(data)) {
+        const list = Array.isArray(data) ? data : data?.data;
+        if (!Array.isArray(list)) {
           if (!unmounted) setLoadingDb(false);
           return;
         }
-        const item = data.find(
+        const item = list.find(
           (x: any) =>
             x.consignmentId === id ||
             x.unitId === id ||
@@ -134,9 +137,30 @@ export function InspectionForm({ id }: { id: string }) {
             inspectDueAt: new Date(
               new Date(item.createdAt || Date.now()).getTime() + 48 * 3600000,
             ).toISOString(),
-            furnishing: "full",
+            furnishing: item.report?.furnishing || "full",
             lock: "smart",
             items: [],
+            note: item.note || undefined,
+            report: item.report
+              ? {
+                  furnishing: item.report.furnishing || "full",
+                  netAreaM2: item.report.netAreaM2 || item.carpetAreaM2 || 45,
+                  inventory: Array.isArray(item.report.inventory) ? item.report.inventory : [],
+                  declared: Array.isArray(item.report.declared)
+                    ? item.report.declared
+                    : [
+                        { field: "identity", ok: true },
+                        { field: "layout", ok: true },
+                        { field: "areaM2", ok: true },
+                        { field: "furnishing", ok: true },
+                        { field: "lock", ok: true },
+                      ],
+                  recommendation: item.report.recommendation || "approve",
+                  note: item.report.note || "",
+                  submittedAt: item.report.submittedAt || new Date().toISOString(),
+                  hostId: item.report.hostId || item.hostId || "host-s2",
+                }
+              : undefined,
           };
           setDbConsignment(mapped);
           setMockState((s) => {
@@ -162,7 +186,7 @@ export function InspectionForm({ id }: { id: string }) {
     return () => {
       unmounted = true;
     };
-  }, [id, existingConsignment]);
+  }, [id]);
 
   const currentHostId = session.user?.pendingHostId || DEFAULT_HOST_ID;
   const isInspector = hostRoles(state, currentHostId).includes("inspector");
@@ -186,29 +210,23 @@ export function InspectionForm({ id }: { id: string }) {
     c ? (c.furnished ? "full" : "empty") : "full",
   );
 
-  // ─── 3. Bảng kê 32 dòng catalog ─────────────────────────────────────────
+  // ─── 3. Bảng kê 32 dòng catalog — Tự động liên kết từ khai báo chủ nhà ──────
+  const { codes: resolvedCodes, landlordCodes, declaredKeys } = useMemo(() => {
+    return resolveInventoryCodesFromLandlord(c?.items, c?.furnished, c?.note);
+  }, [c?.items, c?.furnished, c?.note]);
+
   const [inventory, setInventory] = useState<InventoryLine[]>(() => {
     if (c?.report?.inventory && c.report.inventory.length >= 32) {
       return c.report.inventory.slice(0, 32);
     }
     const blank = blankInventory();
     if (!c) return blank;
-    return blank.map((line) => {
-      const codeNum = Number(line.code);
-      let isPresent = false;
-      // Theo SPEC-P03: Dòng 25–29 luôn tick sẵn
-      if (codeNum >= 25 && codeNum <= 29) {
-        isPresent = true;
-      } else if (c.furnished && codeNum >= 1 && codeNum <= 27) {
-        // Nếu furnished thì 1–27 tick sẵn
-        isPresent = true;
-      }
-      return {
-        ...line,
-        present: isPresent,
-        qty: 1,
-      };
-    });
+    const { codes } = resolveInventoryCodesFromLandlord(c.items, c.furnished, c.note);
+    return blank.map((line) => ({
+      ...line,
+      present: codes.has(line.code),
+      qty: 1,
+    }));
   });
 
   // ─── 4. Hạng mục thêm (X1..X10) ─────────────────────────────────────────
@@ -239,7 +257,22 @@ export function InspectionForm({ id }: { id: string }) {
     VIII: false,
   });
 
-  // ─── 7. Đề xuất & Ghi chú ────────────────────────────────────────────────
+  // ─── 7. Biểu phí sinh hoạt thực tế do Host & Chủ nhà xác minh ────────────
+  const defaultZoneFees = defaultLivingFeesForZone(c?.building ? zoneOfBuilding(c.building).id : "sapphire1");
+  const [mgmtFeePerM2, setMgmtFeePerM2] = useState<number>(
+    c?.report?.livingFees?.managementFeePerM2 ?? defaultZoneFees.managementFeePerM2
+  );
+  const [motorbikeFee, setMotorbikeFee] = useState<number>(
+    c?.report?.livingFees?.motorbikeFee ?? defaultZoneFees.motorbikeFee
+  );
+  const [carFee, setCarFee] = useState<number>(
+    c?.report?.livingFees?.carFee ?? defaultZoneFees.carFee
+  );
+  const [otherFeesNote, setOtherFeesNote] = useState<string>(
+    c?.report?.livingFees?.otherFeesNote ?? ""
+  );
+
+  // ─── 8. Đề xuất & Ghi chú ────────────────────────────────────────────────
   const [recommendation, setRecommendation] = useState<"approve" | "reject">("approve");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -290,6 +323,15 @@ export function InspectionForm({ id }: { id: string }) {
       setFurnishing((prev) => (c.furnished ? prev : "empty"));
       if (c.report?.inventory && c.report.inventory.length >= 32) {
         setInventory(c.report.inventory.slice(0, 32));
+      } else {
+        const { codes } = resolveInventoryCodesFromLandlord(c.items, c.furnished, c.note);
+        setInventory((prev) =>
+          prev.map((line) => ({
+            ...line,
+            present: codes.has(line.code),
+            qty: 1,
+          }))
+        );
       }
     }
   }, [c]);
@@ -614,6 +656,15 @@ export function InspectionForm({ id }: { id: string }) {
       furnishing,
       recommendation,
       note: finalNote || undefined,
+      livingFees: {
+        managementFeePerM2: Number(mgmtFeePerM2) || defaultZoneFees.managementFeePerM2,
+        motorbikeFee: Number(motorbikeFee) || defaultZoneFees.motorbikeFee,
+        carFee: Number(carFee) || defaultZoneFees.carFee,
+        electricityNote: "Theo biểu giá bậc thang EVN Hà Nội",
+        waterNote: "Theo đơn giá nước sạch sinh hoạt BQL",
+        otherFeesNote: otherFeesNote.trim() || undefined,
+        verifiedByHost: true,
+      },
     };
 
     const res = submitInspection(c.id, activeHostId, draft);
@@ -631,31 +682,61 @@ export function InspectionForm({ id }: { id: string }) {
             note: draft.note,
             netAreaM2: draft.netAreaM2,
             furnishing: draft.furnishing,
+            inventory: draft.inventory,
+            declared: draft.declared,
+            hostId: activeHostId,
           }),
         }).catch(() => {});
       } catch {
-        // ignore
+        // ignore fetch error
       }
-      setDbConsignment((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: "reviewing",
-              report: {
-                ...draft,
-                declared: draft.declared,
-                inventory: allLines,
-                netAreaM2: netArea,
-                furnishing,
-                recommendation,
-                note: finalNote || undefined,
-                hostId: activeHostId,
-                submittedAt: new Date().toISOString(),
-              },
-            }
-          : null,
-      );
-      toast("Đã nộp báo cáo thẩm định. Admin sẽ chốt ký gửi.", "success");
+
+      const isApproved = draft.recommendation === "approve";
+      if (isApproved) {
+        try {
+          approveConsignment(c.id, `Field Host ${activeHostId}`);
+        } catch {
+          // fallback
+        }
+      }
+
+      const fullReport: InspectionReport = {
+        ...draft,
+        declared: draft.declared,
+        inventory: allLines,
+        netAreaM2: netArea,
+        furnishing,
+        recommendation,
+        note: finalNote || undefined,
+        hostId: activeHostId,
+        submittedAt: new Date().toISOString(),
+      };
+
+      const updatedC: Consignment = {
+        ...c,
+        status: isApproved ? "approved" : "reviewing",
+        report: fullReport,
+        decidedAt: isApproved ? fullReport.submittedAt : undefined,
+        decidedBy: isApproved ? `Field Host ${activeHostId}` : undefined,
+      };
+
+      // Đẩy trực tiếp căn hộ lên trang chủ để khách thuê có thể xem căn ngay lập tức
+      if (isApproved) {
+        try {
+          const published = createAndPublishUnitFromConsignment(updatedC);
+          publishUnitToCatalog(published);
+        } catch {
+          // fallback
+        }
+      }
+
+      setDbConsignment((prev) => (prev ? updatedC : null));
+
+      if (isApproved) {
+        toast("Thẩm định thành công! Căn hộ đã được niêm yết trực tiếp lên trang chủ cho khách thuê.", "success");
+      } else {
+        toast("Đã nộp báo cáo thẩm định. Admin sẽ rà soát hồ sơ.", "info");
+      }
     }
   };
 
@@ -719,6 +800,57 @@ export function InspectionForm({ id }: { id: string }) {
       )}
 
       {/* Case 2: reviewing | approved | rejected -> Xem báo cáo chỉ đọc */}
+      {c.status === "approved" && (
+        <div
+          style={{
+            background: "linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.08) 100%)",
+            border: "1px solid var(--kelp-500, #10b981)",
+            borderRadius: 12,
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                background: "var(--kelp-500, #10b981)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Check size={20} strokeWidth={2.5} />
+            </div>
+            <div>
+              <b style={{ color: "var(--kelp-800, #065f46)", fontSize: 15 }}>
+                Căn hộ đã được niêm yết trực tiếp lên Trang chủ VinStay AI
+              </b>
+              <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--ink-2)" }}>
+                Hồ sơ thẩm định đạt chuẩn 100%. Khách thuê hiện đã có thể xem chi tiết, bảng All-in Cost và đặt lịch xem phòng ngay.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/units/${c.id}`}
+            className="btn btn-primary btn-sm"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Xem căn trên Trang chủ <ExternalLink size={14} />
+          </Link>
+        </div>
+      )}
+
       {(c.status === "reviewing" ||
         c.status === "approved" ||
         c.status === "rejected") &&
@@ -891,6 +1023,15 @@ export function InspectionForm({ id }: { id: string }) {
                 </button>
               </div>
 
+              {landlordCodes.size > 0 && (
+                <div className={styles.landlordSyncBanner}>
+                  <Sparkles size={16} style={{ flexShrink: 0, color: "#059669" }} />
+                  <span>
+                    <b>Đã tự động liên kết từ hồ sơ ký gửi:</b> Hệ thống đã đối chiếu và tích sẵn <b>{landlordCodes.size} món</b> theo kê khai của chủ nhà ({Array.from(declaredKeys).join(", ")}). Host kiểm tra hiện trạng thực tế và chụp ảnh xác nhận.
+                  </span>
+                </div>
+              )}
+
               {GROUPS.map((grp) => {
                 const groupLines = inventory.filter((l) => l.group === grp);
                 const groupPresent = groupLines.filter((l) => l.present);
@@ -942,6 +1083,17 @@ export function InspectionForm({ id }: { id: string }) {
                                   <span>
                                     {line.code}. {line.name}
                                   </span>
+                                  {landlordCodes.has(line.code) ? (
+                                    <span className={styles.landlordDeclaredBadge}>
+                                      ✓ Chủ nhà khai: Có
+                                    </span>
+                                  ) : (
+                                    !line.present && (
+                                      <span className={styles.landlordUndeclaredBadge}>
+                                        (Chủ nhà không kê khai)
+                                      </span>
+                                    )
+                                  )}
                                 </label>
                               </div>
 
@@ -1320,9 +1472,72 @@ export function InspectionForm({ id }: { id: string }) {
               </div>
             </div>
 
-            {/* 6. Đề xuất & Ghi chú của Host */}
+            {/* 6. Biểu phí sinh hoạt thực tế tại tòa */}
             <div className={styles.formCard}>
-              <h3 className={styles.formCardTitle}>6. Đề xuất của Field Host</h3>
+              <h3 className={styles.formCardTitle}>6. Biểu phí sinh hoạt thực tế tại tòa (Xác minh cùng Chủ nhà & Lễ tân sảnh)</h3>
+              <p className="muted small" style={{ marginBottom: "var(--s-3)" }}>
+                Sale / Field Host xác nhận biểu phí thực tế với Chủ nhà hoặc Lễ tân sảnh để hiển thị minh bạch cho khách thuê. Khách tự chuẩn bị ngân sách đóng tại sảnh và không bị nhầm lẫn với tiền thuê trả cho chủ nhà.
+              </p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "var(--s-3)", marginBottom: "var(--s-3)" }}>
+                <div>
+                  <label className="label" style={{ fontWeight: 600 }}>Phí quản lý BQL (đ/m²/tháng)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={mgmtFeePerM2}
+                    onChange={(e) => setMgmtFeePerM2(Number(e.target.value))}
+                    min={0}
+                    step={1000}
+                  />
+                  <span className="muted xs">
+                    Căn {Number(netAreaM2) || (c ? c.areaM2 : 0)}m²: ~{vnd(Math.round((Number(netAreaM2) || (c ? c.areaM2 : 0)) * (mgmtFeePerM2 || 0)))}/tháng (Khách tự đóng BQL)
+                  </span>
+                </div>
+
+                <div>
+                  <label className="label" style={{ fontWeight: 600 }}>Phí gửi xe máy (đ/xe/tháng)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={motorbikeFee}
+                    onChange={(e) => setMotorbikeFee(Number(e.target.value))}
+                    min={0}
+                    step={10000}
+                  />
+                  <span className="muted xs">Tiêu chuẩn BQL: 90.000 đ/tháng</span>
+                </div>
+
+                <div>
+                  <label className="label" style={{ fontWeight: 600 }}>Phí gửi ô tô (đ/xe/tháng)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={carFee}
+                    onChange={(e) => setCarFee(Number(e.target.value))}
+                    min={0}
+                    step={50000}
+                  />
+                  <span className="muted xs">Tiêu chuẩn BQL: 1.250.000 đ/tháng</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="label" style={{ fontWeight: 600 }}>Ghi chú phí khác / Tiện ích nội khu (nếu có)</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Ví dụ: Miễn phí bể bơi 4 mùa & gym nội khu, nước theo biểu giá BQL..."
+                  value={otherFeesNote}
+                  onChange={(e) => setOtherFeesNote(e.target.value)}
+                  maxLength={150}
+                />
+              </div>
+            </div>
+
+            {/* 7. Đề xuất & Ghi chú của Host */}
+            <div className={styles.formCard}>
+              <h3 className={styles.formCardTitle}>7. Đề xuất của Field Host</h3>
 
               <div
                 style={{

@@ -38,30 +38,7 @@ export class DispatchService {
       this.logger.warn(`Host tickets DB fallback: ${err.message}`);
     }
 
-    return [
-      {
-        id: 't-demo-001',
-        tier: 1,
-        slaSeconds: 300,
-        status: 'OFFERED',
-        offeredAt: new Date().toISOString(),
-        viewing: {
-          id: 'v-demo-001',
-          bookingRefCode: 'VIEW-S1.02-839201',
-          viewingSlot: new Date(Date.now() + 3600000 * 2).toISOString(),
-          status: 'CONFIRMED',
-          tenant: { fullName: 'Nguyễn Văn An' },
-          unit: {
-            id: 'u1111111-1111-1111-1111-111111111111',
-            unitCode: 'VHOP-S1.02-12A08',
-            floorNumber: 12,
-            layoutType: 'ONE_BED_PLUS',
-            baseRentPrice: 6500000,
-            building: { buildingCode: 'S1.02', zoneName: 'The Sapphire 1' },
-          },
-        },
-      },
-    ];
+    return [];
   }
 
   async acceptTicket(ticketId: string, hostId?: string) {

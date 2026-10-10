@@ -10,6 +10,7 @@ Phân tích câu truy vấn của người dùng để trích xuất Intent và 
 import re
 from typing import Any
 
+from ..llm import parse_intent_with_gemini
 from ..state import AgentState, SearchCriteria
 from ..tools.policy_faq import lookup_policy
 
@@ -58,7 +59,44 @@ def parse_intent_and_criteria_node(state: AgentState) -> dict[str, Any]:
     q_lower = query.lower()
     existing_criteria = state.get("criteria", {}) or {}
 
-    # 1. Kiểm tra nếu là câu hỏi chính sách / FAQ
+    # 0. Thử phân tích ngôn ngữ tự nhiên bằng Gemini Flash (nếu có API key)
+    gemini_parsed = parse_intent_with_gemini(query, existing_criteria)
+    if gemini_parsed and isinstance(gemini_parsed, dict):
+        g_intent = gemini_parsed.get("intent", "search_unit")
+        if g_intent == "policy_faq":
+            policy_hit = lookup_policy(query)
+            return {
+                "intent": "policy_faq",
+                "policy_answer": policy_hit or "VinStay AI giải đáp mọi quy định BQL Vinhomes Ocean Park và biểu phí All-in Cost trọn gói.",
+                "metadata": {"llm_parser": "gemini-flash"},
+            }
+
+        criteria: SearchCriteria = {
+            "occupants": gemini_parsed.get("occupants") or existing_criteria.get("occupants", 2),
+            "motorbikes": gemini_parsed.get("motorbikes") or existing_criteria.get("motorbikes", 1),
+            "cars": gemini_parsed.get("cars") if gemini_parsed.get("cars") is not None else existing_criteria.get("cars", 0),
+        }
+        if gemini_parsed.get("budget_ceiling"):
+            criteria["budget_ceiling"] = float(gemini_parsed["budget_ceiling"])
+        elif existing_criteria.get("budget_ceiling"):
+            criteria["budget_ceiling"] = existing_criteria["budget_ceiling"]
+        else:
+            criteria["budget_ceiling"] = extract_budget(query)
+
+        if gemini_parsed.get("layout_type"):
+            criteria["layout_type"] = gemini_parsed["layout_type"]
+        if gemini_parsed.get("zone"):
+            criteria["zone"] = gemini_parsed["zone"]
+
+        policy_hit = lookup_policy(query)
+        return {
+            "intent": "search_unit",
+            "criteria": criteria,
+            "policy_answer": policy_hit,
+            "metadata": {"llm_parser": "gemini-flash"},
+        }
+
+    # 1. Fallback Rule-based: Kiểm tra nếu là câu hỏi chính sách / FAQ
     policy_hit = lookup_policy(query)
     if policy_hit and not any(k in q_lower for k in ["tìm", "thuê", "còn căn", "giới thiệu", "gợi ý", "dưới", "triệu"]):
         return {

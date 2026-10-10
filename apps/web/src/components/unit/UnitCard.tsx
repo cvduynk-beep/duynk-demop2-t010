@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { Bath, BedDouble, Compass, Ruler } from "lucide-react";
+import { Bath, BedDouble, Compass, Ruler, Sparkles } from "lucide-react";
 import { vnd, vndShort } from "@/lib/mock/format";
 import type { CostBreakdown } from "@/lib/mock/cost";
 import { unitAddress, zoneById, type Unit } from "@/lib/mock/units";
-import { AllInBar } from "./AllInBar";
 import { FavoriteButton } from "./FavoriteButton";
 import { UnitBadges } from "./UnitBadges";
 import { VerifiedPhoto } from "./VerifiedPhoto";
@@ -65,21 +64,19 @@ export function UnitCard({ unit, cost, variant = "grid", rank, reasons, priority
 
         <div className={styles.price}>
           <div>
-            <span className={`num ${styles.total}`}>{vnd(cost.total)}</span>
-            <span className={`muted small ${styles.per}`}>đ/tháng</span>
+            <span className={`num ${styles.total}`}>{vnd(unit.rent)}</span>
+            <span className={`muted small ${styles.per}`}>đ/tháng (thuê)</span>
           </div>
           <p className="muted xs">
-            All-in: thuê {vndShort(cost.rent)} + phí {vndShort(cost.total - cost.rent)}
+            Chưa bao gồm phí quản lý
           </p>
         </div>
-        <AllInBar cost={cost} />
 
         {feature && reasons && reasons.length > 0 && (
-          <ul className={styles.reasons}>
-            {reasons.slice(0, 3).map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
+          <div className={styles.cleanHighlight} title={reasons[0]}>
+            <Sparkles size={13} className={styles.highlightIcon} />
+            <span className={styles.highlightText}>{reasons[0]}</span>
+          </div>
         )}
 
         <div className={styles.actions}>

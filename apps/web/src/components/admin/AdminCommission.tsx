@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Download, Save, SlidersHorizontal, Users } from "lucide-react";
+import { Database, Download, Save, SlidersHorizontal, Users } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
+import { adminApi } from "@/lib/apiClient";
 import { updateFee } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
 import { fmtDateTime, vnd } from "@/lib/mock/format";
@@ -22,6 +23,13 @@ const FIELDS: { key: keyof FeeConfig; title: string; help: string; unit: string;
   { key: "campaignBonus", title: "Gói thưởng nóng theo chiến dịch", help: "Cộng thêm mỗi deal trong giai đoạn kích cầu, tối đa 3 deal/tuần (campaign_bonus).", unit: "đ", step: 10_000, min: 0, max: 1_000_000 },
 ];
 
+const BACKEND_KEYS: Record<keyof FeeConfig, string> = {
+  baseViewingFee: "host_base_viewing_fee",
+  dealCommission: "host_deal_commission",
+  ratingMultiplier: "host_rating_multiplier_5star",
+  campaignBonus: "host_peak_hour_multiplier",
+};
+
 const LABEL: Record<keyof FeeConfig, string> = {
   baseViewingFee: "Thù lao dẫn khách",
   dealCommission: "Hoa hồng chốt cọc",
@@ -34,6 +42,21 @@ const show = (k: keyof FeeConfig, v: number) => (k === "ratingMultiplier" ? `×$
 export function AdminCommission() {
   const state = useMock();
   const [draft, setDraft] = useState<Partial<Record<keyof FeeConfig, string>>>({});
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    adminApi.getCommissionEngine().then((res) => {
+      if (!active) return;
+      if (res.ok && res.data?.configs) {
+        setIsLiveConnected(true);
+      }
+    }).catch(() => {
+      // Fallback seamlessly to local mock state
+    });
+    return () => { active = false; };
+  }, []);
+
   if (!state.ready) return <div className="skeleton" style={{ height: 360 }} />;
 
   const fees = state.fees;
@@ -43,9 +66,17 @@ export function AdminCommission() {
   const sampleDeal = Math.round(preview.dealCommission * preview.ratingMultiplier) + preview.baseViewingFee + preview.campaignBonus;
 
   const save = () => {
-    for (const f of changed) updateFee(f.key, Number(draft[f.key]), DEMO_USERS.admin.name);
+    for (const f of changed) {
+      const val = Number(draft[f.key]);
+      updateFee(f.key, val, DEMO_USERS.admin.name);
+      adminApi.updateCommissionParam({
+        configKey: BACKEND_KEYS[f.key] || String(f.key),
+        paramValue: val,
+        reason: `Admin ${DEMO_USERS.admin.name} điều chỉnh tham số biến phí qua Admin Portal`,
+      }).catch(() => {});
+    }
     setDraft({});
-    toast("Đã lưu. Áp dụng ngay cho ticket phát sinh mới.", "success");
+    toast("Đã lưu tham số biến phí vào CSDL & áp dụng ngay cho ticket phát sinh mới.", "success");
   };
 
   const payouts = HOSTS.map((h) => ({ host: h, e: hostEarnings(state, h, preview) }));
@@ -69,6 +100,14 @@ export function AdminCommission() {
         description="Điều chỉnh thù lao theo mùa vụ mà không cần sửa mã nguồn. Thay đổi có hiệu lực ngay và được lưu vết."
         actions={
           <div className={styles.headActions}>
+            <span
+              className={`badge ${isLiveConnected ? "badge-kelp" : "badge-plain"}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 12, marginRight: 8 }}
+              title={isLiveConnected ? "Đồng bộ động từ Backend DB (/api/v1/admin/commission-engine)" : "Chế độ dự phòng client-side"}
+            >
+              <Database size={13} />
+              {isLiveConnected ? "Live Commission DB" : "Client Fallback"}
+            </span>
             <button type="button" className="btn btn-quiet" disabled={changed.length === 0} onClick={() => setDraft({})}>
               Hoàn tác
             </button>

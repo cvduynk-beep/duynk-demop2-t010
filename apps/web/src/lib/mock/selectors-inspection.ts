@@ -24,8 +24,21 @@ export function declaredValue(c: Pick<Consignment, "building" | "floor" | "door"
       return c.layout;
     case "areaM2":
       return `${c.areaM2} m² tim tường`;
-    case "furnishing":
-      return c.furnished ? "Có nội thất" : "Không nội thất";
+    case "furnishing": {
+      if (!c.furnished) return "Không nội thất";
+      const cons = c as Partial<Consignment>;
+      if (cons.items && cons.items.length > 0) {
+        return `Có nội thất (${cons.items.length} món chủ nhà kê khai)`;
+      }
+      if (cons.note && cons.note.includes("Nội thất:")) {
+        const match = cons.note.match(/Nội thất:\s*([^|]+)/i);
+        if (match && match[1]) {
+          const count = match[1].split(",").filter(Boolean).length;
+          return `Có nội thất (${count} món kê khai)`;
+        }
+      }
+      return "Có nội thất";
+    }
     case "lock":
       return (c.locks || []).map((l) => (l === "smart" ? "Khoá thông minh" : "Khoá cơ")).join(" + ");
     default:

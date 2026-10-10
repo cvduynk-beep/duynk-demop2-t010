@@ -136,32 +136,30 @@
   font-weight: 500;
 }
 
-.reasons {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(246, 232, 214, 0.35);
-  border: 1px solid rgba(225, 161, 58, 0.22);
-  font-size: 13px;
-  color: #51656b;
+.cleanHighlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(182, 128, 30, 0.08);
+  border: 1px solid rgba(182, 128, 30, 0.18);
+  font-size: 12px;
+  font-weight: 600;
+  color: #875c12;
+  width: fit-content;
+  max-width: 100%;
 }
 
-.reasons li {
-  position: relative;
-  padding-left: 16px;
+.highlightIcon {
+  color: #b6801e;
+  flex-shrink: 0;
 }
 
-.reasons li::before {
-  content: "";
-  position: absolute;
-  left: 2px;
-  top: 0.55em;
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  background: var(--amber);
+.highlightText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .actions {

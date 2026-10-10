@@ -48,6 +48,22 @@ Toàn bộ yêu cầu xem phòng sau khi khách xác thực OTP trên Web/Zalo �
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### 1.2. QUY CHUẨN AUTO-ESCALATION HỒ SƠ KÝ GỬI & THẨM ĐỊNH (SLA 2H) + ADMIN MANUAL OVERRIDE
+Bên cạnh ca dẫn xem phòng của khách thuê, các hồ sơ ký gửi căn hộ do Chủ nhà nộp lên hệ thống được kiểm soát tiến độ thẩm định thực địa chặt chẽ theo cơ chế Auto-Escalation 3 mốc thời gian, loại bỏ triệt để tình trạng hồ sơ bị ngâm:
+
+1. **Mốc 1 (0 – 30 phút - Phân khu ưu tiên):**
+   * Hồ sơ ký gửi mới nộp (`pending_inspection`) được phát ưu tiên cho các Field Host phụ trách trực tiếp phân khu chứa căn hộ (ví dụ: Sapphire 1, Zenpark).
+2. **Mốc 2 (30 phút – 2 giờ - Mở rộng Open Pool liên phân khu):**
+   * Nếu sau 30 phút chưa có Host thuộc phân khu nhận, hệ thống tự động đẩy hồ sơ vào **Open Pool toàn dự án**. Bất kỳ Field Host/Sale nào đang trực ca đều có quyền bấm nhận thẩm định (First-to-Claim).
+3. **Mốc 3 (Sau 2 giờ - SLA Breach & Cảnh báo còi đỏ):**
+   * Nếu sau 120 phút (2 giờ) vẫn chưa có Host nhận việc, hệ thống kích hoạt trạng thái **SLA Breach**:
+     - Tự động gán trách nhiệm xử lý khẩn cấp cho **Trưởng Phân Khu (Area Lead)**.
+     - Kích hoạt cảnh báo còi đỏ nhấp nháy trên Admin Portal để nhắc nhở ban quản trị.
+4. **Quyền can thiệp thủ công tối cao của Admin (Admin Manual Override):**
+   * Quản trị viên (Admin) luôn giữ quyền can thiệp tay bất kỳ lúc nào trên Admin Portal:
+     - Chọn và chỉ định cưỡng chế hồ sơ cho một Field Host/Sale cụ thể.
+     - Hệ thống lập tức gửi thông báo đẩy trực tiếp vào tài khoản Host được chỉ định kèm mốc thời gian và danh tính Admin thực hiện override, bảo đảm tính minh bạch và truy vết kiểm toán (Audit Trail).
+
 ---
 
 ## ĐIỀU 2. BẢN ĐỒ GIÁM SÁT ĐỘI NGŨ THỰC ĐỊA THỜI GIAN THỰC (FLEET TELEMETRY)

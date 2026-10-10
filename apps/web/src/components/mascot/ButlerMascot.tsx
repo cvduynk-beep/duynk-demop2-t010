@@ -10,6 +10,7 @@ interface ButlerMascotProps {
   mood?: MascotMood;
   customMessage?: string;
   autoSpeak?: boolean;
+  hideBubble?: boolean;
   onClick?: () => void;
   className?: string;
 }
@@ -36,6 +37,7 @@ export function ButlerMascot({
   mood = "idle",
   customMessage,
   autoSpeak,
+  hideBubble = false,
   onClick,
   className,
 }: ButlerMascotProps) {
@@ -143,7 +145,7 @@ export function ButlerMascot({
 
   const bubbleText = clickedGreeting || customMessage || autoSpeech || defaultMessages[mood];
 
-  const showBubble = Boolean(
+  const showBubble = !hideBubble && Boolean(
     isHovered ||
     mood === "thinking" ||
     mood === "happy" ||

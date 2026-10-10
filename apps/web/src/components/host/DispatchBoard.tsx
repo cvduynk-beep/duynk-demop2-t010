@@ -17,9 +17,10 @@ import { DEMO_USERS } from "@/lib/mock/actors";
 import { dayLabel, fmtPhone, fmtTime, vnd } from "@/lib/mock/format";
 import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/mock/cost";
 import { hostBookings, isOpenBooking, noticesFor, openTicketsFor } from "@/lib/mock/selectors";
-import { useMock } from "@/lib/mock/store";
+import { setMockState, useMock } from "@/lib/mock/store";
 import type { Booking } from "@/lib/mock/types";
-import { hostById, unitAddress, unitById, zoneById } from "@/lib/mock/units";
+import { getSafeUnit, hostById, unitAddress, unitById, zoneById } from "@/lib/mock/units";
+import { dispatchApi } from "@/lib/apiClient";
 import { useNow } from "@/lib/useNow";
 import styles from "./Host.module.css";
 
@@ -42,6 +43,60 @@ export function DispatchBoard() {
   const [rejecting, setRejecting] = useState<Booking | null>(null);
   const [reason, setReason] = useState(REJECT_REASONS[0]);
   const host = hostById(HOST_ID)!;
+
+  // Tải danh sách dispatch ticket thật từ Database
+  useEffect(() => {
+    let unmounted = false;
+    async function loadDbTickets() {
+      try {
+        const res = await dispatchApi.getTickets(HOST_ID);
+        if (res.ok && Array.isArray(res.data) && !unmounted) {
+          const tickets = res.data;
+          setMockState((s) => {
+            const nextBookings = [...s.bookings];
+            for (const t of tickets) {
+              if (!t.viewing) continue;
+              const v = t.viewing;
+              const ref = v.bookingRefCode || `VIEW-${t.id.slice(-6)}`;
+              const existingIdx = nextBookings.findIndex((b) => b.ref === ref || b.id === v.id);
+              const mappedBooking: Booking = {
+                id: v.id,
+                ref,
+                unitId: v.unitId || v.unit?.id || "u1",
+                hostId: t.hostId || HOST_ID,
+                tenant: {
+                  name: v.tenant?.fullName || "Khách thuê Ocean Park",
+                  phone: v.tenant?.phoneHash?.replace("hash_", "") || "0912345678",
+                  persons: 2,
+                },
+                slot: v.viewingSlot || new Date().toISOString(),
+                status: t.status === "OFFERED" ? "pending" : t.status === "ACCEPTED" ? "confirmed" : "pending",
+                createdAt: t.offeredAt || v.createdAt || new Date().toISOString(),
+                dispatch: {
+                  state: t.status === "OFFERED" ? "open" : "assigned",
+                  tier: t.tier === 1 ? "top" : "zone_pool",
+                  offeredTo: [t.hostId || HOST_ID],
+                  openedAt: t.offeredAt || new Date().toISOString(),
+                },
+              };
+              if (existingIdx >= 0) {
+                nextBookings[existingIdx] = { ...nextBookings[existingIdx], ...mappedBooking };
+              } else {
+                nextBookings.push(mappedBooking);
+              }
+            }
+            return { ...s, bookings: nextBookings };
+          });
+        }
+      } catch {
+        // ignore offline
+      }
+    }
+    loadDbTickets();
+    return () => {
+      unmounted = true;
+    };
+  }, []);
 
   // Push notification real-time toast cho Host khi có ca mới/yêu cầu nối tiếp
   const hostNotices = noticesFor(state, "host", HOST_ID);
@@ -235,7 +290,7 @@ export function DispatchBoard() {
             <b style={{ fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
               <span>
                 Ca dẫn phòng trực tiếp:{" "}
-                {unitById(liveNow.unitId) ? unitAddress(unitById(liveNow.unitId)!) : liveNow.unitId}
+                {unitAddress(unitById(liveNow.unitId) || getSafeUnit(liveNow.unitId))}
               </span>
               {liveNow.chainedFromBookingId && (
                 <span className="badge" style={{ background: "#ecfdf5", color: "#047857", fontSize: 11, fontWeight: 700 }}>
@@ -245,7 +300,7 @@ export function DispatchBoard() {
             </b>
             <span style={{ fontSize: 13, opacity: 0.95, marginTop: 2 }}>
               Khách {liveNow.tenant.name} ({fmtPhone(liveNow.tenant.phone)}) ·{" "}
-              {unitById(liveNow.unitId) ? zoneById(unitById(liveNow.unitId)!.zoneId).short : "—"} ·{" "}
+              {zoneById((unitById(liveNow.unitId) || getSafeUnit(liveNow.unitId)).zoneId).short} ·{" "}
               {liveNow.doorCode ? `Mã số khoá PIN: ${liveNow.doorCode}` : "Mở cửa bằng chìa cơ/thẻ Host"}
             </span>
           </div>
@@ -271,7 +326,7 @@ export function DispatchBoard() {
           <AlarmClock size={22} />
           <div style={{ flex: 1 }}>
             <b>{lobbyNow.tenant.name} đã có mặt tại sảnh</b>
-            <span>Xuống đón ngay · sảnh toà {unitById(lobbyNow.unitId)?.building ?? "—"}</span>
+            <span>Xuống đón ngay · sảnh toà {(unitById(lobbyNow.unitId) || getSafeUnit(lobbyNow.unitId)).building}</span>
           </div>
           <span
             className="btn btn-sm"
@@ -326,7 +381,7 @@ export function DispatchBoard() {
               </div>
               <div className={styles.ticketGrid}>
                 {openTickets.map((b) => {
-                  const u = unitById(b.unitId)!;
+                  const u = unitById(b.unitId) || getSafeUnit(b.unitId);
                   const cost = allInCost(u, { ...DEFAULT_HOUSEHOLD, persons: b.tenant.persons });
                   const offeredCount = b.dispatch?.offeredTo.length ?? 0;
                   return (
@@ -337,7 +392,7 @@ export function DispatchBoard() {
                           <div className={styles.ticketUnitText}>
                             <b className={styles.unitAddress}>{unitAddress(u)}</b>
                             <p className="muted small">
-                              {zoneById(u.zoneId).short} · All-in {vnd(cost.total)}đ
+                              {zoneById(u.zoneId || "sapphire1").short} · All-in {vnd(cost.total)}đ
                             </p>
                           </div>
                         </div>
@@ -410,7 +465,7 @@ export function DispatchBoard() {
               </div>
               <div className={styles.ticketGrid}>
                 {activeLive.map((b) => {
-                  const u = unitById(b.unitId)!;
+                  const u = unitById(b.unitId) || getSafeUnit(b.unitId);
                   const cost = allInCost(u, { ...DEFAULT_HOUSEHOLD, persons: b.tenant.persons });
                   return (
                     <article
@@ -428,7 +483,7 @@ export function DispatchBoard() {
                           <div className={styles.ticketUnitText}>
                             <b className={styles.unitAddress}>{unitAddress(u)}</b>
                             <p className="muted small">
-                              {zoneById(u.zoneId).short} · All-in {vnd(cost.total)}đ · {u.layoutLabel}
+                              {zoneById(u.zoneId || "sapphire1").short} · All-in {vnd(cost.total)}đ · {u.layoutLabel}
                             </p>
                           </div>
                         </div>
@@ -481,7 +536,7 @@ export function DispatchBoard() {
             </div>
           )}
           {pending.map((b) => {
-            const u = unitById(b.unitId)!;
+            const u = unitById(b.unitId) || getSafeUnit(b.unitId);
             const left = SLA_MS - (now - new Date(b.createdAt).getTime());
             const over = left <= 0;
             const cost = allInCost(u, { ...DEFAULT_HOUSEHOLD, persons: b.tenant.persons });
@@ -493,7 +548,7 @@ export function DispatchBoard() {
                     <div className={styles.ticketUnitText}>
                       <b className={styles.unitAddress}>{unitAddress(u)}</b>
                       <p className="muted small">
-                        {zoneById(u.zoneId).short} · All-in {vnd(cost.total)}đ
+                        {zoneById(u.zoneId || "sapphire1").short} · All-in {vnd(cost.total)}đ
                       </p>
                     </div>
                   </div>

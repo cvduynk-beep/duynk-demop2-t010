@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import { fmtDate } from "@/lib/mock/format";
 import { unitPhoto, type Unit } from "@/lib/mock/units";
@@ -15,17 +18,26 @@ interface VerifiedPhotoProps {
   style?: React.CSSProperties;
 }
 
+const FALLBACK_PHOTO = "/units/s1-02-05-0502/1.jpg";
+
 /** Ảnh thật của căn, kèm dấu Verified có timestamp (chống tin mồi, chống môi giới copy ảnh). */
 export function VerifiedPhoto({ unit, index = 1, sizes, priority, stamp = "compact", className, style }: VerifiedPhotoProps) {
+  const [imgSrc, setImgSrc] = useState<string>(() => unitPhoto(unit, index));
+
   return (
     <div className={`${styles.frame} ${className ?? ""}`} style={style}>
       <Image
-        src={unitPhoto(unit, index)}
+        src={imgSrc}
         alt={`Căn ${unit.code}, ảnh ${index}: ${unit.title}`}
         fill
         sizes={sizes}
         priority={priority}
         className={styles.img}
+        onError={() => {
+          if (imgSrc !== FALLBACK_PHOTO) {
+            setImgSrc(FALLBACK_PHOTO);
+          }
+        }}
       />
       {stamp !== "none" && (
         <span className={styles.stamp}>

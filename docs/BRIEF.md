@@ -47,10 +47,11 @@ VinStay AI đóng vai trò "lớp đệm công nghệ tinh gọn" kết nối tr
 * **Khớp căn thông minh (AI Matchmaker):**
   * Khách nhập 4 tiêu chí: Ngân sách trần, Loại căn (Studio/1PN+/2PN/3PN), Ngày dọn vào, Số nhân khẩu.
   * AI đối soát giỏ hàng khả dụng và đề xuất đúng **3 căn hộ tối ưu nhất trong vòng 30 giây**, gắn nhãn *"Căn hời phân khu"* nếu rẻ hơn $\ge 10\%$ mặt bằng tòa.
-* **Điều phối Thực địa 1-chạm (Field Host Dispatcher):**
+* **Điều phối Thực địa 1-chạm & Điều Phối Ký Gửi (Field Host Dispatcher & Consignment Escalation):**
   * Khách đặt lịch xem và xác thực qua OTP Zalo/SMS.
   * Hệ thống kích hoạt quy trình nhắc hẹn kép T-10m: Báo trước 10 phút cho Field Host di chuyển xuống sảnh, và gửi tin nhắn Zalo kèm nút 1-chạm "Tôi đã có mặt tại sảnh" cho khách (không dán QR sảnh).
   * Host đón khách tại sảnh đúng giờ, quẹt thẻ cư dân thang máy đưa lên phòng; khi tới cửa, Host bấm xác nhận xem phòng trên app để nhận mã số mở khóa điện tử (hoặc dùng chìa cơ do nhân sự phân khu giữ; không dùng Lockbox treo cửa vi phạm BQL).
+  * **Cơ chế Auto-Escalation Hồ sơ Ký gửi & Thẩm định (SLA 2h) + Admin Manual Override:** Tự động điều phối 3 mốc: (1) 0–30 phút ưu tiên Field Host phân khu → (2) 30 phút–2 giờ tự động mở Open Pool liên phân khu (First-to-Claim) → (3) Quá 2 giờ (SLA Breach) tự động gán cho Area Lead & kích hoạt cảnh báo còi đỏ trên Admin Portal. Quản trị viên (Admin) luôn giữ quyền can thiệp thủ công (Manual Override) để chỉ định bất kỳ Field Host/Sale nào đang trực ca, đảm bảo hồ sơ ký gửi của chủ nhà không bị ngâm.
 * **Chốt Cọc Giữ Chỗ & Bảo Đảm Nội Thất (VietQR Escrow & Digital Agreement):**
   * Căn có $\ge 3$ lịch xem/24h tự động gắn nhãn **🔥 HOT**.
   * Khách ưng ý quét mã **VietQR động** cọc giữ chỗ 2.000.000 VNĐ $\rightarrow$ Căn hộ khóa trạng thái `holding` 24h (tự động hủy lịch xem sau và Zalo Bot gợi ý 2 căn thay thế).
@@ -59,6 +60,10 @@ VinStay AI đóng vai trò "lớp đệm công nghệ tinh gọn" kết nối tr
 * **Hộ Chiếu Bàn Giao Số & Danh Bạ Kỹ Thuật Tinh Gọn (Digital Handover Passport & Lean Referral):**
   * Lưu trữ bộ ảnh kiểm kê hiện trạng có timestamp của 10 hạng mục nội thất lúc nhận nhà làm chứng cứ pháp lý đối soát, chống trừ cọc oan với các hao mòn tự nhiên.
   * Mô hình vận hành tinh gọn: Khi có sự cố hỏng hóc phát sinh trong quá trình ở, hệ thống và Field Host đóng vai trò giới thiệu danh bạ thợ kỹ thuật ngoài uy tín tại Ocean Park; khách thuê và phía thợ tự thỏa thuận chi phí và chịu trách nhiệm trực tiếp, VinStay AI duy trì mô hình asset-light không ôm khâu sửa chữa.
+* **Hệ thống Bảo vệ & Vận hành AI Chatbot 3 Lớp (AI Cost & Anti-Spam Guardrails):**
+  * Rate limit 8 req/phút & Hạn mức 15 câu miễn phí cho khách vãng lai trước khi xác thực OTP.
+  * Bộ lọc Zero-Cost Fast-Path FAQ Cache (0đ API token) trả lời tức thì câu hỏi quy chế nội khu kinh điển (phí gửi xe, phí quản lý BQL, nuôi thú cưng, All-in Cost).
+  * Khóa cứng chủ đề chuyên môn Ocean Park và áp trần 200 output tokens để phản hồi thần tốc và triệt tiêu chi phí token thừa.
 
 ---
 
