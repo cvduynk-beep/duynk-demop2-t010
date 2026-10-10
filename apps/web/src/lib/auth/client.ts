@@ -40,10 +40,23 @@ async function load() {
       cache: "no-store",
       headers: portal ? { "x-portal": portal } : {},
     });
-    const body = res.ok ? ((await res.json()) as { data?: { user: SessionUser | null } }) : null;
-    publish({ ready: true, user: body?.data?.user ?? null });
+    let user = res.ok ? ((await res.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null : null;
+    if (!user) {
+      // Fallback sang endpoint cục bộ /api/auth/session khi backend offline
+      const fb = await fetch(portal ? `/api/auth/session?portal=${portal}` : "/api/auth/session");
+      if (fb.ok) user = ((await fb.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null;
+    }
+    publish({ ready: true, user });
   } catch {
-    publish({ ready: true, user: null }); // backend không với tới được ⇒ coi như chưa đăng nhập
+    try {
+      const portal = getPortalForPath();
+      const fb = await fetch(portal ? `/api/auth/session?portal=${portal}` : "/api/auth/session");
+      if (fb.ok) {
+        const user = ((await fb.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null;
+        return publish({ ready: true, user });
+      }
+    } catch {}
+    publish({ ready: true, user: null });
   }
 }
 
@@ -76,13 +89,8 @@ export function useRole(): SessionUser["portal"] {
 /** Đăng xuất: thu hồi phiên ở backend rồi tải lại toàn trang (xoá cache router của các trang có chắn quyền). */
 export async function signOut(redirectTo = "/login") {
   try {
-    const portal = getPortalForPath();
-    await fetch("/api/v1/auth/logout", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json", ...(portal ? { "x-portal": portal } : {}) },
-      body: JSON.stringify({ portal }),
-    });
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    await fetch("/api/v1/auth/logout", { method: "POST" }).catch(() => {});
   } finally {
     window.location.assign(redirectTo);
   }
