@@ -129,7 +129,7 @@ QUY TẮC PHẢN HỒI (BẮT BUỘC TUÂN THỦ NGHIÊM NGẶT):
 
     // Nếu không có key hoặc lỗi key -> trả về ok: false để client dùng Semantic Reasoner
     return NextResponse.json({ ok: false, fallback: true });
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: err?.message, fallback: true });
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : undefined, fallback: true });
   }
 }

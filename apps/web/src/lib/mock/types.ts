@@ -315,6 +315,8 @@ export interface Consignment {
   escalatedToAreaLead?: boolean; // tự động chuyển cho Area Lead
   adminOverriddenBy?: string; // lưu vết Admin chỉ định tay
   adminOverriddenAt?: string;
+  /** Ảnh ký gửi chủ nhà tải lên (chỉ có khi hồ sơ lấy từ backend). */
+  photos?: { id?: string; url?: string; path?: string }[];
   // Compatibility fields for un-refactored UI components (WP3/4/7)
   furnishing: Furnishing;
   lock: LockType;
@@ -426,8 +428,8 @@ export interface MockState {
   chat: ChatState;
   /** Thông tin khách đã dùng để điền sẵn form đặt lịch. */
   tenantProfile?: { name: string; phone: string; refundAccount?: RefundAccount };
-  /** Danh sách tài khoản nhận hoàn cọc đã lưu theo SĐT khách thuê. */
-  savedRefundAccounts?: Record<string, RefundAccount>;
+  /** Danh sách tài khoản nhận hoàn cọc đã lưu theo SĐT khách thuê. `null` = khách đã xoá (không rơi về tài khoản cũ). */
+  savedRefundAccounts?: Record<string, RefundAccount | null>;
   /** Vai của Field Host khi bị Admin sửa (mặc định lấy từ HOSTS). */
   hostRoles: Record<string, HostRole[]>;
   /** Phân khu phụ trách của Field Host khi bị Admin sửa (mặc định lấy từ HOSTS). */

@@ -23,14 +23,7 @@ import {
 } from "@/lib/mock/selectors-inspection";
 import { consignmentById } from "@/lib/mock/selectors-admin";
 import { setMockState, useMock } from "@/lib/mock/store";
-import type {
-  Consignment,
-  DeclaredField,
-  InspectionDraft,
-  InspectionReport,
-  InventoryGroup,
-  InventoryLine,
-} from "@/lib/mock/types";
+import type { Consignment, DeclaredField, InspectionDraft, InspectionReport, InventoryGroup, InventoryLine, ConsignmentStatus } from "@/lib/mock/types";
 import {
   INVENTORY_CATALOG,
   INVENTORY_GROUP_LABEL,
@@ -55,6 +48,7 @@ import styles from "@/components/consign/Consign.module.css";
 
 import { hostRoles } from "@/lib/mock/selectors";
 import { useSession } from "@/lib/auth/client";
+import type { ApiInspectionItem } from "@/lib/apiClient";
 
 const DEFAULT_HOST_ID = DEMO_USERS.host.refId!;
 const DECLARED_FIELDS: DeclaredField[] = [
@@ -105,7 +99,7 @@ export function InspectionForm({ id }: { id: string }) {
           return;
         }
         const item = list.find(
-          (x: any) =>
+          (x: ApiInspectionItem) =>
             x.consignmentId === id ||
             x.unitId === id ||
             x.id === id ||
@@ -130,7 +124,7 @@ export function InspectionForm({ id }: { id: string }) {
             furnished: true,
             locks: ["smart"],
             auditByHost: true,
-            status: (item.status as any) || "awaiting_host",
+            status: (item.status as ConsignmentStatus | undefined) || "awaiting_host",
             createdAt: item.createdAt || new Date().toISOString(),
             signedAt: item.createdAt || new Date().toISOString(),
             hostId: item.hostId || undefined,

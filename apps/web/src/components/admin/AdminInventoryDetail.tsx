@@ -25,11 +25,12 @@ import { consignmentById, unitBookings } from "@/lib/mock/selectors-admin";
 import { isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { viewingLog, type ViewingLogEntry } from "@/lib/mock/selectors-viewing";
 import { setMockState, useMock } from "@/lib/mock/store";
-import type { Booking, Consignment, InspectionReport, DelistReason } from "@/lib/mock/types";
+import type { Booking, Consignment, InspectionReport, DelistReason, ConsignmentStatus } from "@/lib/mock/types";
 import { FURNISHING_LABEL, LAYOUT_LABEL, hostById, hostForUnit, landlordById, unitAddress, unitById, zoneById, type LayoutKind, type UnitStatus, type Unit } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
 import { Archive, RotateCcw, AlertTriangle } from "lucide-react";
 import styles from "./Admin.module.css";
+import type { ApiInspectionItem } from "@/lib/apiClient";
 
 const UNIT_STATUS_META: Record<UnitStatus, { label: string; tone: StatusTone }> = {
   available: { label: "Còn trống", tone: "ok" },
@@ -89,7 +90,7 @@ export function AdminInventoryDetail({ id }: { id: string }) {
           return;
         }
         const item = data.find(
-          (x: any) =>
+          (x: ApiInspectionItem) =>
             x.consignmentId === id ||
             x.unitId === id ||
             x.id === id ||
@@ -114,7 +115,7 @@ export function AdminInventoryDetail({ id }: { id: string }) {
             furnished: true,
             locks: ["smart"],
             auditByHost: true,
-            status: (item.status as any) || "awaiting_host",
+            status: (item.status as ConsignmentStatus | undefined) || "awaiting_host",
             createdAt: item.createdAt || new Date().toISOString(),
             signedAt: item.createdAt || new Date().toISOString(),
             hostId: item.hostId || undefined,

@@ -1,6 +1,6 @@
 "use client";
 
-import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, CalendarClock, Plus, ReceiptText, Footprints, MapPin, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
 import { LogoMark } from "@/components/brand/Logo";
@@ -12,7 +12,7 @@ import { interpret, searchUnits } from "@/lib/mock/matchmaker";
 import { unitStatus } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
 import type { CriteriaState } from "@/lib/mock/types";
-import { UNITS } from "@/lib/mock/units";
+import { UNITS, type Unit } from "@/lib/mock/units";
 import { useUnits } from "@/lib/property/useUnits";
 import { useRole, useSession } from "@/lib/auth/client";
 import { ButlerMascot, VINNY_GREETINGS, type MascotMood } from "@/components/mascot/ButlerMascot";
@@ -78,7 +78,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   const busy = useRef(false);
 
   const { units } = useUnits();
-  const statusOf = (u: any) => unitStatus(state, u);
+  const statusOf = (u: Unit) => unitStatus(state, u);
   const openCount = units.filter((u) => unitStatus(state, u) === "available").length;
   const results = searchUnits(chat.criteria, statusOf, units);
 
@@ -187,7 +187,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
 
         if (isSearch && budget && budget >= 3000000) {
           const rawLayout = result.criteria.layouts?.[0]?.toLowerCase() || "";
-          let prismaLayout: any = undefined;
+          let prismaLayout: string | undefined;
           if (rawLayout.includes("studio")) prismaLayout = "STUDIO";
           else if (rawLayout.includes("1pn") || rawLayout.includes("one")) prismaLayout = "ONE_BED_PLUS";
           else if (rawLayout.includes("3pn") || rawLayout.includes("three")) prismaLayout = "THREE_BED";
@@ -207,7 +207,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
         const chatData = (await Promise.race([
           chatPromise,
           new Promise((resolve) => setTimeout(() => resolve(null), 1600)),
-        ])) as any;
+        ])) as { ok?: boolean; response?: string } | null;
 
         if (chatData?.ok && chatData?.response) {
           aiResponseText = chatData.response;
@@ -274,7 +274,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   }, []);
 
   const renderedBelow = isValidElement(below)
-    ? cloneElement(below as any, { onViewAll: handleViewAllUnits })
+    ? cloneElement(below as ReactElement<{ onViewAll?: () => void }>, { onViewAll: handleViewAllUnits })
     : below;
 
   const onCriteria = (c: CriteriaState) => chatSetCriteria(c);

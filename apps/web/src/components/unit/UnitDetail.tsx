@@ -172,11 +172,11 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
               </p>
             </div>
 
-            {unit.inventory && Array.isArray(unit.inventory) && unit.inventory.filter((l: any) => l.present).length > 0 ? (
+            {unit.inventory && Array.isArray(unit.inventory) && unit.inventory.filter((l) => l.present).length > 0 ? (
               <ul className={styles.items}>
                 {unit.inventory
-                  .filter((l: any) => l.present)
-                  .map((item: any) => (
+                  .filter((l) => l.present)
+                  .map((item) => (
                     <li key={item.code || item.name}>
                       <Check size={16} />
                       <span>{item.name}</span>

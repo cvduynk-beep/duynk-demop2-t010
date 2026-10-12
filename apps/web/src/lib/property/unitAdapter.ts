@@ -4,7 +4,7 @@ import { zoneOfBuilding } from "@/lib/mock/units";
 /**
  * Chuyển đổi layout type từ Database Prisma sang LayoutKind của Frontend
  */
-export function parseLayoutKind(layout: string | undefined): { layout: LayoutKind; layoutLabel: string } {
+export function parseLayoutKind(layout: string | null | undefined): { layout: LayoutKind; layoutLabel: string } {
   if (!layout) return { layout: "2PN", layoutLabel: "2 phòng ngủ" };
   const upper = String(layout || "").toUpperCase();
   if (upper === "STUDIO") return { layout: "Studio", layoutLabel: "Studio" };
@@ -16,10 +16,27 @@ export function parseLayoutKind(layout: string | undefined): { layout: LayoutKin
   return { layout: "2PN", layoutLabel: "2 phòng ngủ" };
 }
 
+/** Bản ghi căn hộ backend trả về — chỉ các trường adapter đọc; dữ liệu cũ có thể thiếu nên đều optional. */
+export interface DbUnit {
+  id: string;
+  unitCode?: string | null;
+  layoutType?: string | null;
+  floorNumber?: number | string | null;
+  baseRentPrice?: number | string | null;
+  marketAvgPrice?: number | string | null;
+  carpetAreaM2?: number | string | null;
+  status?: string | null;
+  doorLockType?: string | null;
+  landlordId?: string | null;
+  updatedAt?: string | null;
+  building?: { buildingCode?: string | null } | null;
+  media?: { url?: string | null }[] | null;
+}
+
 /**
  * Adapter ánh xạ một bản ghi Căn hộ từ Database / Backend DTO sang Model Unit hiển thị trên giao diện
  */
-export function mapDbUnitToFrontendUnit(dbUnit: any): Unit {
+export function mapDbUnitToFrontendUnit(dbUnit: DbUnit): Unit {
   const buildingCode = dbUnit?.building?.buildingCode || "S1.02";
   const zone = zoneOfBuilding(buildingCode);
   const { layout, layoutLabel } = parseLayoutKind(dbUnit?.layoutType);
@@ -44,7 +61,7 @@ export function mapDbUnitToFrontendUnit(dbUnit: any): Unit {
   const lock: LockType = dbUnit.doorLockType === "ELECTRONIC_PIN" ? "smart" : "physical";
 
   const mediaUrls: string[] = Array.isArray(dbUnit.media)
-    ? dbUnit.media.map((m: any) => m.url).filter(Boolean)
+    ? dbUnit.media.map((m) => m.url).filter((url): url is string => Boolean(url))
     : [];
 
   return {

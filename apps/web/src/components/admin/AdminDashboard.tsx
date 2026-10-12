@@ -49,7 +49,7 @@ export function AdminDashboard() {
   const state = useMock();
   const now = useNow(1000);
   const [liveBi, setLiveBi] = useState<LiveBiData | null>(null);
-  const [liveSlaTickets, setLiveSlaTickets] = useState<any[]>([]);
+  const [liveSlaTickets, setLiveSlaTickets] = useState<unknown[]>([]);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
 
   useEffect(() => {

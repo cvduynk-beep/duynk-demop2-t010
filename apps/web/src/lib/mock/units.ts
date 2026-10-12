@@ -13,7 +13,7 @@ export type LockType = "smart" | "physical";
 export type HostRole = "sale" | "inspector"; // +
 export const HOST_ROLE_LABEL: Record<HostRole, string> = { sale: "Sale", inspector: "Thẩm định" }; // +
 
-import type { UnitLivingFees } from "./types";
+import type { Consignment, InventoryLine, UnitLivingFees } from "./types";
 export type { UnitLivingFees };
 
 export type LeaseTermPref = "flexible" | "long" | "mid" | "fixed"; // + Đ10
@@ -176,7 +176,7 @@ export interface Unit {
   description: string;
   items: ItemKey[];
   /** Bảng kê trang thiết bị nội thất thực tế do Field Host thẩm định tại căn */
-  inventory?: any[];
+  inventory?: InventoryLine[];
   mediaUrls?: string[];
   /** Tình trạng / độ mới nội thất trung bình (%) theo Hộ chiếu kiểm định */
   condition?: number;
@@ -2422,7 +2422,7 @@ export const PASSPORT_ITEMS = [
 
 export type PassportItem = (typeof PASSPORT_ITEMS)[number];
 
-export function createAndPublishUnitFromConsignment(c: any): Unit {
+export function createAndPublishUnitFromConsignment(c: Consignment): Unit {
   const zone = zoneOfBuilding(c.building) || ZONES[0];
   const doorText = String(c.door).padStart(2, "0");
   const floorNum = Number(c.floor) || 12;
@@ -2477,7 +2477,7 @@ export function createAndPublishUnitFromConsignment(c: any): Unit {
     }
     itemsList = Array.from(detected);
   } else if (c.report?.items && Array.isArray(c.report.items)) {
-    itemsList = c.report.items.filter((i: any) => i.present).map((i: any) => i.key);
+    itemsList = c.report.items.filter((i) => i.present).map((i) => i.key);
   } else if (Array.isArray(c.items) && c.items.length > 0) {
     itemsList = c.items;
   }
@@ -2523,8 +2523,8 @@ export function createAndPublishUnitFromConsignment(c: any): Unit {
     condition: c.report?.inventory
       ? Math.round(
           c.report.inventory
-            .filter((l: any) => l.present && typeof l.condition === "number")
-            .reduce((sum: number, l: any, _: number, arr: any[]) => sum + l.condition / (arr.length || 1), 0)
+            .filter((l): l is InventoryLine & { condition: number } => l.present && typeof l.condition === "number")
+            .reduce((sum, l, _, arr) => sum + l.condition / (arr.length || 1), 0)
         ) || 90
       : 90,
     livingFees: c.report?.livingFees || defaultLivingFeesForZone(zone.id),

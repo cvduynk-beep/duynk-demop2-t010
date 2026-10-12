@@ -2004,7 +2004,7 @@ export function autoEscalateConsignments(nowMs: number = Date.now()) {
     const createdMs = new Date(cs.signedAt || cs.createdAt).getTime();
     const elapsedMinutes = (nowMs - createdMs) / 60000;
     const can = `${cs.building} · Tầng ${cs.floor} · Căn ${cs.door}`;
-    let updated = { ...cs };
+    const updated = { ...cs };
 
     // Mốc 1: Quá 30 phút -> Đổ về Open Pool liên phân khu
     if (elapsedMinutes >= 30 && !cs.openPoolAt) {
@@ -2462,7 +2462,7 @@ export function deleteTenantRefundAccount(phone: string) {
   setMockState((s) => {
     const updatedSaved = {
       ...(s.savedRefundAccounts ?? {}),
-      [norm]: null as any,
+      [norm]: null, // dấu "đã xoá": selector không rơi về tài khoản cũ trong lịch sử booking
     };
     const updatedProfile =
       s.tenantProfile && normalizePhone(s.tenantProfile.phone) === norm
