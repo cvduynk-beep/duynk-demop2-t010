@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { UNITS } from "../lib/mock/units";
+import { sampleUnit as makeUnit } from "./fixtures/unit";
 import { answerUnitQuestion, isOutOfScope, QUICK_CHIPS } from "../lib/property/unitConcierge";
 
 describe("UnitConcierge - Quản gia AI bảo vệ chi phí & phạm vi", () => {
-  const sampleUnit = UNITS[0]; // Căn mẫu trong cơ sở dữ liệu
+  const sampleUnit = makeUnit(); // Căn mẫu đúng kiểu catalog API
 
   it("chặn cứng câu hỏi ngoài lề để bảo vệ 100% chi phí token (Out-of-scope guardrail)", () => {
     const outOfScopeQueries = [

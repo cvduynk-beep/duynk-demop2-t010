@@ -106,6 +106,23 @@ export interface ConsignmentPhoto {
   url: string | null;
 }
 
+/** Đề xuất giá/cọc bảo đảm của Inspector, chờ chủ nhà đồng ý (stage `awaiting_landlord`). */
+export interface PricingProposal {
+  rent: number;
+  securityDeposit: number;
+  reason: string | null;
+  proposedAt: string;
+  original: { rent: number; securityDeposit: number };
+}
+
+export interface PricingDecisionResult {
+  stage: "approved" | "rejected";
+  unitCode: string;
+  listedAt: string | null;
+  rent?: number;
+  securityDeposit?: number;
+}
+
 export interface Consignment {
   id: string;
   unitId: string;
@@ -141,6 +158,8 @@ export interface Consignment {
   decidedAt: string | null;
   decidedBy: string | null;
   decisionNote: string | null;
+  /** Khác null chỉ khi Inspector đề xuất giá khác bản chủ khai và đang chờ chủ nhà quyết. */
+  pricingProposal?: PricingProposal | null;
 }
 
 export interface CreateConsignmentInput {

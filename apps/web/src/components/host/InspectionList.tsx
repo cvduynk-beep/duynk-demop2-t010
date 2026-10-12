@@ -19,7 +19,6 @@ import type { Consignment, ConsignmentStatus } from "@/lib/mock/types";
 import { landlordById, zoneOfBuilding, ZONES, type LayoutKind } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
 
-import { useSession } from "@/lib/auth/client";
 import { hostRoles, hostZones } from "@/lib/mock/selectors";
 import type { ApiInspectionItem } from "@/lib/apiClient";
 
@@ -35,7 +34,6 @@ function parseLayoutKind(layout: string | undefined): LayoutKind {
 
 export function InspectionList() {
   const state = useMock();
-  const session = useSession();
   const now = useNow(10_000);
   const [dbItems, setDbItems] = useState<Consignment[]>([]);
   const [zoneFilter, setZoneFilter] = useState<string>("all");
@@ -127,7 +125,7 @@ export function InspectionList() {
   }, []);
 
   // Xác định Host ID hiện tại (từ session hoặc demo user)
-  const currentHostId = session.user?.pendingHostId || DEFAULT_HOST_ID;
+  const currentHostId = DEFAULT_HOST_ID; // màn này còn chạy store mock (chưa chuyển sang /host/inspections API)
   const isInspector = hostRoles(state, currentHostId).includes("inspector");
   const myZones = hostZones(state, currentHostId);
 

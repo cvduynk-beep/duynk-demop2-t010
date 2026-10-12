@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CalendarPlus, Send, Sparkles, X } from "lucide-react";
-import type { Unit } from "@/lib/mock/units";
+import type { Unit } from "@/lib/units";
 import { askVinnyConcierge, QUICK_CHIPS } from "@/lib/property/unitConcierge";
 import { ButlerMascot } from "@/components/mascot/ButlerMascot";
 import styles from "./UnitConciergeDrawer.module.css";

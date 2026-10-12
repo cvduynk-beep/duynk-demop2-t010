@@ -46,7 +46,6 @@ import { publishUnitToCatalog } from "@/lib/property/useUnits";
 import { useNow } from "@/lib/useNow";
 import styles from "@/components/consign/Consign.module.css";
 
-import { useSession } from "@/lib/auth/client";
 import type { ApiInspectionItem } from "@/lib/apiClient";
 
 const DEFAULT_HOST_ID = DEMO_USERS.host.refId!;
@@ -71,7 +70,6 @@ function parseLayoutKind(layout: string | undefined): LayoutKind {
 
 export function InspectionForm({ id }: { id: string }) {
   const state = useMock();
-  const session = useSession();
   const now = useNow(10_000);
   const existingConsignment = consignmentById(state, id);
   const [dbConsignment, setDbConsignment] = useState<Consignment | null>(null);
@@ -181,7 +179,7 @@ export function InspectionForm({ id }: { id: string }) {
     };
   }, [id]);
 
-  const currentHostId = session.user?.pendingHostId || DEFAULT_HOST_ID;
+  const currentHostId = DEFAULT_HOST_ID; // màn này còn chạy store mock (chưa chuyển sang /host/inspections API)
   // Host được phép mở phiếu nếu được gán c.hostId hoặc c.hostId là currentHostId hoặc Host có quyền inspector
   const activeHostId = c?.hostId || currentHostId;
 
