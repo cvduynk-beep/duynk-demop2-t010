@@ -13,6 +13,8 @@ import { PhoneService } from '../auth/phone/phone.service';
 import { ActionTokenService } from '../auth/otp/action-token.service';
 import { DispatchAssignerService } from '../dispatch/dispatch-assigner.service';
 import { ViewingFlowService } from '../host-viewings/viewing-flow.service';
+import { DepositService } from '../deposit/deposit.service';
+import { isDemoToolsEnabled } from '../deposit/vietqr';
 import { ViewingStatus, UnitStatus, TicketStatus, HostDutyStatus } from '@prisma/client';
 
 const TENANT_ID = '00000000-0000-4000-8000-000000000001';
@@ -577,7 +579,46 @@ describe('Tenant Booking Backend (SPEC-P02 §6: 14 test cases)', () => {
     });
   });
 
-  // 14. DEMO_TOOLS tắt → 404 not_found
-  it.skip('14. DemoGuard ném 404 not_found khi DEMO_TOOLS không bật', () => {
+  // 14. Công cụ demo (giả lập ngân hàng báo có cọc) chỉ chạy khi DEMO_TOOLS=true VÀ không phải production
+  describe('14. DEMO_TOOLS chặn công cụ demo', () => {
+    const saved = { DEMO_TOOLS: process.env.DEMO_TOOLS, NODE_ENV: process.env.NODE_ENV };
+    afterEach(() => {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    });
+    const depositService = (loadOwned: jest.Mock) =>
+      new DepositService({} as any, {} as any, phoneService, { loadOwned } as unknown as BookingAccessService);
+
+    it.each([
+      [undefined, 'development', false],
+      ['false', 'development', false],
+      ['true', 'production', false],
+      ['true', 'development', true],
+    ])('DEMO_TOOLS=%p NODE_ENV=%p ⇒ bật = %p', (demo, env, enabled) => {
+      if (demo === undefined) delete process.env.DEMO_TOOLS;
+      else process.env.DEMO_TOOLS = demo;
+      process.env.NODE_ENV = env;
+      expect(isDemoToolsEnabled()).toBe(enabled);
+    });
+
+    it('DEMO_TOOLS không bật ⇒ demoPay 404 not_found, không chạm tới lịch/cọc', async () => {
+      delete process.env.DEMO_TOOLS;
+      const loadOwned = jest.fn();
+      await expect(depositService(loadOwned).demoPay('VS-AAAAA', { id: TENANT_ID })).rejects.toMatchObject({
+        status: 404,
+        response: expect.objectContaining({ code: 'not_found' }),
+      });
+      expect(loadOwned).not.toHaveBeenCalled();
+    });
+
+    it('production ⇒ demoPay 404 kể cả khi DEMO_TOOLS=true', async () => {
+      process.env.DEMO_TOOLS = 'true';
+      process.env.NODE_ENV = 'production';
+      const loadOwned = jest.fn();
+      await expect(depositService(loadOwned).demoPay('VS-AAAAA', { id: TENANT_ID })).rejects.toMatchObject({ status: 404 });
+      expect(loadOwned).not.toHaveBeenCalled();
+    });
   });
 });

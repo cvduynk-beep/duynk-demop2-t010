@@ -4,9 +4,10 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
+  # Khung agent Python (src/) — giữ nguyên như trước.
   lint-and-test:
     runs-on: self-hosted
 
@@ -30,3 +31,107 @@ jobs:
         env:
           APP_ENV: test
           OPENAI_API_KEY: test-key
+
+  # Backend NestJS: test dùng Prisma/Supabase giả ⇒ không cần DB hay .env.
+  backend:
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Chỉ là cờ true/false — giá trị secret không bao giờ bị in ra.
+      HAS_LIVE_DB: ${{ secrets.DATABASE_URL != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type-check
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Unit & HTTP tests
+        run: npm run test:unit
+
+      - name: Build
+        run: npm run build
+
+      # Test tích hợp CHỈ ĐỌC trên DB thật — chỉ chạy khi repo có secret DATABASE_URL (không có ⇒ bước này không chạy).
+      - name: Live DB tests (read-only)
+        if: ${{ env.HAS_LIVE_DB == 'true' }}
+        run: npm run test:live
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+  # Web Next.js (4 cổng).
+  web:
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type-check
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  # AI Engine (FastAPI + LLM tool-calling) — test không gọi LLM thật.
+  ai-engine:
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: ai-engine
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint with ruff
+        run: uv run --frozen ruff check .
+
+      - name: Tests
+        run: uv run --frozen pytest -q
