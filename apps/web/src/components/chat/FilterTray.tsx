@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Minus, Plus, SlidersHorizontal, X } from "lucide-react";
-import { RATES } from "@/lib/mock/cost";
-import { vndShort } from "@/lib/mock/format";
+import { RATES } from "@/lib/pricing/cost";
+import { vndShort } from "@/lib/format";
 import { FLOOR_LABEL } from "@/lib/mock/matchmaker";
 import type { CriteriaState } from "@/lib/mock/types";
 import { FURNISHING_LABEL, LAYOUT_LABEL, UNITS, ZONES, type Furnishing, type LayoutKind } from "@/lib/mock/units";

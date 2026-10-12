@@ -133,8 +133,12 @@ export interface ApiInspectionItem {
   report?: Partial<InspectionReport> | null;
 }
 
+/** `GET /me/profile` — hồ sơ của chính người gọi. `phone` dạng 0xxx (null = chưa gắn SĐT). */
 export interface ApiProfile {
+  id?: string;
+  email?: string | null;
   fullName?: string | null;
+  phone?: string | null;
   isPhoneVerified?: boolean;
 }
 

@@ -27,7 +27,7 @@ import { chatAppend, chatSetCriteria, chatSetSearch, countGuestMessage } from "@
 import { interpret } from "@/lib/mock/matchmaker";
 import { unitStatus } from "@/lib/mock/selectors";
 import { UNITS } from "@/lib/mock/units";
-import { allInCost } from "@/lib/mock/cost";
+import { allInCost } from "@/lib/pricing/cost";
 import styles from "./MobileAppExperience.module.css";
 
 type MobileTab = "explore" | "chat" | "booking" | "saved" | "account";

@@ -1,4 +1,6 @@
-import type { Booking, BookingStatus } from "@/lib/mock/types";
+import type { BookingStatusWeb as BookingStatus, TenantBooking } from "@/lib/tenant/types";
+
+export type { BookingStatus };
 
 export type Tone = "info" | "success" | "warning" | "alert" | "muted";
 
@@ -114,7 +116,8 @@ const RANK: Record<BookingStatus, number> = {
   rejected: 0,
 };
 
-export function buildTimeline(b: Booking): TimelineStep[] {
+/** Dòng tiến trình của một lịch hẹn, dựng từ các mốc thời gian thật backend trả (`TenantBooking`). */
+export function buildTimeline(b: TenantBooking): TimelineStep[] {
   const r = RANK[b.status];
   const lobbyDone = !!b.lobbyAt || r >= 3;
   return [
@@ -124,6 +127,6 @@ export function buildTimeline(b: Booking): TimelineStep[] {
     { key: "view", label: "Xem phòng", hint: "Host mở cửa bằng mã trong app", at: b.viewingAt, done: !!b.viewingAt },
     { key: "deposit", label: "Cọc giữ căn", hint: "VietQR 2.000.000đ", at: b.deposit?.paidAt, done: !!b.deposit?.paidAt },
     { key: "kyc", label: "Xác minh CCCD (eKYC)", hint: "Khi làm hợp đồng thuê", at: b.kyc?.verifiedAt, done: !!b.kyc },
-    { key: "lease", label: "Ký hợp đồng thuê", hint: "Hợp đồng ký số", at: b.lease?.signedAt, done: !!b.lease },
+    { key: "lease", label: "Ký hợp đồng thuê", hint: "Hợp đồng ký số", done: !!b.contractId || b.status === "leased" },
   ];
 }

@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
-import { allInCost } from "@/lib/mock/cost";
-import { vnd } from "@/lib/mock/format";
+import { allInCost } from "@/lib/pricing/cost";
+import { vnd } from "@/lib/format";
 import { errorText, landlordApi } from "@/lib/landlord/api";
 import { LAYOUT_LABEL, LEASE_TERM_LABEL } from "@/lib/landlord/labels";
 import type { BuildingOption, Consignment, LayoutKind, LeaseTermPref, LockKind, MyProfile } from "@/lib/landlord/types";

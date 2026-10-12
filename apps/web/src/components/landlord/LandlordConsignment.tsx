@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ConsignTimeline } from "@/components/consign/ConsignTimeline";
 import { InspectionReportView } from "@/components/consign/InspectionReportView";
 import { CONSIGN_STATUS_META } from "@/components/consign/status";
-import { fmtDateTime, vnd } from "@/lib/mock/format";
+import { fmtDateTime, vnd } from "@/lib/format";
 import type { InspectionReport } from "@/lib/mock/types";
 import { FURNISHING_LABEL } from "@/lib/mock/units";
 import { queries } from "@/lib/landlord/queries";

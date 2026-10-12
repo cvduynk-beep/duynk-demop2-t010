@@ -25,7 +25,7 @@ import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
 import { setHostSuspended } from "@/lib/mock/actions";
-import { fmtPhone, initials, isValidVnPhone, vnd } from "@/lib/mock/format";
+import { fmtPhone, initials, isValidVnPhone, vnd } from "@/lib/format";
 import { hostEarnings, hostRoles, hostStatus, hostZones, isHostSuspended } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
 import {

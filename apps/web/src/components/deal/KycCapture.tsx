@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Camera, Check, ImagePlus, RefreshCw, ScanFace, ScanText, ShieldCheck, TriangleAlert } from "lucide-react";
-import { saveKyc } from "@/lib/mock/actions";
-import { identityApi } from "@/lib/apiClient";
-import type { Booking, IdCardData } from "@/lib/mock/types";
+import { useRef, useState } from "react";
+import { Camera, Check, ImagePlus, ScanFace, ScanText, ShieldCheck, TriangleAlert } from "lucide-react";
+import { errorText, tenantApi } from "@/lib/tenant/api";
+import { EKYC_CONSENT_VERSION, type EkycScanResult, type TenantBooking } from "@/lib/tenant/types";
 import styles from "./Deal.module.css";
 
 type Slot = "front" | "back" | "face";
 type Photos = Record<Slot, string | null>;
-type Fields = Pick<IdCardData, "fullName" | "idNumber" | "dob" | "issuedDate" | "address">;
+type Fields = EkycScanResult["fields"];
 
 const SLOT_LABEL: Record<Slot, string> = {
   front: "Mặt trước CCCD",
@@ -27,22 +26,6 @@ function sampleImage(slot: Slot, name: string): string {
         ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" rx="14" fill="#e8dfca"/><rect x="18" y="20" width="44" height="34" rx="6" fill="#d7b64f"/><rect x="18" y="74" width="284" height="6" rx="3" fill="#c7b995"/><rect x="18" y="92" width="240" height="6" rx="3" fill="#c7b995"/><rect x="18" y="110" width="260" height="6" rx="3" fill="#c7b995"/><rect x="220" y="128" width="64" height="52" fill="#222"/><rect x="18" y="150" width="180" height="10" rx="3" fill="#8a7f66"/></svg>`
         : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240"><rect width="240" height="240" fill="#cfe0e2"/><circle cx="120" cy="96" r="42" fill="#8aa9ad"/><path d="M36 240c0-52 38-84 84-84s84 32 84 84z" fill="#8aa9ad"/></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-function mockOcr(b: Booking): { fields: Fields; confidence: IdCardData["confidence"]; face: number } {
-  const digits = b.tenant.phone.replace(/\D/g, "").padEnd(9, "7").slice(-9);
-
-  return {
-    fields: {
-      fullName: String(b.tenant?.name || "").toUpperCase(),
-      idNumber: `001${digits}`,
-      dob: "12/04/2001",
-      issuedDate: "18/08/2021",
-      address: "Thôn Kiêu Kỵ, Xã Kiêu Kỵ, Huyện Gia Lâm, Thành phố Hà Nội",
-    },
-    confidence: { fullName: 0.99, idNumber: 0.98, issuedDate: 0.94, address: 0.78 },
-    face: 0.96,
-  };
 }
 
 interface CaptureProps {
@@ -103,75 +86,76 @@ function CaptureSlot({ slot, value, onChange, disabled, name }: CaptureProps) {
 }
 
 interface KycCaptureProps {
-  booking: Booking;
-  onDone: () => void;
+  booking: TenantBooking;
+  onDone: (booking: TenantBooking) => void;
 }
 
+const norm = (v: string) =>
+  v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toUpperCase().replace(/\s+/g, " ").trim();
+
 /**
- * Component xác minh CCCD (eKYC) dành cho khách thuê khi lập Hợp đồng thuê.
- * Tự động đối chiếu thông tin bóc tách với Thỏa thuận cọc đã ký.
+ * Xác minh CCCD (eKYC) của khách thuê khi lập Hợp đồng thuê (lịch đang giữ chỗ).
+ * MÔ PHỎNG: bước bóc tách do backend giả lập OCR (`POST /bookings/:ref/ekyc/scan`, chưa tích hợp FPT.AI) — ảnh chụp
+ * chỉ hiển thị trên máy, không gửi đi. Thông tin khách xác nhận được backend kiểm tra và lưu mã hoá AES-256 (thật).
  */
 export function KycCapture({ booking, onDone }: KycCaptureProps) {
   const [consent, setConsent] = useState(false);
   const [photos, setPhotos] = useState<Photos>({ front: null, back: null, face: null });
   const [phase, setPhase] = useState<"capture" | "scanning" | "review">("capture");
-  const [ocr] = useState(() => mockOcr(booking));
-  const [fields, setFields] = useState<Fields>(ocr.fields);
+  const [scan, setScan] = useState<EkycScanResult | null>(null);
+  const [fields, setFields] = useState<Fields | null>(null);
   const [touched, setTouched] = useState<Set<keyof Fields>>(new Set());
   const [checkedLow, setCheckedLow] = useState(false);
   const [mismatchConfirmed, setMismatchConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (phase !== "scanning") return;
-    const t = setTimeout(() => setPhase("review"), 1800);
-    return () => clearTimeout(t);
-  }, [phase]);
+  const [submitting, setSubmitting] = useState(false);
 
   const readyToScan = consent && photos.front && photos.back && photos.face;
-  const conf = ocr.confidence;
-  const lowKeys = (Object.keys(conf) as (keyof typeof conf)[]).filter(
-    (k) => conf[k] < LOW && !touched.has(k)
-  );
-
-  const isNameMismatch = String(fields.fullName || "").trim().toUpperCase() !== String(booking.tenant?.name || "").trim().toUpperCase();
+  const conf = (scan?.confidence ?? {}) as Record<keyof Fields, number>;
+  const lowKeys = (scan?.lowConfidenceKeys ?? []).filter((k) => !touched.has(k as keyof Fields));
+  const isNameMismatch = Boolean(fields && norm(fields.fullName) !== norm(booking.contact.name));
   const hasMismatch = isNameMismatch;
 
   const handleEdit = (k: keyof Fields, v: string) => {
-    setFields((prev) => ({ ...prev, [k]: v }));
+    setFields((prev) => (prev ? { ...prev, [k]: v } : prev));
     setTouched((prev) => new Set(prev).add(k));
   };
 
-  const handleSimulateMismatch = () => {
-    setFields((prev) => ({
-      ...prev,
-      fullName: "NGUYỄN VĂN AN (LỆCH)",
-    }));
-    setTouched((prev) => new Set(prev).add("fullName"));
+  const startScan = async () => {
+    setError(null);
+    setPhase("scanning");
+    const res = await tenantApi.scanEkyc(booking.ref, EKYC_CONSENT_VERSION);
+    if (!res.ok) {
+      setPhase("capture");
+      setError(errorText(res, "Không quét được CCCD. Vui lòng thử lại."));
+      return;
+    }
+    setScan(res.data);
+    setFields(res.data.fields);
+    setTouched(new Set());
+    setPhase("review");
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (!scan || !fields || submitting) return;
     setError(null);
-    identityApi
-      .verifyEkyc({
-        depositId: booking.id,
-        consentVersion: "v1.0",
-        hasConsent: consent,
-        idCardFrontUrl: photos.front || undefined,
-      })
-      .catch(() => null);
-
-    const res = saveKyc(booking.id, {
-      ...fields,
-      confidence: conf,
-      manuallyEdited: touched.size > 0,
-      faceMatch: ocr.face,
-    });
-
-    if (res.ok) {
-      onDone();
-    } else {
-      setError(res.reason || "Lưu xác minh CCCD thất bại.");
+    setSubmitting(true);
+    try {
+      const res = await tenantApi.submitEkyc(booking.ref, {
+        scanId: scan.scanId,
+        consentVersion: EKYC_CONSENT_VERSION,
+        fields,
+        confirmedLowConfidence: (scan.lowConfidenceKeys.length === 0 || checkedLow || lowKeys.length === 0),
+        confirmedNameMismatch: hasMismatch ? mismatchConfirmed : undefined,
+      });
+      if (!res.ok) {
+        if (res.code === "scan_expired") setPhase("capture");
+        setError(errorText(res, "Lưu xác minh CCCD thất bại."));
+        return;
+      }
+      onDone(res.data.booking);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -205,7 +189,7 @@ export function KycCapture({ booking, onDone }: KycCaptureProps) {
                 slot={s}
                 value={photos[s]}
                 disabled={!consent}
-                name={ocr.fields.fullName}
+                name={booking.contact.name.toUpperCase()}
                 onChange={(v) => setPhotos((prev) => ({ ...prev, [s]: v }))}
               />
             ))}
@@ -215,7 +199,7 @@ export function KycCapture({ booking, onDone }: KycCaptureProps) {
             type="button"
             className="btn btn-primary btn-lg btn-block"
             disabled={!readyToScan}
-            onClick={() => setPhase("scanning")}
+            onClick={() => void startScan()}
           >
             <ScanText size={18} /> Bóc tách thông tin bằng AI
           </button>
@@ -236,11 +220,12 @@ export function KycCapture({ booking, onDone }: KycCaptureProps) {
         </div>
       )}
 
-      {phase === "review" && (
+      {phase === "review" && scan && fields && (
         <>
           <div className={styles.faceOk}>
             <ShieldCheck size={18} /> Khuôn mặt khớp ảnh trên CCCD:{" "}
-            <b className="num">{Math.round(ocr.face * 100)}%</b>
+            <b className="num">{Math.round(scan.faceMatch * 100)}%</b>
+            {scan.simulated && <span className="muted xs"> · kết quả OCR mô phỏng (môi trường thử nghiệm)</span>}
           </div>
 
           {/* Cảnh báo mismatch nếu có lệch thông tin với lúc đặt lịch */}
@@ -267,7 +252,7 @@ export function KycCapture({ booking, onDone }: KycCaptureProps) {
                 <tbody>
                   <tr>
                     <td>Họ và tên</td>
-                    <td><b>{booking.tenant.name}</b></td>
+                    <td><b>{booking.contact.name}</b></td>
                     <td style={{ color: isNameMismatch ? "var(--danger)" : "inherit" }}>
                       <b>{fields.fullName}</b>
                     </td>
@@ -296,7 +281,7 @@ export function KycCapture({ booking, onDone }: KycCaptureProps) {
                 ["address", "Nơi thường trú"],
               ] as [keyof Fields, string][]
             ).map(([k, label]) => {
-              const c = (conf as Record<string, number>)[k];
+              const c = conf[k];
               const isLow = c !== undefined && c < LOW && !touched.has(k);
               return (
                 <label key={k} className="field">
@@ -340,18 +325,10 @@ export function KycCapture({ booking, onDone }: KycCaptureProps) {
               type="button"
               className="btn btn-primary btn-lg"
               style={{ flex: 1 }}
-              disabled={(lowKeys.length > 0 && !checkedLow) || (hasMismatch && !mismatchConfirmed)}
-              onClick={handleConfirm}
+              disabled={submitting || (lowKeys.length > 0 && !checkedLow) || (hasMismatch && !mismatchConfirmed)}
+              onClick={() => void handleConfirm()}
             >
               <Check size={18} /> Xác nhận thông tin (mã hóa AES-256)
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={handleSimulateMismatch}
-              title="Demo: Giả lập trường hợp khách quét thẻ có tên khác với lúc đặt lịch"
-            >
-              <RefreshCw size={14} /> Demo lệch tên
             </button>
           </div>
         </>

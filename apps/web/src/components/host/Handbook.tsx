@@ -5,9 +5,9 @@ import { KeyRound, Search, Smartphone } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
-import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/mock/cost";
-import { vnd } from "@/lib/mock/format";
-import { HOUSE_RULES } from "@/lib/mock/house-rules";
+import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/pricing/cost";
+import { vnd } from "@/lib/format";
+import { HOUSE_RULES } from "@/lib/legal/house-rules";
 import { UNITS, ZONES, unitAddress, zoneById, type Unit } from "@/lib/mock/units";
 import styles from "./Host.module.css";
 

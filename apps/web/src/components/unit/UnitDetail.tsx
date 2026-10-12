@@ -5,21 +5,13 @@ import { useState } from "react";
 import { Bath, BedDouble, Bot, Building2, CalendarPlus, Check, Compass, Layers, LockKeyhole, Minus, Plus, Ruler, Share2, ShieldCheck, Sofa, Star } from "lucide-react";
 import { BookingSheet } from "@/components/booking/BookingSheet";
 import { toast } from "@/components/ui/Toast";
-import { allInCost, DEFAULT_HOUSEHOLD, isBargain, RATES, savingsPct, type Household } from "@/lib/mock/cost";
-import { vnd, vndShort } from "@/lib/mock/format";
-import { holdHoursFor, similarUnits, unitStatus } from "@/lib/mock/selectors";
-import { HOUSE_RULES } from "@/lib/mock/house-rules";
-import { useMock } from "@/lib/mock/store";
-import {
-  FURNISHING_LABEL,
-  ITEM_LABEL,
-  PASSPORT_ITEMS,
-  getUnitLivingFees,
-  hostForUnit,
-  unitAddress,
-  zoneById,
-  type Unit,
-} from "@/lib/mock/units";
+import { allInCost, DEFAULT_HOUSEHOLD, isBargain, RATES, savingsPct, type Household } from "@/lib/pricing/cost";
+import { vnd, vndShort } from "@/lib/format";
+import { HOUSE_RULES } from "@/lib/legal/house-rules";
+import { useChat } from "@/lib/chat/store";
+import type { UnitWithExtras } from "@/lib/tenant/adapters";
+import { similarUnits, useCatalog } from "@/lib/tenant/catalog";
+import { FURNISHING_LABEL, ITEM_LABEL, PASSPORT_ITEMS, unitAddress, zoneById } from "@/lib/units";
 import { getBuildingPerks } from "@/lib/property/livingIntelligence";
 import { AllInBar } from "./AllInBar";
 import { FavoriteButton } from "./FavoriteButton";
@@ -48,21 +40,22 @@ function Stepper({ label, value, min, max, onChange }: { label: string; value: n
   );
 }
 
-export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBooking: boolean }) {
-  const state = useMock();
-  const zone = zoneById(unit.zoneId);
-  const host = hostForUnit(unit);
-  const status = unitStatus(state, unit);
-  const [hh, setHh] = useState<Household>(state.chat.criteria.household ?? DEFAULT_HOUSEHOLD);
+export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; autoOpenBooking: boolean }) {
+  const chat = useChat();
+  const catalog = useCatalog();
+  const zoneName = unit.zoneName || zoneById(unit.zoneId)?.name || "Ocean Park 1";
+  // Trạng thái căn đến thẳng từ backend (DB): available / holding / rented.
+  const status = unit.baseStatus;
+  const [hh, setHh] = useState<Household>(chat.criteria.household ?? DEFAULT_HOUSEHOLD);
   const [booking, setBooking] = useState(autoOpenBooking);
   const [conciergeOpen, setConciergeOpen] = useState(false);
-  const livingFees = getUnitLivingFees(unit);
   const buildingPerks = getBuildingPerks(unit.building, unit.zoneId);
   const cost = allInCost(unit, hh);
   const sv = savingsPct(unit);
   const bookable = status === "available";
-  const holdHours = holdHoursFor(state, unit.id);
-  const similar = similarUnits(state, unit, 3);
+  const holdHours = unit.holdHours;
+  const mgmtPerM2 = unit.managementFee && unit.areaM2 > 0 ? Math.round(unit.managementFee / unit.areaM2) : RATES.mgmtPerM2;
+  const similar = similarUnits(catalog.units, unit, 3);
 
   const share = async () => {
     const url = window.location.href;
@@ -81,7 +74,7 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
     { icon: Ruler, label: "Diện tích", value: `${unit.areaM2} m²` },
     { icon: BedDouble, label: "Phòng ngủ", value: unit.layoutLabel },
     { icon: Bath, label: "Vệ sinh", value: `${unit.bathrooms} WC` },
-    { icon: Compass, label: "Hướng", value: unit.direction },
+    ...(unit.directionRaw ? [{ icon: Compass, label: "Hướng", value: unit.directionRaw }] : []),
     { icon: Layers, label: "Tầng", value: `Tầng ${unit.floor}` },
     { icon: Sofa, label: "Nội thất", value: FURNISHING_LABEL[unit.furnishing] },
   ];
@@ -89,7 +82,7 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
   return (
     <div className={`wrap ${styles.page}`}>
       <nav className={`small muted ${styles.crumbs}`} aria-label="Đường dẫn">
-        <Link href="/">Trang chủ</Link> / <span>{zone.name}</span>
+        <Link href="/">Trang chủ</Link> / <span>{zoneName}</span>
       </nav>
 
       <Gallery unit={unit} />
@@ -107,11 +100,12 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
               <div>
                 <h1 className={styles.h1}>{unitAddress(unit)}</h1>
                 <p className="muted">
-                  {zone.name} · {unit.view} · mã {unit.code}
+                  {zoneName}
+                  {unit.view && unit.view !== "Chưa cập nhật" ? ` · ${unit.view}` : ""} · mã {unit.code}
                 </p>
               </div>
               <div className={styles.headActions}>
-                <FavoriteButton unitId={unit.id} variant="plain" />
+                <FavoriteButton unitCode={unit.code} variant="plain" />
                 <button type="button" className="icon-btn" aria-label="Chia sẻ căn hộ" onClick={share}>
                   <Share2 size={20} />
                 </button>
@@ -131,7 +125,7 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
 
           <section className={styles.block}>
             <h2>Trải nghiệm sống &amp; Kết nối thực tế</h2>
-            <LivingExperience unit={unit} criteria={state.chat.criteria} />
+            <LivingExperience unit={unit} criteria={chat.criteria} />
           </section>
 
           <section className={styles.block} aria-labelledby="allin">
@@ -158,7 +152,7 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
                 <Stepper label="Xe máy" value={hh.motorbikes} min={0} max={4} onChange={(n) => setHh({ ...hh, motorbikes: n })} />
                 <Stepper label="Ô tô" value={hh.cars} min={0} max={2} onChange={(n) => setHh({ ...hh, cars: n })} />
                 <p className="muted xs">
-                  Biểu phí thực tế toà {unit.building}: Phí quản lý {vnd(livingFees.managementFeePerM2)}đ/m² · xe máy {vndShort(livingFees.motorbikeFee)}/xe · ô tô {vndShort(livingFees.carFee)}/xe · điện nước EVN tính theo công tơ thực tế{livingFees.otherFeesNote ? ` (${livingFees.otherFeesNote})` : ""}.
+                  Biểu phí căn {unit.code}: Phí quản lý {vnd(mgmtPerM2)}đ/m² · xe máy {vndShort(RATES.motorbike)}/xe · ô tô {vndShort(RATES.car)}/xe · điện nước EVN tính theo công tơ thực tế.
                 </p>
               </div>
             </div>
@@ -172,19 +166,20 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
               </p>
             </div>
 
-            {unit.inventory && Array.isArray(unit.inventory) && unit.inventory.filter((l) => l.present).length > 0 ? (
+            {unit.inventory.length > 0 ? (
               <ul className={styles.items}>
-                {unit.inventory
-                  .filter((l) => l.present)
-                  .map((item) => (
-                    <li key={item.code || item.name}>
-                      <Check size={16} />
-                      <span>{item.name}</span>
-                      {typeof item.condition === "number" && (
-                        <b className="muted xs" style={{ marginLeft: 4 }}>({item.condition}% mới)</b>
-                      )}
-                    </li>
-                  ))}
+                {unit.inventory.map((item) => (
+                  <li key={item.code}>
+                    <Check size={16} />
+                    <span>
+                      {item.name}
+                      {item.qty > 1 ? ` ×${item.qty}` : ""}
+                    </span>
+                    {typeof item.conditionPct === "number" && (
+                      <b className="muted xs" style={{ marginLeft: 4 }}>({item.conditionPct}% mới)</b>
+                    )}
+                  </li>
+                ))}
                 {unit.petFriendly && (
                   <li>
                     <Check size={16} /> Cho nuôi thú cưng nhỏ
@@ -247,11 +242,11 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
               </div>
               <div>
                 <dt>Tiền cọc bảo đảm</dt>
-                <dd>Tương đương 1 tháng tiền thuê ({vnd(unit.rent)}đ), giữ nguyên suốt kỳ thuê</dd>
+                <dd>{vnd(unit.securityDeposit)}đ, giữ nguyên suốt kỳ thuê và hoàn lại khi trả nhà</dd>
               </div>
               <div>
                 <dt>Cọc giữ chỗ</dt>
-                <dd>{vnd(RATES.holdingDeposit)}đ, Căn được giữ riêng cho bạn {holdHours} giờ kể từ khi ngân hàng báo có, chuyển 100% vào tiền cọc bảo đảm, không trừ vào tiền thuê tháng đầu</dd>
+                <dd>{vnd(unit.holdingDeposit)}đ, Căn được giữ riêng cho bạn {holdHours} giờ kể từ khi ngân hàng báo có, chuyển 100% vào tiền cọc bảo đảm, không trừ vào tiền thuê tháng đầu</dd>
               </div>
               <div>
                 <dt>Nếu không ký hợp đồng</dt>
@@ -281,11 +276,14 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
           </section>
 
           <section className={`${styles.block} ${styles.hostCard}`}>
-            <span className={styles.hostAvatar}>{host.name.split(" ").slice(-1)[0][0]}</span>
+            <span className={styles.hostAvatar}>
+              <Star size={18} />
+            </span>
             <div>
-              <h2>Field Host phụ trách: {host.name}</h2>
+              <h2>Field Host nội khu {zoneName} dẫn xem</h2>
               <p className="muted">
-                <Star size={13} fill="currentColor" style={{ color: "var(--amber)", verticalAlign: "-1px" }} /> {String(host.rating).replace(".", ",")} · có thẻ cư dân thang máy · nhận lịch trong ≤ 3 phút. Số điện thoại chủ nhà được ẩn; mọi liên lạc đi qua Zalo VinStay.
+                Có thẻ cư dân thang máy · nhận lịch trong ≤ 3 phút. Tên và đánh giá của Host phụ trách hiện trong lịch hẹn ngay khi
+                Host xác nhận. Số điện thoại chủ nhà được ẩn; mọi liên lạc đi qua Zalo VinStay.
               </p>
             </div>
           </section>
@@ -343,7 +341,7 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: Unit; autoOpenBook
           <h2>Căn tương tự cùng layout</h2>
           <div className={styles.similarGrid}>
             {similar.map((u) => (
-              <UnitCard key={u.id} unit={u} cost={allInCost(u, hh)} />
+              <UnitCard key={u.code} unit={u} cost={allInCost(u, hh)} />
             ))}
           </div>
         </section>

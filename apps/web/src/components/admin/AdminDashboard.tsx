@@ -12,7 +12,7 @@ import { Trend } from "@/components/charts/Trend";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { adminApi } from "@/lib/apiClient";
-import { dayLabel, fmtTime, relTime } from "@/lib/mock/format";
+import { dayLabel, fmtTime, relTime } from "@/lib/format";
 import { funnel, noShowRate, noticesFor, unitStatus } from "@/lib/mock/selectors";
 import { dailyBookings, heatRows, occupancyOverall } from "@/lib/mock/stats";
 import { useMock } from "@/lib/mock/store";

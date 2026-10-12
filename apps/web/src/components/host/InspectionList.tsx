@@ -11,7 +11,7 @@ import { toast } from "@/components/ui/Toast";
 import { CONSIGN_STATUS_META } from "@/components/consign/status";
 import { hostAcceptInspection } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { fmtDateTime } from "@/lib/mock/format";
+import { fmtDateTime } from "@/lib/format";
 import { useEffect, useState } from "react";
 import { isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { setMockState, useMock } from "@/lib/mock/store";

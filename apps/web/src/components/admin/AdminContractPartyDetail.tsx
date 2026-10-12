@@ -23,7 +23,7 @@ import {
   type PartyRelation,
   type PartyRole,
 } from "@/lib/mock/contracts";
-import { fmtDate } from "@/lib/mock/format";
+import { fmtDate } from "@/lib/format";
 import { useMock } from "@/lib/mock/store";
 import { useNow } from "@/lib/useNow";
 import styles from "./Contracts.module.css";

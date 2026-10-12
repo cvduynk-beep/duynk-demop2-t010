@@ -12,7 +12,7 @@ import { ConsignTimeline } from "@/components/consign/ConsignTimeline";
 import { InspectionReportView } from "@/components/consign/InspectionReportView";
 import { hostAcceptInspection, submitInspection, approveConsignment } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { fmtTime, vnd } from "@/lib/mock/format";
+import { fmtTime, vnd } from "@/lib/format";
 import { compressInspectionPhoto } from "@/lib/host/inspectionPhotos";
 import { validateInspectionPhoto } from "@/lib/host/aiVisionValidator";
 import { InspectionPhotoModal } from "./InspectionPhotoModal";

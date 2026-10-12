@@ -1,5 +1,5 @@
-import type { Unit, ZoneId } from "@/lib/mock/units";
-import type { CriteriaState } from "@/lib/mock/types";
+import type { Unit, ZoneId } from "@/lib/units";
+import type { CriteriaState } from "@/lib/chat/types";
 
 export interface CommuteDestination {
   name: string;
@@ -12,7 +12,7 @@ export interface CommuteDestination {
 
 export interface BuildingKnowledge {
   building: string;
-  zoneId: ZoneId;
+  zoneId?: ZoneId;
   vinUni: CommuteDestination;
   technoPark: CommuteDestination;
   vinBusStation: {
@@ -283,7 +283,7 @@ export const BUILDING_GEO_REGISTRY: Record<string, Partial<BuildingKnowledge>> =
 /**
  * Fallback dữ liệu kết nối theo Phân khu nếu tòa nhà chưa có trong bảng chi tiết.
  */
-function getZoneFallbackCommute(zoneId: ZoneId, building: string): BuildingKnowledge {
+function getZoneFallbackCommute(zoneId: ZoneId | undefined, building: string): BuildingKnowledge {
   switch (zoneId) {
     case "sapphire2":
       return {
@@ -347,7 +347,7 @@ function getZoneFallbackCommute(zoneId: ZoneId, building: string): BuildingKnowl
 /**
  * Lấy đầy đủ thông tin vị trí thực tế của một tòa nhà cụ thể.
  */
-export function getBuildingKnowledge(building: string, zoneId: ZoneId): BuildingKnowledge {
+export function getBuildingKnowledge(building: string, zoneId?: ZoneId): BuildingKnowledge {
   const specific = BUILDING_GEO_REGISTRY[building];
   const fallback = getZoneFallbackCommute(zoneId, building);
 
@@ -512,7 +512,7 @@ export function getUnitLivingInsights(unit: Unit, criteria?: CriteriaState): Uni
 /**
  * Lấy danh mục tiện ích thực tế chính xác 100% của từng tòa nhà / phân khu
  */
-export function getBuildingPerks(building: string, zoneId: ZoneId): string[] {
+export function getBuildingPerks(building: string, zoneId?: ZoneId): string[] {
   switch (zoneId) {
     case "zenpark":
       return [

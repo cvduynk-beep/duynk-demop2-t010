@@ -7,7 +7,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
 import { adminReassign } from "@/lib/mock/actions";
-import { dayLabel, fmtTime, maskPhone } from "@/lib/mock/format";
+import { dayLabel, fmtTime, maskPhone } from "@/lib/format";
 import { setMockState, useMock } from "@/lib/mock/store";
 import { HOSTS, hostById, unitAddress, unitById } from "@/lib/mock/units";
 import type { Booking } from "@/lib/mock/types";

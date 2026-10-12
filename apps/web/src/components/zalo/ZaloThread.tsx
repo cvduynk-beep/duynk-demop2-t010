@@ -1,8 +1,8 @@
 "use client";
 
 import { Fragment } from "react";
-import { fmtTime, dayLabel } from "@/lib/mock/format";
-import type { Notice, NoticeAction } from "@/lib/mock/types";
+import { fmtTime, dayLabel } from "@/lib/format";
+import type { Notice, NoticeAction } from "@/lib/simulated/zalo";
 import styles from "./ZaloThread.module.css";
 
 interface ZaloBubbleProps {

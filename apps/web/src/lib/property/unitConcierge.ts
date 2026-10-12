@@ -1,6 +1,6 @@
 import { FURNISHING_LABEL, ITEM_LABEL, hostForUnit, type Unit } from "@/lib/mock/units";
 import { getUnitLivingInsights } from "./livingIntelligence";
-import { vnd } from "@/lib/mock/format";
+import { vnd } from "@/lib/format";
 
 export interface ConciergeAnswer {
   text: string;

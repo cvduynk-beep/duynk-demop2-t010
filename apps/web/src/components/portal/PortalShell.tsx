@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { signOut } from "@/lib/auth/client";
-import { initials } from "@/lib/mock/format";
+import { initials } from "@/lib/format";
 import styles from "./PortalShell.module.css";
 
 export interface PortalNavChild {

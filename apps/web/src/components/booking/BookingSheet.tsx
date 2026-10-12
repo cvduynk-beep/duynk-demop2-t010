@@ -16,22 +16,23 @@ import {
   MessageCircleMore,
   Pencil,
   Phone,
-  ShieldCheck,
   Sparkles,
   User,
   Users,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { OtpInput } from "@/components/ui/OtpInput";
+import { toast } from "@/components/ui/Toast";
 import { ZaloBubble } from "@/components/zalo/ZaloThread";
-import { bookingApi } from "@/lib/apiClient";
-import { createBooking, requestOtp, verifyOtp } from "@/lib/mock/actions";
-import { fmtDateTime, fmtPhone, fmtTime, isValidVnPhone, normalizePhone } from "@/lib/mock/format";
-import { useMock } from "@/lib/mock/store";
-import type { Booking } from "@/lib/mock/types";
-import { unitAddress, type Unit } from "@/lib/mock/units";
+import { accountApi } from "@/lib/apiClient";
+import { fmtDateTime, fmtPhone, fmtTime, isValidVnPhone, normalizePhone } from "@/lib/format";
+import { useApiQuery } from "@/lib/query/useApiQuery";
+import { otpNotice, type Notice } from "@/lib/simulated/zalo";
+import { errorText, tenantApi } from "@/lib/tenant/api";
+import { invalidateTenantBookings, invalidateTenantUnit, tenantQueries } from "@/lib/tenant/queries";
+import type { TenantBooking } from "@/lib/tenant/types";
+import { unitAddress, type Unit } from "@/lib/units";
 import { useRole, useSession } from "@/lib/auth/client";
-import { canSkipBookingOtp } from "@/lib/mock/selectors-tenant";
 import { useNow } from "@/lib/useNow";
 import { SlotPicker } from "./SlotPicker";
 import styles from "./BookingSheet.module.css";
@@ -59,31 +60,41 @@ export function BookingSheet({ unit, open, onClose }: BookingSheetProps) {
 }
 
 function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
-  const state = useMock();
   const { user } = useSession();
   const role = useRole();
   const isTenant = role === "tenant";
   const now = useNow(30_000);
+  // Khung giờ đã có người đặt (API A3) — SlotPicker khoá các ô này.
+  const busy = useApiQuery(tenantQueries.busySlots(unit.code));
+  const busySlots = busy.state.status === "ready" ? busy.state.data.slots : [];
+  // Hồ sơ của chính khách (SĐT đã xác thực Zalo ⇒ được bỏ qua bước OTP; backend kiểm lại lần nữa).
+  const profileQuery = useApiQuery(
+    { key: "tenant:me:profile", fetch: accountApi.getProfile, errorText: (res) => errorText(res, "Không tải được hồ sơ.") },
+    isTenant,
+  );
+  const profile = profileQuery.state.status === "ready" ? profileQuery.state.data : null;
 
   const [step, setStep] = useState<Step>("slot");
   const [slot, setSlot] = useState<string | null>(null);
-  const defaultName = state.tenantProfile?.name || (isTenant ? user?.fullName ?? "" : "");
-  const defaultPhone = state.tenantProfile?.phone || "";
+  const defaultName = profile?.fullName || user?.fullName || "";
+  const defaultPhone = profile?.phone || "";
   const [nameInput, setNameInput] = useState<string | null>(null);
   const [phoneInput, setPhoneInput] = useState<string | null>(null);
   const name = nameInput ?? defaultName;
   const phone = phoneInput ?? defaultPhone;
   const [persons, setPersons] = useState(1);
   const [note, setNote] = useState("");
-  const [consent, setConsent] = useState(false);
   const [editingTenant, setEditingTenant] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; phone?: string; consent?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
   const [code, setCode] = useState("");
   const [otpError, setOtpError] = useState(false);
+  const [otpErrorMsg, setOtpErrorMsg] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
-  const [booking, setBooking] = useState<Booking | null>(null);
+  const [otpZalo, setOtpZalo] = useState<Notice | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [booking, setBooking] = useState<TenantBooking | null>(null);
 
-  const canSkip = canSkipBookingOtp(state, role, phone);
+  const canSkip = Boolean(profile?.isPhoneVerified && profile.phone && normalizePhone(phone) === normalizePhone(profile.phone));
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -93,42 +104,97 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
 
   const chosen = slot ? new Date(slot) : null;
   const p = normalizePhone(phone);
-  const otpNotice = state.notices.find((n) => n.audience === "tenant" && n.toKey === p && n.title === "Mã xác thực VinStay AI");
 
-  const sendOtp = () => {
+  /** Gửi OTP Zalo thật (`POST /auth/otp/send`). Ở dev backend trả `devCode` ⇒ hiện tin Zalo mô phỏng chứa mã. */
+  const requestCode = async () => {
+    setSubmitting(true);
+    setOtpError(false);
+    setOtpErrorMsg(null);
+    try {
+      const res = await tenantApi.sendOtp(p, "TENANT_VIEWING");
+      if (!res.ok) {
+        const msg = errorText(res);
+        setErrors((prev) => ({ ...prev, phone: msg }));
+        toast(msg);
+        return false;
+      }
+      setCode("");
+      setOtpZalo(res.data.devCode ? otpNotice(res.data.devCode, "TENANT_VIEWING") : null);
+      setCooldown(30);
+      return true;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /** Tạo lịch (`POST /bookings`); không có action token ⇒ backend chỉ nhận khi SĐT tài khoản đã xác thực. */
+  const book = async (actionToken?: string) => {
+    if (!slot) return false;
+    const res = await tenantApi.createBooking({
+      unitCode: unit.code,
+      slot,
+      contactName: name.trim(),
+      phone: p,
+      partySize: persons,
+      note: note.trim() || undefined,
+      actionToken,
+    });
+    if (!res.ok) {
+      if (res.code === "otp_required" && !actionToken) {
+        if (await requestCode()) setStep("otp");
+        return false;
+      }
+      const msg = errorText(res);
+      setOtpErrorMsg(msg);
+      toast(msg);
+      return false;
+    }
+    invalidateTenantBookings();
+    invalidateTenantUnit(unit.code);
+    setBooking(res.data);
+    setStep("done");
+    return true;
+  };
+
+  const validate = () => {
     const next: typeof errors = {};
     if (name.trim().length < 2) next.name = "Vui lòng nhập họ và tên để Field Host biết xưng hô khi đón bạn.";
     if (!isValidVnPhone(phone)) next.phone = "Số điện thoại chưa hợp lệ. Ví dụ đúng: 0912 345 678.";
-    if (!isTenant && !consent) next.consent = "Vui lòng đồng ý điều khoản xác thực để tiếp tục.";
     setErrors(next);
-    if (Object.keys(next).length) return;
-
-    if (canSkip && slot) {
-      bookingApi.create({ unitId: unit.id, slot, name, phone: p, persons, note }).catch(() => null);
-      setBooking(createBooking({ unitId: unit.id, slot, name, phone: p, persons, note }));
-      setStep("done");
-      return;
-    }
-
-    bookingApi.requestOtp({ phone: p, fullName: name }).catch(() => null);
-    requestOtp(p, "booking");
-    setCode("");
-    setOtpError(false);
-    setCooldown(30);
-    setStep("otp");
+    return Object.keys(next).length === 0 && Boolean(slot);
   };
 
-  const onCode = (v: string) => {
+  const sendOtp = async () => {
+    if (!validate()) return;
+    if (await requestCode()) setStep("otp");
+  };
+
+  const confirmWithoutOtp = async () => {
+    if (!validate()) return;
+    setSubmitting(true);
+    try {
+      await book();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const onCode = async (v: string) => {
     setCode(v);
     setOtpError(false);
-    if (v.length === 4) {
-      if (verifyOtp(v) && slot) {
-        bookingApi.create({ unitId: unit.id, slot, name, phone: p, persons, note }).catch(() => null);
-        setBooking(createBooking({ unitId: unit.id, slot, name, phone: p, persons, note }));
-        setStep("done");
-      } else {
+    setOtpErrorMsg(null);
+    if (v.length !== 4 || submitting) return;
+    setSubmitting(true);
+    try {
+      const verified = await tenantApi.verifyOtp(p, v, "TENANT_VIEWING");
+      if (!verified.ok) {
         setOtpError(true);
+        setOtpErrorMsg(errorText(verified));
+        return;
       }
+      if (!(await book(verified.data.actionToken))) setOtpError(true);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -146,7 +212,7 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
             Đặt lịch xem nhà thành công!
           </h3>
           <p className={styles.doneSub}>
-            Field Host nội khu sẽ nhận ca trong vòng 3 phút. VinStay AI sẽ nhắn thông báo và nút 1-chạm xác nhận có mặt qua Zalo <strong>{fmtPhone(booking.tenant.phone)}</strong>.
+            Field Host nội khu sẽ nhận ca trong vòng 3 phút. VinStay AI sẽ nhắn thông báo và nút 1-chạm xác nhận có mặt qua Zalo <strong>{booking.contact.phoneMasked || fmtPhone(p)}</strong>.
           </p>
         </div>
 
@@ -200,7 +266,7 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
                 <Users size={14} />
                 <span>Số người tham quan</span>
               </div>
-              <div className={styles.ticketItemVal}>{booking.tenant.persons} người</div>
+              <div className={styles.ticketItemVal}>{booking.contact.persons} người</div>
             </div>
           </div>
 
@@ -296,13 +362,24 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
           {now > 0 && (
             <>
               <h4 style={{ margin: "14px 0 6px", fontSize: 15, fontWeight: 700 }}>Chọn ngày bạn muốn xem</h4>
-              <SlotPicker now={now} value={slot} onChange={setSlot} />
+              <SlotPicker now={now} value={slot} onChange={setSlot} busySlots={busySlots} />
             </>
           )}
 
-          <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!slot} onClick={() => setStep("info")}>
-            {chosen ? `Tiếp tục với ${fmtTime(chosen)}` : "Chọn một khung giờ"}
-          </button>
+          {isTenant ? (
+            <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!slot} onClick={() => setStep("info")}>
+              {chosen ? `Tiếp tục với ${fmtTime(chosen)}` : "Chọn một khung giờ"}
+            </button>
+          ) : (
+            <div style={{ display: "grid", gap: 8 }}>
+              <Link href={`/login?next=${encodeURIComponent(`/units/${unit.code}?book=1`)}`} className="btn btn-primary btn-lg btn-block">
+                Đăng nhập để đặt lịch
+              </Link>
+              <p className="xs muted" style={{ textAlign: "center", margin: 0 }}>
+                Lịch xem gắn với tài khoản Khách thuê để bạn theo dõi, đổi giờ và giữ căn an toàn (NĐ 13/2023).
+              </p>
+            </div>
+          )}
         </>
       )}
 
@@ -466,53 +543,21 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
             />
           </div>
 
-          {!isTenant && (
-            <div className={`${styles.securityCard} ${errors.consent ? styles.securityCardError : ""}`}>
-              <div className={styles.securityHeader}>
-                <ShieldCheck size={18} className={styles.securityIcon} />
-                <span className={styles.securityTitle}>Bảo mật thông tin & Cam kết 0% spam môi giới</span>
-              </div>
-              <p className={styles.securityText}>
-                VinStay AI mã hóa số điện thoại, tuyệt đối không chuyển giao cho môi giới tự do làm phiền. SĐT chỉ dùng để Field Host nội khu gửi mã Zalo OTP và đón bạn tại sảnh toà nhà.
-              </p>
-              <label className={styles.consentLabel}>
-                <input
-                  type="checkbox"
-                  className={styles.consentCheckbox}
-                  checked={consent}
-                  onChange={(e) => {
-                    setConsent(e.target.checked);
-                    if (errors.consent) setErrors((prev) => ({ ...prev, consent: undefined }));
-                  }}
-                />
-                <span className={styles.consentText}>
-                  Tôi đồng ý xác thực số điện thoại và nhận thông báo lịch xem nhà qua Zalo theo Nghị định 13/2023/NĐ-CP.
-                </span>
-              </label>
-              {errors.consent && <span className="field-error">{errors.consent}</span>}
-            </div>
-          )}
 
           {canSkip ? (
             <button
               type="button"
               className={`btn btn-primary btn-lg btn-block ${styles.submitBtn}`}
               onClick={() => {
-                const next: typeof errors = {};
-                if (name.trim().length < 2) next.name = "Vui lòng nhập họ và tên để Field Host biết xưng hô khi đón bạn.";
-                if (!isValidVnPhone(phone)) next.phone = "Số điện thoại chưa hợp lệ. Ví dụ đúng: 0912 345 678.";
-                setErrors(next);
-                if (Object.keys(next).length || !slot) return;
-
-                setBooking(createBooking({ unitId: unit.id, slot, name, phone: p, persons, note }));
-                setStep("done");
+                void confirmWithoutOtp();
               }}
+              disabled={submitting}
             >
               <CheckCircle2 size={18} />
               <span>Xác nhận đặt lịch</span>
             </button>
           ) : (
-            <button type="button" className={`btn btn-primary btn-lg btn-block ${styles.submitBtn}`} onClick={sendOtp}>
+            <button type="button" className={`btn btn-primary btn-lg btn-block ${styles.submitBtn}`} onClick={() => void sendOtp()} disabled={submitting}>
               <MessageCircleMore size={18} />
               <span>Tiếp tục xác thực Zalo OTP</span>
             </button>
@@ -538,29 +583,24 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
           </div>
 
           <div className={styles.otpInputWrap}>
-            <OtpInput value={code} onChange={onCode} error={otpError} autoFocus />
-            {otpError && <p className="field-error">Mã chưa đúng. Kiểm tra lại tin nhắn Zalo rồi nhập lại.</p>}
+            <OtpInput value={code} onChange={(v) => void onCode(v)} error={otpError} autoFocus />
+            {otpError && <p className="field-error">{otpErrorMsg ?? "Mã chưa đúng. Kiểm tra lại tin nhắn Zalo rồi nhập lại."}</p>}
             <button
               type="button"
               className={`btn btn-quiet btn-sm ${styles.resendBtn}`}
-              disabled={cooldown > 0}
-              onClick={() => {
-                requestOtp(p, "booking");
-                setCode("");
-                setOtpError(false);
-                setCooldown(30);
-              }}
+              disabled={cooldown > 0 || submitting}
+              onClick={() => void requestCode()}
             >
               {cooldown > 0 ? `Gửi lại mã sau ${cooldown}s` : "Gửi lại mã OTP qua Zalo"}
             </button>
           </div>
 
-          {otpNotice && (
+          {otpZalo && (
             <div className={styles.demoZalo}>
               <p className="xs muted">
-                <CalendarCheck size={13} style={{ verticalAlign: "-2px" }} /> Bản demo: tin Zalo mô phỏng bạn sẽ nhận
+                <CalendarCheck size={13} style={{ verticalAlign: "-2px" }} /> Bản thử nghiệm: tin Zalo mô phỏng chứa mã backend vừa phát
               </p>
-              <ZaloBubble notice={otpNotice} now={now} />
+              <ZaloBubble notice={otpZalo} now={now} />
             </div>
           )}
         </>

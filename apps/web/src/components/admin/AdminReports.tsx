@@ -23,7 +23,7 @@ import { StatTile } from "@/components/charts/StatTile";
 import { DataTable } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { toast } from "@/components/ui/Toast";
-import { vnd, vndShort } from "@/lib/mock/format";
+import { vnd, vndShort } from "@/lib/format";
 import {
   computeReportSummary,
   exportReportToCsv,

@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { PORTAL_HOME, type Portal } from "@/lib/auth/portals";
+import { PORTAL_HOME, hostHome, type HostRoleCode, type Portal, type SessionUser } from "@/lib/auth/portals";
 import { hintDisplayName, useGoogleHint } from "@/lib/auth/googleHint";
 import { GoogleMark } from "./GoogleMark";
-import { RfidVerifyStep } from "./RfidVerifyStep";
 import { API_BASE, errorMessage, postJson } from "./authApi";
 import styles from "./auth.module.css";
 
@@ -20,17 +19,15 @@ interface PortalAuthProps {
 }
 
 interface LoginData {
-  needsRfidVerification?: boolean;
-  hostId?: string;
+  user?: Pick<SessionUser, "hostRoles">;
 }
 
 /**
  * Login (+ signup where allowed) for one role, by Google or email + password.
- * Admin is email + password only and cannot sign up.
- * Host (on first login) must verify their RFID card number.
+ * Admin is email + password only; Field Host accounts are created by Admin. Neither can sign up.
  */
 export function PortalAuth({ portal, label, initialError, initialNotice, next }: PortalAuthProps) {
-  const canSignup = portal !== "admin";
+  const canSignup = portal === "tenant" || portal === "landlord";
   const canGoogle = portal !== "admin"; // Admin chỉ đăng nhập email + mật khẩu
 
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -40,12 +37,11 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next }:
   const [error, setError] = useState<string | null>(initialError ? errorMessage(initialError) : null);
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
   const [loading, setLoading] = useState(false);
-  const [pendingRfid, setPendingRfid] = useState<string | null>(null);
   const googleHint = useGoogleHint();
 
-  function enter() {
-    const destination = next ?? PORTAL_HOME[portal];
-    window.location.assign(destination);
+  /** Host vào trang theo vai (Sale ⇒ điều phối, chỉ Thẩm định ⇒ thẩm định). */
+  function enter(roles?: HostRoleCode[]) {
+    window.location.assign(next ?? (portal === "host" ? hostHome(roles ?? []) : PORTAL_HOME[portal]));
   }
 
   // Google chạy hoàn toàn ở backend (PKCE): điều hướng trình duyệt, không dùng fetch.
@@ -84,17 +80,12 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next }:
             : "";
         return setError(errorMessage(res.code) + googleTip);
       }
-      if (portal === "host" && res.data.needsRfidVerification && res.data.hostId) return setPendingRfid(res.data.hostId);
-      return enter();
+      return enter(res.data.user?.hostRoles);
     } catch (cause) {
       networkError(cause);
     } finally {
       setLoading(false);
     }
-  }
-
-  if (pendingRfid) {
-    return <RfidVerifyStep hostId={pendingRfid} onDone={enter} />;
   }
 
   return (

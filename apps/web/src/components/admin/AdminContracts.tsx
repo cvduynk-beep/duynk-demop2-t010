@@ -8,7 +8,7 @@ import { CONTRACT_KIND_META, CONTRACT_STATUS_META } from "@/components/contracts
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { fmtDate, vnd, vndShort } from "@/lib/mock/format";
+import { fmtDate, vnd, vndShort } from "@/lib/format";
 import { contractKpis, contractRows, type ContractKind, type ContractRow, type ContractStatus } from "@/lib/mock/contracts";
 import { useMock } from "@/lib/mock/store";
 import { useNow } from "@/lib/useNow";

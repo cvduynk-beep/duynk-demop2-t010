@@ -1,8 +1,8 @@
 "use client";
 
 import { Building2, Bus, Car, Compass, GraduationCap, Layers, Sparkles } from "lucide-react";
-import type { Unit } from "@/lib/mock/units";
-import type { CriteriaState } from "@/lib/mock/types";
+import type { Unit } from "@/lib/units";
+import type { CriteriaState } from "@/lib/chat/types";
 import { getUnitLivingInsights } from "@/lib/property/livingIntelligence";
 import styles from "./LivingExperience.module.css";
 

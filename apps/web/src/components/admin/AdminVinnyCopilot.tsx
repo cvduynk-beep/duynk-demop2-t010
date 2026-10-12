@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { ButlerMascot } from "@/components/mascot/ButlerMascot";
 import { useMock } from "@/lib/mock/store";
-import { vnd } from "@/lib/mock/format";
+import { vnd } from "@/lib/format";
 import {
   AGENT_KPIS,
   CAMPAIGN_DATA,

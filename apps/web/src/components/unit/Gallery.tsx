@@ -3,14 +3,25 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Images, X } from "lucide-react";
-import { fmtDate } from "@/lib/mock/format";
-import { unitPhoto, type Unit } from "@/lib/mock/units";
-import { VerifiedPhoto } from "./VerifiedPhoto";
+import { fmtDateTime } from "@/lib/format";
+import { unitPhoto } from "@/lib/units";
+import { VerifiedPhoto, type PhotoUnit } from "./VerifiedPhoto";
+
+type GalleryUnit = PhotoUnit & { photos: string[] };
 import styles from "./Gallery.module.css";
 
-export function Gallery({ unit }: { unit: Unit }) {
+export function Gallery({ unit }: { unit: GalleryUnit }) {
   const [open, setOpen] = useState<number | null>(null);
-  const n = unit.images;
+  const n = unit.photos.length;
+  if (n === 0) {
+    return (
+      <div className={`${styles.grid} ${styles.n1}`}>
+        <div className={styles.cell}>
+          <VerifiedPhoto unit={unit} sizes="(max-width: 900px) 100vw, 640px" stamp="none" className={styles.fill} />
+        </div>
+      </div>
+    );
+  }
   const shown = Math.min(n, 5);
   const idx = Array.from({ length: n }, (_, i) => i + 1);
 
@@ -59,9 +70,10 @@ export function Gallery({ unit }: { unit: Unit }) {
   );
 }
 
-function Lightbox({ unit, start, onClose }: { unit: Unit; start: number; onClose: () => void }) {
+function Lightbox({ unit, start, onClose }: { unit: GalleryUnit; start: number; onClose: () => void }) {
   const [i, setI] = useState(start);
-  const n = unit.images;
+  const n = unit.photos.length;
+  const src = unitPhoto({ id: unit.code, photos: unit.photos }, i);
   const go = (d: number) => setI((cur) => ((cur - 1 + d + n) % n) + 1);
 
   useEffect(() => {
@@ -89,10 +101,11 @@ function Lightbox({ unit, start, onClose }: { unit: Unit; start: number; onClose
       </button>
       <figure className={styles.lbFig}>
         <div className={styles.lbImg}>
-          <Image src={unitPhoto(unit, i)} alt={`Căn ${unit.code}, ảnh ${i}`} fill sizes="90vw" className={styles.contain} priority />
+          {src && <Image src={src} alt={`Căn ${unit.code}, ảnh ${i}`} fill sizes="90vw" className={styles.contain} priority />}
         </div>
         <figcaption>
-          Ảnh {i}/{n} · Đã xác minh {fmtDate(unit.verifiedAt)} 14:20 · {unit.code}
+          Ảnh {i}/{n}
+          {unit.verifiedAt ? ` · Đã xác minh ${fmtDateTime(unit.verifiedAt)}` : ""} · {unit.code}
         </figcaption>
       </figure>
       <button type="button" className={`${styles.lbBtn} ${styles.lbNext}`} onClick={() => go(1)} aria-label="Ảnh sau">

@@ -9,7 +9,7 @@ import { Section } from "@/components/ui/Section";
 import { toast } from "@/components/ui/Toast";
 import { setHoldHours } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { fmtDateTime } from "@/lib/mock/format";
+import { fmtDateTime } from "@/lib/format";
 import { useMock } from "@/lib/mock/store";
 import type { HoldAudit } from "@/lib/mock/types";
 import { unitAddress, unitById } from "@/lib/mock/units";

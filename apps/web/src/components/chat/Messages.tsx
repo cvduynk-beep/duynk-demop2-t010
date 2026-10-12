@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Sparkles } from "lucide-react";
 import { Facade } from "@/components/brand/Facade";
-import { fmtTime } from "@/lib/mock/format";
+import { fmtTime } from "@/lib/format";
 import type { ChatMessage } from "@/lib/mock/types";
 import { InlineChatUnits } from "./InlineChatUnits";
 import styles from "./Messages.module.css";

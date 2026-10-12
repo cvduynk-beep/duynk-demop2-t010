@@ -5,27 +5,17 @@ import { useSearchParams } from "next/navigation";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Tabs } from "@/components/auth/Tabs";
 import { PortalAuth } from "@/components/auth/PortalAuth";
-import { RfidVerifyStep } from "@/components/auth/RfidVerifyStep";
 import { safeNext } from "@/lib/auth/portals";
 
 type Tab = "host" | "admin";
 
 /**
- * Internal login: Field Host (Google or email + password) and Admin
- * (email + password, no signup). Host must verify RFID on first login.
+ * Internal login: Field Host (Google or email + password) and Admin (email + password).
+ * Neither can sign up: Admin creates Field Host accounts (POST /admin/field-hosts).
  */
 export function AdminLoginTabs() {
   const searchParams = useSearchParams();
-  const rfidPending = searchParams.get("rfidPending");
   const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "admin" ? "admin" : "host");
-
-  if (rfidPending) {
-    return (
-      <AuthShell brandFoot="Nội bộ team P-010.">
-        <RfidVerifyStep hostId={rfidPending} onDone={() => {}} />
-      </AuthShell>
-    );
-  }
 
   return (
     <AuthShell brandFoot="Nội bộ team P-010.">
@@ -51,7 +41,7 @@ export function AdminLoginTabs() {
       />
       {tab === "host" && (
         <p style={{ marginTop: 24, fontSize: "0.82rem", color: "var(--slate)" }}>
-          Chỉ email đã được Admin thêm vào danh sách Field Host mới đăng ký được.
+          Tài khoản Field Host do Admin tạo. Chưa có tài khoản? Liên hệ Admin phân khu.
         </p>
       )}
     </AuthShell>

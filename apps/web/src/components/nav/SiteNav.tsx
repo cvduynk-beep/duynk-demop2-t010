@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CalendarSearch, ChevronDown, FileText, Heart, LogIn, LogOut, Menu, User, X } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
-import { initials } from "@/lib/mock/format";
+import { initials } from "@/lib/format";
 import { ROLE_LABEL } from "@/lib/mock/actors";
 import { PORTAL_HOME } from "@/lib/auth/portals";
 import { signOut, useRole, useSession } from "@/lib/auth/client";

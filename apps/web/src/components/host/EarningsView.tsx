@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { hostApi } from "@/lib/apiClient";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { fmtDate, vnd } from "@/lib/mock/format";
+import { fmtDate, vnd } from "@/lib/format";
 import { useNow } from "@/lib/useNow";
 import { hostBookings, hostEarnings } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";

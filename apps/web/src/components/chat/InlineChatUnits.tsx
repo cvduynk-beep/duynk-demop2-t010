@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { ArrowRight, ChevronRight, Sparkles, Zap } from "lucide-react";
 import { VerifiedPhoto } from "@/components/unit/VerifiedPhoto";
-import { isBargain, savingsPct } from "@/lib/mock/cost";
-import { vnd } from "@/lib/mock/format";
+import { isBargain, savingsPct } from "@/lib/pricing/cost";
+import { vnd } from "@/lib/format";
 import { unitAddress, unitById, zoneById, type Unit } from "@/lib/mock/units";
 import type { CriteriaState } from "@/lib/mock/types";
 import styles from "./InlineChatUnits.module.css";

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { parseSetCookie } from "@/lib/auth/setCookie";
-import { loginPathFor, portalForPath, type Portal, type SessionUser } from "@/lib/auth/portals";
+import { hostGateRedirect, loginPathFor, portalForPath, type Portal, type SessionUser } from "@/lib/auth/portals";
 
 const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 
@@ -40,6 +40,14 @@ export async function proxy(request: NextRequest) {
     const target = new URL(loginPathFor(required), request.url);
     target.searchParams.set("next", pathname + search);
     const redirect = NextResponse.redirect(target);
+    for (const c of setCookies) redirect.headers.append("set-cookie", c);
+    return redirect;
+  }
+
+  // Field Host chưa có hồ sơ (Admin chưa tạo) ⇒ về màn đăng nhập kèm lỗi, không vào trang Host.
+  const gate = required === "host" ? hostGateRedirect(user) : null;
+  if (gate) {
+    const redirect = NextResponse.redirect(new URL(gate, request.url));
     for (const c of setCookies) redirect.headers.append("set-cookie", c);
     return redirect;
   }

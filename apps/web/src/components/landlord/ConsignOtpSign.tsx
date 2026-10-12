@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { MessageCircleMore } from "lucide-react";
 import { OtpInput } from "@/components/ui/OtpInput";
-import { fmtPhone, isValidVnPhone, normalizePhone } from "@/lib/mock/format";
+import { fmtPhone, isValidVnPhone, normalizePhone } from "@/lib/format";
 import { errorText, landlordApi } from "@/lib/landlord/api";
 import type { Consignment, SignOtpInfo } from "@/lib/landlord/types";
 

@@ -24,7 +24,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { toast } from "@/components/ui/Toast";
 import { CONSIGN_STATUS_META } from "@/components/consign/status";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { fmtTime, relTime, vnd, vndShort } from "@/lib/mock/format";
+import { fmtTime, relTime, vnd, vndShort } from "@/lib/format";
 import {
   holdMsLeft,
   isOpenBooking,

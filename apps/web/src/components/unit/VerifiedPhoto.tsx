@@ -1,14 +1,20 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
-import { fmtDate } from "@/lib/mock/format";
-import { unitPhoto, type Unit } from "@/lib/mock/units";
-import { BadgeCheck } from "lucide-react";
+import { BadgeCheck, ImageOff } from "lucide-react";
+import { unitPhoto } from "@/lib/units";
 import styles from "./VerifiedPhoto.module.css";
 
+/** Tối thiểu cần để hiện ảnh thật của một căn: mã căn, danh sách URL ảnh (API) và mốc xác minh. */
+export interface PhotoUnit {
+  id?: string;
+  code: string;
+  photos?: string[];
+  verifiedAt?: string | null;
+}
+
 interface VerifiedPhotoProps {
-  unit: Unit;
+  unit: PhotoUnit;
   index?: number;
   sizes: string;
   priority?: boolean;
@@ -18,36 +24,36 @@ interface VerifiedPhotoProps {
   style?: React.CSSProperties;
 }
 
-const FALLBACK_PHOTO = "/units/s1-02-05-0502/1.jpg";
-
-/** Ảnh thật của căn, kèm dấu Verified có timestamp (chống tin mồi, chống môi giới copy ảnh). */
+/**
+ * Ảnh thật của căn (URL từ backend), kèm dấu Verified có timestamp thật (chống tin mồi, chống môi giới copy ảnh).
+ * Căn chưa có ảnh ⇒ ô "Chưa có ảnh", tuyệt đối không mượn ảnh của căn khác.
+ */
 export function VerifiedPhoto({ unit, index = 1, sizes, priority, stamp = "compact", className, style }: VerifiedPhotoProps) {
-  const [imgSrc, setImgSrc] = useState<string>(() => unitPhoto(unit, index));
+  const photo = unitPhoto({ id: unit.id ?? unit.code, photos: unit.photos }, index);
+  const verifiedAt =
+    unit.verifiedAt && Number.isFinite(Date.parse(unit.verifiedAt))
+      ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(new Date(unit.verifiedAt))
+      : null;
 
   return (
     <div className={`${styles.frame} ${className ?? ""}`} style={style}>
-      <Image
-        src={imgSrc}
-        alt={`Căn ${unit.code}, ảnh ${index}: ${unit.title}`}
-        fill
-        sizes={sizes}
-        priority={priority}
-        className={styles.img}
-        onError={() => {
-          if (imgSrc !== FALLBACK_PHOTO) {
-            setImgSrc(FALLBACK_PHOTO);
-          }
-        }}
-      />
-      {stamp !== "none" && (
+      {photo ? (
+        <Image src={photo} alt={`Căn ${unit.code}, ảnh ${index}`} fill sizes={sizes} priority={priority} className={styles.img} />
+      ) : (
+        <div className={styles.noPhoto}>
+          <ImageOff size={22} />
+          <span>Chưa có ảnh trong hệ thống</span>
+        </div>
+      )}
+      {photo && verifiedAt && stamp !== "none" && (
         <span className={styles.stamp}>
           <BadgeCheck size={13} />
           {stamp === "full" ? (
             <>
-              <b>Verified</b> {fmtDate(unit.verifiedAt)} 14:20 · {unit.code}
+              <b>Verified</b> {verifiedAt} · {unit.code}
             </>
           ) : (
-            <>Đã xác minh {fmtDate(unit.verifiedAt).slice(0, 5)}</>
+            <>Đã xác minh {verifiedAt}</>
           )}
         </span>
       )}

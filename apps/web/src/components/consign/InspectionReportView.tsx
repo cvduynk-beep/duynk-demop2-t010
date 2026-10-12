@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Maximize2 } from "lucide-react";
 import type { Consignment, InspectionReport, InventoryGroup } from "@/lib/mock/types";
-import { fmtDateTime, fmtTime, vnd } from "@/lib/mock/format";
+import { fmtDateTime, fmtTime, vnd } from "@/lib/format";
 import { FURNISHING_LABEL, hostById } from "@/lib/mock/units";
 import {
   DECLARED_LABEL,

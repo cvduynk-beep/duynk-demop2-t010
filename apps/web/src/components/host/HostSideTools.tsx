@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Bell } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { fmtTime, relTime } from "@/lib/mock/format";
+import { fmtTime, relTime } from "@/lib/format";
 import { noticesFor } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
 import { useNow } from "@/lib/useNow";
