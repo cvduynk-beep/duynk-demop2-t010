@@ -9,7 +9,7 @@ import styles from "./UnitCard.module.css";
  * bấm tim ⇒ chuyển sang đăng nhập (không lưu tạm vào trình duyệt).
  */
 export function FavoriteButton({ unitCode, variant = "overlay" }: { unitCode: string; variant?: "overlay" | "plain" }) {
-  const { isSaved, toggle, busy } = useFavorites();
+  const { isSaved, toggle, isBusy } = useFavorites();
   const saved = isSaved(unitCode);
   return (
     <button
@@ -17,7 +17,7 @@ export function FavoriteButton({ unitCode, variant = "overlay" }: { unitCode: st
       className={variant === "overlay" ? styles.fav : "icon-btn"}
       aria-pressed={saved}
       aria-label={saved ? "Bỏ khỏi danh sách đã lưu" : "Lưu căn này"}
-      disabled={busy === unitCode}
+      aria-busy={isBusy(unitCode)}
       onClick={() => void toggle(unitCode)}
     >
       <Heart size={variant === "overlay" ? 18 : 20} fill={saved ? "currentColor" : "none"} className={saved ? styles.saved : ""} />

@@ -225,6 +225,8 @@ _(Nếu dùng Supabase Cloud, điền `DATABASE_URL`, `SUPABASE_URL` và `SUPABA
 
 **Biểu phí All-in (`property/fee-rates.service.ts`):** matchmaker và chi tiết căn đọc đơn giá gửi xe máy/ô tô và điện nước/người từ `fee_configs` (`parking_fee_motorbike`, `parking_fee_car`, `utility_per_person`), cache 60s; thiếu khoá hoặc DB lỗi ⇒ dùng giá trị dự phòng bằng seed hiện tại và ghi cảnh báo. Lưu ý: `apps/web/src/lib/pricing/cost.ts` (`RATES`) vẫn là bản sao phía FE dùng để vẽ thẻ căn.
 
+**Tài khoản (`modules/account`, `/me/*`):** user luôn lấy từ phiên (`@CurrentUser`), không nhận `userId` từ client. `GET /me/profile` (mọi cổng) trả hồ sơ của chính người gọi (`phone` dạng 0xxx, không lộ `phoneEnc`/`phoneHash`). `PATCH /me/profile` chỉ đổi `fullName` (2–100 ký tự sau khi bỏ khoảng trắng thừa, sai ⇒ 400 `profile_invalid` + `errors.fullName`); gửi `email`/`phone` ⇒ 400 `field_not_editable` + `errors.<field>` (email là định danh đăng nhập, SĐT chỉ đổi qua OTP khi đặt lịch); trường lạ (vai, cổng, trạng thái) bị loại. `GET /me/bookings`, `GET /me/contracts`, `GET /me/contracts/:id/pdf` (người khác ⇒ 404) và `GET|PUT|DELETE /me/favorites[/:code]` chỉ cho cổng tenant (`@Roles('tenant')`). `PUT` idempotent (upsert); `DELETE` idempotent kể cả căn không còn tồn tại ⇒ 200 `{saved:false}`. `GET /auth/session` KHÔNG bị throttle (proxy Next gọi cho mọi lần điều hướng từ cùng một IP).
+
 ### Bước 3: Khởi chạy Database local (Tùy chọn nếu không dùng Supabase Cloud)
 
 ```bash

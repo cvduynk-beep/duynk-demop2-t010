@@ -79,13 +79,18 @@ export function useRole(): SessionUser["portal"] {
  */
 export async function signOut(redirectTo = "/login", portal: Portal = getPortalForPath()) {
   try {
-    await fetch("/api/v1/auth/logout", {
+    const res = await fetch("/api/v1/auth/logout", {
       method: "POST",
-      credentials: "same-origin",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ portal }),
-    }).catch(() => {});
+    });
+    if (!res.ok) console.error(`[auth] Đăng xuất cổng ${portal} lỗi ${res.status}`);
+  } catch (err) {
+    // Không chặn người dùng rời phiên: vẫn tải lại trang (cache client mất), nhưng ghi lỗi để không nuốt âm thầm.
+    console.error(`[auth] Không gọi được đăng xuất cổng ${portal}:`, err instanceof Error ? err.message : err);
   } finally {
+    // Tải lại toàn trang ⇒ xoá cache dữ liệu tài khoản trong bộ nhớ (useApiQuery, phiên) và cache router.
     window.location.assign(redirectTo);
   }
 }

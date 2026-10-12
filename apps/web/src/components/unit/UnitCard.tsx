@@ -81,13 +81,20 @@ export function UnitCard({ unit, variant = "grid", rank, reasons, priority }: Un
           </div>
         )}
 
+        {/* Trang chi tiết công khai chỉ có căn đang trống / đang giữ chỗ; chỉ căn trống mới đặt lịch được. */}
         <div className={styles.actions}>
-          <Link href={`/units/${unit.id}`} className="btn btn-quiet btn-sm">
-            Xem chi tiết
-          </Link>
-          <Link href={`/units/${unit.id}?book=1`} className="btn btn-primary btn-sm">
-            Đặt lịch xem
-          </Link>
+          {unit.baseStatus === "available" || unit.baseStatus === "holding" ? (
+            <Link href={`/units/${unit.id}`} className="btn btn-quiet btn-sm">
+              Xem chi tiết
+            </Link>
+          ) : (
+            <span className="muted small">Căn không còn hiển thị công khai</span>
+          )}
+          {unit.baseStatus === "available" && (
+            <Link href={`/units/${unit.id}?book=1`} className="btn btn-primary btn-sm">
+              Đặt lịch xem
+            </Link>
+          )}
         </div>
       </div>
     </article>
