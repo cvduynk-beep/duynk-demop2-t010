@@ -23,10 +23,16 @@ function setup(env: Record<string, string> = {}) {
   const phones = new PhoneService(config);
   const audit = new AuthAuditService(prisma as any);
   const consoleSender = new ConsoleOtpSender();
-  jest.spyOn(consoleSender, 'send').mockResolvedValue();
+  const delivered = jest.spyOn(consoleSender, 'send').mockResolvedValue();
   const otp = new OtpService(prisma as any, phones, audit, new ZaloZnsSender(), new SmsFallbackSender(), consoleSender, config);
   const actionTokens = new ActionTokenService(config, otp);
-  return { prisma, otp, phones, actionTokens };
+  /** Gửi mã rồi đọc mã từ KÊNH GỬI (log dev), vì `send` không bao giờ trả mã cho caller. */
+  const sendCode = async (phone = PHONE, purpose: OtpPurpose = OtpPurpose.TENANT_VIEWING) => {
+    const result = await otp.send({ phone, purpose });
+    expect(result).toBeUndefined();
+    return delivered.mock.calls[delivered.mock.calls.length - 1][1];
+  };
+  return { prisma, otp, phones, actionTokens, sendCode, delivered };
 }
 
 const errorCode = async (promise: Promise<unknown>) => {
@@ -40,13 +46,13 @@ const errorCode = async (promise: Promise<unknown>) => {
 
 describe('OtpService', () => {
   describe('send', () => {
-    it('lưu hash (không lưu mã, không lưu SĐT plaintext) và trả devCode khi bật echo', async () => {
-      const { prisma, otp } = setup();
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
+    it('lưu hash (không lưu mã, không lưu SĐT plaintext); mã chỉ đi qua kênh gửi, không trả về caller', async () => {
+      const { prisma, sendCode } = setup();
+      const devCode = await sendCode();
 
       expect(devCode).toMatch(/^\d{4}$/);
       const row = prisma.otpCode.rows[0];
-      expect(JSON.stringify(row)).not.toContain(devCode as string);
+      expect(JSON.stringify(row)).not.toContain(devCode);
       expect(JSON.stringify(row)).not.toContain('84912345678');
       expect(row.codeHash).toMatch(/^[0-9a-f]{64}$/);
       expect(row.status).toBe('PENDING');
@@ -62,27 +68,18 @@ describe('OtpService', () => {
       expect(await errorCode(otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_send_failed');
     });
 
-    it('OTP_DEV_CODE (4 số, ngoài production) ⇒ mã cố định, vẫn băm + xác thực qua otp_codes như mã thật', async () => {
-      const { otp, prisma } = setup({ OTP_DEV_CODE: '4829' });
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
-      expect(devCode).toBe('4829');
-      expect(JSON.stringify(prisma.otpCode.rows[0])).not.toContain('4829');
-      expect((await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: '4829' })).status).toBe('VERIFIED');
+    it('không có mã cố định: OTP_DEV_CODE bị bỏ qua, mã luôn ngẫu nhiên 4 số', async () => {
+      const { sendCode } = setup({ OTP_DEV_CODE: '4829' });
+      const codes = new Set<string>();
+      for (let i = 0; i < 12; i++) codes.add(await sendCode('+849123456' + String(10 + i)));
+      expect([...codes].every((c) => /^\d{4}$/.test(c))).toBe(true);
+      expect(codes.size).toBeGreaterThan(1);
     });
 
-    it('OTP_DEV_CODE bị bỏ qua ở production và khi sai định dạng (mã ngẫu nhiên)', async () => {
-      const prod = setup({ OTP_DEV_CODE: '4829', NODE_ENV: 'production' });
-      expect(await errorCode(prod.otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_send_failed');
-
-      const bad = setup({ OTP_DEV_CODE: '12ab' });
-      const codes = new Set<string>();
-      for (let i = 0; i < 8; i++) {
-        const { devCode } = await bad.otp.send({ phone: '+849123456' + String(10 + i), purpose: OtpPurpose.TENANT_VIEWING });
-        codes.add(devCode as string);
-      }
-      expect([...codes].every((c) => /^\d{4}$/.test(c))).toBe(true);
-      expect(codes.has('12ab')).toBe(false);
-      expect(codes.size).toBeGreaterThan(1);
+    it('chế độ dev chỉ ghi log khi Zalo/SMS thật không gửi được; không bật ⇒ không gọi kênh log', async () => {
+      const off = setup({ OTP_ECHO_DEV_CODE: 'false' });
+      await off.otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }).catch(() => undefined);
+      expect(off.delivered).not.toHaveBeenCalled();
     });
 
     it('chặn gửi lại trong thời gian chờ', async () => {
@@ -92,28 +89,28 @@ describe('OtpService', () => {
     });
 
     it('mã mới vô hiệu mã cũ chưa dùng', async () => {
-      const { prisma, otp } = setup();
-      const first = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
-      const second = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
+      const { prisma, otp, sendCode } = setup();
+      const first = await sendCode();
+      const second = await sendCode();
 
       const pending = prisma.otpCode.rows.filter((r: any) => r.status === 'PENDING');
       expect(pending).toHaveLength(1);
-      expect(await errorCode(otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: first.devCode as string })))
-        .toBe(first.devCode === second.devCode ? 'no-error' : 'otp_invalid');
+      expect(await errorCode(otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: first })))
+        .toBe(first === second ? 'no-error' : 'otp_invalid');
     });
   });
 
   describe('verify', () => {
     it('mã đúng → VERIFIED', async () => {
-      const { otp } = setup();
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
-      const row = await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devCode as string });
+      const { otp, sendCode } = setup();
+      const devCode = await sendCode();
+      const row = await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devCode });
       expect(row.status).toBe('VERIFIED');
     });
 
     it('mã sai báo số lần còn lại, sai đủ số lần thì khóa (kể cả nhập đúng sau đó)', async () => {
-      const { otp } = setup();
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
+      const { otp, sendCode } = setup();
+      const devCode = await sendCode();
       const wrong = devCode === '0000' ? '1111' : '0000';
       const verify = (code: string) => otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code });
 
@@ -122,20 +119,20 @@ describe('OtpService', () => {
       expect(err1.getResponse().errors.attemptsRemaining).toBe(2);
       expect((await verify(wrong).catch((e) => e)).getResponse().errors.attemptsRemaining).toBe(1);
       expect(await errorCode(verify(wrong))).toBe('otp_locked');
-      expect(await errorCode(verify(devCode as string))).toBe('otp_locked');
+      expect(await errorCode(verify(devCode))).toBe('otp_locked');
     });
 
     it('bị khóa thì không gửi được mã mới cho tới khi hết khóa', async () => {
-      const { otp } = setup();
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
+      const { otp, sendCode } = setup();
+      const devCode = await sendCode();
       const wrong = devCode === '0000' ? '1111' : '0000';
       for (let i = 0; i < 3; i++) await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: wrong }).catch(() => undefined);
       expect(await errorCode(otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_locked');
     });
 
     it('đoán song song không vượt quá số lần thử cho phép', async () => {
-      const { otp } = setup();
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
+      const { otp, sendCode } = setup();
+      const devCode = await sendCode();
       const wrong = devCode === '0000' ? '1111' : '0000';
 
       const results = await Promise.all(
@@ -146,35 +143,35 @@ describe('OtpService', () => {
     });
 
     it('mã hết hạn hoặc không tồn tại → otp_not_found_or_expired', async () => {
-      const { prisma, otp } = setup();
+      const { prisma, otp, sendCode } = setup();
       expect(await errorCode(otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: '1234' }))).toBe('otp_not_found_or_expired');
 
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
+      const devCode = await sendCode();
       prisma.otpCode.rows[0].expiresAt = new Date(Date.now() - 1000);
-      expect(await errorCode(otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devCode as string }))).toBe('otp_not_found_or_expired');
+      expect(await errorCode(otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devCode }))).toBe('otp_not_found_or_expired');
     });
 
     it('mã của SĐT/mục đích khác không dùng được', async () => {
-      const { otp } = setup();
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
-      expect(await errorCode(otp.verify({ phone: '+84900000000', purpose: OtpPurpose.TENANT_VIEWING, code: devCode as string }))).toBe('otp_not_found_or_expired');
-      expect(await errorCode(otp.verify({ phone: PHONE, purpose: OtpPurpose.PHONE_VERIFY, code: devCode as string }))).toBe('otp_not_found_or_expired');
+      const { otp, sendCode } = setup();
+      const devCode = await sendCode();
+      expect(await errorCode(otp.verify({ phone: '+84900000000', purpose: OtpPurpose.TENANT_VIEWING, code: devCode }))).toBe('otp_not_found_or_expired');
+      expect(await errorCode(otp.verify({ phone: PHONE, purpose: OtpPurpose.PHONE_VERIFY, code: devCode }))).toBe('otp_not_found_or_expired');
     });
   });
 
   it('consume chỉ thành công đúng một lần', async () => {
-    const { otp } = setup();
-    const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
-    const row = await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devCode as string });
+    const { otp, sendCode } = setup();
+    const devCode = await sendCode();
+    const row = await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devCode });
     expect(await otp.consume(row.id)).toBe(true);
     expect(await otp.consume(row.id)).toBe(false);
   });
 
   describe('ActionTokenService (dùng một lần, lưu ở DB)', () => {
     it('redeem đúng một lần', async () => {
-      const { otp, actionTokens } = setup();
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
-      const verified = await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devCode as string });
+      const { otp, actionTokens, sendCode } = setup();
+      const devCode = await sendCode();
+      const verified = await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devCode });
 
       const token = actionTokens.issue({ phone: PHONE, purpose: 'TENANT_VIEWING', otpId: verified.id });
       expect(await actionTokens.redeem(token, 'TENANT_VIEWING')).toMatchObject({ phone: PHONE, jti: verified.id });
@@ -182,9 +179,9 @@ describe('OtpService', () => {
     });
 
     it('từ chối sai mục đích và token giả', async () => {
-      const { otp, actionTokens } = setup();
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
-      const verified = await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devCode as string });
+      const { otp, actionTokens, sendCode } = setup();
+      const devCode = await sendCode();
+      const verified = await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devCode });
       const token = actionTokens.issue({ phone: PHONE, purpose: 'TENANT_VIEWING', otpId: verified.id });
 
       expect(await errorCode(actionTokens.redeem(token, 'TENANT_DEPOSIT_SIGN'))).toBe('action_token_invalid');

@@ -19,8 +19,10 @@ export const ERROR_MESSAGES: Record<string, string> = {
   action_token_invalid: "Phiên xác thực OTP đã hết hạn hoặc không hợp lệ. Vui lòng xin mã OTP mới.",
   otp_invalid: "Mã OTP không chính xác.",
   otp_not_found_or_expired: "Mã OTP đã hết hạn hoặc không tồn tại.",
-  otp_locked: "Đã vượt quá số lần thử OTP. Vui lòng chờ 15 phút.",
-  otp_cooldown: "Vui lòng đợi ít nhất 30 giây trước khi yêu cầu mã OTP mới.",
+  otp_locked: "Bạn đã nhập sai mã quá số lần cho phép. Vui lòng chờ rồi xin mã mới.",
+  otp_cooldown: "Vui lòng đợi trước khi xin mã OTP mới.",
+  otp_send_failed: "Hiện chưa gửi được mã OTP. Vui lòng thử lại sau.",
+  ref_generation_failed: "Chưa cấp được mã lịch hẹn. Vui lòng bấm đặt lịch lại.",
   phone_already_registered: "Số điện thoại này đã được gắn với một tài khoản khác.",
   unit_not_found: "Không tìm thấy căn hộ hoặc căn hộ không còn khả dụng.",
   unit_not_available: "Căn hộ hiện không khả dụng để đặt lịch hoặc giữ chỗ.",
@@ -48,6 +50,26 @@ export const ERROR_MESSAGES: Record<string, string> = {
   not_found: "Không tìm thấy trang hoặc tính năng không khả dụng.",
 };
 
+const fmtWait = (sec: number) => (sec >= 90 ? `${Math.ceil(sec / 60)} phút` : `${Math.max(1, Math.round(sec))} giây`);
+
+/** Thời gian chờ (giây) server trả kèm `otp_cooldown` / `otp_locked`; không có ⇒ undefined (không đoán). */
+export function retryAfterSeconds(res: ApiResponse<unknown>): number | undefined {
+  const v = res.errors?.retryAfterSeconds;
+  return typeof v === "number" && v > 0 ? v : undefined;
+}
+
+/** Thông báo OTP dùng SỐ LIỆU THẬT của server (thời gian chờ, số lần thử còn lại) thay vì câu ghi cứng. */
+export function otpErrorText(res: ApiResponse<unknown>): string {
+  const wait = retryAfterSeconds(res);
+  if (res.code === "otp_invalid") {
+    const left = res.errors?.attemptsRemaining;
+    return typeof left === "number" ? `Mã OTP không chính xác. Bạn còn ${left} lần thử.` : ERROR_MESSAGES.otp_invalid;
+  }
+  if (res.code === "otp_locked") return wait ? `Bạn đã nhập sai quá số lần cho phép. Thử lại sau ${fmtWait(wait)}.` : ERROR_MESSAGES.otp_locked;
+  if (res.code === "otp_cooldown") return wait ? `Vui lòng đợi ${fmtWait(wait)} trước khi xin mã OTP mới.` : ERROR_MESSAGES.otp_cooldown;
+  return errorText(res);
+}
+
 export function errorText(
   codeOrRes?: string | ApiResponse<unknown> | null,
   fallback = "Đã có lỗi xảy ra. Vui lòng thử lại sau.",
@@ -61,6 +83,12 @@ export function errorText(
     return ERROR_MESSAGES[code];
   }
   return apiErrorText(codeOrRes, fallback);
+}
+
+export interface OtpSent {
+  expiresInSeconds: number;
+  /** Số giây tối thiểu trước khi được xin mã mới (khớp `otp_cooldown` của server). */
+  resendInSeconds: number;
 }
 
 /** Danh mục kèm nguồn: `mock` CHỈ xuất hiện khi server bật fallback có cờ (không bao giờ ở production). */
@@ -104,8 +132,9 @@ export const tenantApi = {
   },
 
   // A4: Gửi mã OTP xác thực SĐT
-  sendOtp: (phone: string, purpose = "TENANT_VIEWING"): Promise<ApiResponse<{ expiresInSeconds: number; devCode?: string }>> => {
-    return api.post<{ expiresInSeconds: number; devCode?: string }>("/auth/otp/send", { phone, purpose });
+  // Response KHÔNG chứa mã OTP (ở dev mã chỉ ghi ra log backend).
+  sendOtp: (phone: string, purpose = "TENANT_VIEWING"): Promise<ApiResponse<OtpSent>> => {
+    return api.post<OtpSent>("/auth/otp/send", { phone, purpose });
   },
 
   // A5: Xác thực OTP lấy actionToken

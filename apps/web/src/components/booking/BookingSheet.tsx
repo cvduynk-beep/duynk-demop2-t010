@@ -1,18 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Calendar,
-  CalendarCheck,
-  CalendarX,
   Check,
   CheckCircle2,
   ChevronLeft,
-  Clock,
   FileText,
-  IdCard,
-  MapPin,
   MessageCircleMore,
   Pencil,
   Phone,
@@ -23,21 +19,18 @@ import {
 import { Modal } from "@/components/ui/Modal";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { toast } from "@/components/ui/Toast";
-import { ZaloBubble } from "@/components/zalo/ZaloThread";
 import { accountApi } from "@/lib/apiClient";
 import { fmtDateTime, fmtPhone, fmtTime, isValidVnPhone, normalizePhone } from "@/lib/format";
 import { useApiQuery } from "@/lib/query/useApiQuery";
-import { otpNotice, type Notice } from "@/lib/simulated/zalo";
-import { errorText, tenantApi } from "@/lib/tenant/api";
+import { errorText, otpErrorText, retryAfterSeconds, tenantApi } from "@/lib/tenant/api";
 import { invalidateTenantBookings, invalidateTenantUnit, tenantQueries } from "@/lib/tenant/queries";
-import type { TenantBooking } from "@/lib/tenant/types";
 import { unitAddress, type Unit } from "@/lib/units";
 import { useRole, useSession } from "@/lib/auth/client";
 import { useNow } from "@/lib/useNow";
 import { SlotPicker } from "./SlotPicker";
 import styles from "./BookingSheet.module.css";
 
-type Step = "slot" | "info" | "otp" | "done";
+type Step = "slot" | "info" | "otp";
 
 const STEPS = [
   { key: "slot", label: "Chọn giờ" },
@@ -54,12 +47,12 @@ interface BookingSheetProps {
 export function BookingSheet({ unit, open, onClose }: BookingSheetProps) {
   return (
     <Modal open={open} onClose={onClose} variant="sheet" title={`Đặt lịch xem căn ${unitAddress(unit)}`} hideClose={false}>
-      {open && <Flow unit={unit} onClose={onClose} />}
+      {open && <Flow unit={unit} />}
     </Modal>
   );
 }
 
-function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
+function Flow({ unit }: { unit: Unit }) {
   const { user } = useSession();
   const role = useRole();
   const isTenant = role === "tenant";
@@ -90,9 +83,9 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
   const [otpError, setOtpError] = useState(false);
   const [otpErrorMsg, setOtpErrorMsg] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
-  const [otpZalo, setOtpZalo] = useState<Notice | null>(null);
+  const [otpTtl, setOtpTtl] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [booking, setBooking] = useState<TenantBooking | null>(null);
+  const router = useRouter();
 
   const canSkip = Boolean(profile?.isPhoneVerified && profile.phone && normalizePhone(phone) === normalizePhone(profile.phone));
 
@@ -105,7 +98,10 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
   const chosen = slot ? new Date(slot) : null;
   const p = normalizePhone(phone);
 
-  /** Gửi OTP Zalo thật (`POST /auth/otp/send`). Ở dev backend trả `devCode` ⇒ hiện tin Zalo mô phỏng chứa mã. */
+  /**
+   * Gửi OTP (`POST /auth/otp/send`). Response KHÔNG chứa mã: Zalo đang mô phỏng nên ở dev mã chỉ nằm trong log backend.
+   * Thời gian chờ gửi lại / thời hạn mã lấy từ server (không ghi cứng).
+   */
   const requestCode = async () => {
     setSubmitting(true);
     setOtpError(false);
@@ -113,14 +109,20 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
     try {
       const res = await tenantApi.sendOtp(p, "TENANT_VIEWING");
       if (!res.ok) {
-        const msg = errorText(res);
+        const wait = retryAfterSeconds(res);
+        // Mã trước còn hiệu lực (đang chờ gửi lại) ⇒ vẫn cho nhập mã, chỉ khoá nút gửi lại đúng số giây server báo.
+        if (res.code === "otp_cooldown" && wait) {
+          setCooldown(wait);
+          return true;
+        }
+        const msg = otpErrorText(res);
         setErrors((prev) => ({ ...prev, phone: msg }));
         toast(msg);
         return false;
       }
       setCode("");
-      setOtpZalo(res.data.devCode ? otpNotice(res.data.devCode, "TENANT_VIEWING") : null);
-      setCooldown(30);
+      setOtpTtl(res.data.expiresInSeconds);
+      setCooldown(res.data.resendInSeconds);
       return true;
     } finally {
       setSubmitting(false);
@@ -151,8 +153,9 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
     }
     invalidateTenantBookings();
     invalidateTenantUnit(unit.code);
-    setBooking(res.data);
-    setStep("done");
+    toast(`Đã đặt lịch ${res.data.ref}`, "success");
+    // Mã lịch do SERVER cấp; trang trạng thái đọc lại từ `GET /bookings/:ref` (không phụ thuộc state/localStorage).
+    router.push(`/booking/${encodeURIComponent(res.data.ref)}`);
     return true;
   };
 
@@ -189,7 +192,7 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
       const verified = await tenantApi.verifyOtp(p, v, "TENANT_VIEWING");
       if (!verified.ok) {
         setOtpError(true);
-        setOtpErrorMsg(errorText(verified));
+        setOtpErrorMsg(otpErrorText(verified));
         return;
       }
       if (!(await book(verified.data.actionToken))) setOtpError(true);
@@ -199,130 +202,6 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
   };
 
   const stepIndex = step === "slot" ? 0 : step === "info" ? 1 : 2;
-
-  if (step === "done" && booking) {
-    return (
-      <div className={styles.done}>
-        <div className={styles.doneIconWrap}>
-          <CheckCircle2 size={36} />
-        </div>
-
-        <div>
-          <h3 className={styles.doneTitle}>
-            Đặt lịch xem nhà thành công!
-          </h3>
-          <p className={styles.doneSub}>
-            Field Host nội khu sẽ nhận ca trong vòng 3 phút. VinStay AI sẽ nhắn thông báo và nút 1-chạm xác nhận có mặt qua Zalo <strong>{booking.contact.phoneMasked || fmtPhone(p)}</strong>.
-          </p>
-        </div>
-
-        <div className={styles.ticketCard}>
-          <div className={styles.ticketHead}>
-            <div className={styles.ticketTag}>
-              <Sparkles size={13} />
-              <span>VÉ HẸN XEM NHÀ NỘI KHU</span>
-            </div>
-            <div className={styles.ticketRef}>
-              <span className="muted xs">Mã lịch</span>
-              <span className={`num ${styles.refCode}`}>{booking.ref}</span>
-            </div>
-          </div>
-
-          <div className={styles.ticketBody}>
-            <div className={styles.ticketItem}>
-              <div className={styles.ticketItemLabel}>
-                <Calendar size={14} />
-                <span>Thời gian hẹn</span>
-              </div>
-              <div className={styles.ticketItemVal}>{fmtDateTime(booking.slot)}</div>
-            </div>
-
-            <div className={styles.ticketItem}>
-              <div className={styles.ticketItemLabel}>
-                <MapPin size={14} />
-                <span>Căn hộ & Toà</span>
-              </div>
-              <div className={styles.ticketItemVal}>
-                {unitAddress(unit)}
-                <span className={styles.ticketSubVal}>Sảnh toà {unit.building}</span>
-              </div>
-            </div>
-
-            <div className={styles.ticketItem}>
-              <div className={styles.ticketItemLabel}>
-                <User size={14} />
-                <span>Field Host tiếp đón</span>
-              </div>
-              <div className={styles.ticketItemVal}>
-                Field Host nội khu
-                <span className={styles.hostBadgeVerified}>
-                  <Check size={11} /> Thẻ cư dân sẵn sàng
-                </span>
-              </div>
-            </div>
-
-            <div className={styles.ticketItem}>
-              <div className={styles.ticketItemLabel}>
-                <Users size={14} />
-                <span>Số người tham quan</span>
-              </div>
-              <div className={styles.ticketItemVal}>{booking.contact.persons} người</div>
-            </div>
-          </div>
-
-          <div className={styles.ticketNotice} style={{ flexDirection: "column", gap: 10, alignItems: "stretch" }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <Clock size={16} style={{ flexShrink: 0, marginTop: 2, color: "var(--kelp)" }} />
-              <div style={{ fontSize: 13, lineHeight: 1.4 }}>
-                <strong>Đến đúng giờ hẹn</strong> — Vui lòng đến đúng giờ để không ảnh hưởng lịch của người khác.
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <IdCard size={16} style={{ flexShrink: 0, marginTop: 2, color: "var(--lagoon)" }} />
-              <div style={{ fontSize: 13, lineHeight: 1.4 }}>
-                <strong>Mang theo giấy tờ</strong> — Mang theo CMND/CCCD để đối chiếu khi cần thiết.
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <CalendarX size={16} style={{ flexShrink: 0, marginTop: 2, color: "var(--coral)" }} />
-              <div style={{ fontSize: 13, lineHeight: 1.4 }}>
-                <strong>Huỷ lịch trước 2 giờ</strong> — Vui lòng huỷ hoặc đổi lịch trước ít nhất 2 giờ.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className={styles.doneActions}>
-          {isTenant ? (
-            <Link href={`/booking/${booking.ref}`} className="btn btn-primary btn-lg btn-block">
-              Xem lịch hẹn
-            </Link>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
-              <Link
-                href={`/login?next=/booking/${booking.ref}`}
-                className="btn btn-primary btn-lg btn-block"
-              >
-                Tạo tài khoản
-              </Link>
-              <Link
-                href={`/login?next=/booking/${booking.ref}`}
-                className="btn btn-quiet btn-block"
-              >
-                Đăng nhập
-              </Link>
-              <p className="xs muted" style={{ textAlign: "center", lineHeight: 1.4, margin: "4px 0" }}>
-                Mã lịch hẹn {booking.ref} đã gửi qua Zalo. Cọc, CCCD và hợp đồng chỉ làm được trong tài khoản để bảo vệ dữ liệu của bạn (NĐ 13/2023).
-              </p>
-            </div>
-          )}
-          <button type="button" className="btn btn-quiet btn-block" onClick={onClose}>
-            Tiếp tục xem các căn khác
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={styles.flow}>
@@ -578,7 +457,8 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
             </div>
             <h3 className={styles.otpTitle}>Nhập mã xác thực 4 số</h3>
             <p className={styles.otpSub}>
-              VinStay AI vừa nhắn mã xác thực qua Zalo tới <b className="tnum">{fmtPhone(p)}</b>. Mã có hiệu lực trong 5 phút.
+              VinStay AI vừa nhắn mã xác thực qua Zalo tới <b className="tnum">{fmtPhone(p)}</b>.
+              {otpTtl ? ` Mã có hiệu lực trong ${Math.round(otpTtl / 60)} phút.` : ""}
             </p>
           </div>
 
@@ -595,13 +475,10 @@ function Flow({ unit, onClose }: { unit: Unit; onClose: () => void }) {
             </button>
           </div>
 
-          {otpZalo && (
-            <div className={styles.demoZalo}>
-              <p className="xs muted">
-                <CalendarCheck size={13} style={{ verticalAlign: "-2px" }} /> Bản thử nghiệm: tin Zalo mô phỏng chứa mã backend vừa phát
-              </p>
-              <ZaloBubble notice={otpZalo} now={now} />
-            </div>
+          {process.env.NODE_ENV !== "production" && (
+            <p className="xs muted" style={{ marginTop: 8 }}>
+              Môi trường thử nghiệm: Zalo đang mô phỏng — mã OTP được ghi trong log backend (không gửi qua API).
+            </p>
           )}
         </>
       )}

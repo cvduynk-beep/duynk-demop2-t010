@@ -1,22 +1,15 @@
 import styles from "./DevOtpHint.module.css";
 
 /**
- * Gợi ý mã OTP cho môi trường thử nghiệm. Backend chỉ trả `devCode` ngoài production và khi chưa có nhà cung cấp
- * Zalo/SMS thật, nên ở production thành phần này không bao giờ hiện (devCode luôn rỗng).
+ * Ghi chú cho môi trường thử nghiệm: Zalo đang MÔ PHỎNG, mã OTP chỉ được ghi trong log backend (khi bật
+ * `OTP_ECHO_DEV_CODE`) — API không bao giờ trả mã. Không hiện ở production.
  */
-export function DevOtpHint({ code, onFill }: { code?: string | null; onFill?: (code: string) => void }) {
-  if (!code) return null;
+export function DevOtpHint() {
+  if (process.env.NODE_ENV === "production") return null;
   return (
     <p className={styles.hint} role="note">
       <span className={styles.tag}>Bản thử nghiệm</span>
-      <span>
-        Mã OTP: <b className="tnum">{code}</b>
-      </span>
-      {onFill && (
-        <button type="button" className={styles.fill} onClick={() => onFill(code)}>
-          Điền mã
-        </button>
-      )}
+      <span>Zalo đang mô phỏng — mã OTP nằm trong log backend.</span>
     </p>
   );
 }

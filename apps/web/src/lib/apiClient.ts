@@ -22,6 +22,8 @@ export interface ApiResponse<T> {
   data: T;
   message?: string;
   code?: string;
+  /** Chi tiết lỗi máy đọc được do backend gửi (vd `retryAfterSeconds`, `attemptsRemaining` của OTP). */
+  errors?: Record<string, unknown>;
 }
 
 type ClientPortal = Portal;
@@ -106,6 +108,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, timeoutMs
   const data = "data" in envelope ? envelope.data : body;
   const message = typeof envelope.message === "string" ? envelope.message : undefined;
   const code = typeof envelope.code === "string" ? envelope.code : !parsed && res.ok ? "bad_response" : undefined;
+  const errors = envelope.errors && typeof envelope.errors === "object" && !Array.isArray(envelope.errors) ? (envelope.errors as Record<string, unknown>) : undefined;
 
   if (isSessionExpired(path, res.status, code)) redirectToLogin();
 
@@ -115,6 +118,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, timeoutMs
     data: (res.ok ? data : data || {}) as T,
     message,
     code,
+    errors,
   };
 }
 

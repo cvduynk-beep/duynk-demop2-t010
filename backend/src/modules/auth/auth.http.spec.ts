@@ -18,6 +18,7 @@ import { GoogleStrategy } from './google/google.strategy';
 import { hashPassword } from './password-hasher';
 import { createFakePrisma, FakePrisma, seedProfile } from './testing/fake-prisma';
 import { createSessionTokens } from './testing/fake-session-token';
+import { ConsoleOtpSender } from './otp/senders/console-otp.sender';
 
 const ENV = {
   WEB_APP_URL: 'http://localhost:3000',
@@ -82,6 +83,10 @@ async function createApp(prisma: FakePrisma, env: Record<string, string | undefi
   return app;
 }
 
+/** Mã OTP chỉ đi qua kênh gửi (log dev), không bao giờ nằm trong response ⇒ test đọc mã từ chính kênh gửi. */
+let deliveredCodes: string[] = [];
+const lastOtp = () => deliveredCodes[deliveredCodes.length - 1];
+
 describe('Auth HTTP (Nest thật + Prisma giả)', () => {
   let app: INestApplication;
   let prisma: FakePrisma;
@@ -93,6 +98,10 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
   });
 
   beforeEach(async () => {
+    deliveredCodes = [];
+    jest.spyOn(ConsoleOtpSender.prototype, 'send').mockImplementation(async (_phone: string, code: string) => {
+      deliveredCodes.push(code);
+    });
     prisma = createFakePrisma();
     restoreEnv = applyEnv(ENV);
     app = await createApp(prisma);
@@ -101,6 +110,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
   afterEach(async () => {
     await app.close();
     restoreEnv();
+    jest.restoreAllMocks();
   });
 
   /** Seed tài khoản đã có mật khẩu `PASSWORD` (như sau khi đăng ký). */
@@ -772,7 +782,9 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
     it('send → verify (Khách thuê) trả action token; sai mã báo số lần còn lại', async () => {
       const send = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
       expect(send.status).toBe(200);
-      const code: string = send.body.data.devCode;
+      expect(send.body.data).toEqual({ expiresInSeconds: expect.any(Number), resendInSeconds: expect.any(Number) });
+      expect(JSON.stringify(send.body)).not.toContain(lastOtp());
+      const code: string = lastOtp();
       expect(code).toMatch(/^\d{4}$/);
 
       const wrongCode = code === '0000' ? '1111' : '0000';
@@ -784,6 +796,46 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect(ok.status).toBe(200);
       expect(ok.body.data).toMatchObject({ expiresInSeconds: 900 });
       expect(ok.body.data.actionToken).toEqual(expect.stringContaining('.'));
+    });
+
+    it('gửi lại quá nhanh → 429 otp_cooldown kèm retryAfterSeconds thật; mã cũ vẫn dùng được', async () => {
+      await app.close();
+      restoreEnv();
+      const env60 = { ...ENV, OTP_RESEND_SECONDS: '60' };
+      restoreEnv = applyEnv(env60);
+      app = await createApp(prisma, env60);
+      const first = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
+      expect(first.body.data).toMatchObject({ resendInSeconds: 60 });
+      const code = lastOtp();
+      const again = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
+      expect(again.status).toBe(429);
+      expect(again.body).toMatchObject({ code: 'otp_cooldown', errors: { retryAfterSeconds: expect.any(Number) } });
+      expect(again.body.errors.retryAfterSeconds).toBeGreaterThan(50);
+      expect(deliveredCodes).toHaveLength(1); // không gửi mã thứ hai
+      const ok = await request(app.getHttpServer()).post('/api/v1/auth/otp/verify').send({ phone: '0912345678', purpose: 'TENANT_VIEWING', code });
+      expect(ok.status).toBe(200);
+    });
+
+    it('sai quá số lần → 429 otp_locked kèm retryAfterSeconds; production không có kênh thật → 502, không có mã', async () => {
+      await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
+      const wrong = lastOtp() === '0000' ? '1111' : '0000';
+      const verify = () => request(app.getHttpServer()).post('/api/v1/auth/otp/verify').send({ phone: '0912345678', purpose: 'TENANT_VIEWING', code: wrong });
+      await verify();
+      await verify();
+      const locked = await verify();
+      expect(locked.status).toBe(429);
+      expect(locked.body).toMatchObject({ code: 'otp_locked', errors: { retryAfterSeconds: expect.any(Number) } });
+
+      await app.close();
+      restoreEnv();
+      const prodEnv = { ...ENV, NODE_ENV: 'production' };
+      restoreEnv = applyEnv(prodEnv);
+      app = await createApp(prisma, prodEnv);
+      const before = deliveredCodes.length;
+      const prod = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0987654321', purpose: 'TENANT_VIEWING' });
+      expect(prod.status).toBe(502);
+      expect(prod.body.code).toBe('otp_send_failed');
+      expect(deliveredCodes).toHaveLength(before); // không ghi mã ra log ở production
     });
 
     it('SĐT sai định dạng → 400 invalid_phone; PHONE_VERIFY không verify được ở endpoint tenant', async () => {
@@ -800,7 +852,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       await login(agent, 'landlord', 'l@example.com');
 
       const send = await agent.post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'PHONE_VERIFY' });
-      const res = await agent.post('/api/v1/auth/phone/verify').send({ phone: '0912345678', code: send.body.data.devCode });
+      const res = await agent.post('/api/v1/auth/phone/verify').send({ phone: '0912345678', code: lastOtp() });
       expect({ status: res.status, body: res.body }).toMatchObject({ status: 200, body: { success: true } });
 
       const profile = prisma.profile.rows[0];
@@ -819,7 +871,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
 
       const sendA = await a.post('/api/v1/auth/phone/send-otp').send({ phone: '0912345678' });
       expect(sendA.status).toBe(200);
-      await a.post('/api/v1/auth/phone/verify').send({ phone: '0912345678', code: sendA.body.data.devCode });
+      await a.post('/api/v1/auth/phone/verify').send({ phone: '0912345678', code: lastOtp() });
 
       const otpRows = () => (prisma as any).otpCode?.rows?.length;
       const before = otpRows();

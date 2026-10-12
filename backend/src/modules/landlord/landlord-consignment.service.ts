@@ -317,13 +317,13 @@ export class LandlordConsignmentService {
     }
     const { phone, trusted } = await this.signingPhone(landlordId, phoneRaw);
     if (trusted) return { otpRequired: false as const, maskedPhone: maskPhone(phone), expiresInSeconds: 0 };
-    const { devCode } = await this.otp.send({ phone, purpose: OtpPurpose.PHONE_VERIFY });
-    // devCode chỉ có khi OtpService bật echo dev/demo (ngoài production, chưa có nhà cung cấp Zalo).
+    // Mã không bao giờ nằm trong response; ở dev (OTP_ECHO_DEV_CODE) mã chỉ ghi ra log backend.
+    await this.otp.send({ phone, purpose: OtpPurpose.PHONE_VERIFY });
     return {
       otpRequired: true as const,
       maskedPhone: maskPhone(phone),
       expiresInSeconds: this.otp.expiresInSeconds,
-      ...(devCode ? { devCode } : {}),
+      resendInSeconds: this.otp.resendInSeconds,
     };
   }
 
