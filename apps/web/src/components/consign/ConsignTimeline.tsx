@@ -1,12 +1,15 @@
 import { Check, Clock, X } from "lucide-react";
 import type { Consignment } from "@/lib/mock/types";
+import type { ConsignmentStatus } from "@/lib/landlord/types";
 import { fmtDateTime } from "@/lib/format";
 import { isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import styles from "./Consign.module.css";
 
 /** Chỉ các trường tiến trình cần — để cả hồ sơ mock (Admin/Host) lẫn hồ sơ từ API (Chủ nhà) đều dùng được. */
-export type TimelineSource = Pick<Consignment, "status" | "signedAt" | "hostAcceptedAt" | "decidedAt" | "note" | "inspectDueAt"> & {
+export type TimelineSource = Pick<Consignment, "signedAt" | "hostAcceptedAt" | "decidedAt" | "note" | "inspectDueAt"> & {
+  /** Trạng thái backend (bao trùm trạng thái mock, thêm `awaiting_landlord`). */
+  status: ConsignmentStatus;
   report?: { submittedAt?: string };
 };
 
@@ -23,7 +26,7 @@ export function ConsignTimeline({ c, now }: ConsignTimelineProps) {
       label: "Ký ủy quyền",
       time: c.signedAt ? fmtDateTime(c.signedAt) : undefined,
       isDone: Boolean(c.signedAt),
-      isCurrent: c.status === "draft",
+      isCurrent: false,
       isDanger: false,
     },
     {
@@ -44,7 +47,7 @@ export function ConsignTimeline({ c, now }: ConsignTimelineProps) {
       label: "Admin duyệt",
       time: c.decidedAt ? fmtDateTime(c.decidedAt) : undefined,
       isDone: c.status === "approved" || c.status === "rejected",
-      isCurrent: c.status === "reviewing",
+      isCurrent: c.status === "reviewing" || c.status === "awaiting_landlord",
       isDanger: false,
     },
     {

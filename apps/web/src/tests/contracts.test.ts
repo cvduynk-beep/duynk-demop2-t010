@@ -54,14 +54,10 @@ describe("Admin Contracts - WP1", () => {
     }
   });
 
-  // T2: mandate từ consignment: draft không sinh row, awaiting_host/inspecting/reviewing => pending_inspection, approved => active, rejected => void, docId = UQ-CS-...
-  it("T2: mandate từ consignment: draft không sinh row, các trạng thái phân định đúng, docId = UQ-CS-...", () => {
+  // T2: mandate từ consignment: awaiting_host/inspecting/reviewing => pending_inspection, approved => active, rejected => void, docId = UQ-CS-...
+  it("T2: mandate từ consignment: các trạng thái phân định đúng, docId = UQ-CS-...", () => {
     const state = getMockState();
     const rows = contracts.contractRows(state, FIXED_NOW);
-
-    // cs-1 là draft trong seed -> không sinh row
-    const cs1Row = rows.find((r) => r.key === "mandate.cs-1");
-    expect(cs1Row).toBeUndefined();
 
     // cs-2 (awaiting_host), cs-3 (inspecting), cs-4 (reviewing) -> pending_inspection
     for (const id of ["cs-2", "cs-3", "cs-4"]) {

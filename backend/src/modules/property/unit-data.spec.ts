@@ -29,12 +29,15 @@ function makeCreateService() {
   const tx: any = {
     unit: { create: unitCreate },
     doorAccessKey: { create: jest.fn() },
-    exclusiveMandate: { create: mandateCreate },
+    exclusiveMandate: { create: mandateCreate, findMany: jest.fn(async () => []) },
+    fieldHost: { findMany: jest.fn(async () => []) },
   };
   const prisma: any = {
     building: { findUnique: jest.fn(async () => building) },
     unit: { findUnique: jest.fn(async () => null) },
     feeConfig: { findUnique: jest.fn(async () => null) },
+    // Số đã xác thực của tài khoản ⇒ ký không cần OTP (spec này chỉ kiểm dữ liệu căn).
+    profile: { findUnique: jest.fn(async () => ({ phoneEnc: 'enc-phone', isPhoneVerified: true, payoutBankName: 'VCB', payoutAccountEnc: 'ENC(0011223344)', payoutAccountHolder: 'TRAN B' })) },
     $transaction: jest.fn(async (fn: any) => fn(tx)),
   };
   const service = new LandlordConsignmentService(
@@ -42,15 +45,16 @@ function makeCreateService() {
     new LandlordAccessService(prisma),
     { log: jest.fn() } as any,
     {} as any,
-    { encrypt: jest.fn((v: string) => `ENC(${v})`) } as any,
+    { encrypt: jest.fn((v: string) => `ENC(${v})`), decrypt: jest.fn(() => '+84901234567'), normalize: jest.fn() } as any,
     {} as any,
     new ConsignmentMetaStore(prisma),
     new InspectorAssigner(),
+    { assertReady: jest.fn(async () => ({ ready: true })) } as any,
   );
   return { service, unitCreate, mandateCreate };
 }
 
-const baseDto = { building: 'S1.02', floor: 12, door: '08', layout: '1PN', areaM2: 47, askRent: 6_500_000, bathrooms: 2 };
+const baseDto = { building: 'S1.02', floor: 12, door: '08', layout: '1PN', areaM2: 47, askRent: 6_500_000, bathrooms: 2, ownershipWarranted: true, otp: '4829' };
 
 describe('P1-1/P1-2 — tạo ký gửi ghi thông tin căn vào units', () => {
   it('P1-1: ghi bathrooms/direction/securityDeposit/minLeaseMonths/furnishing', async () => {

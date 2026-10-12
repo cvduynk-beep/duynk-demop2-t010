@@ -10,12 +10,12 @@ import { PortalShell } from "./PortalShell";
 
 export function LandlordShell({ children }: { children: React.ReactNode }) {
   const session = useSession();
-  const consignments = useLandlordQuery(queries.consignments);
   // Cache dữ liệu chủ nhà gắn với người đang đăng nhập; đổi tài khoản thì bỏ cache cũ.
   const userId = session.user?.id;
   useEffect(() => setLandlordCacheOwner(userId), [userId]);
-  // Số hồ sơ ký gửi còn nháp (chưa ký) hiện trên mục "Tổng quan"; chưa tải xong thì không hiện số.
-  const draft = consignments.state.status === "ready" ? consignments.state.data.filter((c) => c.status === "draft").length : 0;
+  // Số bước xác thực còn thiếu (chưa đủ thì chưa ký gửi được) — hiện trên mục "Tài khoản".
+  const verification = useLandlordQuery(queries.verification);
+  const missing = verification.state.status === "ready" ? verification.state.data.missing.length : 0;
   return (
     <PortalShell
       portal="Cổng chủ nhà"
@@ -27,11 +27,11 @@ export function LandlordShell({ children }: { children: React.ReactNode }) {
       userMeta="Ký gửi độc quyền"
       signOutHref={loginPathFor("landlord")}
       nav={[
-        { href: "/landlord/dashboard", label: "Tổng quan", icon: LayoutDashboard, badge: draft },
+        { href: "/landlord/dashboard", label: "Tổng quan", icon: LayoutDashboard },
         { href: "/landlord/units", label: "Căn hộ", icon: Building2 },
         { href: "/landlord/finance", label: "Khoản thu", icon: Banknote },
         { href: "/landlord/consign", label: "Ký gửi căn mới", icon: FilePlus2 },
-        { href: "/landlord/account", label: "Tài khoản", icon: UserCircle2 },
+        { href: "/landlord/account", label: "Tài khoản", icon: UserCircle2, badge: missing },
       ]}
     >
       {children}

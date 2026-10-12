@@ -26,14 +26,14 @@ export function normalizeName(str: string): string {
     .replace(/\s+/g, ' ');
 }
 
-function parseVnDate(dateStr: string): Date | null {
+export function parseVnDate(dateStr: string): Date | null {
   const parts = (dateStr || '').split('/');
   if (parts.length !== 3) return null;
   const d = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
   return isNaN(d.getTime()) ? null : d;
 }
 
-function ageOn(dob: Date, today: Date): number {
+export function ageOn(dob: Date, today: Date): number {
   let age = today.getFullYear() - dob.getFullYear();
   const m = today.getMonth() - dob.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;

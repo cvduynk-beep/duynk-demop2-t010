@@ -46,7 +46,7 @@ export function declaredValue(c: Pick<Consignment, "building" | "floor" | "door"
   }
 }
 
-export function isInspectOverdue(c: Pick<Consignment, "status" | "inspectDueAt">, now: number): boolean {
+export function isInspectOverdue(c: { status: string; inspectDueAt?: string }, now: number): boolean {
   if (c.status !== "awaiting_host" && c.status !== "inspecting") return false;
   if (!c.inspectDueAt) return false;
   return now > new Date(c.inspectDueAt).getTime();

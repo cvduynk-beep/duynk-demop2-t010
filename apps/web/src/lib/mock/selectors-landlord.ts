@@ -26,7 +26,7 @@ export function landlordUnitRows(state: MockState, landlordId: string): Landlord
   });
 }
 
-/** Hồ sơ ký gửi (chưa thành căn chính thức) của chủ nhà: draft/pending/approved/rejected. */
+/** Hồ sơ ký gửi (chưa thành căn chính thức) của chủ nhà: pending/approved/rejected. */
 export function landlordConsignments(state: MockState, landlordId: string) {
   return state.consignments.filter((c) => c.landlordId === landlordId);
 }

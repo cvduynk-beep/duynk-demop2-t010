@@ -11,6 +11,8 @@ export const MANDATE_TERM_MONTHS = 12;
 /** Khóa FeeConfig do Admin cấu hình; chưa có thì dùng mặc định và trả `feeSource: 'default'`. */
 export const SERVICE_FEE_CONFIG_KEY = 'landlord_service_fee_rate';
 export const DEFAULT_SERVICE_FEE_PERCENT = 5;
+/** Phần chủ nhà nhận từ cọc giữ chỗ khách bỏ (legal/02 Điều 6.1: 50% chủ nhà bù trống phòng, 50% nền tảng). Không trừ phí dịch vụ. */
+export const LANDLORD_FORFEIT_SHARE = 0.5;
 export const MGMT_FEE_CONFIG_KEY = 'mgmt_fee_per_m2';
 export const DEFAULT_MGMT_FEE_PER_M2 = 9500;
 
@@ -62,8 +64,8 @@ export function toUiMandateStatus(status: MandateStatus): UiMandateStatus {
 
 // ─── Hồ sơ ký gửi (lưu trong ExclusiveMandate.doorAccessConfig.consignment) ────────────────────
 
-/** Chuỗi hợp lệ: draft → awaiting_host → inspecting → approved | rejected | awaiting_landlord (đổi giá/cọc ⇒ chủ duyệt: accept ⇒ approved, decline ⇒ rejected — hồ sơ 18). */
-export type ConsignmentStage = 'draft' | 'awaiting_host' | 'inspecting' | 'awaiting_landlord' | 'approved' | 'rejected';
+/** Chuỗi hợp lệ: awaiting_host → inspecting → approved | rejected | awaiting_landlord (đổi giá/cọc ⇒ chủ duyệt: accept ⇒ approved, decline ⇒ rejected — hồ sơ 18). */
+export type ConsignmentStage = 'awaiting_host' | 'inspecting' | 'awaiting_landlord' | 'approved' | 'rejected';
 
 export interface ConsignmentForm {
   building: string;
@@ -225,6 +227,8 @@ export interface ConsignmentMeta {
   ownershipWarrantedAt?: string;
   /** SĐT đã ký OTP, mã hoá AES (cùng `PhoneService`); KHÔNG gắn vào Profile. */
   signedPhoneEnc?: string;
+  /** Tài khoản thụ hưởng tiền thuê của căn này (số TK mã hoá AES). Chỉ chủ nhà xem được, dạng che. */
+  payout?: { bankName: string; accountEnc: string; holder: string };
   inspectDueAt?: string;
   /** FieldHost.id được GIAO (lúc ký) hoặc NHẬN (accept/claim). */
   hostId?: string;
@@ -253,6 +257,15 @@ export function withConsignmentMeta(doorAccessConfig: unknown, meta: Consignment
   return { ...base, consignment: meta };
 }
 
+/** Số căn suy từ mã căn khi không có `doorNumber` (vd `VHOP-S1.02-0701`, tầng 7 ⇒ `01`) — cùng quy tắc với web `unitDoor`. */
+export function doorFromCode(unitCode: string, floor: number): string {
+  const tail = unitCode.split('-').pop() ?? unitCode;
+  for (const prefix of [String(floor).padStart(2, '0'), String(floor)]) {
+    if (tail.startsWith(prefix) && tail.length > prefix.length) return tail.slice(prefix.length);
+  }
+  return tail;
+}
+
 export function consignmentStage(mandate: {
   status: MandateStatus;
   signedAt: Date | null;
@@ -261,7 +274,7 @@ export function consignmentStage(mandate: {
   const explicit = readConsignmentMeta(mandate.doorAccessConfig)?.stage;
   if (explicit) return explicit;
   if (mandate.status === MandateStatus.ACTIVE) return 'approved';
-  return mandate.signedAt ? 'awaiting_host' : 'draft';
+  return 'awaiting_host';
 }
 
 // ─── Enum web ↔ Prisma ────────────────────────────────────────────────────────────────────────

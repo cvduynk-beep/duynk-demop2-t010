@@ -1839,3 +1839,59 @@
 }
 
 
+
+/* Xác thực tài khoản (trang Tài khoản) */
+.verifyGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+.verifyCard {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.verifyCardHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.verifyCardHead b {
+  flex: 1;
+  font-size: 15px;
+}
+.verifyIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--kelp-050, #e8f3ee);
+  color: var(--kelp, #2f7d5b);
+  flex: none;
+}
+.verifyRows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.verifyRows > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+  font-size: 14px;
+}
+.verifyRows dt {
+  color: var(--ink-3, #6b7280);
+}
+.verifyRows dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ConsignmentCoreModule } from '../inspection/consignment-core.module';
+import { DepositModule } from '../deposit/deposit.module';
 import { LandlordAccessService } from './landlord-access.service';
 import { LandlordConsignmentService } from './landlord-consignment.service';
 import { LandlordController } from './landlord.controller';
@@ -8,6 +9,8 @@ import { LandlordDirectoryService } from './landlord-directory.service';
 import { LandlordFeeService } from './landlord-fee.service';
 import { LandlordFinanceService } from './landlord-finance.service';
 import { LandlordPhotoService } from './landlord-photo.service';
+import { LandlordVerificationService } from './landlord-verification.service';
+import { LandlordPriceInsightService } from './landlord-price-insight.service';
 import { LandlordMandateService } from './landlord-mandate.service';
 import { LandlordPricingService } from './landlord-pricing.service';
 import { LandlordService } from './landlord.service';
@@ -16,7 +19,8 @@ import { LandlordUnitsService } from './landlord-units.service';
 @Module({
   // AuthModule: OtpService + PhoneService (xác thực OTP khi ký, giải mã SĐT).
   // ConsignmentCoreModule: kho meta khóa dòng + kho ảnh Storage + bộ chọn Inspector (dùng chung với InspectionModule).
-  imports: [AuthModule, ConsignmentCoreModule],
+  // DepositModule: hết hạn giữ chỗ trước khi đọc số liệu căn / khoản thu.
+  imports: [AuthModule, ConsignmentCoreModule, DepositModule],
   controllers: [LandlordController],
   providers: [
     LandlordAccessService,
@@ -29,6 +33,8 @@ import { LandlordUnitsService } from './landlord-units.service';
     LandlordFinanceService,
     LandlordMandateService,
     LandlordPricingService,
+    LandlordVerificationService,
+    LandlordPriceInsightService,
   ],
   exports: [LandlordService],
 })

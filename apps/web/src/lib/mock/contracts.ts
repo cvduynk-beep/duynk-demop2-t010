@@ -177,8 +177,6 @@ export function contractRows(state: MockState, now: number): ContractRow[] {
 
   // 2. Mandates từ Consignments
   for (const c of state.consignments) {
-    if (c.status === "draft") continue;
-
     let status: ContractStatus = "pending_inspection";
     if (c.status === "approved") {
       status = "active";

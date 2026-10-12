@@ -1701,39 +1701,37 @@ export type ConsignResult =
 
 export type { ConsignInput } from "./types";
 
-export function submitConsignment(input: ConsignInput, asDraft = false): Consignment {
+export function submitConsignment(input: ConsignInput): Consignment {
   const zone = zoneOfBuilding(input.building);
-  if (!asDraft && !zone) {
+  if (!zone) {
     throw new Error("Tòa nhà không thuộc phân khu hỗ trợ.");
   }
 
-  // Validate Đ10 khi không phải bản nháp
-  if (!asDraft) {
-    if (typeof input.floor !== "number" || input.floor < 1 || input.floor > 60) {
-      throw new Error("Tầng phải từ 1 đến 60.");
-    }
-    if (!input.door || !input.door.trim()) {
-      throw new Error("Số căn là bắt buộc.");
-    }
-    if (typeof input.areaM2 !== "number" || input.areaM2 < 20 || input.areaM2 > 300) {
-      throw new Error("Diện tích tim tường phải từ 20 đến 300 m².");
-    }
-    if (typeof input.askRent !== "number" || input.askRent < 3_000_000) {
-      throw new Error("Giá thuê tối thiểu 3.000.000đ.");
-    }
-    const deposit = input.suggestedDeposit ?? input.askRent;
-    if (deposit < 2_000_000 || deposit > 3 * input.askRent) {
-      throw new Error("Tiền cọc đề xuất phải từ 2.000.000đ đến 3 lần giá thuê.");
-    }
-    if (input.locks && (!Array.isArray(input.locks) || input.locks.length < 1 || input.locks.length > 2)) {
-      throw new Error("Chọn ít nhất một hình thức khoá cửa.");
-    }
-    if (input.bankAccount && input.bankAccount.replace(/\D/g, "").length < 6) {
-      throw new Error("Số tài khoản ngân hàng không hợp lệ (tối thiểu 6 chữ số).");
-    }
-    if (input.bankAccountHolder && input.bankAccountHolder.trim().length < 3) {
-      throw new Error("Tên chủ tài khoản phải có ít nhất 3 ký tự.");
-    }
+  // Validate Đ10
+  if (typeof input.floor !== "number" || input.floor < 1 || input.floor > 60) {
+    throw new Error("Tầng phải từ 1 đến 60.");
+  }
+  if (!input.door || !input.door.trim()) {
+    throw new Error("Số căn là bắt buộc.");
+  }
+  if (typeof input.areaM2 !== "number" || input.areaM2 < 20 || input.areaM2 > 300) {
+    throw new Error("Diện tích tim tường phải từ 20 đến 300 m².");
+  }
+  if (typeof input.askRent !== "number" || input.askRent < 3_000_000) {
+    throw new Error("Giá thuê tối thiểu 3.000.000đ.");
+  }
+  const deposit = input.suggestedDeposit ?? input.askRent;
+  if (deposit < 2_000_000 || deposit > 3 * input.askRent) {
+    throw new Error("Tiền cọc đề xuất phải từ 2.000.000đ đến 3 lần giá thuê.");
+  }
+  if (input.locks && (!Array.isArray(input.locks) || input.locks.length < 1 || input.locks.length > 2)) {
+    throw new Error("Chọn ít nhất một hình thức khoá cửa.");
+  }
+  if (input.bankAccount && input.bankAccount.replace(/\D/g, "").length < 6) {
+    throw new Error("Số tài khoản ngân hàng không hợp lệ (tối thiểu 6 chữ số).");
+  }
+  if (input.bankAccountHolder && input.bankAccountHolder.trim().length < 3) {
+    throw new Error("Tên chủ tài khoản phải có ít nhất 3 ký tự.");
   }
 
   const nowMs = Date.now();
@@ -1741,8 +1739,8 @@ export function submitConsignment(input: ConsignInput, asDraft = false): Consign
   const state = getMockState();
   const picked = zone ? pickHostFor(state, zone.id, "inspector") : undefined;
   const hostId = picked?.hostId ?? zone?.hostId;
-  const signedAt = asDraft ? undefined : iso(nowMs);
-  const inspectDueAt = asDraft ? undefined : iso(nowMs + INSPECT_SLA_MS);
+  const signedAt = iso(nowMs);
+  const inspectDueAt = iso(nowMs + INSPECT_SLA_MS);
 
   const furnished = input.furnished ?? (input.furnishing !== "empty");
   const locks = input.locks ?? (input.lock ? [input.lock] : ["smart"]);
@@ -1761,7 +1759,7 @@ export function submitConsignment(input: ConsignInput, asDraft = false): Consign
   const cs: Consignment = {
     ...input,
     id: csId,
-    status: asDraft ? "draft" : "awaiting_host",
+    status: "awaiting_host",
     createdAt: iso(nowMs),
     signedAt,
     hostId,
@@ -1777,7 +1775,7 @@ export function submitConsignment(input: ConsignInput, asDraft = false): Consign
   };
 
   const extraNotices: Notice[] = [];
-  if (!asDraft && hostId) {
+  if (hostId) {
     const hostName = hostById(hostId)?.name ?? hostId;
     const can = `${cs.building} · Tầng ${cs.floor} · Căn ${cs.door}`;
     extraNotices.push(
@@ -1826,77 +1824,6 @@ export function submitConsignment(input: ConsignInput, asDraft = false): Consign
   });
 
   return cs;
-}
-
-/** Ký uỷ quyền độc quyền cho căn đã đăng ký (draft → awaiting_host). */
-export function signConsignment(id: string, opts?: { ownershipWarranted?: boolean }): ConsignResult {
-  const state = getMockState();
-  const cs = state.consignments.find((c) => c.id === id);
-  if (!cs) {
-    return { ok: false, code: "not_found", reason: "Không tìm thấy hồ sơ ký gửi." };
-  }
-  if (cs.status !== "draft") {
-    return { ok: false, code: "bad_status", reason: "Hồ sơ không ở trạng thái nháp để ký ủy quyền." };
-  }
-  if (opts?.ownershipWarranted !== true) {
-    return { ok: false, code: "no_warranty", reason: "Cần cam đoan quyền sở hữu (Điều 2) trước khi ký." };
-  }
-  const zone = zoneOfBuilding(cs.building);
-  if (!zone) {
-    return { ok: false, code: "unknown_building", reason: "Tòa nhà không thuộc phân khu hỗ trợ." };
-  }
-
-  const nowMs = Date.now();
-  const signedAt = iso(nowMs);
-  const inspectDueAt = iso(nowMs + INSPECT_SLA_MS);
-  const picked = pickHostFor(state, zone.id, "inspector");
-  const hostId = picked.hostId;
-  const hostName = hostById(hostId)?.name ?? hostId;
-  const can = `${cs.building} · Tầng ${cs.floor} · Căn ${cs.door}`;
-
-  const extraNotices: Notice[] = [
-    zaloToLandlord(cs.landlordId, {
-      tone: "info",
-      title: "Đã gửi yêu cầu thẩm định",
-      body: `Chuyên viên thẩm định ${hostName} sẽ liên hệ hỗ trợ bạn trong 48 giờ`,
-    }),
-    pushToHost(hostId, {
-      tone: "info",
-      title: "Ticket thẩm định ký gửi mới",
-      body: `${can} (${cs.layout}, ${cs.areaM2} m²), hạn 48h.`,
-    }),
-    toAdmin({
-      tone: "info",
-      title: "Yêu cầu ký gửi mới",
-      body: `${can} giao ${hostName}.`,
-    }),
-  ];
-
-  if (picked.fallback) {
-    extraNotices.push(
-      toAdmin({
-        tone: "warning",
-        title: "Phân khu chưa có Thẩm định",
-        body: `Phân khu ${zone.id} không có Thẩm định đang có vai — giao tạm Host mặc định.`,
-      }),
-    );
-  }
-
-  setMockState((s) =>
-    withNotices(
-      {
-        ...s,
-        consignments: s.consignments.map((c) =>
-          c.id === id
-            ? { ...c, status: "awaiting_host", signedAt, hostId, inspectDueAt, ownershipWarrantedAt: signedAt }
-            : c,
-        ),
-      },
-      ...extraNotices,
-    ),
-  );
-
-  return { ok: true };
 }
 
 export function hostAcceptInspection(id: string, hostId: string): ConsignResult {

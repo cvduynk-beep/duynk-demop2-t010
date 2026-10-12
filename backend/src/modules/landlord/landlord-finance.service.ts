@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ContractStatus, DepositStatus, MandateStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LandlordFeeService } from './landlord-fee.service';
-import { isConsigned, lastMonths, toUiUnitStatus } from './landlord.mappers';
+import { LANDLORD_FORFEIT_SHARE, isConsigned, lastMonths, toUiUnitStatus } from './landlord.mappers';
 
 const HISTORY_MONTHS = 6;
 
@@ -11,6 +11,8 @@ const HISTORY_MONTHS = 6;
  * một tháng được tính là có thu khi hợp đồng còn hiệu lực trong tháng đó.
  * Tỷ lệ phí dịch vụ lấy từ FeeConfig `landlord_service_fee_rate` (Admin cấu hình, legal/01 Điều 6 để mở);
  * chưa cấu hình thì dùng mặc định và báo `feeSource: 'default'` để UI nói rõ đây là mức tạm.
+ * Cọc giữ chỗ khách bỏ (`FORFEITED`) ⇒ chủ nhà nhận `LANDLORD_FORFEIT_SHARE` (50%), ghi vào tháng của `expiresAt`
+ * (thời điểm khách mất cọc — chưa có sổ chi trả thực tế), cộng thẳng vào thực nhận, không trừ phí dịch vụ.
  */
 @Injectable()
 export class LandlordFinanceService {
@@ -20,7 +22,8 @@ export class LandlordFinanceService {
   ) {}
 
   async getFinance(landlordId: string, now = new Date()) {
-    const [fee, units, contracts, deposits] = await Promise.all([
+    const months = lastMonths(HISTORY_MONTHS, now);
+    const [fee, units, contracts, deposits, forfeits] = await Promise.all([
       this.fees.get(),
       this.prisma.unit.findMany({
         where: { landlordId },
@@ -30,19 +33,29 @@ export class LandlordFinanceService {
         where: { landlordId, status: { in: [ContractStatus.ACTIVE, ContractStatus.TERMINATED_SETTLED] } },
       }),
       this.prisma.holdingDeposit.findMany({
-        where: { unit: { landlordId }, paymentStatus: DepositStatus.PAID_HOLDING },
+        // Chỉ cọc còn hạn mới là "đang giữ hộ"; quá hạn là khách đã mất cọc (lượt quét sẽ chuyển FORFEITED).
+        where: { unit: { landlordId }, paymentStatus: DepositStatus.PAID_HOLDING, expiresAt: { gt: now } },
         select: { unitId: true, amount: true },
+      }),
+      this.prisma.holdingDeposit.findMany({
+        where: { unit: { landlordId }, paymentStatus: DepositStatus.FORFEITED, expiresAt: { gte: months[0].start } },
+        select: { id: true, unitId: true, amount: true, paidAt: true, expiresAt: true, unit: { select: { unitCode: true } } },
+        orderBy: { expiresAt: 'desc' },
       }),
     ]);
 
     const feeOf = fee.of;
 
-    const months = lastMonths(HISTORY_MONTHS, now);
     const history = months.map((m) => {
       const gross = contracts
         .filter((c) => c.startDate <= m.end && c.endDate >= m.start)
         .reduce((sum, c) => sum + Number(c.monthlyRentPrice), 0);
-      return { month: m.key, label: m.label, gross, fee: feeOf(gross), net: gross - feeOf(gross) };
+      const forfeit = Math.round(
+        forfeits
+          .filter((d) => d.expiresAt && d.expiresAt >= m.start && d.expiresAt <= m.end)
+          .reduce((sum, d) => sum + Number(d.amount), 0) * LANDLORD_FORFEIT_SHARE,
+      );
+      return { month: m.key, label: m.label, gross, fee: feeOf(gross), forfeit, net: gross - feeOf(gross) + forfeit };
     });
     const current = history[history.length - 1];
 
@@ -72,11 +85,21 @@ export class LandlordFinanceService {
     return {
       serviceFeePercent: fee.percent,
       feeSource: fee.source,
-      thisMonth: { gross: current.gross, fee: current.fee, net: current.net },
+      thisMonth: { gross: current.gross, fee: current.fee, forfeit: current.forfeit, net: current.net },
       totalNet6Months: history.reduce((sum, m) => sum + m.net, 0),
       escrowTotal: perUnit.reduce((sum, r) => sum + r.escrow, 0),
       history,
       perUnit,
+      // Từng khoản bồi thường để chủ nhà biết đến từ căn nào, khi nào (6 tháng gần nhất, mới nhất trước).
+      forfeits: forfeits.map((d) => ({
+        depositId: d.id,
+        unitId: d.unitId,
+        unitCode: d.unit.unitCode,
+        depositAmount: Number(d.amount),
+        share: Math.round(Number(d.amount) * LANDLORD_FORFEIT_SHARE),
+        paidAt: d.paidAt,
+        expiredAt: d.expiresAt,
+      })),
     };
   }
 }
