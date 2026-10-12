@@ -17,10 +17,7 @@ const nextConfig: NextConfig = {
   // vượt là cắt cụt body và proxy lỗi 500. Tải ảnh ký gửi tối đa 8 ảnh × 3MB = 24MB (xem lib/landlord/photos.ts).
   experimental: { proxyClientMaxBodySize: "30mb" },
   async rewrites() {
-    if (process.env.BACKEND_URL && !process.env.BACKEND_URL.includes("localhost:4000")) {
-      return [{ source: "/api/v1/:path*", destination: `${BACKEND_URL}/api/v1/:path*` }];
-    }
-    return [];
+    return [{ source: "/api/v1/:path*", destination: `${BACKEND_URL}/api/v1/:path*` }];
   },
 };
 
