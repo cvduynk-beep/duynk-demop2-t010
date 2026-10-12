@@ -3,9 +3,19 @@
  */
 
 import type { InspectionReport } from "@/lib/mock/types";
+import { loginPathFor, type Portal } from "@/lib/auth/portals";
 
 const API_BASE = "/api/v1";
 
+/** Timeout mặc định của một request (ms). Upload ảnh (multipart) được dài hơn. */
+export const API_TIMEOUT_MS = 15_000;
+export const API_UPLOAD_TIMEOUT_MS = 90_000;
+
+/**
+ * Kết quả thống nhất của MỌI lời gọi API phía trình duyệt. Không ném lỗi: caller đọc `ok`/`status`/`code` và PHẢI hiển
+ * thị lỗi cho người dùng (xem `apiErrorText`). Mã do client tự đặt khi không có phản hồi HTTP:
+ * `status 0` + `code: "timeout" | "network"`; phản hồi 2xx không phải JSON ⇒ `code: "bad_response"`.
+ */
 export interface ApiResponse<T> {
   ok: boolean;
   status: number;
@@ -14,7 +24,9 @@ export interface ApiResponse<T> {
   code?: string;
 }
 
-function getClientPortal(): string | undefined {
+type ClientPortal = Portal;
+
+function getClientPortal(): ClientPortal | undefined {
   if (typeof window === "undefined") return undefined;
   const p = window.location.pathname;
   if (p.startsWith("/host")) return "host";
@@ -24,50 +36,97 @@ function getClientPortal(): string | undefined {
   return undefined;
 }
 
-async function request<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T>> {
+/**
+ * 401 nghĩa là "phiên hết hạn / chưa đăng nhập" CHỈ khi backend trả mã `unauthorized` (guard). Các 401 nghiệp vụ —
+ * `LOGIN_REQUIRED` (khách hết lượt chat), `invalid_credentials`, `email_not_verified`, `action_token_invalid` — và mọi
+ * lời gọi `/auth/*` để caller tự xử lý, không chuyển trang.
+ */
+export function isSessionExpired(endpoint: string, status: number, code: string | undefined): boolean {
+  if (status !== 401 || endpoint.startsWith("/auth/")) return false;
+  return code === undefined || code === "unauthorized";
+}
+
+let redirecting = false;
+function redirectToLogin() {
+  if (typeof window === "undefined" || redirecting) return;
+  const portal = getClientPortal() ?? "tenant";
+  const here = window.location.pathname + window.location.search;
+  const base = loginPathFor(portal);
+  redirecting = true;
+  // Điều hướng cứng có chủ đích: hết phiên ⇒ bỏ cache router của các trang có chắn quyền (giống signOut).
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign(`${base}${base.includes("?") ? "&" : "?"}next=${encodeURIComponent(here)}`);
+}
+
+async function request<T>(endpoint: string, options: RequestInit = {}, timeoutMs = API_TIMEOUT_MS): Promise<ApiResponse<T>> {
+  const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const url = path.startsWith("/api/") ? path : `${API_BASE}${path}`;
+  // FormData: để trình duyệt tự đặt Content-Type (kèm boundary); đặt tay sẽ làm hỏng multipart.
+  const isForm = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const portal = getClientPortal();
+  const headers = {
+    ...(isForm ? {} : { "Content-Type": "application/json" }),
+    ...(portal ? { "x-portal": portal } : {}),
+    ...(options.headers || {}),
+  };
+
+  let res: Response;
   try {
-    const url = `${API_BASE}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-    // FormData: để trình duyệt tự đặt Content-Type (kèm boundary); đặt tay sẽ làm hỏng multipart.
-    const isForm = typeof FormData !== "undefined" && options.body instanceof FormData;
-    const portal = getClientPortal();
-    const headers = {
-      ...(isForm ? {} : { "Content-Type": "application/json" }),
-      ...(portal ? { "x-portal": portal } : {}),
-      ...(options.headers || {}),
-    };
-
-    const res = await fetch(url, {
+    res = await fetch(url, {
       ...options,
-      credentials: "same-origin",
+      // Cùng origin (rewrite /api/v1 → backend); `include` để cookie phiên luôn đi kèm kể cả khi FE/BE tách domain.
+      credentials: "include",
       headers,
+      signal: options.signal ?? AbortSignal.timeout(timeoutMs),
     });
-
-    const body = await res.json().catch(() => ({}));
-
-    // NestJS response envelope or raw object
-    const envelope: Record<string, unknown> = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-    const data = "data" in envelope ? envelope.data : body;
-    const message = typeof envelope.message === "string" ? envelope.message : undefined;
-    const code = typeof envelope.code === "string" ? envelope.code : undefined;
-
-    return {
-      ok: res.ok,
-      status: res.status,
-      data: (res.ok ? data : data || {}) as T,
-      message,
-      code,
-    };
   } catch (err: unknown) {
+    const timedOut = err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError");
     return {
       ok: false,
       status: 0,
       data: {} as T,
-      message: (err instanceof Error && err.message) || "Lỗi kết nối máy chủ",
+      code: timedOut ? "timeout" : "network",
+      message: timedOut ? "Máy chủ phản hồi quá lâu, vui lòng thử lại." : "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
     };
   }
+
+  const text = await res.text();
+  let body: unknown = {};
+  let parsed = true;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      parsed = false; // vd trang lỗi HTML của proxy; trạng thái HTTP vẫn được trả về nguyên vẹn bên dưới
+    }
+  }
+
+  // NestJS response envelope or raw object
+  const envelope: Record<string, unknown> = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const data = "data" in envelope ? envelope.data : body;
+  const message = typeof envelope.message === "string" ? envelope.message : undefined;
+  const code = typeof envelope.code === "string" ? envelope.code : !parsed && res.ok ? "bad_response" : undefined;
+
+  if (isSessionExpired(path, res.status, code)) redirectToLogin();
+
+  return {
+    ok: res.ok && parsed,
+    status: res.status,
+    data: (res.ok ? data : data || {}) as T,
+    message,
+    code,
+  };
+}
+
+/** Câu báo lỗi thống nhất theo trạng thái (dùng khi caller không có thông điệp nghiệp vụ riêng). */
+export function apiErrorText(res: Pick<ApiResponse<unknown>, "status" | "code" | "message">, fallback = "Đã có lỗi, vui lòng thử lại."): string {
+  if (res.code === "timeout" || res.code === "network") return res.message ?? fallback;
+  if (res.status === 401) return res.message || "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.";
+  if (res.status === 403) return res.message || "Bạn không có quyền thực hiện thao tác này.";
+  if (res.status === 404) return res.message || "Không tìm thấy dữ liệu.";
+  if (res.status === 429) return "Bạn thao tác quá nhanh, vui lòng thử lại sau ít phút.";
+  if (res.status >= 500) return "Máy chủ đang gặp sự cố, vui lòng thử lại sau.";
+  return res.message || fallback;
 }
 
 export const api = {
@@ -76,7 +135,7 @@ export const api = {
     request<T>(endpoint, { method: "POST", body: JSON.stringify(body ?? {}) }),
   patch: <T>(endpoint: string, body?: unknown) =>
     request<T>(endpoint, { method: "PATCH", body: JSON.stringify(body ?? {}) }),
-  postForm: <T>(endpoint: string, form: FormData) => request<T>(endpoint, { method: "POST", body: form }),
+  postForm: <T>(endpoint: string, form: FormData) => request<T>(endpoint, { method: "POST", body: form }, API_UPLOAD_TIMEOUT_MS),
   put: <T>(endpoint: string, body?: unknown) =>
     request<T>(endpoint, { method: "PUT", body: JSON.stringify(body ?? {}) }),
   delete: <T>(endpoint: string) => request<T>(endpoint, { method: "DELETE" }),
@@ -173,17 +232,6 @@ export const propertyApi = {
     const qStr = qs.toString();
     return api.get<unknown>(`/properties/units/${id}${qStr ? `?${qStr}` : ""}`);
   },
-};
-
-export const matchmakerApi = {
-  recommend: (body: {
-    maxAllInBudget: number;
-    preferredLayout?: string;
-    motorbikes?: number;
-    cars?: number;
-    occupants?: number;
-    prompt?: string;
-  }) => api.post<{ scanSummary: unknown; topRecommendations: unknown[] }>("/matchmaker/recommend", body),
 };
 
 export const bookingApi = {

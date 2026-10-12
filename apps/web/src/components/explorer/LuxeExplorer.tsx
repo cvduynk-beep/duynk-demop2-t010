@@ -11,20 +11,22 @@ import {
   Search,
   User,
 } from "lucide-react";
-import { allInCost } from "@/lib/pricing/cost";
+import { allInCost, isBargain } from "@/lib/pricing/cost";
 import { vnd } from "@/lib/format";
-import { hostForUnit, unitAddress, unitPhoto, zoneById, type ZoneId } from "@/lib/mock/units";
+import { unitAddress, unitPhoto, zoneById, type ZoneId } from "@/lib/units";
 import { OceanParkInteractiveMap } from "@/components/map/OceanParkInteractiveMap";
-import { useUnits } from "@/lib/property/useUnits";
-import { toggleFavorite } from "@/lib/mock/actions";
-import { useMock } from "@/lib/mock/store";
+import { MockDataBanner } from "@/components/ui/MockDataBanner";
+import { useCatalog } from "@/lib/tenant/catalog";
+import { useFavorites } from "@/lib/tenant/favorites";
 import styles from "./LuxeExplorer.module.css";
 
 type SheetPosition = "peek" | "half" | "full";
 
 export function LuxeExplorer() {
-  const store = useMock();
-  const { units } = useUnits();
+  // Catalog thật (`/api/catalog/units`) + danh sách đã lưu thật (`/me/favorites`); không trộn dữ liệu mẫu.
+  const catalog = useCatalog();
+  const { units } = catalog;
+  const favorites = useFavorites();
   const [query, setQuery] = useState("");
   const [priceFilter, setPriceFilter] = useState<"all" | "under7" | "7to10" | "above10">("all");
   const [bedFilter, setBedFilter] = useState<string>("all");
@@ -46,7 +48,7 @@ export function LuxeExplorer() {
         const q = query.toLowerCase().trim();
         const matchCode = u.code.toLowerCase().includes(q);
         const matchBuilding = u.building.toLowerCase().includes(q);
-        const matchZone = zoneById(u.zoneId).name.toLowerCase().includes(q);
+        const matchZone = (u.zoneName || zoneById(u.zoneId)?.name || "").toLowerCase().includes(q);
         const matchLayout = u.layoutLabel.toLowerCase().includes(q);
         if (!matchCode && !matchBuilding && !matchZone && !matchLayout) return false;
       }
@@ -71,9 +73,9 @@ export function LuxeExplorer() {
     });
   }, [units, query, zoneFilter, bedFilter, priceFilter]);
 
-  const handleToggleFav = (unitId: string, e: React.MouseEvent) => {
+  const handleToggleFav = (unitCode: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    toggleFavorite(unitId);
+    void favorites.toggle(unitCode);
   };
 
   // Các hàm vuốt kéo Bottom Sheet
@@ -266,11 +268,27 @@ export function LuxeExplorer() {
 
           {/* Danh sách thẻ căn hộ xếp tầng kính mờ */}
           <div className={styles.cardsList}>
+            {catalog.source === "mock" && <MockDataBanner />}
+            {catalog.error ? (
+              <div role="alert" style={{ padding: 16, textAlign: "center" }}>
+                <p className="small">{catalog.error}</p>
+                <button type="button" className="btn btn-primary btn-sm" onClick={catalog.reload}>
+                  Thử lại
+                </button>
+              </div>
+            ) : catalog.loading ? (
+              <p className="muted small" style={{ padding: 16 }} aria-busy="true">
+                Đang tải danh sách căn…
+              </p>
+            ) : filteredUnits.length === 0 ? (
+              <p className="muted small" style={{ padding: 16 }}>
+                {units.length === 0 ? "Hiện chưa có căn nào đang mở." : "Không có căn nào khớp bộ lọc."}
+              </p>
+            ) : null}
             {filteredUnits.slice(0, sheetState === "peek" ? 1 : sheetState === "half" ? 4 : 10).map((unit, index) => {
               const cost = allInCost(unit);
               const zone = zoneById(unit.zoneId);
-              const host = hostForUnit(unit);
-              const isFav = store.favorites.includes(unit.id);
+              const isFav = favorites.isSaved(unit.code);
               const isSelected = activeUnitId === unit.id;
               const photoUrl = unitPhoto(unit, 1);
 
@@ -282,16 +300,22 @@ export function LuxeExplorer() {
                 >
                   {/* Cột trái: Ảnh căn hộ có số thứ tự */}
                   <div className={styles.photoWrap}>
-                    <Image
-                      src={photoUrl}
-                      alt={unitAddress(unit)}
-                      fill
-                      sizes="125px"
-                      className={styles.cardPhoto}
-                      loading={index < 2 ? "eager" : "lazy"}
-                    />
+                    {photoUrl ? (
+                      <Image
+                        src={photoUrl}
+                        alt={unitAddress(unit)}
+                        fill
+                        sizes="125px"
+                        className={styles.cardPhoto}
+                        loading={index < 2 ? "eager" : "lazy"}
+                      />
+                    ) : (
+                      <span className="muted xs" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
+                        Chưa có ảnh
+                      </span>
+                    )}
                     <span className={styles.rankBadge}>{index + 1}</span>
-                    {cost.total <= 7_500_000 && <span className={styles.dealTag}>Căn hời ⚡</span>}
+                    {isBargain(unit) && <span className={styles.dealTag}>Căn hời ⚡</span>}
                   </div>
 
                   {/* Cột phải: Thông tin căn hộ */}
@@ -302,7 +326,7 @@ export function LuxeExplorer() {
                         <button
                           type="button"
                           className={`${styles.favBtn} ${isFav ? styles.favBtnActive : ""}`}
-                          onClick={(e) => handleToggleFav(unit.id, e)}
+                          onClick={(e) => handleToggleFav(unit.code, e)}
                           aria-label="Yêu thích"
                         >
                           <Heart size={16} fill={isFav ? "currentColor" : "none"} />
@@ -312,7 +336,7 @@ export function LuxeExplorer() {
                       <div className={styles.priceLocRow}>
                         <span className={styles.priceMain}>{vnd(cost.total)}đ</span>
                         <span className={styles.locText}>
-                          • {zone.name}
+                          • {unit.zoneName || zone?.name || "Ocean Park"}
                         </span>
                       </div>
 
@@ -329,10 +353,10 @@ export function LuxeExplorer() {
                     <div className={styles.cardFooter}>
                       <div className={styles.hostWrap}>
                         <div className={styles.hostAvatar}>
-                          {host.name.split(" ").slice(-1)[0].charAt(0)}
+                          H
                         </div>
                         <div className={styles.hostLabel}>
-                          <span className={styles.hostRole}>{host.name}</span>
+                          <span className={styles.hostRole}>Field Host nội khu</span>
                           <span>Đón sảnh</span>
                         </div>
                       </div>

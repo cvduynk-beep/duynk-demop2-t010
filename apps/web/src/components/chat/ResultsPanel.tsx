@@ -5,25 +5,36 @@ import { LayoutGrid, Map, SearchX, Sparkles, X } from "lucide-react";
 import { Facade } from "@/components/brand/Facade";
 import { UnitCard } from "@/components/unit/UnitCard";
 import { OceanParkInteractiveMap } from "@/components/map/OceanParkInteractiveMap";
-import { criteriaChips, relaxHint, type MatchResult } from "@/lib/mock/matchmaker";
-import type { CriteriaState } from "@/lib/mock/types";
-import { unitStatus } from "@/lib/mock/selectors";
-import type { MockState } from "@/lib/mock/types";
-import { zoneById, type ZoneId } from "@/lib/mock/units";
+import type { CriteriaState } from "@/lib/chat/types";
+import type { CostBreakdown } from "@/lib/pricing/cost";
+import type { UnitWithExtras } from "@/lib/tenant/adapters";
+import { criteriaChips } from "@/lib/tenant/matchmaker";
+import { zoneById, type ZoneId } from "@/lib/units";
 import styles from "./ResultsPanel.module.css";
 
 type Sort = "best" | "price" | "area";
 type ViewMode = "list" | "map";
 
-interface ResultsPanelProps {
-  results: MatchResult[];
-  criteria: CriteriaState;
-  onCriteria: (c: CriteriaState) => void;
-  state: MockState;
-  totalOpen: number;
+/** Một căn trong danh sách kết quả: thứ hạng, All-in và lý do lấy từ AI Matchmaker (backend), ảnh/thông tin từ catalog. */
+export interface RankedResult {
+  unit: UnitWithExtras;
+  rank: number;
+  cost: CostBreakdown;
+  reasons: string[];
 }
 
-export function ResultsPanel({ results, criteria, onCriteria, state, totalOpen }: ResultsPanelProps) {
+interface ResultsPanelProps {
+  /** Đúng thứ tự backend trả ("Phù hợp nhất"); FE chỉ sắp lại khi khách tự chọn tiêu chí sắp xếp khác. */
+  results: RankedResult[];
+  criteria: CriteriaState;
+  onCriteria: (c: CriteriaState) => void;
+  totalOpen: number;
+  loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+}
+
+export function ResultsPanel({ results, criteria, onCriteria, totalOpen, loading, error, onRetry }: ResultsPanelProps) {
   const [sort, setSort] = useState<Sort>("best");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [mapZone, setMapZone] = useState<string | null>(null);
@@ -53,7 +64,15 @@ export function ResultsPanel({ results, criteria, onCriteria, state, totalOpen }
         <div className={styles.headTop}>
           <div>
             <h2 className={styles.title}>
-              {results.length ? (chips.length === 0 ? `Tất cả ${results.length} căn hộ đang mở` : `${results.length} căn khớp yêu cầu`) : "Chưa có căn khớp"}
+              {loading
+                ? "Đang xếp hạng căn phù hợp…"
+                : error
+                ? "Chưa tải được danh sách"
+                : results.length
+                ? chips.length === 0
+                  ? `Tất cả ${results.length} căn hộ đang mở`
+                  : `${results.length} căn khớp yêu cầu`
+                : "Chưa có căn khớp"}
             </h2>
             <p className="muted small">
               Đã quét {totalOpen} căn đang mở · tính cho {hh.persons} người, {hh.motorbikes} xe máy{hh.cars ? `, ${hh.cars} ô tô` : ""}
@@ -105,7 +124,26 @@ export function ResultsPanel({ results, criteria, onCriteria, state, totalOpen }
         )}
       </header>
 
-      {results.length === 0 ? (
+      {error ? (
+        <div className={styles.empty}>
+          <div>
+            <h3>
+              <SearchX size={18} style={{ verticalAlign: "-3px", marginRight: 6 }} />
+              {error}
+            </h3>
+            <p className="muted">Danh sách và thứ hạng căn do AI Matchmaker tính trên dữ liệu thật; bạn thử tải lại nhé.</p>
+            {onRetry && (
+              <div className={styles.emptyActions}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={onRetry}>
+                  Tải lại
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : loading && results.length === 0 ? (
+        <p className="muted small">Đang tải danh sách căn…</p>
+      ) : results.length === 0 ? (
         <div className={styles.empty}>
           <div className={styles.emptyArt}>
             <Facade lit={0} label="" />
@@ -115,7 +153,7 @@ export function ResultsPanel({ results, criteria, onCriteria, state, totalOpen }
               <SearchX size={18} style={{ verticalAlign: "-3px", marginRight: 6 }} />
               Không có căn nào vừa với bộ lọc này
             </h3>
-            <p className="muted">{relaxHint(criteria, (u) => unitStatus(state, u))}</p>
+            <p className="muted">Bạn thử nâng ngân sách hoặc bớt tầng, đồ dùng, phân khu để có thêm căn nhé.</p>
             <div className={styles.emptyActions}>
               {criteria.budget && (
                 <button type="button" className="btn btn-primary btn-sm" onClick={() => onCriteria({ ...criteria, budget: criteria.budget! + 1_000_000 })}>
@@ -140,7 +178,7 @@ export function ResultsPanel({ results, criteria, onCriteria, state, totalOpen }
           {mapZone ? (
             <div className={styles.zoneFilterBanner}>
               <span>
-                Đang lọc phân khu: <strong>{zoneById(mapZone as ZoneId).name}</strong> ({zoneResults.length} căn khớp)
+                Đang lọc phân khu: <strong>{zoneById(mapZone as ZoneId)?.name ?? mapZone}</strong> ({zoneResults.length} căn khớp)
               </span>
               <button type="button" className={styles.clearZoneBtn} onClick={() => setMapZone(null)}>
                 Xem tất cả ({results.length} căn)
@@ -171,7 +209,7 @@ export function ResultsPanel({ results, criteria, onCriteria, state, totalOpen }
               </h3>
               <div className={styles.top}>
                 {top.map((r, i) => (
-                  <UnitCard key={r.unit.id} unit={r.unit} cost={r.cost} variant="feature" rank={i + 1} reasons={r.reasons} priority={i === 0} />
+                  <UnitCard key={r.unit.id} unit={r.unit} cost={r.cost} variant="feature" rank={r.rank} reasons={r.reasons} priority={i === 0} />
                 ))}
               </div>
             </section>

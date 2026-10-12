@@ -189,3 +189,9 @@
     transform: translateY(0);
   }
 }
+
+.degraded {
+  display: block;
+  margin-top: 4px;
+  font-style: italic;
+}

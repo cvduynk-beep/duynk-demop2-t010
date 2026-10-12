@@ -1,7 +1,23 @@
 # VinStay AI — Web (Next.js)
 
-Giao diện 4 cổng (Khách thuê, Chủ nhà, Field Host, Admin). **Bản MVP hiện chạy hoàn toàn bằng dữ liệu mock**: không gọi
-backend, không cần Supabase. Backend NestJS (`../../backend`) đang tạm dừng.
+Giao diện 4 cổng (Khách thuê, Chủ nhà, Field Host, Admin), gọi backend NestJS (`../../backend`, `BACKEND_URL`) qua rewrite
+`/api/v1/*`. Luồng khách thuê (tìm căn, chat, đặt lịch, cọc, eKYC, ký HĐ) chạy dữ liệu thật; một số màn Admin/Host/Landlord
+còn dùng `src/lib/mock` (đang gỡ dần — các mục "mock" bên dưới là mô tả cũ của các màn đó).
+
+## Dữ liệu căn hộ (`/units`, `/units/[id]`)
+
+- **Nguồn duy nhất:** `src/lib/units/source.ts` (+ `source.server.ts` đọc env ở server). Danh sách/chi tiết luôn lấy từ DB
+  qua `GET /api/v1/properties/units[/:code]`; map sang kiểu UI ở MỘT chỗ (`src/lib/tenant/adapters.ts` → `toUnit`).
+- **Trình duyệt** đọc danh sách qua route Next `GET /api/catalog/units` (`?zone&layout&maxRent&q`):
+  `200 { success, data: { units: TenantUnit[], source: "api" | "mock" } }` · `502 { success:false, code:"units_upstream" }`.
+  Thứ hạng "Phù hợp nhất" vẫn do `POST /api/v1/matchmaker/recommend`.
+- **Chi tiết** render ở server: 404 ⇒ `notFound()`; backend lỗi ⇒ `app/units/[id]/error.tsx` (Thử lại), không rơi về dữ liệu giả.
+- **Fallback có cờ:** `ALLOW_MOCK_FALLBACK=true` (mặc định tắt, **bị bỏ qua ở production**) ⇒ khi backend lỗi 5xx/timeout/mạng,
+  trả `src/lib/units/fixtures.ts` với `source: "mock"`, log cảnh báo ở server, UI hiện banner "Dữ liệu mẫu, chưa xếp hạng"
+  (xếp theo giá thuê). 404 và danh sách rỗng thật không bao giờ bị thay bằng dữ liệu mẫu.
+- **API client chung** (`src/lib/apiClient.ts`): `credentials: "include"`, timeout 15s (upload 90s), lỗi mạng/timeout có mã
+  `network`/`timeout`; 401 mã `unauthorized` ⇒ chuyển về trang đăng nhập đúng cổng kèm `next` (401 nghiệp vụ như
+  `LOGIN_REQUIRED` để màn hình tự xử lý); `apiErrorText` cho 403/404/429/5xx.
 
 ## Chạy
 

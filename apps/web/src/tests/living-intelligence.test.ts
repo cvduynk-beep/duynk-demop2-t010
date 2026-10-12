@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getBuildingKnowledge, getUnitLivingInsights } from "@/lib/property/livingIntelligence";
-import { unitById } from "@/lib/mock/units";
+import { sampleUnit } from "./fixtures/unit";
 
 describe("livingIntelligence - Building & Living Experience Engine", () => {
   it("1. Lấy dữ liệu cự ly thực tế chính xác cho từng tòa", () => {
@@ -23,7 +23,7 @@ describe("livingIntelligence - Building & Living Experience Engine", () => {
   });
 
   it("2. Phân tích thông minh không gian sống theo layout và tầng cao", () => {
-    const unit1PNPlus = unitById("s1-08-26-2614");
+    const unit1PNPlus = sampleUnit();
     if (unit1PNPlus) {
       const insights = getUnitLivingInsights(unit1PNPlus);
       // Layout 1PN+ có highlight góc +1
@@ -43,7 +43,7 @@ describe("livingIntelligence - Building & Living Experience Engine", () => {
   });
 
   it("3. Nhận diện ngữ cảnh tìm kiếm khi khách tìm gần VinUni", () => {
-    const unit = unitById("s1-08-26-2614");
+    const unit = sampleUnit();
     if (unit) {
       const insights = getUnitLivingInsights(unit, {
         layouts: [],

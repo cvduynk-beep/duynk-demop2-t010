@@ -52,7 +52,6 @@ import {
   zoneOfBuilding,
   createAndPublishUnitFromConsignment,
 } from "./units";
-import { publishUnitToCatalog } from "@/lib/property/useUnits";
 import { inspectionSummary } from "./selectors-inspection";
 import { contractByKey } from "./contracts";
 
@@ -2125,7 +2124,7 @@ export function submitInspection(id: string, hostId: string, draft: InspectionDr
         ...updatedConsignment,
         status: "approved",
       });
-      publishUnitToCatalog(published);
+      void published;
     } catch {
       // fallback
     }
@@ -2179,7 +2178,7 @@ export function approveConsignment(id: string, by: string): ConsignResult {
   // Đẩy trực tiếp lên trang chủ cho khách thuê
   try {
     const published = createAndPublishUnitFromConsignment(updatedConsignment);
-    publishUnitToCatalog(published);
+    void published;
   } catch {
     // fallback
   }

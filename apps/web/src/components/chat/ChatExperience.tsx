@@ -1,24 +1,21 @@
 "use client";
 
-import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { ArrowRight, BadgeCheck, CalendarClock, Plus, ReceiptText, Footprints, MapPin, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
-import { matchmakerApi } from "@/lib/apiClient";
-import { chatAppend, chatReset, chatSetCriteria, chatSetSearch, countGuestMessage } from "@/lib/mock/actions";
-import { DEFAULT_HOUSEHOLD, isBargain } from "@/lib/pricing/cost";
-import { vndShort } from "@/lib/format";
-import { interpret, searchUnits } from "@/lib/mock/matchmaker";
-import { unitStatus } from "@/lib/mock/selectors";
-import { useMock } from "@/lib/mock/store";
-import type { CriteriaState } from "@/lib/mock/types";
-import { UNITS, type Unit } from "@/lib/mock/units";
-import { useUnits } from "@/lib/property/useUnits";
+import { chatApi, chatErrorText, recommendQuery, type RankedCost } from "@/lib/chat/api";
+import { chatAppend, chatReset, chatSetConversation, chatSetCriteria, chatSetSearch, useChat } from "@/lib/chat/store";
+import type { CriteriaState } from "@/lib/chat/types";
+import { DEFAULT_HOUSEHOLD, type CostBreakdown } from "@/lib/pricing/cost";
+import { useApiQuery } from "@/lib/query/useApiQuery";
+import { useCatalog } from "@/lib/tenant/catalog";
+import { emptyCriteria } from "@/lib/tenant/matchmaker";
 import { useRole, useSession } from "@/lib/auth/client";
 import { clientRandomIndex, useClientValue } from "@/lib/useClientValue";
 import { ButlerMascot, VINNY_GREETINGS, type MascotMood } from "@/components/mascot/ButlerMascot";
 import { Composer } from "./Composer";
 import { InlineChatUnits } from "./InlineChatUnits";
 import { Messages } from "./Messages";
-import { ResultsPanel } from "./ResultsPanel";
+import { ResultsPanel, type RankedResult } from "./ResultsPanel";
 import styles from "./ChatExperience.module.css";
 
 const TRUST = [
@@ -28,7 +25,6 @@ const TRUST = [
   { icon: CalendarClock, text: "Giữ căn qua VietQR" },
 ];
 
-/** Trang chủ khách thuê: ban đầu là hero + khung chat; khi bắt đầu tìm căn, chat thu về cột trái và mở màn kết quả. */
 /** URL yêu cầu mở thẳng danh mục căn (`?view=all`, `?catalog=1`, `?tab=results`). */
 function urlWantsResults(): boolean {
   if (typeof window === "undefined") return false;
@@ -36,10 +32,22 @@ function urlWantsResults(): boolean {
   return params.get("view") === "all" || params.get("catalog") === "1" || params.get("tab") === "results";
 }
 
+const toCost = (c: RankedCost): CostBreakdown => ({
+  rent: c.baseRent,
+  mgmt: c.managementFee,
+  parking: c.parkingFee,
+  utility: c.utilityCost,
+  total: c.allInTotal,
+});
+
+/**
+ * Trang chủ khách thuê: ban đầu là hero + khung chat; khi bắt đầu tìm căn, chat thu về cột trái và mở màn kết quả.
+ * Mọi lượt chat đi qua `POST /api/v1/chat` (backend phân tích câu, AI Matchmaker xếp hạng, Gemini chỉ giải thích);
+ * tab kết quả dùng `POST /api/v1/matchmaker/recommend` — cùng một thuật toán xếp hạng, FE không tự xếp.
+ */
 export function ChatExperience({ below }: { below: ReactNode }) {
-  const state = useMock();
+  const chat = useChat();
   const role = useRole();
-  const { chat } = state;
   const [thinking, setThinking] = useState<{ steps: string[] } | null>(null);
   const [freshId, setFreshId] = useState<string | null>(null);
   const [tab, setTab] = useState<"chat" | "results">("chat");
@@ -52,12 +60,36 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   }
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  // Backend trả 401 LOGIN_REQUIRED khi khách vãng lai hết lượt (đếm ở server theo IP).
+  const [guestLocked, setGuestLocked] = useState(false);
   const busy = useRef(false);
+  const workspace = chat.searched;
 
-  const { units } = useUnits();
-  const statusOf = (u: Unit) => unitStatus(state, u);
-  const openCount = units.filter((u) => unitStatus(state, u) === "available").length;
-  const results = searchUnits(chat.criteria, statusOf, units);
+  const { units: catalog, available } = useCatalog();
+  const openCount = available.length;
+  const byCode = useMemo(() => new Map(catalog.map((u) => [u.code, u])), [catalog]);
+
+  const resultsQuery = useApiQuery(recommendQuery(chat.criteria), workspace);
+  const results = useMemo<RankedResult[]>(() => {
+    if (resultsQuery.state.status !== "ready") return [];
+    return resultsQuery.state.data.topRecommendations.flatMap((r) => {
+      const unit = byCode.get(r.unitCode);
+      return unit ? [{ unit, rank: r.rank, cost: toCost(r.allInCost), reasons: [r.aiExplanation] }] : [];
+    });
+  }, [resultsQuery.state, byCode]);
+
+  // Băng chuyền "Căn hời" ở hero: top theo thứ hạng matchmaker, chỉ căn được backend gắn cờ tiết kiệm ≥ 10%.
+  const heroQuery = useApiQuery(recommendQuery(emptyCriteria()), !workspace);
+  const initialBargainUnitIds = useMemo(
+    () =>
+      heroQuery.state.status === "ready"
+        ? heroQuery.state.data.topRecommendations
+            .filter((r) => r.comparison.isBargain)
+            .slice(0, 4)
+            .map((r) => r.unitCode)
+        : [],
+    [heroQuery.state],
+  );
 
   const mascotMood: MascotMood = thinking
     ? "thinking"
@@ -67,8 +99,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
     ? "listening"
     : "idle";
 
-  const GUEST_QUOTA = 15;
-  const locked = role === null && (state.guestSent || 0) >= GUEST_QUOTA;
+  const locked = role === null && guestLocked;
   const { user } = useSession();
   const first = role === "tenant" ? (user?.fullName?.split(" ").slice(-1)[0] ?? null) : null;
   // Chọn ngẫu nhiên 1 trong các câu chào của Vinny khi vào trang (chỉ ở trình duyệt); bấm vào robot để xoay vòng.
@@ -79,100 +110,48 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   const activeGreeting = VINNY_GREETINGS[greetingIdx];
   const greeting = first ? `Chào ${first}! ${activeGreeting}` : activeGreeting;
 
-  const initialBargainUnitIds = UNITS.filter((u) => u.baseStatus === "available" && isBargain(u))
-    .slice(0, 4)
-    .map((u) => u.id);
-
   const onSend = async (text: string) => {
     if (busy.current || locked) return;
     busy.current = true;
+    const base = chat.criteria;
+    const searchedBefore = chat.searched || chat.messages.some((m) => m.criteria);
     try {
       chatAppend({ role: "user", text });
-      if (role === null) countGuestMessage();
-
-      const result = interpret(text, chat.criteria, chat.searched, statusOf, units);
-      const isSearch = result.kind === "search";
-      const budget = isSearch ? result.criteria.budget : undefined;
-
       setThinking({
-        steps: isSearch
-          ? [
-              `Quét ${openCount} căn đang mở tại Ocean Park 1`,
-              budget ? `Loại căn có All-in vượt ${vndShort(budget)}` : "Áp dụng bộ lọc của bạn",
-              "AI Gemini Flash phân tích All-in Cost & xếp hạng Top 3",
-            ]
-          : ["AI Gemini Flash tra cứu quy chế & giải đáp"],
+        steps: [
+          `Quét ${openCount} căn đang mở tại Ocean Park 1`,
+          "AI Matchmaker lọc theo All-in và xếp hạng",
+          "Trợ lý giải thích lựa chọn cho bạn",
+        ],
       });
 
-      // Gọi đồng thời API /api/chat (LangGraph + Gemini Flash) với thời gian chờ tối ưu
-      let aiResponseText: string | null = null;
-      try {
-        const chatPromise = fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: text,
-            budget_ceiling: budget,
-            occupants: isSearch ? result.criteria.household?.persons : undefined,
-            motorbikes: isSearch ? result.criteria.household?.motorbikes : undefined,
-            cars: isSearch ? result.criteria.household?.cars : undefined,
-          }),
-        })
-          .then((res) => res.json())
-          .catch(() => null);
-
-        if (isSearch && budget && budget >= 3000000) {
-          const rawLayout = result.criteria.layouts?.[0]?.toLowerCase() || "";
-          let prismaLayout: string | undefined;
-          if (rawLayout.includes("studio")) prismaLayout = "STUDIO";
-          else if (rawLayout.includes("1pn") || rawLayout.includes("one")) prismaLayout = "ONE_BED_PLUS";
-          else if (rawLayout.includes("3pn") || rawLayout.includes("three")) prismaLayout = "THREE_BED";
-          else if (rawLayout.includes("2pn") || rawLayout.includes("two")) prismaLayout = "TWO_BED_TWO_BATH";
-
-          matchmakerApi
-            .recommend({
-              maxAllInBudget: budget,
-              preferredLayout: prismaLayout,
-              occupants: result.criteria.household?.persons ?? 2,
-              motorbikes: result.criteria.household?.motorbikes ?? 1,
-              cars: result.criteria.household?.cars ?? 0,
-            })
-            .catch(() => null);
-        }
-
-        const chatData = (await Promise.race([
-          chatPromise,
-          new Promise((resolve) => setTimeout(() => resolve(null), 1600)),
-        ])) as { ok?: boolean; response?: string } | null;
-
-        if (chatData?.ok && chatData?.response) {
-          aiResponseText = chatData.response;
-        }
-      } catch {
-        // Tự động dùng fallback engine
+      const res = await chatApi.send(text, base, searchedBefore, chat.conversationId);
+      if (!res.ok) {
+        if (res.status === 401 || res.code === "LOGIN_REQUIRED") setGuestLocked(true);
+        setFreshId(chatAppend({ role: "assistant", text: chatErrorText(res) }));
+        return;
       }
+      const data = res.data;
+      chatSetConversation(data.conversationId);
 
-      const finalReply = aiResponseText || result.reply;
-
-      if (result.kind === "search") {
-        chatSetCriteria(result.criteria);
+      if (data.kind === "search" && data.criteria) {
+        const criteria: CriteriaState = { ...base, ...data.criteria };
+        chatSetCriteria(criteria);
         setFreshId(
           chatAppend({
             role: "assistant",
-            text: finalReply,
-            resultIds: result.results.slice(0, 3).map((r) => r.unit.id),
-            criteria: result.criteria,
-          })
+            text: data.reply,
+            // Đúng thứ hạng backend trả — không sắp lại.
+            resultIds: data.recommendations.map((r) => r.id),
+            criteria,
+            degraded: data.degraded,
+          }),
         );
-        // Nếu đã ở màn hình workspace thì chuyển tab kết quả; nếu đang ở trang đầu (Hero), giữ nguyên để khách xem Băng chuyền ngang ngay trong khung chat Hero!
-        if (workspace) {
-          setTab("results");
-        }
+        // Ở workspace thì chuyển sang tab kết quả; ở hero giữ nguyên để khách xem băng chuyền ngay trong khung chat.
+        if (workspace && data.recommendations.length) setTab("results");
       } else {
-        setFreshId(chatAppend({ role: "assistant", text: finalReply }));
+        setFreshId(chatAppend({ role: "assistant", text: data.reply, degraded: data.degraded }));
       }
-    } catch (err) {
-      console.error("Chat send error:", err);
     } finally {
       setThinking(null);
       busy.current = false;
@@ -210,7 +189,6 @@ export function ChatExperience({ below }: { below: ReactNode }) {
     : below;
 
   const onCriteria = (c: CriteriaState) => chatSetCriteria(c);
-  const workspace = chat.searched;
 
   if (!workspace) {
     return (
@@ -420,7 +398,15 @@ export function ChatExperience({ below }: { below: ReactNode }) {
       )}
 
       <section className={styles.results} aria-label="Kết quả tìm căn">
-        <ResultsPanel results={results} criteria={chat.criteria} onCriteria={onCriteria} state={state} totalOpen={openCount} />
+        <ResultsPanel
+          results={results}
+          criteria={chat.criteria}
+          onCriteria={onCriteria}
+          totalOpen={openCount}
+          loading={resultsQuery.state.status === "loading"}
+          error={resultsQuery.state.status === "error" ? resultsQuery.state.message : null}
+          onRetry={resultsQuery.reload}
+        />
       </section>
     </div>
   );

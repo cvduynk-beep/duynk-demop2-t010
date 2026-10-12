@@ -1,0 +1,33 @@
+import type { Unit } from "@/lib/units";
+
+/** Căn mẫu đúng kiểu `Unit` mà catalog API trả (qua `toUnit`), dùng cho test thuần — không lấy từ dữ liệu mock. */
+export const sampleUnit = (patch: Partial<Unit> = {}): Unit => ({
+  id: "VHOP-S1.08-2614",
+  code: "VHOP-S1.08-2614",
+  building: "S1.08",
+  zoneId: "sapphire1",
+  zoneName: "The Sapphire 1",
+  floor: 26,
+  door: "14",
+  layout: "1PN",
+  layoutLabel: "1PN+",
+  bedrooms: 1,
+  bathrooms: 1,
+  areaM2: 45,
+  managementFee: 427_500,
+  direction: "Đông Nam",
+  view: "View nội khu thoáng mát",
+  furnishing: "full",
+  rent: 5_500_000,
+  marketAvg: 7_500_000,
+  baseStatus: "available",
+  lock: "smart",
+  images: 4,
+  interest24h: 2,
+  petFriendly: true,
+  minMonths: 6,
+  verifiedAt: "2026-09-22T09:00:00.000Z",
+  items: ["ac", "balcony", "bed", "curtain", "fridge", "heater", "kitchen", "sofa", "tv", "wardrobe", "washer"],
+  photos: [],
+  ...patch,
+});
