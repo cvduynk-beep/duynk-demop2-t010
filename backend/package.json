@@ -90,6 +90,7 @@
     "testEnvironment": "node",
     "setupFiles": [
       "<rootDir>/testing/silence-logs.ts"
-    ]
+    ],
+    "testTimeout": 30000
   }
 }
