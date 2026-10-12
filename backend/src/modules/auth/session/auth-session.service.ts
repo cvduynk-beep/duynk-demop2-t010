@@ -2,9 +2,8 @@ import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { portalForRole } from '../auth.constants';
+import { Portal, portalForRole } from '../auth.constants';
 import { authError } from '../auth.errors';
-import { DEMO_USERS } from '../demo-accounts';
 import { AuthenticatedUser } from './authenticated-user';
 import { SessionTokenService } from './session-token.service';
 
@@ -67,49 +66,37 @@ export class AuthSessionService {
     for (const [key, entry] of this.cache) if (entry.user.id === userId) this.cache.delete(key);
   }
 
-  /** null nếu token không hợp lệ/hết hạn; ném `account_suspended` nếu tài khoản bị khoá. */
-  async authenticate(accessToken: string): Promise<AuthenticatedUser | null> {
+  /**
+   * null nếu token không hợp lệ/hết hạn/sai cổng; ném `account_suspended` nếu tài khoản bị khoá.
+   * `expectedPortal` = cổng của cookie đã đọc ra token (`vs_access_<portal>`): claim `portal` phải trùng.
+   * Claim `portal` cũng phải trùng cổng của vai trò HIỆN TẠI trong DB (Admin đổi vai ⇒ phiên cũ hết hiệu lực).
+   */
+  async authenticate(accessToken: string, expectedPortal?: Portal): Promise<AuthenticatedUser | null> {
+    // Kiểm tra cục bộ (HMAC, không tốn mạng).
+    const claims = this.sessionTokens.verify(accessToken);
+    if (!claims) return null;
+    if (expectedPortal && claims.portal !== expectedPortal) return null;
+
     const key = createHash('sha256').update(accessToken).digest('hex');
     const hit = this.cache.get(key);
     if (hit && hit.expiresAt > Date.now()) return hit.user;
     this.cache.delete(key);
 
-    // Kiểm tra cục bộ (HMAC, không tốn mạng).
-    const claims = this.sessionTokens.verify(accessToken);
-    if (!claims) return null;
     const identity = { id: claims.sub, email: claims.email };
+    const profile = await withRetry(() =>
+      this.prisma.profile.findUnique({
+        where: { id: identity.id },
+        include: PROFILE_INCLUDE,
+      }),
+    );
+    // Token luôn gắn với một Profile đã tạo; Profile bị xoá thì token vô hiệu.
+    if (!profile) return null;
+    if (!profile.isActive) throw authError('account_suspended');
+    if (claims.portal !== portalForRole(profile.role?.code)) return null;
 
-    // Fast-path cho demo user (trả về tức thì 0ms, không tốn mạng hay treo chờ DB offline)
-    for (const demoUser of Object.values(DEMO_USERS)) {
-      if (demoUser.id === identity.id || (identity.email && demoUser.email?.toLowerCase() === identity.email.toLowerCase())) {
-        this.cache.set(key, { user: demoUser, expiresAt: Date.now() + CACHE_TTL_MS });
-        return demoUser;
-      }
-    }
-
-    try {
-      const profile = await withRetry(() =>
-        this.prisma.profile.findUnique({
-          where: { id: identity.id },
-          include: PROFILE_INCLUDE,
-        }),
-      );
-      // Token luôn gắn với một Profile đã tạo; Profile bị xoá thì token vô hiệu.
-      if (!profile) return null;
-      if (!profile.isActive) throw authError('account_suspended');
-
-      const user = toAuthenticatedUser(identity, profile);
-      if (this.cache.size >= CACHE_MAX_ENTRIES) this.cache.delete(this.cache.keys().next().value);
-      this.cache.set(key, { user, expiresAt: Date.now() + CACHE_TTL_MS });
-      return user;
-    } catch (err) {
-      // Fallback khi DB offline
-      for (const demoUser of Object.values(DEMO_USERS)) {
-        if (demoUser.id === identity.id || (identity.email && demoUser.email?.toLowerCase() === identity.email.toLowerCase())) {
-          return demoUser;
-        }
-      }
-      throw err;
-    }
+    const user = toAuthenticatedUser(identity, profile);
+    if (this.cache.size >= CACHE_MAX_ENTRIES) this.cache.delete(this.cache.keys().next().value);
+    this.cache.set(key, { user, expiresAt: Date.now() + CACHE_TTL_MS });
+    return user;
   }
 }

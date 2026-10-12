@@ -4,7 +4,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
-import { ACCESS_COOKIE } from './modules/auth/auth.constants';
+import { accessCookieName } from './modules/auth/auth.constants';
 
 async function bootstrap() {
   const logger = new Logger('VinStayBootstrap');
@@ -76,7 +76,8 @@ async function bootstrap() {
       },
       'bearer-token',
     )
-    .addCookieAuth(ACCESS_COOKIE, { type: 'apiKey', in: 'cookie', name: ACCESS_COOKIE }, 'session-cookie')
+    // Cookie riêng từng cổng (`vs_access_<portal>`); Swagger chỉ khai được một tên nên ghi cookie của cổng tenant.
+    .addCookieAuth(accessCookieName('tenant'), { type: 'apiKey', in: 'cookie', name: accessCookieName('tenant') }, 'session-cookie')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

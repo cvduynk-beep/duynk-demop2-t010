@@ -57,19 +57,65 @@ describe('SupabaseAuthGuard', () => {
     expect(await codeOf(build({}, {}).make(reflector).canActivate(ctx))).toBe('unauthorized');
   });
 
-  it('nhận token từ cookie hoặc Bearer (Bearer ưu tiên) và gắn request.user', async () => {
+  it('nhận token từ cookie vs_access_<portal> hoặc Bearer (Bearer ưu tiên) và gắn request.user', async () => {
     const authenticate = jest.fn(async () => user());
 
-    const viaCookie: any = { headers: {}, cookies: { vs_access: 'cookie-token' } };
+    const viaCookie: any = { headers: {}, cookies: { vs_access_tenant: 'cookie-token' } };
     let { reflector, ctx } = context(viaCookie);
     await build({}, {}, authenticate).make(reflector).canActivate(ctx);
-    expect(authenticate).toHaveBeenLastCalledWith('cookie-token');
+    expect(authenticate).toHaveBeenLastCalledWith('cookie-token', 'tenant');
     expect(viaCookie.user).toMatchObject({ id: 'u1' });
 
-    const viaBearer: any = { headers: { authorization: 'Bearer header-token' }, cookies: { vs_access: 'cookie-token' } };
+    const viaBearer: any = { headers: { authorization: 'Bearer header-token' }, cookies: { vs_access_tenant: 'cookie-token' } };
     ({ reflector, ctx } = context(viaBearer));
     await build({}, {}, authenticate).make(reflector).canActivate(ctx);
-    expect(authenticate).toHaveBeenLastCalledWith('header-token');
+    expect(authenticate).toHaveBeenLastCalledWith('header-token', undefined);
+  });
+
+  it('cookie dùng chung vs_access của bản cũ bị bỏ qua → 401', async () => {
+    const { reflector, ctx } = context({ headers: {}, cookies: { vs_access: 'old-token' } });
+    const authenticate = jest.fn();
+    expect(await codeOf(build({}, {}, authenticate).make(reflector).canActivate(ctx))).toBe('unauthorized');
+    expect(authenticate).not.toHaveBeenCalled();
+  });
+
+  describe('chọn cookie khi đăng nhập nhiều cổng cùng lúc', () => {
+    const cookies = { vs_access_tenant: 't-token', vs_access_landlord: 'l-token', vs_access_admin: 'a-token' };
+
+    it('header x-portal hợp lệ thắng: chỉ dùng cookie của cổng đó', async () => {
+      const authenticate = jest.fn(async () => user());
+      const { reflector, ctx } = context({ headers: { 'x-portal': 'landlord' }, cookies });
+      await build({}, {}, authenticate).make(reflector).canActivate(ctx);
+      expect(authenticate).toHaveBeenLastCalledWith('l-token', 'landlord');
+    });
+
+    it('x-portal không có cookie tương ứng → 401 (không rơi sang cookie cổng khác)', async () => {
+      const authenticate = jest.fn();
+      const { reflector, ctx } = context({ headers: { 'x-portal': 'host' }, cookies });
+      expect(await codeOf(build({}, {}, authenticate).make(reflector).canActivate(ctx))).toBe('unauthorized');
+      expect(authenticate).not.toHaveBeenCalled();
+    });
+
+    it('không có x-portal: theo @Roles của route (ops_admin ⇒ cookie admin)', async () => {
+      const authenticate = jest.fn(async () => user());
+      const { reflector, ctx } = context({ headers: {}, cookies }, { [ROLES_KEY]: ['ops_admin'] });
+      await build({}, {}, authenticate).make(reflector).canActivate(ctx);
+      expect(authenticate).toHaveBeenLastCalledWith('a-token', 'admin');
+    });
+
+    it('route @Roles(ops_admin) mà chỉ có cookie tenant ⇒ xác thực bằng token tenant (để RolesGuard trả 403, không phải 401)', async () => {
+      const authenticate = jest.fn(async () => user());
+      const { reflector, ctx } = context({ headers: {}, cookies: { vs_access_tenant: 't-token' } }, { [ROLES_KEY]: ['ops_admin'] });
+      await build({}, {}, authenticate).make(reflector).canActivate(ctx);
+      expect(authenticate).toHaveBeenLastCalledWith('t-token', 'tenant');
+    });
+
+    it('x-portal lạ bị bỏ qua (dùng @Roles), không ghép vào tên cookie', async () => {
+      const authenticate = jest.fn(async () => user());
+      const { reflector, ctx } = context({ headers: { 'x-portal': 'superuser' }, cookies }, { [ROLES_KEY]: ['landlord'] });
+      await build({}, {}, authenticate).make(reflector).canActivate(ctx);
+      expect(authenticate).toHaveBeenLastCalledWith('l-token', 'landlord');
+    });
   });
 
   it('token không hợp lệ → 401', async () => {

@@ -2,12 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { CookieOptions, Request, Response } from 'express';
 import {
-  ACCESS_COOKIE,
+  accessCookieName,
   GOOGLE_HINT_COOKIE,
   GOOGLE_HINT_MAX_AGE_MS,
+  LEGACY_ACCESS_COOKIE,
   LEGACY_REFRESH_COOKIE,
   OAUTH_COOKIE,
   OAUTH_COOKIE_MAX_AGE_MS,
+  Portal,
+  PORTALS,
 } from '../auth.constants';
 
 export interface SessionTokens {
@@ -17,8 +20,9 @@ export interface SessionTokens {
 }
 
 /**
- * Cookie phiên httpOnly + SameSite=Lax (Lax cũng là lớp chống CSRF cho POST/PUT/DELETE).
- * Path `/` bắt buộc: proxy của Next chuyển tiếp cookie của trang (vd. /admin/dashboard) lên backend.
+ * Cookie phiên httpOnly RIÊNG từng cổng (`vs_access_<portal>`). SameSite=Lax (Strict cho admin) cũng là lớp chống
+ * CSRF cho POST/PUT/DELETE. Path `/` bắt buộc: proxy của Next chuyển tiếp cookie của trang (vd. /admin/dashboard)
+ * lên backend. Không còn cookie dùng chung `vs_access` — chỉ xoá nó để dọn trình duyệt của bản cũ.
  */
 @Injectable()
 export class SessionCookieService {
@@ -35,19 +39,24 @@ export class SessionCookieService {
     return { httpOnly: true, secure: this.secure, sameSite: 'lax', path: '/', domain: this.domain };
   }
 
-  set(res: Response, tokens: SessionTokens, portal?: string): void {
-    res.cookie(ACCESS_COOKIE, tokens.accessToken, { ...this.base(), maxAge: tokens.expiresIn * 1000 });
-    if (portal) {
-      res.cookie(`${ACCESS_COOKIE}_${portal}`, tokens.accessToken, { ...this.base(), maxAge: tokens.expiresIn * 1000 });
-    }
-    res.clearCookie(LEGACY_REFRESH_COOKIE, this.base());
+  /** Admin: Strict — không gửi cookie khi điều hướng từ site khác (Admin không đăng nhập Google nên không cần Lax). */
+  private sessionOptions(portal: Portal): CookieOptions {
+    return { ...this.base(), sameSite: portal === 'admin' ? 'strict' : 'lax' };
   }
 
-  clear(res: Response, portal?: string): void {
-    res.clearCookie(ACCESS_COOKIE, this.base());
-    if (portal) {
-      res.clearCookie(`${ACCESS_COOKIE}_${portal}`, this.base());
-    }
+  set(res: Response, tokens: SessionTokens, portal: Portal): void {
+    res.cookie(accessCookieName(portal), tokens.accessToken, { ...this.sessionOptions(portal), maxAge: tokens.expiresIn * 1000 });
+    this.clearLegacy(res);
+  }
+
+  /** Chỉ xoá cookie của đúng cổng `portal`; phiên các cổng khác giữ nguyên. */
+  clear(res: Response, portal: Portal): void {
+    res.clearCookie(accessCookieName(portal), this.sessionOptions(portal));
+    this.clearLegacy(res);
+  }
+
+  private clearLegacy(res: Response): void {
+    res.clearCookie(LEGACY_ACCESS_COOKIE, this.base());
     res.clearCookie(LEGACY_REFRESH_COOKIE, this.base());
   }
 
@@ -72,23 +81,20 @@ export class SessionCookieService {
     return req.cookies?.[OAUTH_COOKIE];
   }
 
-  /** `Authorization: Bearer` (API client / Swagger) ưu tiên hơn cookie (trình duyệt). Hỗ trợ cookie riêng từng portal (vs_access_<portal>). */
-  readAccessToken(req: Request, explicitPortal?: string): string | undefined {
+  /** `Authorization: Bearer` (API client / Swagger) — token mang claim `portal` riêng. */
+  readBearer(req: Request): string | undefined {
     const header = req.headers?.authorization;
-    if (header?.toLowerCase().startsWith('bearer ')) {
-      const token = header.slice(7).trim();
-      if (token) return token;
-    }
-    const path = req.path || req.url || '';
-    let portal = explicitPortal || (req.query?.portal as string) || (req.headers?.['x-portal'] as string);
-    if (!portal) {
-      if (path.includes('/host')) portal = 'host';
-      else if (path.includes('/admin')) portal = 'admin';
-      else if (path.includes('/landlord')) portal = 'landlord';
-    }
-    if (portal && req.cookies?.[`${ACCESS_COOKIE}_${portal}`]) {
-      return req.cookies[`${ACCESS_COOKIE}_${portal}`];
-    }
-    return req.cookies?.[ACCESS_COOKIE];
+    if (!header?.toLowerCase().startsWith('bearer ')) return undefined;
+    return header.slice(7).trim() || undefined;
+  }
+
+  /** Token của đúng cổng `portal`: Bearer ưu tiên, nếu không thì CHỈ cookie `vs_access_<portal>` (không rơi sang cổng khác). */
+  readAccessToken(req: Request, portal: Portal): string | undefined {
+    return this.readBearer(req) ?? req.cookies?.[accessCookieName(portal)];
+  }
+
+  /** Các cổng đang có cookie phiên trên request (theo thứ tự PORTALS). */
+  portalsWithCookie(req: Request): Portal[] {
+    return PORTALS.filter((portal) => Boolean(req.cookies?.[accessCookieName(portal)]));
   }
 }

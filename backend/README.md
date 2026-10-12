@@ -246,11 +246,15 @@ npm test                         # unit + HTTP test (Prisma/Supabase giả)
 ## 4. ĐĂNG NHẬP & PHÂN QUYỀN (`modules/auth`)
 
 Toàn bộ đăng nhập nằm ở backend; `apps/web` chỉ có form và proxy `/api/v1/*` → backend.
-Phiên là **cookie httpOnly** (`vs_access`, SameSite=Lax) do backend set — response không chứa token.
+Phiên là **cookie httpOnly RIÊNG từng cổng** `vs_access_<portal>` (`tenant` / `landlord` / `host` / `admin`; SameSite=Lax, riêng admin SameSite=Strict) do backend set — response không chứa token. Đăng nhập nhiều cổng cùng trình duyệt không ghi đè nhau; cookie dùng chung `vs_access` của bản cũ không còn được đọc (chỉ bị xoá khi đăng nhập/đăng xuất).
 **Không dùng Supabase Auth** (bảng `auth.users` không liên quan): email + mật khẩu kiểm tra ngay trong bảng `public.profiles`
 (`password_hash` = scrypt `scrypt$<salt>$<hash>`, NULL với tài khoản chỉ dùng Google; Prisma omit toàn cục nên cột này không
 bao giờ lộ ra response của module khác). Cả hai cách đăng nhập (mật khẩu, Google/Passport) đều phát JWT phiên do backend tự ký
-(HS256, `iss=vinstay-backend`, sống 7 ngày, không có refresh token — hết hạn thì đăng nhập lại). **Đăng ký không xác nhận email**:
+(HS256, `iss=vinstay-backend`, claim `sub`/`email`/`role`/`portal`/`iat`/`exp`, không có refresh token — hết hạn thì đăng nhập lại).
+Thời gian sống = Max-Age cookie: `SESSION_TTL_SECONDS` (mặc định 7 ngày) cho tenant/landlord/host, `SESSION_TTL_ADMIN_SECONDS`
+(mặc định 8 giờ) cho admin. Đọc cookie `vs_access_X` thì claim `portal` phải là `X` VÀ trùng cổng của vai trò hiện tại trong DB —
+lệch (token cổng A bỏ vào cookie cổng B, token bản cũ không có `portal`, Admin đổi vai) ⇒ phiên vô hiệu. Guard của route nghiệp vụ
+chọn cookie theo header `x-portal` (FE gửi theo trang đang mở) → cổng của `@Roles` → cookie đầu tiên có. **Đăng ký không xác nhận email**:
 tạo Profile rồi đăng nhập luôn; email đã có tài khoản (kể cả Google) → 409, không bao giờ đặt mật khẩu lên tài khoản có sẵn.
 API client có thể dùng `Authorization: Bearer <token>`. Vai trò đọc từ DB (`profiles.role`). Supabase chỉ còn dùng cho
 Postgres + Storage ảnh hồ sơ ký gửi.
@@ -259,11 +263,12 @@ Hai cổng đăng nhập trên UI: `/login` (Khách thuê / Chủ nhà) và `/ad
 
 | Endpoint | Mô tả |
 |---|---|
-| `POST /auth/login` `{email,password,portal}` | portal = tenant / landlord / host / admin |
+| `POST /auth/login` `{email,password,portal}` | portal = tenant / landlord / host / admin ⇒ chỉ set `vs_access_<portal>`. Sai email/mật khẩu (kể cả tài khoản chỉ có Google) ⇒ 401 `invalid_credentials` (cùng message, cùng độ trễ). Sai cổng ⇒ 403 `wrong_portal`; bị khoá ⇒ 403 `account_suspended` (đều không set cookie). 10 lần/phút/IP ⇒ 429 `rate_limited`; sai `LOGIN_MAX_FAILURES` (5) lần cùng email trong `LOGIN_LOCKOUT_SECONDS` (15 phút) ⇒ 429 `login_locked` `{errors:{retryAfterSeconds}}` |
 | `POST /auth/signup` | tenant / landlord (và Host đã được Admin mời email) — đăng ký xong đăng nhập luôn, không xác nhận email |
 | `POST /auth/demo-login` | đăng nhập 1-click tài khoản demo (chỉ khi `AUTH_DEMO_MODE=true`) |
 | `GET /auth/google?portal=` → `GET /auth/google/callback` | Google OAuth (Passport; `state` = `portal.nonce`, nonce nằm trong cookie httpOnly `vs_oauth`; luôn hiện màn chọn tài khoản; nhận `login_hint=<email>` để chọn sẵn tài khoản; thành công thì set cookie không-httpOnly `vs_google_hint` {name,email} để FE hiện "Tiếp tục bằng tên …") |
-| `GET /auth/session`, `POST /auth/logout` | phiên hiện tại, đăng xuất (xoá cookie) |
+| `GET /auth/session?portal=` | `{user}` của đúng cổng đó (`null` nếu không có / hết hạn / sai cổng — cookie hỏng bị xoá). Thiếu/sai `portal` ⇒ 400 |
+| `POST /auth/logout` `{portal}` | chỉ xoá `vs_access_<portal>`; cổng khác giữ nguyên. Thiếu/sai `portal` ⇒ 400 |
 | `npm run set:password -- <email> <mật khẩu>` | script đặt/đặt lại mật khẩu cho Profile có sẵn (tài khoản cũ chưa có `password_hash`); `create:admin` / `seed:auth` chỉ tạo mới |
 | `POST /auth/verify-rfid` | Field Host nhập RFID lần đầu; chưa xong thì bị chặn mọi quyền Host |
 | `POST /auth/otp/send`, `/otp/verify`, `/phone/verify` | OTP xác thực SĐT (không phải đăng nhập); Khách thuê nhận action token dùng một lần |
