@@ -2,29 +2,41 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { SiteNav } from "@/components/nav/SiteNav";
 import { UnitDetail } from "@/components/unit/UnitDetail";
+import { MockDataBanner } from "@/components/ui/MockDataBanner";
 import { unitAddress, zoneById } from "@/lib/units";
-import { backendUrl } from "@/lib/auth/session";
 import { toUnit } from "@/lib/tenant/adapters";
-import type { TenantUnit } from "@/lib/tenant/types";
+import { UnitNotFoundError } from "@/lib/units/source";
+import { getUnitServer } from "@/lib/units/source.server";
 
-/** null = backend trả 404 (căn không tồn tại / không công khai). Backend không với tới hoặc lỗi 5xx thì NÉM LỖI để
- *  hiện trang lỗi tải, không giả làm "không tồn tại" (lỗi cũ: gọi nhầm cổng 3001 ⇒ mọi căn đều 404). */
-async function fetchUnit(codeOrId: string): Promise<TenantUnit | null> {
-  const res = await fetch(`${backendUrl()}/api/v1/properties/units/${encodeURIComponent(codeOrId)}`, {
-    cache: "no-store",
-  });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`Không tải được căn ${codeOrId} (backend ${res.status})`);
-  const json = await res.json();
-  return json.data || json;
+/**
+ * Chi tiết căn — dữ liệu qua data-source server duy nhất (`lib/units/source.ts`), `cache()` dùng chung cho metadata và
+ * page (1 lần gọi backend / request). 404 ⇒ `notFound()`; backend lỗi ⇒ ném sang `./error.tsx` (có nút thử lại) —
+ * không bao giờ âm thầm rơi về dữ liệu mẫu. Không cache trang: trạng thái giữ chỗ / ca xem đổi theo phút.
+ */
+export const dynamic = "force-dynamic";
+
+async function load(id: string) {
+  try {
+    return await getUnitServer(id);
+  } catch (err) {
+    if (err instanceof UnitNotFoundError) notFound();
+    throw err;
+  }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const dto = await fetchUnit(id).catch(() => null);
-  if (!dto) return {};
-  const unit = toUnit(dto);
-  return { title: `Căn ${unitAddress(unit)} · ${unit.zoneName || zoneById(unit.zoneId)?.name || "Ocean Park"}`, description: `Căn ${unitAddress(unit)} tại Vinhomes Ocean Park: ảnh đã kiểm định, chi phí All-in rõ ràng, có Field Host đón tại sảnh.` };
+  const { data, source } = await load(id);
+  const unit = toUnit(data);
+  const zone = unit.zoneName || zoneById(unit.zoneId)?.name || "Ocean Park";
+  const photo = unit.photos[0];
+  return {
+    title: `Căn ${unitAddress(unit)} · ${zone}`,
+    description: `Căn ${unit.layoutLabel} ${unit.areaM2}m² tại ${zone}, Vinhomes Ocean Park: ảnh đã kiểm định, chi phí All-in rõ ràng, có Field Host đón tại sảnh.`,
+    // Dữ liệu mẫu (fallback dev) không bao giờ được index.
+    robots: source === "mock" ? { index: false, follow: false } : undefined,
+    openGraph: photo ? { images: [{ url: photo }] } : undefined,
+  };
 }
 
 export default async function UnitPage({
@@ -36,19 +48,21 @@ export default async function UnitPage({
 }) {
   const { id } = await params;
   const { book } = await searchParams;
-
-  // Dữ liệu căn đến thẳng từ API A2 (DB thật). Mã không có trong DB ⇒ 404, không còn rơi về danh sách mock.
-  const dto = await fetchUnit(id);
-  if (!dto) notFound();
+  const { data, source } = await load(id);
 
   // Vào bằng UUID hoặc mã viết thường ⇒ chuyển về URL chuẩn theo mã căn.
-  if (dto.code !== id) redirect(`/units/${encodeURIComponent(dto.code)}${book === "1" ? "?book=1" : ""}`);
+  if (data.code !== id) redirect(`/units/${encodeURIComponent(data.code)}${book === "1" ? "?book=1" : ""}`);
 
   return (
     <>
       <SiteNav />
       <main>
-        <UnitDetail unit={toUnit(dto)} autoOpenBooking={book === "1"} />
+        {source === "mock" && (
+          <div className="wrap">
+            <MockDataBanner detail="Backend không phản hồi nên đây là căn mẫu, không phải căn thật trong hệ thống." />
+          </div>
+        )}
+        <UnitDetail unit={toUnit(data)} autoOpenBooking={book === "1" && source === "api"} />
       </main>
     </>
   );

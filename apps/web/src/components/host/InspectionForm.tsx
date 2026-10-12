@@ -35,14 +35,12 @@ import {
 import {
   landlordById,
   PASSPORT_ITEMS,
-  createAndPublishUnitFromConsignment,
   defaultLivingFeesForZone,
   zoneOfBuilding,
   type Furnishing,
   type LayoutKind,
   type PassportItem,
 } from "@/lib/mock/units";
-import { publishUnitToCatalog } from "@/lib/property/useUnits";
 import { useNow } from "@/lib/useNow";
 import styles from "@/components/consign/Consign.module.css";
 
@@ -710,15 +708,7 @@ export function InspectionForm({ id }: { id: string }) {
         decidedBy: isApproved ? `Field Host ${activeHostId}` : undefined,
       };
 
-      // Đẩy trực tiếp căn hộ lên trang chủ để khách thuê có thể xem căn ngay lập tức
-      if (isApproved) {
-        try {
-          const published = createAndPublishUnitFromConsignment(updatedC);
-          publishUnitToCatalog(published);
-        } catch {
-          // fallback
-        }
-      }
+      // Căn duyệt xong xuất hiện ở catalog qua DB thật (backend cache ≤ 20s); không còn đẩy căn vào danh sách phía trình duyệt.
 
       setDbConsignment((prev) => (prev ? updatedC : null));
 

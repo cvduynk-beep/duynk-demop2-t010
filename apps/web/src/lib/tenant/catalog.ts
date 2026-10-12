@@ -5,16 +5,20 @@ import { useApiQuery } from "@/lib/query/useApiQuery";
 import { toUnit, type UnitWithExtras } from "./adapters";
 import { tenantQueries } from "./queries";
 
-/** Catalog công khai THẬT (API A1) đã đổi sang kiểu `Unit` của UI. Dùng chung cache với `/units`. */
-/** `enabled=false` ⇒ không tải danh sách (trang chỉ cần 1 căn không nên kéo cả catalog). */
+/**
+ * Catalog công khai (API A1 qua `/api/catalog/units`) đã đổi sang kiểu `Unit` của UI. Dùng chung cache với `/units`.
+ * `source === "mock"` ⇒ server đang phục vụ dữ liệu mẫu (fallback có cờ) — màn hình PHẢI hiện banner cảnh báo.
+ * `enabled=false` ⇒ không tải danh sách (trang chỉ cần 1 căn không nên kéo cả catalog).
+ */
 export function useCatalog(enabled = true) {
   const query = useApiQuery(tenantQueries.units(), enabled);
   const units = useMemo<UnitWithExtras[]>(
-    () => (query.state.status === "ready" ? query.state.data.map(toUnit) : []),
+    () => (query.state.status === "ready" ? query.state.data.units.map(toUnit) : []),
     [query.state],
   );
   return {
     units,
+    source: query.state.status === "ready" ? query.state.data.source : null,
     available: useMemo(() => units.filter((u) => u.baseStatus === "available"), [units]),
     loading: query.state.status === "loading",
     error: query.state.status === "error" ? query.state.message : null,

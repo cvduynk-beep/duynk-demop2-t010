@@ -1,6 +1,6 @@
 import type { ApiQueryDef } from "@/lib/query/useApiQuery";
 import { invalidateApiPattern } from "@/lib/query/useApiQuery";
-import { tenantApi, errorText, type UnitFilter } from "./api";
+import { tenantApi, errorText, type CatalogPayload, type UnitFilter } from "./api";
 import type {
   DepositTermsDoc,
   TenantBooking,
@@ -9,7 +9,7 @@ import type {
 } from "./types";
 
 export const tenantQueries = {
-  units: (filter?: UnitFilter): ApiQueryDef<TenantUnit[]> => {
+  units: (filter?: UnitFilter): ApiQueryDef<CatalogPayload> => {
     const key = `tenant:units:${filter?.zone || ""}:${filter?.layout || ""}:${filter?.maxRent || ""}:${filter?.q || ""}`;
     return {
       key,
