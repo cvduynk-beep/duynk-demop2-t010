@@ -110,3 +110,42 @@ describe('MatchmakerService bộ lọc mở rộng (khung chat)', () => {
     expect(errs.map((e) => e.property).sort()).toEqual(['floor', 'layouts', 'zones']);
   });
 });
+
+describe('MatchmakerService đọc biểu phí từ fee_configs', () => {
+  const unit = mkUnit(1, { rent: 6_000_000, managementFee: 300_000 });
+  const svcWith = (findMany: jest.Mock) =>
+    new MatchmakerService({ feeConfig: { findMany } } as any, { getUnits: jest.fn().mockResolvedValue([unit]) } as any);
+
+  it('dùng đơn giá trong DB cho gửi xe + điện nước', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      { configKey: 'parking_fee_motorbike', paramValue: '200000' },
+      { configKey: 'parking_fee_car', paramValue: '1500000' },
+      { configKey: 'utility_per_person', paramValue: '350000' },
+    ]);
+    const res = await svcWith(findMany).findTopRecommendations(plainToInstance(MatchmakerRequestDto, { motorbikes: 2, cars: 1, occupants: 3 }));
+    expect(res.topRecommendations[0].allInCost).toEqual({
+      baseRent: 6_000_000,
+      managementFee: 300_000,
+      parkingFee: 2 * 200_000 + 1_500_000,
+      utilityCost: 3 * 350_000,
+      allInTotal: 6_000_000 + 300_000 + 1_900_000 + 1_050_000,
+    });
+  });
+
+  it('thiếu khoá / DB lỗi ⇒ dùng giá trị dự phòng, không gãy', async () => {
+    const partial = jest.fn().mockResolvedValue([{ configKey: 'parking_fee_motorbike', paramValue: '180000' }]);
+    const a = await svcWith(partial).findTopRecommendations(plainToInstance(MatchmakerRequestDto, { occupants: 2 }));
+    expect(a.topRecommendations[0].allInCost).toMatchObject({ parkingFee: 180_000, utilityCost: 600_000 });
+    const down = jest.fn().mockRejectedValue(new Error('db down'));
+    const b = await svcWith(down).findTopRecommendations(plainToInstance(MatchmakerRequestDto, { occupants: 2 }));
+    expect(b.topRecommendations[0].allInCost).toMatchObject({ parkingFee: 150_000, utilityCost: 600_000 });
+  });
+
+  it('cache 60s: không đọc DB mỗi lượt', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const svc = svcWith(findMany);
+    await svc.findTopRecommendations(plainToInstance(MatchmakerRequestDto, {}));
+    await svc.findTopRecommendations(plainToInstance(MatchmakerRequestDto, {}));
+    expect(findMany).toHaveBeenCalledTimes(1);
+  });
+});

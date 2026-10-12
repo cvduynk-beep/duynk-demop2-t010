@@ -223,6 +223,8 @@ _(Nếu dùng Supabase Cloud, điền `DATABASE_URL`, `SUPABASE_URL` và `SUPABA
 
 **Khung chat trang chủ (`modules/chat`):** `POST /api/v1/chat` (`@Public`, 8 req/phút/IP) là nguồn duy nhất cho chat ở `/`. Body `{message ≤250 ký tự, conversationId?, context?}` (`context` = bộ lọc FE). Luồng: phân tích câu tất định → `MatchmakerService` (nguồn DUY NHẤT của danh sách, thứ tự, `score`) → Gemini chỉ viết lời giải thích → backend kiểm lại lời đó (mã căn ⊆ danh sách, đúng thứ tự rank, số tiền khớp dữ liệu, luật cứng AGENTS) rồi mới trả. Câu hỏi quy chế trả 0 đồng từ `ai-engine/knowledge/*.md` + `fee_configs` (không gọi LLM). Fallback: Gemini lỗi/timeout/bị loại ⇒ vẫn trả danh sách thật kèm `degraded: true`; matchmaker lỗi ⇒ chỉ trả chữ, `recommendations: []`. Biến: `GEMINI_API_KEY` (chỉ ở backend, gửi qua header, không log), `GEMINI_MODEL` (mặc định `gemini-3.5-flash-lite`; dòng 2.5 Google đã khoá với tài khoản mới), `GEMINI_TIMEOUT_MS` (6000), `GEMINI_RETRIES` (1), `GEMINI_MAX_OUTPUT_TOKENS` (≤250), `CHAT_GUEST_TURNS` (15 lượt/IP/24h ⇒ 401 `LOGIN_REQUIRED`), `CHAT_KNOWLEDGE_DIR`. Lưu ý Windows: biến môi trường hệ thống `GEMINI_API_KEY` sẽ ĐÈ lên `.env`.
 
+**Biểu phí All-in (`property/fee-rates.service.ts`):** matchmaker và chi tiết căn đọc đơn giá gửi xe máy/ô tô và điện nước/người từ `fee_configs` (`parking_fee_motorbike`, `parking_fee_car`, `utility_per_person`), cache 60s; thiếu khoá hoặc DB lỗi ⇒ dùng giá trị dự phòng bằng seed hiện tại và ghi cảnh báo. Lưu ý: `apps/web/src/lib/pricing/cost.ts` (`RATES`) vẫn là bản sao phía FE dùng để vẽ thẻ căn.
+
 ### Bước 3: Khởi chạy Database local (Tùy chọn nếu không dùng Supabase Cloud)
 
 ```bash

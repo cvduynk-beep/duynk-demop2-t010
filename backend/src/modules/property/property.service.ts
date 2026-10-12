@@ -13,6 +13,7 @@ import {
 } from '../tenant/tenant.mappers';
 import { TenantUnit } from '../tenant/tenant.types';
 import { generateAllSlotsBetween } from '../tenant/slots.helper';
+import { DEFAULT_FEE_RATES, FeeRates, FeeRatesService } from './fee-rates.service';
 
 /** Thời gian giữ danh sách công khai; đủ ngắn để trạng thái căn không lệch lâu. */
 export const CATALOG_CACHE_MS = 20_000;
@@ -24,16 +25,19 @@ export class PropertyService {
 
   private readonly catalogCache = new Map<string, { at: number; value: TenantUnit[] }>();
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly feeRates: FeeRatesService = new FeeRatesService(prisma),
+  ) {}
 
   /**
    * Tính toán All-in Cost (phục vụ Matchmaker AI và bộ so sánh chi phí).
    */
-  calculateAllInCost(unit: any, motorbikes = 1, cars = 0, occupants = 2) {
+  calculateAllInCost(unit: any, motorbikes = 1, cars = 0, occupants = 2, rates: FeeRates = DEFAULT_FEE_RATES) {
     const baseRent = Number(unit.baseRentPrice);
     const managementFee = Number(unit.managementFee);
-    const parkingFee = motorbikes * 150000 + cars * 1250000;
-    const utilityCost = occupants * 300000;
+    const parkingFee = motorbikes * rates.motorbike + cars * rates.car;
+    const utilityCost = occupants * rates.utilityPerPerson;
     const allInTotal = baseRent + managementFee + parkingFee + utilityCost;
 
     const marketAvg = Number(unit.marketAvgPrice);
@@ -385,7 +389,7 @@ export class PropertyService {
       });
     }
 
-    const cost = this.calculateAllInCost(unit, motorbikes, cars, occupants);
+    const cost = this.calculateAllInCost(unit, motorbikes, cars, occupants, await this.feeRates.get());
     return {
       ...unit,
       allInCost: cost.breakdown,

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PropertyService } from '../property/property.service';
 import { PropertyFilterDto } from '../property/dto/property-query.dto';
+import { FeeRatesService } from '../property/fee-rates.service';
 import { ZONE_BUILDINGS } from '../tenant/tenant.mappers';
 import { TenantUnit } from '../tenant/tenant.types';
 import { MatchmakerRequestDto } from './dto/matchmaker-request.dto';
@@ -32,6 +33,7 @@ export class MatchmakerService {
   constructor(
     private prisma: PrismaService,
     private propertyService: PropertyService,
+    private readonly feeRates: FeeRatesService = new FeeRatesService(prisma),
   ) {}
 
   async findTopRecommendations(dto: MatchmakerRequestDto) {
@@ -42,14 +44,15 @@ export class MatchmakerService {
     const filter: PropertyFilterDto = { status: UnitStatus.AVAILABLE, motorbikes, cars, occupants };
     if (preferredLayout) filter.layoutType = preferredLayout;
     else if (dto.layouts?.length === 1) filter.layout = dto.layouts[0];
-    const scannedUnits = await this.propertyService.getUnits(filter);
+    const [scannedUnits, rates] = await Promise.all([this.propertyService.getUnits(filter), this.feeRates.get()]);
 
     const totalScanned = scannedUnits.length;
     const enrichedUnits = scannedUnits.filter((u) => passesFilters(u, dto)).map((item) => {
       const baseRent = Number(item.rent);
       const managementFee = Number(item.managementFee);
-      const parkingFee = motorbikes * 150000 + cars * 1250000;
-      const utilityCost = occupants * 300000;
+      // Đơn giá lấy từ fee_configs (Admin cài) — cùng nguồn với FAQ của khung chat.
+      const parkingFee = motorbikes * rates.motorbike + cars * rates.car;
+      const utilityCost = occupants * rates.utilityPerPerson;
       const allInTotal = baseRent + managementFee + parkingFee + utilityCost;
       const marketAllInEstimate = Number(item.marketAvg) + managementFee + parkingFee + utilityCost;
       const savingAmount = Math.max(0, marketAllInEstimate - allInTotal);
