@@ -4,6 +4,7 @@ import { AuthException } from '../auth.errors';
 import { PhoneService } from '../phone/phone.service';
 import { fakeConfig } from '../testing/fake-config';
 import { createFakePrisma } from '../testing/fake-prisma';
+import { containsValue } from '../testing/contains-value';
 import { ActionTokenService } from './action-token.service';
 import { OtpService } from './otp.service';
 import { ConsoleOtpSender } from './senders/console-otp.sender';
@@ -52,7 +53,8 @@ describe('OtpService', () => {
 
       expect(devCode).toMatch(/^\d{4}$/);
       const row = prisma.otpCode.rows[0];
-      expect(JSON.stringify(row)).not.toContain(devCode);
+      expect(containsValue(row, devCode)).toBe(false); // không có trường nào lưu mã dạng rõ
+      expect(row.codeHash).not.toBe(devCode);
       expect(JSON.stringify(row)).not.toContain('84912345678');
       expect(row.codeHash).toMatch(/^[0-9a-f]{64}$/);
       expect(row.status).toBe('PENDING');
