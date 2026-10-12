@@ -16,6 +16,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { DIRECTIONS } from '../../property/unit-facts';
 
 export class RequestExitMandateDto {
   @ApiProperty({ description: 'ID của ủy quyền (lấy từ `mandate.id` trong GET /landlord/units)' })
@@ -65,21 +66,32 @@ export class CreateConsignmentDto {
   @Max(300)
   areaM2: number;
 
-  @ApiProperty({ example: 6500000, description: 'Giá thuê kỳ vọng (VNĐ/tháng, 3.000.000 → 80.000.000)' })
+  @ApiPropertyOptional({ example: 2, description: 'Số phòng vệ sinh (1–4). Bỏ trống = theo loại căn (2PN/3PN: 2, còn lại: 1); Inspector xác nhận lại khi thẩm định' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(4)
+  bathrooms?: number;
+
+  @ApiPropertyOptional({ example: 'Đông Nam', description: 'Hướng căn hộ: Đông | Tây | Nam | Bắc | Đông Nam | Đông Bắc | Tây Nam | Tây Bắc' })
+  @IsOptional()
+  @IsIn(DIRECTIONS as unknown as string[])
+  direction?: string;
+
+  @ApiProperty({ example: 6500000, description: 'Giá thuê kỳ vọng (VNĐ/tháng, tối thiểu 3.000.000)' })
   @IsNumber()
   @Min(3_000_000)
-  @Max(80_000_000, { message: 'Giá thuê kỳ vọng không được vượt quá 80.000.000 VNĐ/tháng' })
   askRent: number;
 
-  @ApiPropertyOptional({ example: 6500000, description: 'Tiền cọc bảo đảm đề xuất: 2.000.000 → 3 lần giá thuê. Mặc định = giá thuê' })
+  @ApiPropertyOptional({ example: 6500000, description: 'Tiền cọc bảo đảm đề xuất: 0.5–4 lần giá thuê tháng (Admin cấu hình). Mặc định = giá thuê' })
   @IsOptional()
   @IsNumber()
   suggestedDeposit?: number;
 
-  @ApiPropertyOptional({ example: 'flexible', description: 'Thời gian thuê mong muốn: flexible (từ 1 tháng) | mid (3–12 tháng) | long (từ 12 tháng) | fixed (cố định 12 tháng)' })
+  @ApiPropertyOptional({ example: 'long', description: 'Thời gian thuê mong muốn: mid (1–6 tháng) | long (12 tháng) | fixed (cố định 12 tháng)' })
   @IsOptional()
-  @IsIn(['flexible', 'mid', 'long', 'fixed'])
-  leaseTerm?: 'flexible' | 'mid' | 'long' | 'fixed';
+  @IsIn(['mid', 'long', 'fixed'])
+  leaseTerm?: 'mid' | 'long' | 'fixed';
 
   @ApiPropertyOptional({ example: true, description: 'Đã có đầy đủ nội thất' })
   @IsOptional()
@@ -100,34 +112,18 @@ export class CreateConsignmentDto {
   @MaxLength(20)
   doorCode?: string;
 
-  @ApiPropertyOptional({ example: 'Techcombank', description: 'Ngân hàng thụ hưởng nhận tiền thuê hàng tháng (Smart Onboarding)' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  bankName?: string;
-
-  @ApiPropertyOptional({ example: '190388889999', description: 'Số tài khoản ngân hàng thụ hưởng' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  bankAccount?: string;
-
-  @ApiPropertyOptional({ example: 'NGUYEN VAN A', description: 'Tên chủ tài khoản thụ hưởng' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  bankAccountHolder?: string;
-
-  @ApiPropertyOptional({ default: true, description: 'Lưu làm tài khoản thụ hưởng mặc định cấp Profile cho toàn bộ căn hộ của chủ nhà' })
-  @IsOptional()
-  @IsBoolean()
-  saveAsDefaultPayout?: boolean;
-
   @ApiPropertyOptional({ example: 'Ưu tiên khách ở lâu dài, giữ gìn vệ sinh' })
   @IsOptional()
   @IsString()
   @MaxLength(300)
   note?: string;
+
+  @ApiPropertyOptional({ example: ['8', '21'], description: 'Mã hạng mục (catalog 32 món) chủ nhà khai là có sẵn; thẩm định tick sẵn' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(32)
+  @IsString({ each: true })
+  inventoryCodes?: string[];
 
   @ApiPropertyOptional({ default: false, description: 'true = bản nháp: bỏ kiểm tra tiền cọc đề xuất' })
   @IsOptional()
@@ -140,20 +136,28 @@ export class SignConsignmentDto {
   @IsBoolean()
   ownershipWarranted: boolean;
 
-  @ApiProperty({ example: '4829', description: 'OTP Zalo gửi tới SĐT đã xác thực của chủ nhà (gửi trước bằng POST /auth/otp/send, purpose PHONE_VERIFY)' })
+  @ApiPropertyOptional({ example: '4829', description: 'OTP Zalo — KHÔNG cần khi ký bằng số đã xác thực của tài khoản; bắt buộc khi nhập số khác hoặc tài khoản chưa có số (gửi trước bằng POST /landlord/consignments/:id/send-otp)' })
+  @IsOptional()
   @IsString()
   @Matches(/^\d{4}$/, { message: 'OTP gồm 4 chữ số' })
-  otp: string;
+  otp?: string;
 
-  @ApiPropertyOptional({ example: '0901234567', description: 'Chỉ cần khi hồ sơ chủ nhà chưa có SĐT: OTP đúng sẽ gắn SĐT này vào hồ sơ' })
+  @ApiPropertyOptional({ example: '0901234567', description: 'Bỏ trống ⇒ dùng số đã xác thực của tài khoản (không cần OTP). Nhập số KHÁC (hoặc tài khoản chưa có số) ⇒ phải OTP; số ký chỉ lưu (mã hoá) trong hồ sơ ký gửi, KHÔNG gắn vào tài khoản' })
   @IsOptional()
   @IsString()
   phone?: string;
 }
 
 export class SendConsignmentOtpDto {
-  @ApiPropertyOptional({ example: '0901234567', description: 'Chỉ cần khi hồ sơ chủ nhà chưa có SĐT; đã có thì bỏ qua và gửi tới SĐT đã lưu' })
+  @ApiPropertyOptional({ example: '0901234567', description: 'Bỏ trống ⇒ số đã xác thực của tài khoản (trả `otpRequired:false`, không gửi mã). Nhập số khác ⇒ gửi OTP tới số đó' })
   @IsOptional()
   @IsString()
   phone?: string;
+}
+
+/** Quyết định của chủ nhà về giá + cọc bảo đảm do Inspector đề xuất (hồ sơ 18, 01 §4.3). */
+export class PricingDecisionDto {
+  @ApiProperty({ enum: ['accept', 'decline'] })
+  @IsIn(['accept', 'decline'])
+  decision: 'accept' | 'decline';
 }

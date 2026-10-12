@@ -8,8 +8,6 @@ import { AuthService } from './auth.service';
 import { GoogleAuthGuard, GoogleCallbackGuard } from './google/google-auth.guard';
 import { GoogleStrategy } from './google/google.strategy';
 import { LoginLockoutService } from './login-lockout.service';
-import { HostInvitesController } from './host-invites/host-invites.controller';
-import { HostInvitesService } from './host-invites/host-invites.service';
 import { ActionTokenService } from './otp/action-token.service';
 import { OtpController } from './otp/otp.controller';
 import { OtpService } from './otp/otp.service';
@@ -21,6 +19,7 @@ import { PhoneService } from './phone/phone.service';
 import { resolveJwtSecret } from './secrets';
 import { AuthSessionService } from './session/auth-session.service';
 import { ProfileProvisioningService } from './session/profile-provisioning.service';
+import { RoleIdService } from './session/role-ids.service';
 import { SessionCookieService } from './session/session-cookies.service';
 import { SESSION_TOKEN_ISSUER, SessionTokenService } from './session/session-token.service';
 
@@ -36,11 +35,12 @@ import { SESSION_TOKEN_ISSUER, SessionTokenService } from './session/session-tok
       }),
     }),
   ],
-  controllers: [AuthController, OtpController, HostInvitesController],
+  controllers: [AuthController, OtpController],
   providers: [
     AuthService,
     AuthSessionService,
     ProfileProvisioningService,
+    RoleIdService,
     SessionCookieService,
     SessionTokenService,
     GoogleStrategy,
@@ -48,7 +48,6 @@ import { SESSION_TOKEN_ISSUER, SessionTokenService } from './session/session-tok
     GoogleCallbackGuard,
     AuthAuditService,
     LoginLockoutService,
-    HostInvitesService,
     PhoneService,
     OtpService,
     ActionTokenService,
@@ -68,6 +67,7 @@ import { SESSION_TOKEN_ISSUER, SessionTokenService } from './session/session-tok
     PhoneVerificationService,
     ActionTokenService,
     AuthAuditService,
+    RoleIdService,
   ],
 })
 export class AuthModule {}

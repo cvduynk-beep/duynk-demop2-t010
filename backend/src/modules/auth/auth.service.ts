@@ -1,12 +1,12 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { HostDutyStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthAuditService } from './auth-audit.service';
 import { PORTAL_HOME, Portal, PORTALS, loginPathForPortal } from './auth.constants';
 import { AuthException, authError } from './auth.errors';
 import { GoogleIdentity } from './google/google.strategy';
+import { hostHome } from './host-roles';
 import { LoginLockoutService } from './login-lockout.service';
 import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from './password-hasher';
 import { AuthenticatedUser, AuthUserView } from './session/authenticated-user';
@@ -23,8 +23,6 @@ export interface RequestContext {
 export interface LoginOutcome {
   tokens: SessionTokens;
   user: AuthUserView;
-  needsRfidVerification: boolean;
-  hostId?: string;
 }
 
 /** Callback Google luôn kết thúc bằng một redirect về FE (thành công → trang chủ cổng, lỗi → màn đăng nhập). */
@@ -32,16 +30,9 @@ export type OAuthResult =
   | { ok: true; redirectUrl: string; outcome: LoginOutcome }
   | { ok: false; redirectUrl: string };
 
-const rfidEquals = (expected: string, given: string) => {
-  // RFID thường nhập tay nên so không phân biệt hoa/thường; so sánh thời gian hằng số.
-  const a = Buffer.from(expected.trim().toLowerCase());
-  const b = Buffer.from(given.trim().toLowerCase());
-  return a.length === b.length && timingSafeEqual(a, b);
-};
-
 /**
  * Toàn bộ nghiệp vụ đăng nhập của VinStay: mật khẩu (băm scrypt trong `profiles.password_hash`), đăng ký, Google
- * (Passport), phiên (JWT do backend ký) và bước RFID của Field Host. Không dùng Supabase Auth. FE chỉ hiển thị
+ * (Passport) và phiên (JWT do backend ký). Field Host do Admin tạo (`POST /admin/field-hosts`), chỉ đăng nhập ở đây. Không dùng Supabase Auth. FE chỉ hiển thị
  * form và gọi các endpoint này.
  */
 @Injectable()
@@ -97,17 +88,13 @@ export class AuthService {
     dto: { email: string; password: string; fullName: string; portal: Portal },
     ctx: RequestContext,
   ): Promise<LoginOutcome> {
-    if (dto.portal === 'admin') throw authError('signup_not_allowed');
+    // Admin tạo bằng `npm run create:admin`; Field Host do Admin tạo ở /admin/field-hosts.
+    if (dto.portal === 'admin' || dto.portal === 'host') throw authError('signup_not_allowed');
 
     const email = dto.email.trim().toLowerCase();
     // Không đặt mật khẩu lên tài khoản đã có (kể cả tài khoản Google): email chưa được chứng minh nên làm vậy là chiếm tài khoản.
     const existing = await this.prisma.profile.findUnique({ where: { email }, select: { id: true } });
     if (existing) throw authError('email_already_registered');
-
-    if (dto.portal === 'host') {
-      const invite = await this.prisma.hostInvite.findUnique({ where: { email } });
-      if (!invite || invite.claimedAt) throw authError('not_authorized');
-    }
 
     const passwordHash = await hashPassword(dto.password);
     return this.completeLogin(
@@ -157,9 +144,7 @@ export class AuthService {
       const existing = await this.prisma.profile.findUnique({ where: { email }, select: { id: true } });
       const user: ProvisionUser = { id: existing?.id ?? randomUUID(), email, fullName: identity.fullName };
       const outcome = await this.completeLogin(user, state.portal, ctx, 'google');
-      const path = outcome.needsRfidVerification
-        ? `/admin/login?tab=host&rfidPending=${outcome.hostId}`
-        : PORTAL_HOME[state.portal];
+      const path = state.portal === 'host' ? hostHome(outcome.user.hostRoles) : PORTAL_HOME[state.portal];
       return { ok: true, redirectUrl: `${this.webUrl}${path}`, outcome };
     } catch (err) {
       if (err instanceof AuthException) return failure(err.code);
@@ -177,44 +162,9 @@ export class AuthService {
   async resolveSession(accessToken: string | undefined, portal: Portal): Promise<{ user: AuthUserView | null; clear?: boolean }> {
     if (accessToken) {
       const user = await this.safeAuthenticate(accessToken, portal);
-      if (user) return { user: await this.toView(user) };
+      if (user) return { user };
     }
     return { user: null, clear: Boolean(accessToken) };
-  }
-
-  // ------------------------------------------------------------------ Field Host: xác nhận RFID
-
-  async verifyRfid(user: AuthenticatedUser, dto: { hostId: string; rfid: string }, ctx: RequestContext): Promise<void> {
-    if (user.role !== 'field_host' || user.isHostVerified) throw authError('invalid_host');
-
-    const invite = await this.prisma.hostInvite.findUnique({ where: { id: dto.hostId } });
-    if (!invite || invite.claimedAt || invite.email !== user.email?.toLowerCase()) throw authError('invalid_host');
-
-    if (!rfidEquals(invite.rfidCardNumber, dto.rfid)) {
-      await this.audit.record('rfid_failed', { userId: user.id, ...ctx });
-      throw authError('rfid_mismatch');
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      // Nhận lời mời nguyên tử: chỉ một request thắng.
-      const claimed = await tx.hostInvite.updateMany({
-        where: { id: invite.id, claimedAt: null },
-        data: { claimedAt: new Date(), claimedById: user.id },
-      });
-      if (claimed.count !== 1) throw authError('invalid_host');
-
-      await tx.fieldHost.create({
-        data: {
-          profileId: user.id,
-          assignedZone: invite.assignedZone,
-          rfidCardNumber: invite.rfidCardNumber,
-          dutyStatus: HostDutyStatus.OFF_DUTY,
-        },
-      });
-      await tx.profile.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    });
-    this.sessions.invalidate(user.id);
-    await this.audit.record('rfid_verified', { userId: user.id, ...ctx });
   }
 
   // ------------------------------------------------------------------ nội bộ
@@ -230,8 +180,6 @@ export class AuthService {
     return {
       tokens: this.sessionTokens.sign(admitted.profile.id, user.email, portal, admitted.profile.role?.code),
       user: this.viewOfProfile(admitted.profile),
-      needsRfidVerification: admitted.needsRfidVerification,
-      ...(admitted.hostId ? { hostId: admitted.hostId } : {}),
     };
   }
 
@@ -241,7 +189,7 @@ export class AuthService {
     portal: Portal,
     ctx: RequestContext,
     method: 'password' | 'google' | 'signup',
-  ): Promise<{ profile: ProfileWithRole; needsRfidVerification: boolean; hostId?: string }> {
+  ): Promise<{ profile: ProfileWithRole }> {
     const result = await this.provisioning.ensureProfile(user, portal);
     // `in` thay vì `!result.ok`: backend chạy strictNullChecks=false nên TS không thu hẹp union theo boolean.
     if ('error' in result) {
@@ -254,21 +202,11 @@ export class AuthService {
     }
 
     await this.audit.record('login_succeeded', { userId: user.id, ...ctx, metadata: { portal, method } });
-    return {
-      profile: result.profile,
-      needsRfidVerification: result.needsRfidVerification,
-      ...(result.needsRfidVerification ? { hostId: result.hostId } : {}),
-    };
+    return { profile: result.profile };
   }
 
   private viewOfProfile(profile: ProfileWithRole): AuthUserView {
     return toAuthenticatedUser({ id: profile.id, email: profile.email }, profile);
-  }
-
-  private async toView(user: AuthenticatedUser): Promise<AuthUserView> {
-    if (user.role !== 'field_host' || user.isHostVerified || !user.email) return user;
-    const invite = await this.prisma.hostInvite.findUnique({ where: { email: user.email.toLowerCase() } });
-    return invite && !invite.claimedAt ? { ...user, pendingHostId: invite.id } : user;
   }
 
   private async safeAuthenticate(accessToken: string, portal: Portal): Promise<AuthenticatedUser | null> {

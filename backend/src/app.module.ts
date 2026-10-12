@@ -23,10 +23,16 @@ import { HandoverModule } from './modules/handover/handover.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AccountModule } from './modules/account/account.module';
 import { HostModule } from './modules/host/host.module';
+import { FieldHostsModule } from './modules/field-hosts/field-hosts.module';
+import { HostViewingsModule } from './modules/host-viewings/host-viewings.module';
+import { DoorModule } from './modules/door/door.module';
+import { InspectionModule } from './modules/inspection/inspection.module';
+import { AssistantModule } from './modules/assistant/assistant.module';
 
 // Common Filters, Guards & Interceptors
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { VerificationGuard } from './common/guards/verification.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -58,6 +64,11 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
     AdminModule,
     AccountModule,
     HostModule,
+    FieldHostsModule,
+    HostViewingsModule,
+    DoorModule,
+    InspectionModule,
+    AssistantModule,
   ],
   providers: [
     {
@@ -67,6 +78,10 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: VerificationGuard,
     },
     {
       provide: APP_FILTER,

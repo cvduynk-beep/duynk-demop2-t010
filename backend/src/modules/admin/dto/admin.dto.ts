@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsEmail, IsNotEmpty, IsNumber, IsOptional, IsString, IsIn, Max, Min } from 'class-validator';
+import { IsArray, IsEmail, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsIn, Max, Min } from 'class-validator';
 
 export class UpdateCommissionParamDto {
   @ApiProperty({ example: 'host_deal_commission', description: 'Mã tham số biến phí' })
@@ -95,6 +95,25 @@ export class ReassignBookingDto {
   @IsNotEmpty()
   @IsString()
   hostId: string;
+
+  @ApiProperty({ example: 'Host cũ kẹt thang', description: 'Lý do can thiệp (lưu Audit)' })
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
+}
+
+export class TerminateMandateDto {
+  @ApiProperty({ example: 'Chủ nhà đã báo trước đủ 15 ngày', description: 'Lý do chấm dứt ủy quyền (lưu Audit)' })
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
+}
+
+export class EscalateTicketDto {
+  @ApiProperty({ example: 'Host không phản hồi', description: 'Lý do leo thang (lưu Audit)' })
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
 }
 
 export class VoidHoldDto {
@@ -109,15 +128,102 @@ export class VoidHoldDto {
   note: string;
 }
 
-export class UpdateHoldPolicyDto {
-  @ApiPropertyOptional({ example: 'u1111111-1111-1111-1111-111111111111', description: 'Unit ID nếu cài riêng cho từng căn (null nếu toàn sàn)' })
-  @IsOptional()
-  @IsString()
-  unitId?: string;
-
-  @ApiProperty({ example: 48, description: 'Số giờ giữ chỗ (12 - 72 giờ)' })
+export class UpdateLandlordFeeDto {
+  @ApiProperty({ example: 5, description: 'Phí dịch vụ ký gửi tính theo % tiền thuê tháng, trừ vào khoản chủ nhà nhận khi có khách thuê (0–30)' })
   @IsNumber()
+  @Min(0)
+  @Max(30)
+  percent: number;
+
+  @ApiProperty({ example: 'Chốt mức phí quý 4', description: 'Lý do thay đổi (lưu Audit)' })
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
+}
+
+export class UpdateUnitHoldHoursDto {
+  @ApiPropertyOptional({
+    example: 48,
+    nullable: true,
+    description: 'Số giờ khoá căn sau khi khách chuyển cọc (nguyên, 12–72). null/bỏ trống = đặt lại mặc định 48 giờ',
+  })
+  @IsOptional()
+  @IsInt()
   @Min(12)
   @Max(72)
-  hours: number;
+  hours?: number | null;
+
+  @ApiProperty({ example: 'Kích cầu: căn đang hot, rút ngắn để quay vòng nhanh', description: 'Lý do thay đổi (lưu Audit)' })
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
 }
+
+export class PayoutQueryDto {
+  @ApiPropertyOptional({ example: '2026-W41', description: 'Tuần ISO; mặc định tuần hiện tại' })
+  @IsOptional()
+  @IsString()
+  period?: string;
+}
+
+export class ResolveUncDto {
+  @ApiProperty({ enum: ['APPROVE', 'REJECT'], description: 'Duyệt hoặc từ chối UNC (từ chối ⇒ QR_EXPIRED)' })
+  @IsIn(['APPROVE', 'REJECT'])
+  decision: 'APPROVE' | 'REJECT';
+
+  @ApiProperty({ example: 'Đã đối soát sao kê', description: 'Lý do (lưu Audit)' })
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
+}
+
+export class KeyReasonDto {
+  @ApiProperty({ example: 'Khách cũ trả phòng', description: 'Lý do (lưu Audit)' })
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
+}
+
+export class DepositQueryDto {
+  @ApiPropertyOptional({ example: 'UNC_PENDING_REVIEW' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  page?: number;
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  pageSize?: number;
+}
+
+export class UpdateDepositPolicyDto {
+  @ApiPropertyOptional({ example: 0.5, description: 'Tỷ lệ cọc tối thiểu theo giá thuê tháng (ví dụ 0.5 = 50%)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(2.0)
+  minRatio?: number;
+
+  @ApiPropertyOptional({ example: 4.0, description: 'Tỷ lệ cọc tối đa theo giá thuê tháng (ví dụ 4.0 = 400% / 4 lần)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(1.0)
+  @Max(10.0)
+  maxRatio?: number;
+
+  @ApiPropertyOptional({ example: 1.0, description: 'Tỷ lệ cọc khuyến nghị mặc định (ví dụ 1.0 = 100% / 1 tháng)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  @Max(10.0)
+  defaultRatio?: number;
+
+  @ApiPropertyOptional({ example: 'Cập nhật quy định cọc căn cứ theo giá thuê tháng', description: 'Lý do thay đổi (lưu Audit)' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+

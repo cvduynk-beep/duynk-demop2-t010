@@ -5,8 +5,14 @@ import { SessionCookieService } from '../../modules/auth/session/session-cookies
 import { AuthenticatedUser } from '../../modules/auth/session/authenticated-user';
 import { fakeConfig } from '../../modules/auth/testing/fake-config';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { HOST_ROLES_KEY } from '../decorators/host-roles.decorator';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { RolesGuard } from './roles.guard';
+import { VerificationGuard } from './verification.guard';
+import { HostViewingsController } from '../../modules/host-viewings/host-viewings.controller';
+import { InspectionController } from '../../modules/inspection/inspection.controller';
+import { LandlordController } from '../../modules/landlord/landlord.controller';
+import { REQUIRE_VERIFICATION_KEY } from '../decorators/require-verification.decorator';
 import { SupabaseAuthGuard } from './supabase-auth.guard';
 
 const user = (overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser => ({
@@ -17,6 +23,7 @@ const user = (overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser => 
   portal: 'tenant',
   isPhoneVerified: false,
   isHostVerified: false,
+  hostRoles: [],
   ...overrides,
 });
 
@@ -150,8 +157,89 @@ describe('RolesGuard', () => {
     expect(() => run(['tenant'], user({ role: null }))()).toThrow();
   });
 
-  it('Field Host chưa nhập RFID không được dùng quyền Host', async () => {
-    expect(await codeOf(run(['field_host'], user({ role: 'field_host', isHostVerified: false })))).toBe('host_rfid_unverified');
+  it('Field Host chưa có hồ sơ Field Host (Admin chưa tạo) không được dùng quyền Host', async () => {
+    expect(await codeOf(run(['field_host'], user({ role: 'field_host', isHostVerified: false })))).toBe('host_not_provisioned');
     expect(run(['field_host'], user({ role: 'field_host', isHostVerified: true }))()).toBe(true);
+  });
+
+  describe('@HostRoles', () => {
+    const runWith = (roles: string[] | undefined, hostRoles: string[], current: AuthenticatedUser | undefined) => {
+      const { reflector, ctx } = context(
+        { user: current },
+        { ...(roles ? { [ROLES_KEY]: roles } : {}), [HOST_ROLES_KEY]: hostRoles },
+      );
+      return () => new RolesGuard(reflector).canActivate(ctx);
+    };
+    const host = (hostRoles: string[], over: Partial<AuthenticatedUser> = {}) =>
+      user({ role: 'field_host', portal: 'host', isHostVerified: true, hostRoles: hostRoles as never, ...over });
+
+    it('Host thiếu vai → host_role_missing kèm errors.required; đủ vai → qua', async () => {
+      expect(await codeOf(runWith(['field_host'], ['sale'], host(['inspector'])))).toBe('host_role_missing');
+      try {
+        runWith(['field_host'], ['sale'], host(['inspector']))();
+      } catch (err) {
+        expect((err as AuthException).getResponse()).toMatchObject({ errors: { required: ['sale'] } });
+      }
+      expect(runWith(['field_host'], ['sale'], host(['sale']))()).toBe(true);
+      expect(runWith(['field_host'], ['sale'], host(['inspector', 'sale']))()).toBe(true);
+    });
+
+    it('chỉ cần một trong các vai yêu cầu', () => {
+      expect(runWith(['field_host'], ['sale', 'inspector'], host(['inspector']))()).toBe(true);
+    });
+
+    it('@Roles("field_host","ops_admin") + @HostRoles("sale"): ops_admin không bị kiểm vai con', () => {
+      expect(runWith(['field_host', 'ops_admin'], ['sale'], user({ role: 'ops_admin', portal: 'admin' }))()).toBe(true);
+    });
+
+    it('Host chưa có hồ sơ + @HostRoles → host_not_provisioned (không phải host_role_missing)', async () => {
+      expect(await codeOf(runWith(['field_host'], ['sale'], host([], { isHostVerified: false })))).toBe('host_not_provisioned');
+    });
+
+    it('@HostRoles đứng một mình ngầm hiểu chỉ Field Host: tenant → 403', () => {
+      expect(() => runWith(undefined, ['sale'], user({ role: 'tenant' }))()).toThrow(/field_host/);
+      expect(runWith(undefined, ['sale'], host(['sale']))()).toBe(true);
+    });
+  });
+});
+
+describe('VerificationGuard', () => {
+  const run = (metadata: Record<string, unknown>, u: AuthenticatedUser | undefined) => {
+    const { reflector, ctx } = context({ user: u }, metadata);
+    return new VerificationGuard(reflector).canActivate(ctx);
+  };
+
+  it('route không gắn @RequireVerification ⇒ cho qua kể cả chưa xác thực SĐT', () => {
+    expect(run({}, user({ isPhoneVerified: false }))).toBe(true);
+  });
+
+  it('@RequireVerification("phone") + SĐT đã xác thực ⇒ cho qua', () => {
+    expect(run({ [REQUIRE_VERIFICATION_KEY]: 'phone' }, user({ isPhoneVerified: true }))).toBe(true);
+  });
+
+  it('@RequireVerification("phone") + chưa xác thực ⇒ 403 phone_not_verified', async () => {
+    expect(await codeOf(() => run({ [REQUIRE_VERIFICATION_KEY]: 'phone' }, user({ isPhoneVerified: false })))).toBe('phone_not_verified');
+  });
+
+  it('@RequireVerification("phone") + không có user ⇒ 403 phone_not_verified', async () => {
+    expect(await codeOf(() => run({ [REQUIRE_VERIFICATION_KEY]: 'phone' }, undefined))).toBe('phone_not_verified');
+  });
+});
+
+describe('Route "nhận việc / ký" phải gắn @RequireVerification("phone")', () => {
+  const gated: Array<[string, Function]> = [
+    ['Sale accept', HostViewingsController.prototype.accept],
+    ['Sale claim', HostViewingsController.prototype.claim],
+    ['Thẩm định accept', InspectionController.prototype.accept],
+    ['Thẩm định claim', InspectionController.prototype.claim],
+    ['Chủ nhà send-otp', LandlordController.prototype.sendSignOtp],
+    ['Chủ nhà sign', LandlordController.prototype.signConsignment],
+  ];
+  it.each(gated)('%s', (_name, handler) => {
+    expect(Reflect.getMetadata(REQUIRE_VERIFICATION_KEY, handler)).toBe('phone');
+  });
+  it('route chỉ đọc không bị chặn', () => {
+    expect(Reflect.getMetadata(REQUIRE_VERIFICATION_KEY, HostViewingsController.prototype.getBoard)).toBeUndefined();
+    expect(Reflect.getMetadata(REQUIRE_VERIFICATION_KEY, InspectionController.prototype.board)).toBeUndefined();
   });
 });

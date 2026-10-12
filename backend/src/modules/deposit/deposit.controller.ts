@@ -1,48 +1,135 @@
-import { Controller, Post, Body, Get, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiCookieAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Headers,
+  Query,
+  Req,
+  UnauthorizedException,
+  ServiceUnavailableException,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { timingSafeEqual } from 'node:crypto';
+import { Request } from 'express';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { DepositService } from './deposit.service';
-import { GenerateVietQrDto, VietQrWebhookDto, UploadHostReceiptDto } from './dto/deposit.dto';
-import { Public } from '../../common/decorators/public.decorator';
+import {
+  CreateDepositDto,
+  VietQrWebhookInputDto,
+  UploadHostReceiptDto,
+} from './dto/deposit.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { HostRoles } from '../../common/decorators/host-roles.decorator';
 
 @ApiTags('5. Cọc VietQR 2M & Khóa Giữ Chỗ')
-@ApiCookieAuth('session-cookie')
-@Controller('deposits')
+@Controller()
 export class DepositController {
   constructor(private readonly depositService: DepositService) {}
 
-  @Post('generate-vietqr')
+  @Public()
+  @Get('legal/deposit-terms')
   @ApiOperation({
-    summary: 'Sinh mã VietQR động 2.000.000 VNĐ kèm Attribution Lock (host_id)',
-    description: 'Tạo mã QR Napas247 động, nhúng mã căn và host_id, ràng buộc cọc bảo đảm tài sản',
+    summary: 'A14 (công khai): biên bản điều khoản đặt cọc giữ chỗ — khách đọc trước khi tick và quét VietQR',
+    description: 'Có `?unitCode=` thì số giờ giữ chỗ là của căn đó; không có thì dùng giờ mặc định Admin cài.',
   })
-  async generateVietQr(@Body() dto: GenerateVietQrDto) {
-    return this.depositService.generateVietQr(dto);
+  async getPublicDepositTerms(@Query('unitCode') unitCode?: string) {
+    return this.depositService.getPublicDepositTerms(unitCode);
+  }
+
+  @Roles('tenant')
+  @Get('bookings/:ref/deposit/terms')
+  @ApiOperation({
+    summary: 'A14: Lấy biên bản điều khoản đặt cọc giữ chỗ trước khi tick chấp thuận',
+  })
+  async getDepositTerms(@Param('ref') ref: string, @CurrentUser() user: any) {
+    return this.depositService.getDepositTerms(ref, user);
+  }
+
+  @Roles('tenant')
+  @Post('bookings/:ref/deposit')
+  @ApiOperation({
+    summary: 'A15: Chấp thuận điều khoản cọc & Tạo giao dịch cọc VietQR 2.000.000 VNĐ',
+  })
+  async createDeposit(
+    @Param('ref') ref: string,
+    @CurrentUser() user: any,
+    @Body() dto: CreateDepositDto,
+    @Req() req: Request,
+  ) {
+    return this.depositService.createDeposit(ref, user, dto, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+  }
+
+  @Roles('tenant')
+  @Post('bookings/:ref/deposit/demo-pay')
+  @ApiOperation({
+    summary: 'DEMO: giả lập ngân hàng báo có cọc (chỉ khi DEMO_TOOLS=true và không phải production)',
+  })
+  async demoPay(@Param('ref') ref: string, @CurrentUser() user: any) {
+    return this.depositService.demoPay(ref, user);
   }
 
   @Public()
-  @Post('webhook-vietqr')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  @Post('vietqr/webhook')
   @ApiOperation({
-    summary: 'Webhook Ngân hàng tự động gạch nợ (SLA <= 5s) & Kích hoạt Conflict Resolver',
-    description: 'Chuyển căn sang HOLDING theo số giờ cài đặt (mặc định 48h), hủy tự động lịch trùng, cộng ví +450k cho Field Host',
+    summary: 'A16: Webhook Ngân hàng tự động gạch nợ (First-to-Pay Wins)',
   })
-  async processWebhook(@Body() dto: VietQrWebhookDto) {
-    return this.depositService.processWebhook(dto);
+  async vietqrWebhook(
+    @Headers('x-vietqr-secret') secretHeader: string = '',
+    @Body() dto: VietQrWebhookInputDto,
+  ) {
+    const expectedSecret = process.env.VIETQR_WEBHOOK_SECRET;
+    if (!expectedSecret) {
+      throw new ServiceUnavailableException({
+        message: 'VietQR webhook secret is not configured.',
+        code: 'webhook_not_configured',
+      });
+    }
+
+    const secretBuf = Buffer.from(secretHeader);
+    const expectedBuf = Buffer.from(expectedSecret);
+
+    if (
+      secretBuf.length !== expectedBuf.length ||
+      !timingSafeEqual(secretBuf, expectedBuf)
+    ) {
+      throw new UnauthorizedException({
+        message: 'Mã bí mật webhook không hợp lệ.',
+        code: 'webhook_secret_invalid',
+      });
+    }
+
+    const outcome = await this.depositService.markPaid({
+      depositCode: dto.depositCode,
+      transferContent: dto.transferContent,
+      amount: dto.amount,
+      bankRefNumber: dto.bankRefNumber,
+      actor: 'bank',
+    });
+
+    return { success: true, outcome };
   }
 
-  @Roles('field_host', 'ops_admin')
-  @Post(':id/host-receipt')
+  @Roles('field_host')
+  @HostRoles('sale')
+  @Post('deposits/:id/host-receipt')
   @ApiOperation({
     summary: 'Host tải ảnh ủy nhiệm chi (UNC) khi webhook ngân hàng chậm',
-    description: 'Khóa tạm căn hộ trong 30 phút để đối soát thanh toán',
   })
-  async uploadHostReceipt(@Param('id') id: string, @Body() dto: UploadHostReceiptDto) {
-    return this.depositService.uploadHostReceipt(id, dto);
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Xem trạng thái cọc giữ chỗ và thông tin đếm ngược thời hạn giữ căn' })
-  async getDepositStatus(@Param('id') id: string) {
-    return this.depositService.getDepositStatus(id);
+  async uploadHostReceipt(
+    @Param('id') id: string,
+    @Body() dto: UploadHostReceiptDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.depositService.uploadHostReceipt(id, dto, user.id);
   }
 }
