@@ -67,7 +67,11 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next, a
       const path = mode === "login" ? "/auth/login" : "/auth/signup";
       const body = mode === "login" ? { email, password, portal } : { email, password, fullName, portal };
       const { ok, data, code } = await postJson<LoginData>(path, body);
-      if (!ok) return setError(errorMessage(code));
+      if (!ok) {
+        // Backend không nói email có tài khoản Google hay không (chống dò email) ⇒ FE tự gợi ý khi cổng có nút Google.
+        const googleTip = mode === "login" && canGoogle && code === "invalid_credentials" ? " Nếu bạn đăng ký bằng Google, hãy bấm nút Google ở trên." : "";
+        return setError(errorMessage(code) + googleTip);
+      }
       enter(data.user?.hostRoles);
       return;
     } catch (cause) {

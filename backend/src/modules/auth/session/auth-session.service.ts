@@ -69,7 +69,7 @@ export class AuthSessionService {
     for (const [key, entry] of this.cache) if (entry.user.id === userId) this.cache.delete(key);
   }
 
-  /** null nếu token không hợp lệ/hết hạn; ném `account_suspended` nếu tài khoản bị khoá. */
+  /** null nếu token không hợp lệ/hết hạn/sai cổng; ném `account_suspended` nếu tài khoản bị khoá. */
   async authenticate(accessToken: string): Promise<AuthenticatedUser | null> {
     const key = createHash('sha256').update(accessToken).digest('hex');
     const hit = this.cache.get(key);
@@ -90,6 +90,8 @@ export class AuthSessionService {
     // Token luôn gắn với một Profile đã tạo; Profile bị xoá thì token vô hiệu.
     if (!profile) return null;
     if (!profile.isActive) throw authError('account_suspended');
+    // Token phát cho cổng nào chỉ dùng được khi vai trò hiện tại vẫn thuộc cổng đó (vd. Admin đổi vai ⇒ phiên cũ hết hiệu lực).
+    if (claims.portal !== portalForRole(profile.role?.code)) return null;
 
     const user = toAuthenticatedUser(identity, profile);
     if (this.cache.size >= CACHE_MAX_ENTRIES) this.cache.delete(this.cache.keys().next().value);

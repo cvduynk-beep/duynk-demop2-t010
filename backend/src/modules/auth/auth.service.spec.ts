@@ -1,9 +1,10 @@
 import { JwtService } from '@nestjs/jwt';
 import { AuthAuditService } from './auth-audit.service';
-import { SESSION_TTL_SECONDS } from './auth.constants';
+import { ADMIN_SESSION_TTL_SECONDS, portalForRole, SESSION_TTL_SECONDS } from './auth.constants';
 import { AuthException } from './auth.errors';
 import { AuthService } from './auth.service';
 import { GoogleIdentity } from './google/google.strategy';
+import { LoginLockoutService } from './login-lockout.service';
 import { hashPassword } from './password-hasher';
 import { AuthSessionService } from './session/auth-session.service';
 import { ProfileProvisioningService } from './session/profile-provisioning.service';
@@ -17,15 +18,17 @@ const JWT_SECRET = 'a-test-jwt-secret-of-at-least-32-chars';
 
 function setup(env: Record<string, string> = {}) {
   const prisma = createFakePrisma();
-  const sessionTokens = createSessionTokens();
+  const sessionTokens = createSessionTokens(undefined, env);
   const sessions = new AuthSessionService(prisma as any, sessionTokens);
+  const config = fakeConfig({ WEB_APP_URL: 'http://localhost:3000/', API_PREFIX: 'api/v1', ...env });
   const service = new AuthService(
     prisma as any,
     sessions,
     new ProfileProvisioningService(prisma as any, new RoleIdService(prisma as any)),
     new AuthAuditService(prisma as any),
     sessionTokens,
-    fakeConfig({ WEB_APP_URL: 'http://localhost:3000/', API_PREFIX: 'api/v1', ...env }),
+    config,
+    new LoginLockoutService(config),
   );
   return { prisma, service, sessions, sessionTokens };
 }
@@ -78,12 +81,13 @@ describe('AuthService', () => {
       expect(prisma.profile.rows).toHaveLength(0);
     });
 
-    it('tài khoản Google chưa có mật khẩu → password_not_set (kèm audit login_failed)', async () => {
+    it('tài khoản Google chưa có mật khẩu → invalid_credentials như sai mật khẩu (không lộ email có tài khoản); lý do chỉ ở audit', async () => {
       const { service, prisma } = setup();
       seedProfile(prisma, { email: 'g@example.com', roleCode: 'tenant' });
 
-      expect(await codeOf(service.login({ email: 'g@example.com', password: 'bat-ky-123', portal: 'tenant' }, CTX))).toBe('password_not_set');
-      expect(prisma.authAuditLog.rows.map((r: any) => r.event)).toContain('login_failed');
+      expect(await codeOf(service.login({ email: 'g@example.com', password: 'bat-ky-123', portal: 'tenant' }, CTX))).toBe('invalid_credentials');
+      const failed = prisma.authAuditLog.rows.find((r: any) => r.event === 'login_failed');
+      expect(failed.metadata).toMatchObject({ portal: 'tenant', method: 'password', reason: 'password_not_set' });
     });
 
     it('đúng mật khẩu nhưng sai cổng → wrong_portal, ghi login_rejected, không phát token', async () => {
@@ -99,6 +103,91 @@ describe('AuthService', () => {
       const { service, prisma } = setup();
       await seedWithPassword(prisma, { email: 'a@example.com', roleCode: 'tenant', password: 'Matkhau-123', isActive: false });
       expect(await codeOf(service.login({ email: 'a@example.com', password: 'Matkhau-123', portal: 'tenant' }, CTX))).toBe('account_suspended');
+    });
+
+    it('JWT mang claim portal của cổng đăng nhập; Admin sống ADMIN_SESSION_TTL_SECONDS (ngắn hơn cổng khác)', async () => {
+      const { service, prisma, sessionTokens } = setup();
+      await seedWithPassword(prisma, { email: 'ad@example.com', roleCode: 'ops_admin', password: 'Matkhau-123' });
+      await seedWithPassword(prisma, { email: 't@example.com', roleCode: 'tenant', password: 'Matkhau-123' });
+
+      const admin = await service.login({ email: 'ad@example.com', password: 'Matkhau-123', portal: 'admin' }, CTX);
+      const tenant = await service.login({ email: 't@example.com', password: 'Matkhau-123', portal: 'tenant' }, CTX);
+
+      expect(sessionTokens.verify(admin.tokens.accessToken)).toMatchObject({ portal: 'admin' });
+      expect(sessionTokens.verify(tenant.tokens.accessToken)).toMatchObject({ portal: 'tenant' });
+      expect(admin.tokens.expiresIn).toBe(ADMIN_SESSION_TTL_SECONDS);
+      expect(tenant.tokens.expiresIn).toBe(SESSION_TTL_SECONDS);
+      expect(ADMIN_SESSION_TTL_SECONDS).toBeLessThan(SESSION_TTL_SECONDS);
+    });
+
+    it('TTL đọc từ env SESSION_TTL_SECONDS / SESSION_TTL_ADMIN_SECONDS; giá trị rác ⇒ mặc định', async () => {
+      const custom = setup({ SESSION_TTL_SECONDS: '3600', SESSION_TTL_ADMIN_SECONDS: '600' });
+      await seedWithPassword(custom.prisma, { email: 'ad@example.com', roleCode: 'ops_admin', password: 'Matkhau-123' });
+      await seedWithPassword(custom.prisma, { email: 'l@example.com', roleCode: 'landlord', password: 'Matkhau-123' });
+      expect((await custom.service.login({ email: 'ad@example.com', password: 'Matkhau-123', portal: 'admin' }, CTX)).tokens.expiresIn).toBe(600);
+      expect((await custom.service.login({ email: 'l@example.com', password: 'Matkhau-123', portal: 'landlord' }, CTX)).tokens.expiresIn).toBe(3600);
+
+      const junk = setup({ SESSION_TTL_SECONDS: 'abc', SESSION_TTL_ADMIN_SECONDS: '-5' });
+      await seedWithPassword(junk.prisma, { email: 'ad@example.com', roleCode: 'ops_admin', password: 'Matkhau-123' });
+      expect((await junk.service.login({ email: 'ad@example.com', password: 'Matkhau-123', portal: 'admin' }, CTX)).tokens.expiresIn).toBe(ADMIN_SESSION_TTL_SECONDS);
+    });
+
+    describe('khoá theo email sau nhiều lần sai', () => {
+      afterEach(() => jest.restoreAllMocks());
+
+      const failTimes = async (service: AuthService, email: string, n: number) => {
+        const codes: string[] = [];
+        for (let i = 0; i < n; i++) codes.push(await codeOf(service.login({ email, password: 'sai-mat-khau', portal: 'tenant' }, CTX)));
+        return codes;
+      };
+
+      it('sai 5 lần ⇒ lần 6 trả login_locked (429) dù đúng mật khẩu, không kiểm tra mật khẩu, có retryAfterSeconds', async () => {
+        const { service, prisma } = setup();
+        await seedWithPassword(prisma, { email: 'a@example.com', roleCode: 'tenant', password: 'Matkhau-123' });
+
+        expect(await failTimes(service, 'a@example.com', 5)).toEqual(Array(5).fill('invalid_credentials'));
+        prisma.profile.findUnique.mockClear();
+        const err = await service.login({ email: ' A@example.com ', password: 'Matkhau-123', portal: 'tenant' }, CTX).catch((e) => e);
+        expect(err).toBeInstanceOf(AuthException);
+        expect(err.code).toBe('login_locked');
+        expect(err.getStatus()).toBe(429);
+        expect(err.getResponse().errors.retryAfterSeconds).toBeGreaterThan(0);
+        expect(prisma.profile.findUnique).not.toHaveBeenCalled();
+        expect(prisma.authAuditLog.rows.at(-1).metadata).toMatchObject({ reason: 'locked' });
+      });
+
+      it('email không tồn tại cũng bị khoá như email có thật (không lộ email nào có tài khoản)', async () => {
+        const { service } = setup();
+        expect(await failTimes(service, 'khong-co@example.com', 6)).toEqual([...Array(5).fill('invalid_credentials'), 'login_locked']);
+      });
+
+      it('khoá theo từng email: email khác vẫn đăng nhập được', async () => {
+        const { service, prisma } = setup();
+        await seedWithPassword(prisma, { email: 'b@example.com', roleCode: 'tenant', password: 'Matkhau-123' });
+        await failTimes(service, 'a@example.com', 5);
+        expect(await service.login({ email: 'b@example.com', password: 'Matkhau-123', portal: 'tenant' }, CTX)).toMatchObject({ user: { portal: 'tenant' } });
+      });
+
+      it('đăng nhập đúng trước ngưỡng ⇒ xoá bộ đếm', async () => {
+        const { service, prisma } = setup();
+        await seedWithPassword(prisma, { email: 'a@example.com', roleCode: 'tenant', password: 'Matkhau-123' });
+        await failTimes(service, 'a@example.com', 4);
+        await service.login({ email: 'a@example.com', password: 'Matkhau-123', portal: 'tenant' }, CTX);
+        expect(await failTimes(service, 'a@example.com', 4)).toEqual(Array(4).fill('invalid_credentials'));
+      });
+
+      it('hết LOGIN_LOCKOUT_SECONDS ⇒ mở khoá; ngưỡng/thời gian chỉnh qua env', async () => {
+        const { service, prisma } = setup({ LOGIN_MAX_FAILURES: '2', LOGIN_LOCKOUT_SECONDS: '60' });
+        await seedWithPassword(prisma, { email: 'a@example.com', roleCode: 'tenant', password: 'Matkhau-123' });
+        const start = Date.now();
+        jest.spyOn(Date, 'now').mockReturnValue(start);
+        expect(await failTimes(service, 'a@example.com', 3)).toEqual(['invalid_credentials', 'invalid_credentials', 'login_locked']);
+
+        jest.spyOn(Date, 'now').mockReturnValue(start + 59_000);
+        expect(await codeOf(service.login({ email: 'a@example.com', password: 'Matkhau-123', portal: 'tenant' }, CTX))).toBe('login_locked');
+        jest.spyOn(Date, 'now').mockReturnValue(start + 61_000);
+        expect(await service.login({ email: 'a@example.com', password: 'Matkhau-123', portal: 'tenant' }, CTX)).toMatchObject({ user: { portal: 'tenant' } });
+      });
     });
 
     it('Host có hồ sơ Field Host: đăng nhập thẳng, user mang hostRoles đúng thứ tự (sale trước)', async () => {
@@ -182,7 +271,7 @@ describe('AuthService', () => {
 
       expect(await codeOf(service.signup({ email: 'g@example.com', password: 'Mat-khau-moi-2', fullName: 'Kẻ lạ', portal: 'tenant' }, CTX))).toBe('email_already_registered');
       expect(prisma.profile.rows[0].passwordHash).toBeNull();
-      expect(await codeOf(service.login({ email: 'g@example.com', password: 'Mat-khau-moi-2', portal: 'tenant' }, CTX))).toBe('password_not_set');
+      expect(await codeOf(service.login({ email: 'g@example.com', password: 'Mat-khau-moi-2', portal: 'tenant' }, CTX))).toBe('invalid_credentials');
     });
 
     it('đăng ký đồng thời hai lần cùng email: chỉ một Profile, không 500', async () => {
@@ -333,13 +422,13 @@ describe('AuthService', () => {
       expect(await service.login({ email: 'g@example.com', password: 'Matkhau-123', portal: 'tenant' }, CTX)).toMatchObject({ user: { portal: 'tenant' } });
     });
 
-    it('Google tạo Profile mới: không có passwordHash, nên đăng nhập mật khẩu báo password_not_set', async () => {
+    it('Google tạo Profile mới: không có passwordHash, nên đăng nhập mật khẩu báo invalid_credentials', async () => {
       const { service, prisma } = setup();
       const { state, nonce } = roundTrip(service);
       await service.completeGoogle({ identity: google(), state, nonce }, CTX);
 
       expect(prisma.profile.rows[0].passwordHash).toBeNull();
-      expect(await codeOf(service.login({ email: 'g@example.com', password: 'bat-ky-123', portal: 'tenant' }, CTX))).toBe('password_not_set');
+      expect(await codeOf(service.login({ email: 'g@example.com', password: 'bat-ky-123', portal: 'tenant' }, CTX))).toBe('invalid_credentials');
     });
 
     it('Host có hồ sơ Field Host chỉ vai Thẩm định → redirect /host/inspections', async () => {
@@ -406,7 +495,7 @@ describe('AuthService', () => {
   describe('phiên do backend ký', () => {
     const signedIn = (ctx: ReturnType<typeof setup>, roleCode = 'tenant') => {
       const profile = seedProfile(ctx.prisma, { email: 'g@example.com', roleCode });
-      return { profile, token: ctx.sessionTokens.sign(profile.id, 'g@example.com').accessToken };
+      return { profile, token: ctx.sessionTokens.sign(profile.id, 'g@example.com', portalForRole(roleCode)).accessToken };
     };
     const expiredToken = (sub: string) =>
       new JwtService({ secret: JWT_SECRET }).sign({ sub }, { issuer: 'vinstay-backend', expiresIn: -10 });
@@ -434,7 +523,7 @@ describe('AuthService', () => {
     it('authenticate: khóa khác / thiếu issuer / hết hạn / JWT kiểu Supabase / rác → null, không truy vấn DB', async () => {
       const ctx = setup();
       const profile = seedProfile(ctx.prisma, { email: 'g@example.com', roleCode: 'tenant' });
-      const forged = createSessionTokens('another-secret-of-at-least-32-characters').sign(profile.id, 'g@example.com').accessToken;
+      const forged = createSessionTokens('another-secret-of-at-least-32-characters').sign(profile.id, 'g@example.com', 'tenant').accessToken;
       const noIssuer = new JwtService({ secret: JWT_SECRET }).sign({ sub: profile.id });
       const supabaseLike = new JwtService({ secret: JWT_SECRET }).sign({ sub: profile.id, aud: 'authenticated', role: 'authenticated' }, { issuer: 'https://x.supabase.co/auth/v1' });
 
@@ -443,6 +532,33 @@ describe('AuthService', () => {
         expect(await ctx.sessions.authenticate(token)).toBeNull();
       }
       expect(ctx.prisma.profile.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('authenticate: token của cổng A không dùng được khi vai trò thuộc cổng B (token giả mạo cổng / đổi vai) → null', async () => {
+      const ctx = setup();
+      const profile = seedProfile(ctx.prisma, { email: 'g@example.com', roleCode: 'tenant' });
+      for (const portal of ['admin', 'landlord', 'host'] as const) {
+        expect(await ctx.sessions.authenticate(ctx.sessionTokens.sign(profile.id, 'g@example.com', portal).accessToken)).toBeNull();
+      }
+
+      const token = ctx.sessionTokens.sign(profile.id, 'g@example.com', 'tenant').accessToken;
+      expect(await ctx.sessions.authenticate(token)).toMatchObject({ portal: 'tenant' });
+      ctx.prisma.role.rows.push({ id: 'role-landlord', code: 'landlord', name: 'landlord' });
+      ctx.prisma.profile.rows[0].roleId = 'role-landlord'; // Admin đổi vai tenant → landlord
+      ctx.sessions.invalidate(profile.id);
+      expect(await ctx.service.resolveSession(token)).toEqual({ user: null, clear: true });
+    });
+
+    it('authenticate: JWT cũ không có claim portal / portal lạ → null', async () => {
+      const ctx = setup();
+      const profile = seedProfile(ctx.prisma, { email: 'g@example.com', roleCode: 'tenant' });
+      const jwt = new JwtService({ secret: JWT_SECRET });
+      const legacy = jwt.sign({ sub: profile.id, email: 'g@example.com' }, { issuer: 'vinstay-backend', expiresIn: 60 });
+      const bogus = jwt.sign({ sub: profile.id, portal: 'superuser' }, { issuer: 'vinstay-backend', expiresIn: 60 });
+      for (const token of [legacy, bogus]) {
+        expect(ctx.sessionTokens.verify(token)).toBeNull();
+        expect(await ctx.sessions.authenticate(token)).toBeNull();
+      }
     });
 
     it('resolveSession: token hợp lệ → user (không có clear)', async () => {
@@ -476,21 +592,21 @@ describe('AuthService', () => {
       const ctx = setup();
       const profile = seedProfile(ctx.prisma, { email: 'h@example.com', roleCode: 'field_host', withFieldHost: true, hostRoles: ['INSPECTOR', 'SALE'] });
       ctx.prisma.fieldHost.rows[0].rfidCardNumber = 'SECRET-CARD-0001'; // cột cũ còn trong DB, không được lộ
-      const token = ctx.sessionTokens.sign(profile.id, 'h@example.com').accessToken;
+      const token = ctx.sessionTokens.sign(profile.id, 'h@example.com', 'host').accessToken;
 
       const { user } = await ctx.service.resolveSession(token);
       expect(user).toMatchObject({ isHostVerified: true, hostRoles: ['sale', 'inspector'] });
       expect(JSON.stringify(user)).not.toMatch(/SECRET-CARD|rfid|pendingHostId|needsRfid/i);
 
       const tenant = seedProfile(ctx.prisma, { email: 't@example.com', roleCode: 'tenant' });
-      const t = await ctx.service.resolveSession(ctx.sessionTokens.sign(tenant.id, 't@example.com').accessToken);
+      const t = await ctx.service.resolveSession(ctx.sessionTokens.sign(tenant.id, 't@example.com', 'tenant').accessToken);
       expect(t.user).toMatchObject({ hostRoles: [] });
     });
 
     it('đổi vai Host → request kế tiếp đọc lại ngay sau invalidate (không đợi cache 30 giây)', async () => {
       const ctx = setup();
       const profile = seedProfile(ctx.prisma, { email: 'h@example.com', roleCode: 'field_host', withFieldHost: true, hostRoles: ['SALE'] });
-      const token = ctx.sessionTokens.sign(profile.id, 'h@example.com').accessToken;
+      const token = ctx.sessionTokens.sign(profile.id, 'h@example.com', 'host').accessToken;
       expect((await ctx.service.resolveSession(token)).user).toMatchObject({ hostRoles: ['sale'] });
 
       ctx.prisma.fieldHost.rows[0].roles = ['INSPECTOR'];

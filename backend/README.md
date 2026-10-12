@@ -259,7 +259,10 @@ Phiên là **cookie httpOnly** (`vs_access`, SameSite=Lax) do backend set — re
 **Không dùng Supabase Auth** (bảng `auth.users` không liên quan): email + mật khẩu kiểm tra ngay trong bảng `public.profiles`
 (`password_hash` = scrypt `scrypt$<salt>$<hash>`, NULL với tài khoản chỉ dùng Google; Prisma omit toàn cục nên cột này không
 bao giờ lộ ra response của module khác). Cả hai cách đăng nhập (mật khẩu, Google/Passport) đều phát JWT phiên do backend tự ký
-(HS256, `iss=vinstay-backend`, sống 7 ngày, không có refresh token — hết hạn thì đăng nhập lại). **Đăng ký không xác nhận email**:
+(HS256, `iss=vinstay-backend`, claim `sub`/`email`/`portal`, không có refresh token — hết hạn thì đăng nhập lại). Thời gian sống theo cổng:
+`SESSION_TTL_SECONDS` (mặc định 7 ngày) cho tenant/landlord/host, `SESSION_TTL_ADMIN_SECONDS` (mặc định 8 giờ) cho admin = Max-Age cookie.
+Mỗi request so claim `portal` với cổng của vai trò hiện tại trong DB: lệch (token cũ không có `portal`, token cổng A dùng cho tài khoản
+cổng B, Admin đổi vai) ⇒ phiên vô hiệu, `GET /auth/session` trả `user: null` và xoá cookie. **Đăng ký không xác nhận email**:
 tạo Profile rồi đăng nhập luôn; email đã có tài khoản (kể cả Google) → 409, không bao giờ đặt mật khẩu lên tài khoản có sẵn.
 API client có thể dùng `Authorization: Bearer <token>`. Vai trò đọc từ DB (`profiles.role`). Supabase chỉ còn dùng cho
 Postgres + Storage ảnh hồ sơ ký gửi.
@@ -268,7 +271,7 @@ Hai cổng đăng nhập trên UI: `/login` (Khách thuê / Chủ nhà) và `/ad
 
 | Endpoint | Mô tả |
 |---|---|
-| `POST /auth/login` `{email,password,portal}` | portal = tenant / landlord / host / admin |
+| `POST /auth/login` `{email,password,portal}` | portal = tenant / landlord / host / admin. Sai email/mật khẩu (kể cả tài khoản chỉ có Google) ⇒ 401 `invalid_credentials` (cùng message, cùng độ trễ). Sai cổng ⇒ 403 `wrong_portal`; bị khoá ⇒ 403 `account_suspended`. Giới hạn 10 lần/phút/IP ⇒ 429 `rate_limited`; sai `LOGIN_MAX_FAILURES` (5) lần cùng email trong `LOGIN_LOCKOUT_SECONDS` (15 phút) ⇒ 429 `login_locked` `{errors:{retryAfterSeconds}}` đến hết thời gian khoá |
 | `POST /auth/signup` | tenant / landlord — đăng ký xong đăng nhập luôn, không xác nhận email. Host/Admin ⇒ 403 `signup_not_allowed` |
 | `GET /auth/google?portal=` → `GET /auth/google/callback` | Google OAuth (Passport; `state` = `portal.nonce`, nonce nằm trong cookie httpOnly `vs_oauth`; luôn hiện màn chọn tài khoản; nhận `login_hint=<email>` để chọn sẵn tài khoản; thành công thì set cookie không-httpOnly `vs_google_hint` {name,email} để FE hiện "Tiếp tục bằng tên …") |
 | `GET /auth/session`, `POST /auth/logout` | phiên hiện tại, đăng xuất (xoá cookie) |

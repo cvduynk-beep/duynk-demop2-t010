@@ -13,6 +13,7 @@ import { SupabaseAuthGuard } from '../../common/guards/supabase-auth.guard';
 import { TransformInterceptor } from '../../common/interceptors/transform.interceptor';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthModule } from '../auth/auth.module';
+import { portalForRole } from '../auth/auth.constants';
 import { SessionTokenService } from '../auth/session/session-token.service';
 import { hashPassword } from '../auth/password-hasher';
 import { createFakePrisma, seedProfile } from '../auth/testing/fake-prisma';
@@ -165,11 +166,13 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
   });
 
   const WRONG_ROLES = ['tenant', 'landlord', 'field_host', 'area_lead', 'compliance_officer'];
-  it.each(WRONG_ROLES)('vai %s ⇒ 403 ở mọi route admin', async (role) => {
-    const token = moduleRef.get(SessionTokenService).sign(`00000000-0000-4000-8000-00000000000${role.length}`, `${role}@example.com`).accessToken;
+  // Vai không thuộc cổng nào (area_lead, compliance_officer) không có phiên hợp lệ (claim portal không khớp) ⇒ 401.
+  it.each(WRONG_ROLES)('vai %s ⇒ 403 ở mọi route admin (vai không có cổng ⇒ 401)', async (role) => {
+    const portal = portalForRole(role);
+    const token = moduleRef.get(SessionTokenService).sign(`00000000-0000-4000-8000-00000000000${role.length}`, `${role}@example.com`, portal ?? 'tenant').accessToken;
     for (const r of ADMIN_ROUTES) {
       const res = await call(request(app.getHttpServer()) as any, r, token);
-      expect([r.method, r.path, res.status]).toEqual([r.method, r.path, 403]);
+      expect([r.method, r.path, res.status]).toEqual([r.method, r.path, portal ? 403 : 401]);
     }
   });
 

@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { GoogleAuthGuard, GoogleCallbackGuard } from './google/google-auth.guard';
 import { GoogleStrategy } from './google/google.strategy';
+import { LoginLockoutService } from './login-lockout.service';
 import { ActionTokenService } from './otp/action-token.service';
 import { OtpController } from './otp/otp.controller';
 import { OtpService } from './otp/otp.service';
@@ -46,6 +47,7 @@ import { SESSION_TOKEN_ISSUER, SessionTokenService } from './session/session-tok
     GoogleAuthGuard,
     GoogleCallbackGuard,
     AuthAuditService,
+    LoginLockoutService,
     PhoneService,
     OtpService,
     ActionTokenService,
