@@ -1,4 +1,4 @@
-import { api, type ApiResponse } from "@/lib/apiClient";
+import { api, apiErrorText, type ApiResponse } from "@/lib/apiClient";
 import type {
   CreateBookingDto,
   DepositTermsDoc,
@@ -12,6 +12,7 @@ import type {
 
 export const ERROR_MESSAGES: Record<string, string> = {
   invalid_request: "Thông tin gửi lên không hợp lệ.",
+  units_upstream: "Không tải được danh sách căn từ máy chủ. Vui lòng thử lại.",
   unauthorized: "Vui lòng đăng nhập để tiếp tục.",
   forbidden: "Tài khoản không phải Khách thuê.",
   otp_required: "Vui lòng xác thực số điện thoại qua OTP.",
@@ -59,7 +60,13 @@ export function errorText(
   if (code && ERROR_MESSAGES[code]) {
     return ERROR_MESSAGES[code];
   }
-  return codeOrRes.message || fallback;
+  return apiErrorText(codeOrRes, fallback);
+}
+
+/** Danh mục kèm nguồn: `mock` CHỈ xuất hiện khi server bật fallback có cờ (không bao giờ ở production). */
+export interface CatalogPayload {
+  units: TenantUnit[];
+  source: "api" | "mock";
 }
 
 export interface UnitFilter {
@@ -71,14 +78,15 @@ export interface UnitFilter {
 
 export const tenantApi = {
   // A1: Catalog công khai
-  units: (filter?: UnitFilter): Promise<ApiResponse<TenantUnit[]>> => {
+  // Đi qua route Next `/api/catalog/units` (data-source server, cờ fallback chỉ đọc ở server) — không gọi thẳng backend.
+  units: (filter?: UnitFilter): Promise<ApiResponse<CatalogPayload>> => {
     const params = new URLSearchParams();
     if (filter?.zone) params.set("zone", filter.zone);
     if (filter?.layout) params.set("layout", filter.layout);
     if (filter?.maxRent) params.set("maxRent", String(filter.maxRent));
     if (filter?.q) params.set("q", filter.q);
     const qs = params.toString();
-    return api.get<TenantUnit[]>(`/properties/units${qs ? `?${qs}` : ""}`);
+    return api.get<CatalogPayload>(`/api/catalog/units${qs ? `?${qs}` : ""}`);
   },
 
   // A2: Chi tiết căn hộ theo mã code
