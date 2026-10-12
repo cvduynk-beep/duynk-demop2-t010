@@ -27,9 +27,11 @@ export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   at: string;
-  /** Tin trả lời có kết quả tìm căn (mã căn). */
+  /** Tin trả lời có kết quả tìm căn: mã căn theo đúng thứ hạng backend trả (không sắp lại ở FE). */
   resultIds?: string[];
   criteria?: CriteriaState;
+  /** Backend trả lời ở chế độ rút gọn (LLM lỗi/không cấu hình, hoặc matchmaker lỗi). */
+  degraded?: boolean;
 }
 
 export interface ChatState {
@@ -37,4 +39,6 @@ export interface ChatState {
   criteria: CriteriaState;
   /** Đã có ít nhất một lần tìm căn → giao diện chuyển sang chế độ kết quả. Danh sách căn luôn tính lại từ `criteria`. */
   searched: boolean;
+  /** Id hội thoại do `POST /chat` cấp ở lượt đầu. */
+  conversationId?: string;
 }

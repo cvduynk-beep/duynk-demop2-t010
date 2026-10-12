@@ -7,7 +7,7 @@ import type { ChatMessage, ChatState, CriteriaState } from "./types";
 /**
  * Lịch sử chat + tiêu chí tìm căn của RIÊNG người đang xem (tiện ích theo trình duyệt, không phải dữ liệu nghiệp vụ):
  * lưu localStorage, mất cũng không sao. Danh sách căn luôn lấy lại từ API theo `criteria`. Hạn mức chat của khách vãng
- * lai do server đếm (route /api/chat), không đếm ở đây.
+ * lai do backend đếm (`POST /api/v1/chat`, theo IP), không đếm ở đây.
  */
 const KEY = "vinstay.chat.v1";
 const MAX_MESSAGES = 60;
@@ -29,7 +29,12 @@ function read(): ChatState {
     const parsed = raw ? (JSON.parse(raw) as Partial<ChatState>) : null;
     snapshot =
       parsed && Array.isArray(parsed.messages) && parsed.criteria
-        ? { messages: parsed.messages.slice(-MAX_MESSAGES), criteria: parsed.criteria, searched: Boolean(parsed.searched) }
+        ? {
+            messages: parsed.messages.slice(-MAX_MESSAGES),
+            criteria: parsed.criteria,
+            searched: Boolean(parsed.searched),
+            conversationId: typeof parsed.conversationId === "string" ? parsed.conversationId : undefined,
+          }
         : emptyChat();
   } catch {
     snapshot = emptyChat();
@@ -74,6 +79,11 @@ export function chatSetSearch(criteria: CriteriaState) {
 
 export function chatSetCriteria(criteria: CriteriaState) {
   write({ ...read(), criteria });
+}
+
+export function chatSetConversation(conversationId: string) {
+  const cur = read();
+  if (cur.conversationId !== conversationId) write({ ...cur, conversationId });
 }
 
 export function chatReset() {

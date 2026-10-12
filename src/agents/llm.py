@@ -126,7 +126,9 @@ def generate_response_with_gemini(
         "3. Minh bạch 100% All-in Cost: Giải thích rõ giá thuê gốc và tổng chi phí đã gồm (Phí QL BQL 9.5k/m2, Xe máy 150k, Xe con 1.25M, Điện nước).\n"
         "4. Kêu gọi hành động rõ ràng: Khách có thể 'Đặt lịch xem phòng' (Host đón tại sảnh bằng thẻ cư dân trong 60 giây) hoặc 'Quét VietQR cọc 2.000.000đ giữ chỗ 48h'.\n"
         "5. Nếu có căn đạt nhãn 'Căn hời phân khu', nhấn mạnh số tiền tiết kiệm được hàng tháng so với thị trường.\n"
-        "6. Giới hạn trả lời súc tích dưới 80 từ, dùng emoji tinh tế."
+        "6. Giới hạn trả lời súc tích dưới 80 từ, dùng emoji tinh tế.\n"
+        "7. Danh sách matched_units ĐÃ được AI Matchmaker của hệ thống xếp hạng: giữ nguyên thứ tự, chỉ nhắc đúng các mã căn có trong đó, "
+        "không thêm/bịa căn, chép đúng mọi con số."
     )
 
     data_payload = {

@@ -1,4 +1,7 @@
-import { FURNISHING_LABEL, ITEM_LABEL, hostForUnit, type Unit } from "@/lib/mock/units";
+import { FURNISHING_LABEL, ITEM_LABEL, type Unit } from "@/lib/units";
+import { allInCost, DEFAULT_HOUSEHOLD, RATES } from "@/lib/pricing/cost";
+import { api } from "@/lib/apiClient";
+import type { ChatResponse } from "@/lib/chat/api";
 import { getUnitLivingInsights } from "./livingIntelligence";
 import { vnd } from "@/lib/format";
 
@@ -70,11 +73,9 @@ export function answerUnitQuestion(unit: Unit, question: string): ConciergeAnswe
   }
 
   const insights = getUnitLivingInsights(unit);
-  const host = hostForUnit(unit);
-
-  // Ước tính tiền điện theo diện tích & layout
-  const estElecMin = unit.areaM2 <= 35 ? 350000 : unit.areaM2 <= 55 ? 450000 : 700000;
-  const estElecMax = unit.areaM2 <= 35 ? 600000 : unit.areaM2 <= 55 ? 750000 : 1100000;
+  // Không bịa tên Host: Host được điều phối khi khách đặt lịch.
+  const host = { name: "Field Host nội khu" };
+  const cost = allInCost(unit, DEFAULT_HOUSEHOLD);
 
   // 2. Tiền điện / Tiền nước EVN / Chi phí điện nước (Giải quyết triệt để lỗi "tiền điên bao nhiu")
   if (
@@ -86,7 +87,9 @@ export function answerUnitQuestion(unit: Unit, question: string): ConciergeAnswe
     q.includes("hóa đơn điện")
   ) {
     return {
-      text: `⚡ Chi phí điện nước tại toà ${unit.building} tính theo biểu giá bậc thang nhà nước của EVN, nộp trực tiếp qua app EVN Hà Nội hoặc VinID:\n• Tiền điện: Dao động khoảng từ ${vnd(estElecMin)} – ${vnd(estElecMax)} đ/tháng cho căn ${unit.layoutLabel} (mùa hè cao điểm bật điều hòa nhiều có thể dao động từ ${vnd(estElecMax)} – ${vnd(estElecMax + 350000)} đ/tháng tùy nhu cầu sử dụng thực tế).\n• Tiền nước sạch: Khoảng từ 60.000đ – 120.000đ/tháng tính theo chỉ số đồng hồ nước BQL.\n*(Lưu ý: Chủ nhà và Field Host sẽ cùng bạn chốt chỉ số công tơ bằng ảnh chụp timestamp lúc nhận nhà, đảm bảo 0% nợ đọng từ khách thuê trước).*`,
+      text: `⚡ Tiền điện nước tại toà ${unit.building} tính theo biểu giá bậc thang EVN, nộp trực tiếp qua app EVN Hà Nội hoặc VinID.
+• Trong All-in Cost, hệ thống ước tính điện nước theo định mức ${vnd(RATES.utilityPerPerson)}đ/người/tháng; hoá đơn thực tế phụ thuộc mức dùng điều hoà.
+*(Chủ nhà và Field Host cùng bạn chốt chỉ số công tơ bằng ảnh có timestamp lúc nhận nhà, đảm bảo không nợ đọng từ khách thuê trước).*`,
       suggestBooking: true,
     };
   }
@@ -163,7 +166,10 @@ export function answerUnitQuestion(unit: Unit, question: string): ConciergeAnswe
     q.includes("vinfast")
   ) {
     return {
-      text: `🚗 Phương án đỗ & gửi xe tại toà ${unit.building}:\n• Ô tô / Xe hơi: Dao động khoảng từ 1.000.000đ – 1.250.000đ/tháng/xe (tùy vị trí đỗ hầm toà nhà hoặc nhà xe nổi thông minh 5 tầng kế bên có xe điện trung chuyển miễn phí).\n• Xe máy / Xe điện: Dao động khoảng từ 60.000đ – 90.000đ/tháng/xe (có trạm sạc xe điện VinFast).\n*(Lưu ý: Mức phí và tình trạng lốt đỗ thực tế do BQL Vinhomes niêm yết theo quy định toà nhà từng thời điểm. Field Host sẽ hỗ trợ bạn làm thủ tục đăng ký thẻ xe trực tiếp tại quầy lễ tân lúc nhận phòng!)*`,
+      text: `🚗 Phương án đỗ & gửi xe tại toà ${unit.building}:
+• Ô tô / Xe hơi: ${vnd(RATES.car)}đ/tháng/xe theo biểu phí hệ thống (đỗ hầm toà nhà hoặc nhà xe nổi).
+• Xe máy / Xe điện: ${vnd(RATES.motorbike)}đ/tháng/xe.
+*(Mức phí và chỗ đỗ thực tế do BQL Vinhomes niêm yết từng thời điểm. Field Host hỗ trợ bạn đăng ký thẻ xe lúc nhận phòng.)*`,
       suggestBooking: true,
     };
   }
@@ -272,12 +278,13 @@ export function answerUnitQuestion(unit: Unit, question: string): ConciergeAnswe
     q.includes("all in") ||
     q.includes("trọn gói")
   ) {
-    const mgmtMin = Math.round(unit.areaM2 * 8000);
-    const mgmtMax = Math.round(unit.areaM2 * 16000);
-    const totalMin = unit.rent + mgmtMin + 60000 + estElecMin;
-    const totalMax = unit.rent + mgmtMax + 1250000 + estElecMax;
     return {
-      text: `💰 Khoảng chi phí ước tính hàng tháng căn ${unit.code || unit.building}:\n• Tiền thuê nhà: ${vnd(unit.rent)} đ/tháng (cố định theo Hợp đồng ký trực tiếp với Chủ nhà).\n• Phí quản lý & dịch vụ BQL toà ${unit.building}: Dao động khoảng từ 8.000đ – 16.000đ/m²/tháng (căn ${unit.areaM2}m² ước tính khoảng ${vnd(mgmtMin)} – ${vnd(mgmtMax)} đ/tháng tùy phân khu).\n• Phí gửi xe: Xe máy khoảng 60.000đ – 90.000đ/tháng · Ô tô khoảng 1.000.000đ – 1.250.000đ/tháng.\n• Điện nước EVN: Ước tính khoảng 450.000đ – 850.000đ/tháng.\n👉 Tổng chi phí All-in dự kiến: Dao động trong khoảng từ ${vnd(totalMin)} – ${vnd(totalMax)} đ/tháng tùy theo phương tiện gửi và mức dùng điều hòa của bạn!`,
+      text: `💰 Chi phí ước tính hàng tháng căn ${unit.code || unit.building} (1 người, 1 xe máy):
+• Tiền thuê nhà: ${vnd(cost.rent)} đ/tháng.
+• Phí quản lý BQL: ${vnd(cost.mgmt)} đ/tháng.
+• Phí gửi xe: ${vnd(cost.parking)} đ/tháng (ô tô ${vnd(RATES.car)}đ/xe).
+• Điện nước ước tính: ${vnd(cost.utility)} đ/tháng (${vnd(RATES.utilityPerPerson)}đ/người).
+👉 All-in dự kiến: ${vnd(cost.total)} đ/tháng — thay đổi theo số người và số xe bạn khai báo.`,
       suggestBooking: true,
     };
   }
@@ -304,7 +311,7 @@ export function answerUnitQuestion(unit: Unit, question: string): ConciergeAnswe
   ) {
     const itemsText = unit.items.map((i) => ITEM_LABEL[i]).join(", ");
     return {
-      text: `🛋️ Căn hộ bàn giao ${FURNISHING_LABEL[unit.furnishing]} (độ mới kiểm định ~${unit.condition || 90}%).\nĐã trang bị sẵn: ${itemsText}.\nĐầy đủ thiết bị thiết yếu, bạn chỉ cần xách vali cá nhân vào ở ngay!`,
+      text: `🛋️ Căn hộ bàn giao ${FURNISHING_LABEL[unit.furnishing]}.\nĐã trang bị sẵn: ${itemsText}.\nĐầy đủ thiết bị thiết yếu, bạn chỉ cần xách vali cá nhân vào ở ngay!`,
       suggestBooking: true,
     };
   }
@@ -395,16 +402,13 @@ export function answerUnitQuestion(unit: Unit, question: string): ConciergeAnswe
     };
   }
 
-  // Fallback có ngữ cảnh đầy đủ
-  return {
-    text: `Căn hộ ${unit.layoutLabel} toà ${unit.building} (tầng ${unit.floor}, ${unit.areaM2}m²) có giá thuê ${vnd(unit.rent)} đ/tháng. Vị trí rất tiện di chuyển tới ĐH VinUni (~${insights.commute.vinUni.distanceM}m) và trạm VinBus chân sảnh. Bạn có muốn đặt lịch để Field Host dẫn xem phòng thực tế không?`,
-    suggestBooking: true,
-  };
+  // Không khớp câu nào về dữ liệu căn ⇒ để lớp 3 (backend) trả lời.
+  return null;
 }
 
 /**
- * LỚP 3: GỌI API AI TRỰC TUYẾN (/api/concierge)
- * Kết nối với AI Router để xử lý ngôn ngữ tự nhiên thông minh, đồng thời fallback về answerUnitQuestion nếu offline.
+ * LỚP 3: Câu không có trong dữ liệu căn ⇒ hỏi backend `POST /api/v1/chat` (FAQ quy chế từ tri thức đã kiểm + fee_configs,
+ * hoặc tìm căn bằng AI Matchmaker). Không còn route Next gọi thẳng LLM bằng dữ liệu mock.
  */
 export async function askVinnyConcierge(unit: Unit, question: string): Promise<ConciergeAnswer> {
   const trimmed = question.trim();
@@ -412,48 +416,17 @@ export async function askVinnyConcierge(unit: Unit, question: string): Promise<C
     return { text: OUT_OF_SCOPE_RESPONSE, suggestBooking: false };
   }
 
-  try {
-    const res = await fetch("/api/concierge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        question: trimmed,
-        unitId: unit.id,
-        unitContext: {
-          code: unit.code,
-          building: unit.building,
-          floor: unit.floor,
-          door: unit.door,
-          layout: unit.layout,
-          layoutLabel: unit.layoutLabel,
-          areaM2: unit.areaM2,
-          rent: unit.rent,
-          furnishing: unit.furnishing,
-          direction: unit.direction,
-          view: unit.view,
-          petFriendly: unit.petFriendly,
-          items: unit.items,
-        },
-      }),
-      signal: AbortSignal.timeout(4500),
-    });
+  // Dữ liệu của chính căn đang xem (0đ, 0ms).
+  const local = answerUnitQuestion(unit, trimmed);
+  if (local) return local;
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.text) {
-        return {
-          text: data.text,
-          suggestBooking: data.suggestBooking ?? true,
-        };
-      }
-    }
-  } catch {
-    // API timeout hoặc lỗi mạng -> chuyển sang local semantic engine
+  const res = await api.post<ChatResponse>("/chat", { message: trimmed.slice(0, 250) });
+  if (res.ok && res.data?.reply && (res.data.kind === "faq" || res.data.kind === "refusal")) {
+    return { text: res.data.reply, suggestBooking: res.data.kind === "faq" };
   }
-
-  // Semantic Local Engine phản hồi lập tức
-  return answerUnitQuestion(unit, trimmed) || {
-    text: `Căn toà ${unit.building} đang sẵn sàng đón bạn xem thực tế. Bạn có muốn đặt lịch cùng Host ngay không?`,
+  const insights = getUnitLivingInsights(unit);
+  return {
+    text: `Căn hộ ${unit.layoutLabel} toà ${unit.building} (tầng ${unit.floor}, ${unit.areaM2}m²) có giá thuê ${vnd(unit.rent)} đ/tháng, cách ĐH VinUni khoảng ${insights.commute.vinUni.distanceM}m. Bạn có muốn đặt lịch để Field Host dẫn xem phòng thực tế không?`,
     suggestBooking: true,
   };
 }

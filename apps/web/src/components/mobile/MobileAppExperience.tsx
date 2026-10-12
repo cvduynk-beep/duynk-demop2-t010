@@ -21,62 +21,58 @@ import { Composer } from "@/components/chat/Composer";
 import { UnitCard } from "@/components/unit/UnitCard";
 import { MobileBottomNav } from "@/components/pwa/MobileBottomNav";
 import { VINNY_GREETINGS } from "@/components/mascot/ButlerMascot";
-import { useMock } from "@/lib/mock/store";
 import { useSession, signOut } from "@/lib/auth/client";
-import { chatAppend, chatSetCriteria, chatSetSearch, countGuestMessage } from "@/lib/mock/actions";
-import { interpret } from "@/lib/mock/matchmaker";
-import { unitStatus } from "@/lib/mock/selectors";
-import { UNITS } from "@/lib/mock/units";
+import { chatApi, chatErrorText } from "@/lib/chat/api";
+import { chatAppend, chatSetConversation, chatSetCriteria, chatSetSearch, useChat } from "@/lib/chat/store";
+import type { CriteriaState } from "@/lib/chat/types";
 import { allInCost } from "@/lib/pricing/cost";
+import { useCatalog } from "@/lib/tenant/catalog";
+import { useFavorites } from "@/lib/tenant/favorites";
 import styles from "./MobileAppExperience.module.css";
 
 type MobileTab = "explore" | "chat" | "booking" | "saved" | "account";
 
 export function MobileAppExperience({ initialTab = "explore" }: { initialTab?: MobileTab }) {
   const [tab, setTab] = useState<MobileTab>(initialTab);
-  const state = useMock();
-  const { chat } = state;
+  const chat = useChat();
   const { user } = useSession();
   const [thinking, setThinking] = useState<{ steps: string[] } | null>(null);
   const [freshId, setFreshId] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
   // Câu chào ngẫu nhiên cho lần tải trang (chỉ ở trình duyệt, không lệch markup khi hydrate).
   const greetingIdx = useClientValue(() => clientRandomIndex(VINNY_GREETINGS.length), 0);
 
-  const statusOf = (u: (typeof UNITS)[number]) => unitStatus(state, u);
-  const openCount = UNITS.filter((u) => unitStatus(state, u) === "available").length;
+  const { available } = useCatalog();
+  const openCount = available.length;
+  const { units: savedUnits } = useFavorites();
 
-  const savedUnits = UNITS.filter((u) => state.favorites.includes(u.id));
-
-  // Logic chat tương tác
-  const onSend = (text: string) => {
+  // Cùng một endpoint với trang chủ: backend phân tích câu, AI Matchmaker xếp hạng, Gemini chỉ giải thích.
+  const onSend = async (text: string) => {
+    if (thinking || locked) return;
+    const base = chat.criteria;
     chatAppend({ role: "user", text });
-    countGuestMessage();
-
-    const result = interpret(text, chat.criteria, chat.searched, statusOf);
-    const isSearch = result.kind === "search";
-
-    setThinking({
-      steps: isSearch
-        ? [`Quét ${openCount} căn đang mở`, "Lọc theo ngân sách All-in", "Xếp hạng mức tiết kiệm"]
-        : ["Đang tìm câu trả lời"],
-    });
-
-    setTimeout(() => {
-      if (result.kind === "search") {
-        chatSetSearch(result.criteria);
+    setThinking({ steps: [`Quét ${openCount} căn đang mở`, "AI Matchmaker lọc theo All-in và xếp hạng", "Trợ lý giải thích lựa chọn"] });
+    try {
+      const res = await chatApi.send(text, base, chat.searched || chat.messages.some((m) => m.criteria), chat.conversationId);
+      if (!res.ok) {
+        if (res.status === 401 || res.code === "LOGIN_REQUIRED") setLocked(true);
+        setFreshId(chatAppend({ role: "assistant", text: chatErrorText(res) }));
+        return;
+      }
+      const data = res.data;
+      chatSetConversation(data.conversationId);
+      if (data.kind === "search" && data.criteria) {
+        const criteria: CriteriaState = { ...base, ...data.criteria };
+        chatSetSearch(criteria);
         setFreshId(
-          chatAppend({
-            role: "assistant",
-            text: result.reply,
-            resultIds: result.results.slice(0, 3).map((r) => r.unit.id),
-            criteria: result.criteria,
-          }),
+          chatAppend({ role: "assistant", text: data.reply, resultIds: data.recommendations.map((r) => r.id), criteria, degraded: data.degraded }),
         );
       } else {
-        setFreshId(chatAppend({ role: "assistant", text: result.reply }));
+        setFreshId(chatAppend({ role: "assistant", text: data.reply, degraded: data.degraded }));
       }
+    } finally {
       setThinking(null);
-    }, 1000);
+    }
   };
 
   return (
@@ -141,7 +137,7 @@ export function MobileAppExperience({ initialTab = "explore" }: { initialTab?: M
                 onCriteria={(c) => chatSetCriteria(c)}
                 onSend={onSend}
                 busy={!!thinking}
-                locked={false}
+                locked={locked && !user}
                 guestNotice={false}
               />
             </div>

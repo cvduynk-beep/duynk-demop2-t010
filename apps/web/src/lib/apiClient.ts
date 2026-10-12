@@ -175,17 +175,6 @@ export const propertyApi = {
   },
 };
 
-export const matchmakerApi = {
-  recommend: (body: {
-    maxAllInBudget: number;
-    preferredLayout?: string;
-    motorbikes?: number;
-    cars?: number;
-    occupants?: number;
-    prompt?: string;
-  }) => api.post<{ scanSummary: unknown; topRecommendations: unknown[] }>("/matchmaker/recommend", body),
-};
-
 export const bookingApi = {
   requestOtp: (dto: { phone: string; fullName?: string }) =>
     api.post<{ message: string; phone: string; expiresInSeconds: number; testHint?: string }>("/bookings/request-otp", dto),

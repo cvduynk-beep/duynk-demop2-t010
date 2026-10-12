@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -5,12 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import router
 from src.config import get_settings
+from src.services.core_api import probe
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    settings = get_settings()
+    settings = get_settings()  # CORE_API_URL sai định dạng ⇒ lỗi ngay tại đây, không khởi động
     print(f"🚀 Starting {settings.app_name} at Vinhomes Ocean Park in {settings.app_env} mode")
+    if settings.app_env != "test" and not await probe():
+        logger.warning(
+            "Không kết nối được Core API tại %s — tìm căn sẽ trả lời 'chưa tải được danh sách'.", settings.core_api_url
+        )
     yield
     print("🛑 Shutting down VinStay AI Agent...")
 

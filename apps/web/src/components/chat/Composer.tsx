@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { Lock, LogIn, Send } from "lucide-react";
-import { SAMPLE_PROMPTS, sentenceFromCriteria, hasCriteria } from "@/lib/mock/matchmaker";
-import type { CriteriaState } from "@/lib/mock/types";
+import { CHAT_MESSAGE_MAX } from "@/lib/chat/api";
+import type { CriteriaState } from "@/lib/chat/types";
+import { SAMPLE_PROMPTS, sentenceFromCriteria, hasCriteria } from "@/lib/tenant/matchmaker";
 import { FilterTray } from "./FilterTray";
 import styles from "./Composer.module.css";
 
@@ -36,7 +37,7 @@ export function Composer({ criteria, onCriteria, onSend, onTyping, busy, locked,
 
   const submit = (value?: string) => {
     const rawVal = value ?? area.current?.value ?? text;
-    const body = (rawVal ?? "").trim() || (filtered ? sentenceFromCriteria(criteria) : "");
+    const body = ((rawVal ?? "").trim() || (filtered ? sentenceFromCriteria(criteria) : "")).slice(0, CHAT_MESSAGE_MAX);
     if (!body || busy || locked) return;
     onTyping?.(false);
     onSend(body);
@@ -54,7 +55,7 @@ export function Composer({ criteria, onCriteria, onSend, onTyping, busy, locked,
           <Lock size={18} />
         </span>
         <div>
-          <strong>Bạn đã dùng 15 câu tư vấn miễn phí</strong>
+          <strong>Bạn đã dùng hết lượt tư vấn miễn phí</strong>
           <p className="muted small">
             Đăng nhập bằng Zalo OTP hoặc SĐT để tiếp tục trò chuyện không giới hạn với Quản gia Vinny và lưu các căn bạn ưng ý. Bạn vẫn xem chi tiết và đặt lịch xem phòng bình thường!
           </p>
@@ -85,7 +86,7 @@ export function Composer({ criteria, onCriteria, onSend, onTyping, busy, locked,
           ref={area}
           className={styles.area}
           rows={1}
-          maxLength={250}
+          maxLength={CHAT_MESSAGE_MAX}
           placeholder={variant === "hero" ? "Ví dụ: Studio dưới 8 triệu, có điều hòa, gần VinUni…" : "Hỏi tiếp hoặc chỉnh yêu cầu…"}
           value={text}
           disabled={busy}
@@ -122,7 +123,7 @@ export function Composer({ criteria, onCriteria, onSend, onTyping, busy, locked,
 
         {charLength >= 150 && (
           <span className={`${styles.charCounter} ${charLength >= 230 ? styles.charCounterWarning : ""}`}>
-            {charLength}/250
+            {charLength}/{CHAT_MESSAGE_MAX}
           </span>
         )}
 
@@ -163,7 +164,7 @@ export function Composer({ criteria, onCriteria, onSend, onTyping, busy, locked,
           ))}
         </div>
       )}
-      {guestNotice && <p className={`muted xs ${styles.guest}`}>✨ <strong>VinStay AI Copilot (Powered by Gemini 2.0 Flash)</strong> · Tư vấn căn & giải đáp BQL 24/7 · Không tin ảo, không phí ẩn.</p>}
+      {guestNotice && <p className={`muted xs ${styles.guest}`}>✨ <strong>VinStay AI Copilot</strong> · Tư vấn căn & giải đáp BQL 24/7 · Không tin ảo, không phí ẩn.</p>}
     </div>
   );
 }

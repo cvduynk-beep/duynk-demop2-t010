@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Sparkles } from "lucide-react";
 import { Facade } from "@/components/brand/Facade";
 import { fmtTime } from "@/lib/format";
-import type { ChatMessage } from "@/lib/mock/types";
+import type { ChatMessage } from "@/lib/chat/types";
 import { InlineChatUnits } from "./InlineChatUnits";
 import styles from "./Messages.module.css";
 
@@ -126,6 +126,9 @@ export function Messages({ greeting, messages, thinking, freshId, onFreshDone, o
                 )}
               </div>
 
+              {!mine && m.degraded && !fresh && (
+                <span className={`muted xs ${styles.degraded}`}>Trả lời rút gọn từ hệ thống — trợ lý AI tạm thời không khả dụng.</span>
+              )}
               {!mine && m.resultIds && m.resultIds.length > 0 && !fresh && !hideInlineUnits && (
                 <InlineChatUnits
                   unitIds={m.resultIds}
