@@ -89,7 +89,7 @@ export function SiteNav({ variant = "solid" }: { variant?: "solid" | "clear" }) 
   return (
     <header className={`${styles.nav} ${variant === "clear" ? styles.clear : ""} no-print`}>
       <div className={`wrap ${styles.inner}`}>
-        <Logo sub="Vinhomes Ocean Park 1" />
+        <Logo />
 
         <nav className={styles.links} aria-label="Điều hướng chính">
           {LINKS.map((l) => (

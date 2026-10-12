@@ -1,25 +1,19 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   Bell,
   ChevronDown,
   ChevronUp,
-  Compass,
   Heart,
-  LocateFixed,
-  Minus,
-  Plus,
-  RotateCcw,
   Search,
-  Sparkles,
   User,
-  Zap,
 } from "lucide-react";
 import { allInCost } from "@/lib/mock/cost";
-import { vnd, vndShort } from "@/lib/mock/format";
-import { hostForUnit, unitAddress, unitPhoto, zoneById, type Unit, type ZoneId } from "@/lib/mock/units";
+import { vnd } from "@/lib/mock/format";
+import { hostForUnit, unitAddress, unitPhoto, zoneById, type ZoneId } from "@/lib/mock/units";
 import { OceanParkInteractiveMap } from "@/components/map/OceanParkInteractiveMap";
 import { useUnits } from "@/lib/property/useUnits";
 import { toggleFavorite } from "@/lib/mock/actions";
@@ -43,7 +37,6 @@ export function LuxeExplorer() {
   // Xử lý kéo vuốt Bottom Sheet bằng cảm ứng và chuột
   const startYRef = useRef<number | null>(null);
   const currentDeltaYRef = useRef<number>(0);
-  const [isDragging, setIsDragging] = useState(false);
 
   // Lọc danh sách căn hộ theo các tiêu chí tìm kiếm
   const filteredUnits = useMemo(() => {
@@ -76,7 +69,7 @@ export function LuxeExplorer() {
 
       return true;
     });
-  }, [query, zoneFilter, bedFilter, priceFilter]);
+  }, [units, query, zoneFilter, bedFilter, priceFilter]);
 
   const handleToggleFav = (unitId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -87,7 +80,6 @@ export function LuxeExplorer() {
   const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
     const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
     startYRef.current = clientY;
-    setIsDragging(true);
   };
 
   const handleTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
@@ -101,7 +93,6 @@ export function LuxeExplorer() {
     const deltaY = currentDeltaYRef.current;
     startYRef.current = null;
     currentDeltaYRef.current = 0;
-    setIsDragging(false);
 
     // Vuốt lên > 40px
     if (deltaY < -40) {
@@ -228,7 +219,6 @@ export function LuxeExplorer() {
                 if (firstInZone) setActiveUnitId(firstInZone.id);
               }
             }}
-            totalUnits={filteredUnits.length}
             height="100%"
           />
         </section>
@@ -292,9 +282,11 @@ export function LuxeExplorer() {
                 >
                   {/* Cột trái: Ảnh căn hộ có số thứ tự */}
                   <div className={styles.photoWrap}>
-                    <img
+                    <Image
                       src={photoUrl}
                       alt={unitAddress(unit)}
+                      fill
+                      sizes="125px"
                       className={styles.cardPhoto}
                       loading={index < 2 ? "eager" : "lazy"}
                     />

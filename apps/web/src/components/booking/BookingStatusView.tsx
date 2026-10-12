@@ -8,7 +8,6 @@ import {
   Check,
   CheckCircle2,
   Clock,
-  DoorOpen,
   FileCheck,
   FileText,
   MapPin,

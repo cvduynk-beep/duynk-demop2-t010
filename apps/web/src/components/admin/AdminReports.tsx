@@ -4,9 +4,7 @@ import { useMemo, useState } from "react";
 import {
   ArrowDownToLine,
   Award,
-  BarChart3,
   BookOpen,
-  CheckCircle2,
   Clock,
   Download,
   Filter,
@@ -15,18 +13,14 @@ import {
   Info,
   Megaphone,
   Printer,
-  Search,
   Sparkles,
-  TrendingUp,
   UserCheck,
-  Users,
-  X,
   Zap,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/charts/StatTile";
-import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { DataTable } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { toast } from "@/components/ui/Toast";
 import { vnd, vndShort } from "@/lib/mock/format";
@@ -37,7 +31,6 @@ import {
   type AgentKpiMetric,
   type CampaignReportRow,
   type ClientType,
-  type HighValueProspect,
   type RawExportRow,
   type ReportFilter,
   type TimeRangeKey,

@@ -1,9 +1,7 @@
 "use client";
 
 import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
-import Link from "next/link";
 import { ArrowRight, BadgeCheck, CalendarClock, Plus, ReceiptText, Footprints, MapPin, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
-import { LogoMark } from "@/components/brand/Logo";
 import { matchmakerApi } from "@/lib/apiClient";
 import { chatAppend, chatReset, chatSetCriteria, chatSetSearch, countGuestMessage } from "@/lib/mock/actions";
 import { DEFAULT_HOUSEHOLD, isBargain } from "@/lib/mock/cost";
@@ -30,39 +28,6 @@ const TRUST = [
   { icon: CalendarClock, text: "Giữ căn qua VietQR" },
 ];
 
-const MASCOT_POSITIONS = [
-  "pos_top_center",
-  "pos_top_right",
-  "pos_side_right",
-  "pos_top_left",
-  "pos_side_left",
-] as const;
-
-type MascotPosition = (typeof MASCOT_POSITIONS)[number];
-
-const POSITION_SPEECHES: Record<MascotPosition, { speech: string; badge: string }> = {
-  pos_top_center: {
-    speech: "Đang quan sát toàn bộ rổ hàng Ocean Park 1 ✨",
-    badge: "Đỉnh trung tâm",
-  },
-  pos_top_right: {
-    speech: "Góc này ngắm biển hồ Crystal Lagoon đẹp lắm nè! 🌊",
-    badge: "Góc trên phải",
-  },
-  pos_side_right: {
-    speech: "Bạn thích căn ban công Đông Nam hay view thoáng mát? 🍃",
-    badge: "Sườn phải",
-  },
-  pos_top_left: {
-    speech: "Mình giữ sẵn thẻ thang máy cho bạn rồi nhé! 🔑",
-    badge: "Góc trên trái",
-  },
-  pos_side_left: {
-    speech: "Host nội khu sẵn sàng đón bạn trong 3 phút nha! 🏢",
-    badge: "Sườn trái",
-  },
-};
-
 /** Trang chủ khách thuê: ban đầu là hero + khung chat; khi bắt đầu tìm căn, chat thu về cột trái và mở màn kết quả. */
 /** URL yêu cầu mở thẳng danh mục căn (`?view=all`, `?catalog=1`, `?tab=results`). */
 function urlWantsResults(): boolean {
@@ -87,9 +52,6 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   }
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [mascotPos, setMascotPos] = useState<MascotPosition>("pos_top_center");
-  const [isCruising, setIsCruising] = useState(false);
-  const [mascotCustomSpeech, setMascotCustomSpeech] = useState<string | null>(null);
   const busy = useRef(false);
 
   const { units } = useUnits();
@@ -104,49 +66,6 @@ export function ChatExperience({ below }: { below: ReactNode }) {
     : isTyping
     ? "listening"
     : "idle";
-
-  // Thỉnh thoảng linh vật tự động di chuyển tuần tra quanh khung chat tổng
-  useEffect(() => {
-    if (isTyping || !!thinking) return;
-
-    const timer = setInterval(() => {
-      setMascotPos((prev) => {
-        const nextIdx = (MASCOT_POSITIONS.indexOf(prev) + 1) % MASCOT_POSITIONS.length;
-        const nextPos = MASCOT_POSITIONS[nextIdx];
-        setIsCruising(true);
-        setTimeout(() => setIsCruising(false), 1400);
-        return nextPos;
-      });
-    }, 12000); // Tự động di chuyển mỗi 12 giây
-
-    return () => clearInterval(timer);
-  }, [isTyping, thinking]);
-
-  const isSidePos = (p: MascotPosition) => p === "pos_side_left" || p === "pos_side_right";
-
-  // Khi đang gõ phím, đưa robot về phía trên để không che khuất nội dung
-  const handleTyping = (typing: boolean) => {
-    setIsTyping(typing);
-    if (typing && isSidePos(mascotPos)) {
-      setIsCruising(true);
-      setMascotPos("pos_top_center");
-      setTimeout(() => setIsCruising(false), 1400);
-    }
-  };
-
-  // Chuyển góc tuần tra khi người dùng chạm vào robot hoặc huy hiệu
-  const cycleMascotPosition = () => {
-    setMascotPos((prev) => {
-      const nextIdx = (MASCOT_POSITIONS.indexOf(prev) + 1) % MASCOT_POSITIONS.length;
-      // Đang gõ phím thì không đưa robot sang hai bên (che nội dung), giữ ở phía trên.
-      const nextPos = isTyping && isSidePos(MASCOT_POSITIONS[nextIdx]) ? "pos_top_center" : MASCOT_POSITIONS[nextIdx];
-      setIsCruising(true);
-      setTimeout(() => setIsCruising(false), 1400);
-      setMascotCustomSpeech(POSITION_SPEECHES[nextPos].speech);
-      setTimeout(() => setMascotCustomSpeech(null), 4000);
-      return nextPos;
-    });
-  };
 
   const GUEST_QUOTA = 15;
   const locked = role === null && (state.guestSent || 0) >= GUEST_QUOTA;
@@ -368,7 +287,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
                     criteria={chat.criteria}
                     onCriteria={onCriteria}
                     onSend={onSend}
-                    onTyping={handleTyping}
+                    onTyping={setIsTyping}
                     busy={!!thinking}
                     locked={locked}
                     guestNotice={false}
@@ -495,7 +414,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
             />
           </div>
           <div className={styles.railFoot}>
-            <Composer variant="rail" criteria={chat.criteria} onCriteria={onCriteria} onSend={onSend} onTyping={handleTyping} busy={!!thinking} locked={locked} guestNotice={false} />
+            <Composer variant="rail" criteria={chat.criteria} onCriteria={onCriteria} onSend={onSend} onTyping={setIsTyping} busy={!!thinking} locked={locked} guestNotice={false} />
           </div>
         </aside>
       )}

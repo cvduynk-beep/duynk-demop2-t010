@@ -1,4 +1,4 @@
-import type { LayoutKind, LockType, Unit, UnitStatus, ZoneId } from "@/lib/mock/units";
+import type { LayoutKind, LockType, Unit, UnitStatus } from "@/lib/mock/units";
 import { zoneOfBuilding } from "@/lib/mock/units";
 
 /**

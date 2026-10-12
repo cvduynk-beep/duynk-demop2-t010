@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, Clock3, Database, Timer } from "lucide-react";
+import { AlertTriangle, ArrowRight, ClipboardCheck, Clock3, Database, Timer } from "lucide-react";
 import { BarList } from "@/components/charts/BarList";
 import { Funnel } from "@/components/charts/Funnel";
 import { Heatmap } from "@/components/charts/Heatmap";
@@ -49,22 +49,15 @@ export function AdminDashboard() {
   const state = useMock();
   const now = useNow(1000);
   const [liveBi, setLiveBi] = useState<LiveBiData | null>(null);
-  const [liveSlaTickets, setLiveSlaTickets] = useState<unknown[]>([]);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      adminApi.getBiFunnel(),
-      adminApi.getDispatchSla(),
-    ]).then(([biRes, slaRes]) => {
+    adminApi.getBiFunnel().then((biRes) => {
       if (!active) return;
       if (biRes.ok && biRes.data) {
         setLiveBi(biRes.data);
         setIsLiveConnected(true);
-      }
-      if (slaRes.ok && Array.isArray(slaRes.data)) {
-        setLiveSlaTickets(slaRes.data);
       }
     }).catch(() => {
       // Seamless fallback to client state

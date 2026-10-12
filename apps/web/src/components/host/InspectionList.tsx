@@ -13,7 +13,7 @@ import { hostAcceptInspection } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
 import { fmtDateTime } from "@/lib/mock/format";
 import { useEffect, useState } from "react";
-import { hostInspections, isInspectOverdue } from "@/lib/mock/selectors-inspection";
+import { isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { setMockState, useMock } from "@/lib/mock/store";
 import type { Consignment, ConsignmentStatus } from "@/lib/mock/types";
 import { landlordById, zoneOfBuilding, ZONES, type LayoutKind } from "@/lib/mock/units";
@@ -314,7 +314,7 @@ export function InspectionList() {
                         } catch {
                           // ignore
                         }
-                        const res = hostAcceptInspection(c.id, acceptHostId);
+                        hostAcceptInspection(c.id, acceptHostId);
                         setDbItems((prev) => prev.map((item) => (item.id === c.id ? { ...item, status: "inspecting" } : item)));
                         toast("Đã nhận thẩm định thành công. Mở phiếu thẩm định khi tới căn.", "success");
                       }}

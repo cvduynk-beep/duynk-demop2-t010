@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { LayoutList, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Facade } from "@/components/brand/Facade";
 import { fmtTime } from "@/lib/mock/format";
 import type { ChatMessage } from "@/lib/mock/types";
@@ -81,11 +81,10 @@ interface MessagesProps {
   freshId: string | null;
   onFreshDone: () => void;
   onShowResults?: (count: number) => void;
-  initialUnitIds?: string[];
   hideInlineUnits?: boolean;
 }
 
-export function Messages({ greeting, messages, thinking, freshId, onFreshDone, onShowResults, initialUnitIds, hideInlineUnits }: MessagesProps) {
+export function Messages({ greeting, messages, thinking, freshId, onFreshDone, onShowResults, hideInlineUnits }: MessagesProps) {
   const end = useRef<HTMLDivElement>(null);
   const scroll = () => {
     end.current?.scrollIntoView({ block: "end", behavior: "smooth" });

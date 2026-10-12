@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Bath, BedDouble, Compass, Ruler, Sparkles } from "lucide-react";
-import { vnd, vndShort } from "@/lib/mock/format";
+import { vnd } from "@/lib/mock/format";
 import type { CostBreakdown } from "@/lib/mock/cost";
 import { unitAddress, zoneById, type Unit } from "@/lib/mock/units";
 import { FavoriteButton } from "./FavoriteButton";
@@ -18,7 +18,7 @@ interface UnitCardProps {
   priority?: boolean;
 }
 
-export function UnitCard({ unit, cost, variant = "grid", rank, reasons, priority }: UnitCardProps) {
+export function UnitCard({ unit, variant = "grid", rank, reasons, priority }: UnitCardProps) {
   const zone = zoneById(unit.zoneId);
   const feature = variant === "feature";
   return (

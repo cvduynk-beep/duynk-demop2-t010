@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarPlus, Send, Sparkles, X } from "lucide-react";
 import type { Unit } from "@/lib/mock/units";
-import { answerUnitQuestion, askVinnyConcierge, QUICK_CHIPS } from "@/lib/property/unitConcierge";
+import { askVinnyConcierge, QUICK_CHIPS } from "@/lib/property/unitConcierge";
 import { ButlerMascot } from "@/components/mascot/ButlerMascot";
 import styles from "./UnitConciergeDrawer.module.css";
 
@@ -358,7 +358,6 @@ export function UnitConciergeDrawer({ unit, open, onOpen, onClose, onBook }: Uni
  * Giữ export FloatingConciergeBubble để tương thích hoàn toàn với các component khác
  */
 export function FloatingConciergeBubble({
-  unit,
   onClick,
 }: {
   unit: Unit;

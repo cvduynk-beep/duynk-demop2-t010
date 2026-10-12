@@ -355,7 +355,6 @@ export function PortalShell({
           <div className={styles.brandGroup}>
             <Logo
               href={logoHref ?? "/"}
-              sub={compactLogo ? undefined : "Vinhomes Ocean Park 1"}
               compact={compactLogo}
             />
             {!hidePortalBadge && <span className={styles.portalBadge}>{portal}</span>}

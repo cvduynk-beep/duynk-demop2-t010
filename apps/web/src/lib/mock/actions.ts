@@ -2710,7 +2710,6 @@ export function adminRelistUnit(
   unitId: string,
   adminName: string
 ): { ok: boolean; reason?: string } {
-  const current = getMockState();
   const unit = unitById(unitId);
   if (!unit) {
     return { ok: false, reason: "Không tìm thấy thông tin căn hộ." };

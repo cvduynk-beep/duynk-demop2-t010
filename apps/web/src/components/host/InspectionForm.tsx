@@ -46,7 +46,6 @@ import { publishUnitToCatalog } from "@/lib/property/useUnits";
 import { useNow } from "@/lib/useNow";
 import styles from "@/components/consign/Consign.module.css";
 
-import { hostRoles } from "@/lib/mock/selectors";
 import { useSession } from "@/lib/auth/client";
 import type { ApiInspectionItem } from "@/lib/apiClient";
 
@@ -183,7 +182,6 @@ export function InspectionForm({ id }: { id: string }) {
   }, [id]);
 
   const currentHostId = session.user?.pendingHostId || DEFAULT_HOST_ID;
-  const isInspector = hostRoles(state, currentHostId).includes("inspector");
   // Host được phép mở phiếu nếu được gán c.hostId hoặc c.hostId là currentHostId hoặc Host có quyền inspector
   const activeHostId = c?.hostId || currentHostId;
 
@@ -205,7 +203,7 @@ export function InspectionForm({ id }: { id: string }) {
   );
 
   // ─── 3. Bảng kê 32 dòng catalog — Tự động liên kết từ khai báo chủ nhà ──────
-  const { codes: resolvedCodes, landlordCodes, declaredKeys } = useMemo(() => {
+  const { landlordCodes, declaredKeys } = useMemo(() => {
     return resolveInventoryCodesFromLandlord(c?.items, c?.furnished, c?.note);
   }, [c?.items, c?.furnished, c?.note]);
 

@@ -4,19 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import type { LayerGroup, Map as LeafletMap, TileLayer } from "leaflet";
 import {
   Compass,
-  Footprints,
   GraduationCap,
   Layers,
   MapPin,
   Minus,
-  Navigation,
   Plus,
   RotateCcw,
   ShoppingBag,
-  Sparkles,
   Waves,
   X,
-  Zap,
 } from "lucide-react";
 import type { ZoneId } from "@/lib/mock/units";
 import styles from "./OceanParkInteractiveMap.module.css";
@@ -128,7 +124,6 @@ interface OceanParkInteractiveMapProps {
   selectedZone?: ZoneId | null;
   onSelectZone?: (zoneId: ZoneId | null) => void;
   height?: number | string;
-  totalUnits?: number;
   className?: string;
 }
 
@@ -136,7 +131,6 @@ export function OceanParkInteractiveMap({
   selectedZone = null,
   onSelectZone,
   height = 420,
-  totalUnits = 71,
   className,
 }: OceanParkInteractiveMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);

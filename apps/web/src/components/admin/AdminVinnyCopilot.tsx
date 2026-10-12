@@ -3,17 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
-  AlertTriangle,
   ArrowRight,
-  Bot,
   Check,
   ChevronDown,
   Copy,
-  ExternalLink,
   RotateCcw,
   Send,
   Sparkles,
-  TrendingUp,
   X,
 } from "lucide-react";
 import { ButlerMascot } from "@/components/mascot/ButlerMascot";
@@ -22,10 +18,7 @@ import { vnd } from "@/lib/mock/format";
 import {
   AGENT_KPIS,
   CAMPAIGN_DATA,
-  HIGH_VALUE_PROSPECTS,
-  RAW_DEALS,
   computeReportSummary,
-  type ReportFilter,
 } from "@/lib/mock/reports";
 import styles from "./AdminVinnyCopilot.module.css";
 

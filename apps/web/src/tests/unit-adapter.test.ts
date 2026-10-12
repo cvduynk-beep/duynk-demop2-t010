@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { mapDbUnitToFrontendUnit, parseLayoutKind } from "@/lib/property/unitAdapter";
-import { UNITS } from "@/lib/mock/units";
 
 describe("unitAdapter - Database to Frontend Mapper", () => {
   it("1. parseLayoutKind chuẩn hoá các kiểu layout Prisma", () => {

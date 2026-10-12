@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
-import { ExternalLink, LayoutGrid, Map, SearchX, Sparkles, X } from "lucide-react";
+import { LayoutGrid, Map, SearchX, Sparkles, X } from "lucide-react";
 import { Facade } from "@/components/brand/Facade";
 import { UnitCard } from "@/components/unit/UnitCard";
 import { OceanParkInteractiveMap } from "@/components/map/OceanParkInteractiveMap";
@@ -135,7 +134,6 @@ export function ResultsPanel({ results, criteria, onCriteria, state, totalOpen }
           <OceanParkInteractiveMap
             selectedZone={mapZone as ZoneId | null}
             onSelectZone={(z) => setMapZone(z)}
-            totalUnits={results.length}
             height={440}
           />
 

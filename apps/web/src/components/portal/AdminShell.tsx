@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Building2, FileSignature, Gauge, Radar, Settings, SlidersHorizontal, Users } from "lucide-react";
+import { BarChart3, Building2, FileSignature, Gauge, Radar, SlidersHorizontal, Users } from "lucide-react";
 import { loginPathFor } from "@/lib/auth/portals";
 import { useSession } from "@/lib/auth/client";
 import { DEMO_USERS } from "@/lib/mock/actors";
