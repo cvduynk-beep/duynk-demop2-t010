@@ -7,6 +7,7 @@ import type {
   SubmitEkycDto,
   TenantBooking,
   TenantContract,
+  TenantHandover,
   TenantUnit,
 } from "./types";
 
@@ -219,6 +220,11 @@ export const tenantApi = {
   // A19: Hợp đồng của tôi
   myContracts: (): Promise<ApiResponse<TenantContract[]>> => {
     return api.get<TenantContract[]>("/me/contracts");
+  },
+
+  // Biên bản bàn giao số của hợp đồng (chỉ chủ hợp đồng xem được; người khác ⇒ 403)
+  handovers: (contractId: string): Promise<ApiResponse<TenantHandover[]>> => {
+    return api.get<TenantHandover[]>(`/handovers/contracts/${encodeURIComponent(contractId)}`);
   },
 
   // A20: Tải file PDF hợp đồng
