@@ -1,9 +1,12 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SITE_NAV } from "@/lib/nav/siteNav";
 
 const SRC = join(__dirname, "..");
+/** Đường dẫn dạng POSIX (`/`) để so khớp giống nhau trên Windows (`\`) và Linux/macOS. */
+const toPosix = (path: string) => path.split(sep).join("/");
+const SRC_POSIX = toPosix(SRC);
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 // Ngoại lệ có sẵn trước hồ sơ 17: id camelCase của form thẩm định (host/inspection, code cuộn tới lỗi
@@ -20,11 +23,11 @@ function listTsx(dir: string): string[] {
   return out;
 }
 
-const files = listTsx(SRC).map((path) => ({ path, text: readFileSync(path, "utf8") }));
+const files = listTsx(SRC).map((path) => ({ path: toPosix(path), text: readFileSync(path, "utf8") }));
 
 function collect(re: RegExp): { path: string; value: string }[] {
   const found: { path: string; value: string }[] = [];
-  for (const f of files) for (const m of f.text.matchAll(re)) found.push({ path: f.path.replace(SRC, "src"), value: m[1] });
+  for (const f of files) for (const m of f.text.matchAll(re)) found.push({ path: f.path.replace(SRC_POSIX, "src"), value: m[1] });
   return found;
 }
 
@@ -38,7 +41,9 @@ describe("anchor tiếng Anh kebab-case (B2)", () => {
     expect(bad).toEqual([]);
   });
   it("mọi /#x trong SITE_NAV có id=\"x\" trong Landing.tsx", () => {
-    const landing = files.find((f) => f.path.endsWith("components/landing/Landing.tsx"))!.text;
+    const landingFile = files.find((f) => f.path.endsWith("components/landing/Landing.tsx"));
+    expect(landingFile, "không tìm thấy components/landing/Landing.tsx").toBeDefined();
+    const landing = landingFile!.text;
     for (const item of SITE_NAV) {
       if (!item.href.startsWith("/#")) continue;
       expect(landing, item.href).toContain(`id="${item.href.slice(2)}"`);
