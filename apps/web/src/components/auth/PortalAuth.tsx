@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { PORTAL_HOME, type Portal } from "@/lib/auth/portals";
 import { hintDisplayName, useGoogleHint } from "@/lib/auth/googleHint";
 import { GoogleMark } from "./GoogleMark";
@@ -31,10 +30,10 @@ interface LoginData {
  * Host (on first login) must verify their RFID card number.
  */
 export function PortalAuth({ portal, label, initialError, initialNotice, next }: PortalAuthProps) {
-  const router = useRouter();
   const canSignup = portal !== "admin";
   const canGoogle = portal !== "admin"; // Admin chỉ đăng nhập email + mật khẩu
-  const demoEnabled = true;
+  // Nút "Trải nghiệm nhanh": chỉ khi bật NEXT_PUBLIC_DEMO_LOGIN (backend cũng phải bật AUTH_DEMO_MODE).
+  const demoEnabled = process.env.NEXT_PUBLIC_DEMO_LOGIN === "true";
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [fullName, setFullName] = useState("");
@@ -61,6 +60,15 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next }:
     window.location.assign(`${API_BASE}/auth/google?portal=${portal}${hint}`);
   }
 
+  /** Lỗi mạng / quá thời gian khi gọi backend (không có đường dự phòng: đăng nhập chỉ do backend quyết định). */
+  function networkError(cause: unknown) {
+    setError(
+      cause instanceof DOMException && cause.name === "AbortError"
+        ? "Máy chủ đăng nhập phản hồi quá lâu. Kiểm tra backend rồi thử lại."
+        : "Không kết nối được máy chủ đăng nhập. Kiểm tra backend đang chạy rồi thử lại.",
+    );
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -69,40 +77,19 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next }:
     try {
       const path = mode === "login" ? "/auth/login" : "/auth/signup";
       const body = mode === "login" ? { email, password, portal } : { email, password, fullName, portal };
-      
-      // 1. Thử gọi backend trước
-      let res = await postJson<LoginData>(path, body);
-
-      // 2. Nếu backend offline/lỗi, thử fallback sang Route Handler cục bộ /api/auth/login
+      const res = await postJson<LoginData>(path, body);
       if (!res.ok) {
-        const fbRes = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, portal }),
-        });
-        if (fbRes.ok) {
-          const fbData = await fbRes.json();
-          if (fbData.ok) return enter();
-        }
+        // Backend không nói email có tài khoản Google hay không (chống dò email) ⇒ FE tự gợi ý khi cổng có nút Google.
+        const googleTip =
+          mode === "login" && canGoogle && res.code === "invalid_credentials"
+            ? " Nếu bạn đăng ký bằng Google, hãy bấm nút Google ở trên."
+            : "";
+        return setError(errorMessage(res.code) + googleTip);
       }
-
-      if (!res.ok) return setError(errorMessage(res.code));
       if (portal === "host" && res.data.needsRfidVerification && res.data.hostId) return setPendingRfid(res.data.hostId);
       return enter();
-    } catch {
-      // Offline fallback
-      try {
-        const fbRes = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, portal }),
-        });
-        if (fbRes.ok) {
-          const fbData = await fbRes.json();
-          if (fbData.ok) return enter();
-        }
-      } catch {}
-      setError("Không thể kết nối đến máy chủ. Vui lòng thử lại.");
+    } catch (cause) {
+      networkError(cause);
     } finally {
       setLoading(false);
     }
@@ -112,34 +99,12 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next }:
     setLoading(true);
     setError(null);
     try {
-      let res = await postJson<LoginData>("/auth/demo-login", { portal });
-      if (!res.ok) {
-        const fbRes = await fetch("/api/auth/demo-login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ portal }),
-        });
-        if (fbRes.ok) {
-          const fbData = await fbRes.json();
-          if (fbData.ok) return enter();
-        }
-      }
+      const res = await postJson<LoginData>("/auth/demo-login", { portal });
       if (!res.ok) return setError(errorMessage(res.code));
       if (res.data.needsRfidVerification && res.data.hostId) return setPendingRfid(res.data.hostId);
       enter();
-    } catch {
-      try {
-        const fbRes = await fetch("/api/auth/demo-login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ portal }),
-        });
-        if (fbRes.ok) {
-          const fbData = await fbRes.json();
-          if (fbData.ok) return enter();
-        }
-      } catch {}
-      setError("Không thể kết nối đến máy chủ. Vui lòng thử lại.");
+    } catch (cause) {
+      networkError(cause);
     } finally {
       setLoading(false);
     }
