@@ -65,6 +65,13 @@ model Profile {
   isPhoneVerified Boolean   @default(false) @map("is_phone_verified")
   isActive        Boolean   @default(true) @map("is_active")
   lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
+  // Tài khoản thụ hưởng mặc định của chủ nhà (nhận tiền thuê / bồi thường). Số TK mã hoá AES-256-GCM (PhoneService), chỉ trả ra API dạng che.
+  payoutBankName      String?   @map("payout_bank_name") @db.VarChar(100)
+  payoutAccountEnc    String?   @map("payout_account_enc")
+  payoutAccountHolder String?   @map("payout_account_holder") @db.VarChar(100)
+  payoutUpdatedAt     DateTime? @map("payout_updated_at") @db.Timestamptz
+  // Đã đối chiếu tên chủ TK với họ tên eKYC (mô phỏng tra cứu Napas). null = chưa xác thực ngân hàng ⇒ chưa được ký gửi.
+  payoutVerifiedAt    DateTime? @map("payout_verified_at") @db.Timestamptz
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 

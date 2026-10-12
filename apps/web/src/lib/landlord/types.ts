@@ -5,7 +5,7 @@ export type MandateStatus = "pending_inspection" | "active" | "exiting" | "ended
 export type LayoutKind = "Studio" | "1PN" | "2PN" | "3PN";
 export type LockKind = "smart" | "physical";
 export type LeaseTermPref = "flexible" | "long" | "mid" | "fixed";
-export type ConsignmentStatus = "draft" | "awaiting_host" | "inspecting" | "reviewing" | "approved" | "rejected";
+export type ConsignmentStatus = "awaiting_host" | "inspecting" | "reviewing" | "awaiting_landlord" | "approved" | "rejected";
 
 export interface MandateSummary {
   id: string;
@@ -141,6 +141,7 @@ export interface Consignment {
   decidedAt: string | null;
   decidedBy: string | null;
   decisionNote: string | null;
+  payout?: BankPayoutAccount | null;
 }
 
 export interface CreateConsignmentInput {
@@ -163,10 +164,16 @@ export interface CreateConsignmentInput {
   saveAsDefaultPayout?: boolean;
   items?: string[];
   note?: string;
-  draft?: boolean;
+  /** Cam kết quyền sở hữu (Điều 2) — bắt buộc true; tạo hồ sơ = ký ủy quyền. */
+  ownershipWarranted: boolean;
+  /** OTP Zalo 4 số — bỏ trống khi ký bằng số đã xác thực của tài khoản. */
+  otp?: string;
+  phone?: string;
 }
 
 export interface SignOtpInfo {
+  /** false = ký bằng số đã xác thực của tài khoản, không gửi mã. */
+  otpRequired: boolean;
   maskedPhone: string | null;
   expiresInSeconds: number;
   /** Chỉ có khi backend bật OTP_ECHO_DEV_CODE (môi trường dev). */
@@ -187,6 +194,8 @@ export interface FinanceMonth {
   label: string;
   gross: number;
   fee: number;
+  /** 50% cọc giữ chỗ khách bỏ trong tháng (legal/02 Điều 6.1), đã cộng vào `net`, không trừ phí. */
+  forfeit: number;
   net: number;
 }
 
@@ -201,15 +210,28 @@ export interface FinanceUnitRow {
   escrow: number;
 }
 
+/** Một khoản cọc giữ chỗ khách bỏ: chủ nhà nhận `share` (50%). */
+export interface FinanceForfeit {
+  depositId: string;
+  unitId: string;
+  unitCode: string;
+  depositAmount: number;
+  share: number;
+  paidAt: string | null;
+  expiredAt: string | null;
+}
+
 export interface Finance {
   serviceFeePercent: number;
   /** `default` = Admin chưa cấu hình, đang dùng mức tạm. */
   feeSource: "config" | "default";
-  thisMonth: { gross: number; fee: number; net: number };
+  thisMonth: { gross: number; fee: number; forfeit: number; net: number };
   totalNet6Months: number;
   escrowTotal: number;
   history: FinanceMonth[];
   perUnit: FinanceUnitRow[];
+  /** 6 tháng gần nhất, mới nhất trước. */
+  forfeits: FinanceForfeit[];
 }
 
 export interface BuildingOption {
@@ -219,12 +241,11 @@ export interface BuildingOption {
   totalFloors: number;
 }
 
+/** Tài khoản thụ hưởng đã lưu ở backend — số TK chỉ có dạng che, không bao giờ trả đầy đủ. */
 export interface BankPayoutAccount {
   bankName: string;
-  bankAccount: string;
+  bankAccountMasked: string;
   bankAccountHolder: string;
-  isVerified: boolean;
-  verifiedAt?: string;
 }
 
 export interface MyProfile {
@@ -232,6 +253,59 @@ export interface MyProfile {
   fullName: string | null;
   email: string | null;
   isPhoneVerified: boolean;
+  /** SĐT của chính chủ (0xxxxxxxxx) — chỉ trả cho chính người đăng nhập. */
+  phone?: string | null;
   createdAt: string;
   payoutAccount?: BankPayoutAccount | null;
+}
+
+export type VerificationStep = "phone" | "identity" | "payout";
+
+/** Trạng thái xác thực chủ nhà — đủ 3 bước (`ready`) mới được ký gửi. */
+export interface LandlordVerification {
+  phone: { verified: boolean; maskedPhone: string | null };
+  identity: { verified: boolean; fullName: string | null; idNumberMasked: string | null; address: string | null; verifiedAt: string | null };
+  payout: { verified: boolean; account: BankPayoutAccount | null; verifiedAt: string | null };
+  /** Bước còn thiếu theo thứ tự làm. */
+  missing: VerificationStep[];
+  ready: boolean;
+}
+
+export type ActivityKind = "viewing_booked" | "viewing_done" | "no_show" | "deposit_paid" | "deposit_forfeited" | "lease_signed";
+
+/** Một sự kiện trên căn của chủ nhà (30 ngày gần nhất) — không có thông tin khách. */
+export interface LandlordActivity {
+  id: string;
+  at: string;
+  kind: ActivityKind;
+  unitId: string;
+  unitCode: string;
+  tone: "info" | "success" | "warning";
+  title: string;
+  body: string;
+}
+
+export interface LandlordDashboard {
+  activity: LandlordActivity[];
+}
+
+/** Gợi ý giá (AI Dynamic Deal) cho căn đang trống — xem `LandlordPriceInsightService`. */
+export interface PriceInsight {
+  unitId: string;
+  unitCode: string;
+  layoutKind: LayoutKind;
+  zone: string;
+  scope: "zone" | "park";
+  comps: number;
+  currentRent: number;
+  marketMedian: number;
+  suggestedRent: number;
+  dealBadge: boolean;
+  savingPercent: number;
+  daysVacant: number;
+  viewings30d: number;
+  viewingsNoDeposit: number;
+  noShows: number;
+  vacancyLossPerMonth: number;
+  floorLimited: boolean;
 }

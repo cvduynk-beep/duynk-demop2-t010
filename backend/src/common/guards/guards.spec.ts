@@ -233,7 +233,7 @@ describe('Route "nhận việc / ký" phải gắn @RequireVerification("phone")
     ['Thẩm định accept', InspectionController.prototype.accept],
     ['Thẩm định claim', InspectionController.prototype.claim],
     ['Chủ nhà send-otp', LandlordController.prototype.sendSignOtp],
-    ['Chủ nhà sign', LandlordController.prototype.signConsignment],
+    ['Chủ nhà ký gửi (tạo hồ sơ + OTP)', LandlordController.prototype.createConsignment],
   ];
   it.each(gated)('%s', (_name, handler) => {
     expect(Reflect.getMetadata(REQUIRE_VERIFICATION_KEY, handler)).toBe('phone');

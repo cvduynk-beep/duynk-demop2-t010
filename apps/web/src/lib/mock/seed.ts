@@ -366,26 +366,6 @@ export function seedState(now: number): MockState {
 
   const consignments: Consignment[] = [
     {
-      id: "cs-1",
-      landlordId: "L1",
-      building: "S2.19",
-      floor: 9,
-      door: "05",
-      layout: "2PN",
-      areaM2: 59,
-      askRent: 9_500_000,
-      suggestedDeposit: 9_500_000,
-      leaseTerm: "long",
-      furnished: true,
-      locks: ["smart"],
-      auditByHost: true,
-      furnishing: "full",
-      lock: "smart",
-      items: ["ac", "fridge", "washer"],
-      status: "draft",
-      createdAt: iso(now - 1 * DAY),
-    },
-    {
       id: "cs-2",
       landlordId: "L1",
       building: "S1.09",

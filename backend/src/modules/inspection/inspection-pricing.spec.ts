@@ -203,7 +203,7 @@ describe('Inspection — giá/cọc đổi ⇒ chủ nhà duyệt (hồ sơ 18)'
     const svc = new LandlordConsignmentService(
       prisma, { ownedMandate: async (_l: string, id: string) => prisma.exclusiveMandate.findFirst({ where: { id } }) } as any,
       new AuditService(prisma), {} as any, {} as any,
-      { withUrls: async () => [], signPaths: async () => new Map() } as any, w.store, {} as any,
+      { withUrls: async () => [], signPaths: async () => new Map() } as any, w.store, {} as any, {} as any,
     );
     const view: any = await svc.get(LANDLORD, c.mandate.id);
     expect(view.status).toBe('awaiting_landlord');

@@ -1,296 +1,135 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import {
-  ArrowRight,
-  CheckCircle2,
-  Clock,
-  FileSignature,
-  Info,
-  MapPin,
-  ShieldCheck,
-  Sparkles,
-  TrendingDown,
-  X,
-} from "lucide-react";
+import { ArrowRight, FilePlus2, FileSignature, ShieldCheck } from "lucide-react";
 import { Columns } from "@/components/charts/Columns";
 import { StatTile } from "@/components/charts/StatTile";
 import { DataTable } from "@/components/ui/DataTable";
-import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { toast } from "@/components/ui/Toast";
 import { CONSIGN_STATUS_META } from "@/components/consign/status";
-import { DEMO_USERS } from "@/lib/mock/actors";
 import { fmtTime, relTime, vnd, vndShort } from "@/lib/format";
-import {
-  holdMsLeft,
-  isOpenBooking,
-  monthlyRent,
-  noticesFor,
-  occupancy,
-  unitDisplayStatus,
-} from "@/lib/mock/selectors";
-import {
-  landlordConsignments,
-  landlordUnitRows,
-  type LandlordUnitRow,
-} from "@/lib/mock/selectors-landlord";
-import { PASSPORT_ITEMS } from "@/lib/landlord/labels";
-import { LANDLORD_HISTORY, SERVICE_FEE_RATE } from "@/lib/mock/stats";
-import { useMock } from "@/lib/mock/store";
-import { unitAddress, type Unit } from "@/lib/mock/units";
+import { LAYOUT_LABEL, UNIT_STATUS_META, axisMillions, hoursLeft, unitLabel } from "@/lib/landlord/labels";
+import { queries } from "@/lib/landlord/queries";
+import type { Consignment, Finance, LandlordActivity, UnitRow } from "@/lib/landlord/types";
+import { useLandlordQuery } from "@/lib/landlord/useLandlordQuery";
 import { useNow } from "@/lib/useNow";
+import { PriceInsightCard } from "./PriceInsightCard";
+import { QueryView } from "./QueryView";
 import styles from "./Landlord.module.css";
 
-const LID = DEMO_USERS.landlord.refId!;
+/** Hồ sơ còn đang xử lý (chưa thành căn chính thức / chưa bị từ chối) — hiện thành nhắc việc đầu trang. */
+const IN_PROGRESS = new Set<Consignment["status"]>(["awaiting_host", "inspecting", "reviewing", "awaiting_landlord"]);
 
-const monthLabels = (now: number, n: number) =>
-  Array.from({ length: n }, (_, i) => {
-    const d = new Date(now);
-    d.setMonth(d.getMonth() - (n - 1 - i), 1);
-    return `T${d.getMonth() + 1}`;
-  });
-
+/**
+ * Tổng quan chủ nhà — toàn bộ từ API thật của người đang đăng nhập:
+ * căn (`/landlord/units`), hồ sơ ký gửi (`/consignments`), khoản thu (`/finance`), hoạt động (`/dashboard`), xác thực.
+ */
 export function LandlordDashboard() {
-  const state = useMock();
+  const units = useLandlordQuery(queries.units);
+  const consignments = useLandlordQuery(queries.consignments);
+  const finance = useLandlordQuery(queries.finance);
+  const dashboard = useLandlordQuery(queries.dashboard);
+  const verification = useLandlordQuery(queries.verification);
+  const priceInsights = useLandlordQuery(queries.priceInsights);
   const now = useNow(60_000);
 
-  // Trạng thái mở Hộ chiếu bàn giao số
-  const [showPassportModal, setShowPassportModal] = useState(false);
-  const [selectedPassportUnit, setSelectedPassportUnit] = useState<Unit | null>(null);
-
-  // Trạng thái gợi ý AI Dynamic Pricing
-  const [aiPriceApplied, setAiPriceApplied] = useState(false);
-  const [dismissAiInsight, setDismissAiInsight] = useState(false);
-
-  if (!state.ready || !now) return <div className="skeleton" style={{ height: 480 }} />;
-
-  const rows = landlordUnitRows(state, LID);
-  const occ = occupancy(state, rows.map((r) => r.unit));
-  const rent = monthlyRent(state, LID);
-  const mine = landlordConsignments(state, LID);
-  const inProgress = mine.filter((c) => c.status !== "approved");
-  const feed = noticesFor(state, "landlord", LID).slice(0, 8);
-  const history = LANDLORD_HISTORY[LID];
-  const series = [...history, rent].map((v, i, arr) => ({
-    label: monthLabels(now, arr.length)[i],
-    value: Math.round(v * (1 - SERVICE_FEE_RATE)),
-  }));
-
-  const handleOpenPassport = (unit?: Unit) => {
-    if (unit) {
-      setSelectedPassportUnit(unit);
-    } else {
-      const rentedRow = rows.find((r) => unitDisplayStatus(state, r.unit) === "rented");
-      setSelectedPassportUnit(rentedRow ? rentedRow.unit : rows[0]?.unit ?? null);
-    }
-    setShowPassportModal(true);
-  };
+  const unitCount = units.state.status === "ready" ? units.state.data.length : null;
+  const notVerified = verification.state.status === "ready" && !verification.state.data.ready ? verification.state.data : null;
+  const pending =
+    consignments.state.status === "ready" ? consignments.state.data.filter((c) => IN_PROGRESS.has(c.status)) : [];
 
   return (
     <div className={styles.page}>
       <PageHeader
         title="Tổng quan"
-        description="Bạn ở nhà 100%: Field Host đón khách, mở cửa và báo bạn từng bước qua Zalo."
+        description="Bạn ở nhà 100%: Field Host đón khách, mở cửa và báo bạn từng bước."
         actions={
           <div style={{ display: "flex", gap: "var(--s-2)", alignItems: "center", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => handleOpenPassport()}
-              className="btn btn-secondary btn-sm"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-            >
-              <ShieldCheck size={16} style={{ color: "var(--kelp)" }} />
-              Hộ chiếu bàn giao số
-            </button>
             <Link href="/landlord/units" className="btn btn-quiet btn-sm">
-              Tất cả căn ({rows.length})
+              Tất cả căn{unitCount !== null ? ` (${unitCount})` : ""}
+            </Link>
+            <Link href="/landlord/consign" className="btn btn-primary btn-sm">
+              <FilePlus2 size={15} /> Ký gửi căn mới
             </Link>
           </div>
         }
       />
 
-      {inProgress.length > 0 && (
+      {(notVerified || pending.length > 0) && (
         <ul className={styles.alerts}>
-          {inProgress.map((c) => {
+          {notVerified && (
+            <li>
+              <ShieldCheck size={20} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b>Hoàn tất xác thực tài khoản để ký gửi căn mới</b>
+                <p className="small muted" style={{ margin: "var(--s-1) 0 0" }}>
+                  Còn {notVerified.missing.length}/3 bước: số điện thoại, CCCD (eKYC), tài khoản nhận tiền.
+                </p>
+              </div>
+              <Link href="/landlord/verify" className="btn btn-primary btn-sm">
+                Xác thực ngay <ArrowRight size={14} />
+              </Link>
+            </li>
+          )}
+          {pending.map((c) => {
             const meta = CONSIGN_STATUS_META[c.status];
             return (
               <li key={c.id}>
                 <FileSignature size={20} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--s-2)", flexWrap: "wrap" }}>
-                    <b>
-                      Căn {c.building} · Tầng {c.floor} · Căn {c.door}
-                    </b>
+                    <b>{unitLabel(c)}</b>
                     <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
                   </div>
                   <p className="small muted" style={{ margin: "var(--s-1) 0 0" }}>
                     {meta.landlordHint}
                   </p>
                 </div>
-                {c.status === "draft" ? (
-                  <Link href={`/landlord/consign?draft=${c.id}`} className="btn btn-amber btn-sm">
-                    Ký ngay <ArrowRight size={14} />
-                  </Link>
-                ) : (
-                  <Link href={`/landlord/consignments/${c.id}`} className="btn btn-secondary btn-sm">
-                    Chi tiết <ArrowRight size={14} />
-                  </Link>
-                )}
+                <Link href={`/landlord/consignments/${c.id}`} className="btn btn-secondary btn-sm">
+                  Chi tiết <ArrowRight size={14} />
+                </Link>
               </li>
             );
           })}
         </ul>
       )}
 
-      <div className={styles.kpis}>
-        <StatTile
-          hero
-          label="Thu tiền thuê tháng này"
-          value={vndShort(Math.round(rent * (1 - SERVICE_FEE_RATE)))}
-          delta={{ text: "sau phí dịch vụ ký gửi", tone: "flat" }}
-          spark={series.slice(-6).map((s) => s.value)}
-        />
-        <StatTile
-          label="Đang cho thuê"
-          value={String(occ.rented)}
-          unit={`/ ${rows.length}`}
-          delta={{ text: "1 căn có Hộ chiếu số", tone: "good", dir: "up" }}
-        />
-        <StatTile
-          label="Đang giữ căn"
-          value={String(occ.holding)}
-          delta={{ text: "khách đã chuyển cọc, chờ ký hợp đồng", tone: "flat" }}
-        />
-        <StatTile
-          label="Còn trống, đang mở khách"
-          value={String(occ.available)}
-          delta={{ text: "Host đón khách thay bạn", tone: "good", dir: "up" }}
-        />
-      </div>
+      <QueryView query={units} skeleton="cards">
+        {(rows) => (
+          <QueryView query={finance} skeleton="cards">
+            {(f) => <Kpis rows={rows} f={f} />}
+          </QueryView>
+        )}
+      </QueryView>
 
-      {/* Gợi ý thông minh từ AI (Dynamic Pricing / Feedback Insight) */}
-      {!dismissAiInsight && (
-        <section className={styles.aiCard} aria-label="Gợi ý tối ưu giá từ VinStay AI">
-          <div className={styles.aiHeader}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span className={styles.aiBadge}>
-                <Sparkles size={13} /> AI Matchmaker · Dynamic Deal Engine
-              </span>
-              <span className="muted xs">Cập nhật theo phản hồi khách xem thực địa</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setDismissAiInsight(true)}
-              className="icon-btn"
-              title="Tạm ẩn gợi ý"
-              style={{ width: 24, height: 24, padding: 0 }}
-            >
-              <X size={15} />
-            </button>
-          </div>
-
-          <div className={styles.aiGrid}>
-            <div>
-              <h3 style={{ fontSize: 15.5, fontWeight: 700, margin: "0 0 6px", color: "var(--ink)" }}>
-                Phát hiện căn VHOP-S1.02-1007 có khách quan tâm nhưng chưa chốt cọc vì giá
-              </h3>
-              <p className="small" style={{ margin: "0 0 8px", color: "var(--ink-700, #475569)", lineHeight: 1.5 }}>
-                Buổi xem lúc 10:30 vừa qua ghi nhận: <b>Khách rất ưng nội thất &amp; vị trí nhưng do dự vì giá chào 7.5tr/tháng</b> (cao hơn ~400k so với mặt bằng layout 1PN+ cùng phân khu Sapphire 1).
-              </p>
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--coral, #dc2626)" }}>
-                  <TrendingDown size={15} />
-                  <span>Rủi ro trống phòng: <b>Mất trắng ~7.5tr/tháng</b> + phí BQL nếu kéo dài 15–30 ngày</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--kelp, #059669)" }}>
-                  <Clock size={15} />
-                  <span>Nếu chỉnh sang <b>7.100.000đ</b>: Kích hoạt nhãn <b>&quot;Căn hời phân khu&quot;</b>, tỷ lệ chốt cọc đạt <b>88% trong 5 ngày</b> (có 2 khách trong Waitlist F2)</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 210, alignSelf: "center" }}>
-              {aiPriceApplied ? (
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    background: "rgba(16, 185, 129, 0.1)",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
-                    borderRadius: "var(--r)",
-                    color: "var(--kelp)",
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  <CheckCircle2 size={16} /> Đã áp dụng 7.1tr &amp; bật nhãn Căn hời
-                </div>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAiPriceApplied(true);
-                      toast("Đã áp dụng mức giá 7.100.000đ/tháng và kích hoạt nhãn Căn hời phân khu!", "success");
-                    }}
-                    className="btn btn-primary btn-sm"
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, fontWeight: 600 }}
-                  >
-                    <Sparkles size={14} /> Áp dụng giá 7.1tr
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDismissAiInsight(true)}
-                    className="btn btn-quiet btn-xs"
-                    style={{ fontSize: 12, color: "var(--ink-4, #64748b)" }}
-                  >
-                    Giữ nguyên giá 7.5tr
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
+      {priceInsights.state.status === "ready" && priceInsights.state.data.length > 0 && <PriceInsightCard insights={priceInsights.state.data} />}
 
       <div className={styles.two}>
-        <Columns
-          title="Tiền thuê thu về mỗi tháng"
-          subtitle="Sau khi trừ phí dịch vụ ký gửi; tháng hiện tại được nhấn"
-          data={series}
-          axisFormat={(v) => (v === 0 ? "0" : `${v / 1_000_000}tr`)}
-          valueFormat={(v) => `${vnd(v)}đ`}
-          seriesName="Thu về"
-        />
-        <Section title="Thông báo tức thì">
-          <ul className={styles.feed}>
-            {feed.map((n) => (
-              <li key={n.id} className={n.tone ? styles[`t-${n.tone}`] : ""}>
-                <div>
-                  <b>{n.title}</b>
-                  <p className="small muted">{n.body}</p>
-                </div>
-                <span className="xs muted">
-                  {fmtTime(n.at)} · {relTime(n.at, now)}
-                </span>
-              </li>
-            ))}
-            {feed.length === 0 && (
-              <li className="muted small">Chưa có thông báo. Khi Host mở cửa hoặc khách cọc, Zalo báo bạn ở đây.</li>
-            )}
-          </ul>
+        <QueryView query={finance} skeleton="cards">
+          {(f) => (
+            <Columns
+              title="Thực nhận mỗi tháng"
+              subtitle="Tiền thuê sau phí dịch vụ, cộng bồi thường trống phòng; tháng hiện tại được nhấn"
+              data={f.history.map((m) => ({ label: m.label, value: m.net }))}
+              axisFormat={axisMillions}
+              scaleFloor={1_000_000}
+              valueFormat={(v) => `${vnd(v)}đ`}
+              seriesName="Thực nhận"
+            />
+          )}
+        </QueryView>
+        <Section title="Hoạt động gần đây" description="30 ngày qua trên các căn của bạn">
+          <QueryView query={dashboard} skeleton="table">
+            {(d) => <ActivityFeed items={d.activity} now={now} />}
+          </QueryView>
         </Section>
       </div>
 
       <Section
         title="Căn của bạn"
-        description={rows.length > 5 ? `5 trên tổng ${rows.length} căn đã ký gửi` : undefined}
+        description={unitCount && unitCount > 5 ? `5 trên tổng ${unitCount} căn đã ký gửi` : undefined}
         actions={
           <Link href="/landlord/units" className="btn btn-quiet btn-sm">
             Xem tất cả <ArrowRight size={14} />
@@ -298,189 +137,80 @@ export function LandlordDashboard() {
         }
         flush
       >
-        <DataTable
-          columns={[
-            { key: "unit", header: "Căn", render: (r: LandlordUnitRow) => unitAddress(r.unit) },
-            { key: "building", header: "Toà", render: (r: LandlordUnitRow) => r.unit.building },
-            { key: "layout", header: "Loại căn", render: (r: LandlordUnitRow) => r.unit.layoutLabel },
-            {
-              key: "rent",
-              header: "Giá thuê",
-              align: "right",
-              render: (r: LandlordUnitRow) => <span className="tnum">{vnd(r.rent)}đ</span>,
-            },
-            {
-              key: "status",
-              header: "Trạng thái",
-              render: (r: LandlordUnitRow) => {
-                const ds = unitDisplayStatus(state, r.unit);
-                if (ds === "viewing") {
-                  const openCount = state.bookings.filter((b) => b.unitId === r.unit.id && isOpenBooking(b)).length;
-                  return (
-                    <span className="badge badge-amber-soft">
-                      Có khách xem · {openCount} lịch
-                    </span>
-                  );
-                }
-                if (ds === "holding") {
-                  const holdingBooking = state.bookings.find(
-                    (b) => b.unitId === r.unit.id && (b.status === "holding" || b.deposit?.paidAt)
-                  );
-                  const hours = holdingBooking ? Math.max(0, Math.ceil(holdMsLeft(holdingBooking, now) / 3_600_000)) : 48;
-                  return <StatusBadge tone="warn">{`Đang giữ căn · còn ${hours} giờ`}</StatusBadge>;
-                }
-                if (ds === "rented") {
-                  return <StatusBadge tone="ok">Đang cho thuê</StatusBadge>;
-                }
-                return <StatusBadge tone="neutral">Đang trống</StatusBadge>;
-              },
-            },
-            {
-              key: "passport",
-              header: "Hộ chiếu số",
-              render: (r: LandlordUnitRow) => {
-                const isRented = unitDisplayStatus(state, r.unit) === "rented";
-                return isRented ? (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      handleOpenPassport(r.unit);
-                    }}
-                    className="btn btn-quiet btn-xs"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                      color: "var(--kelp)",
-                      fontWeight: 600,
-                      background: "rgba(16, 185, 129, 0.08)",
-                      border: "1px solid rgba(16, 185, 129, 0.2)",
-                      borderRadius: "var(--r)",
-                      padding: "3px 8px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <ShieldCheck size={13} /> Xem 10 mục
-                  </button>
-                ) : (
-                  <span className="muted xs">—</span>
-                );
-              },
-            },
-          ]}
-          rows={rows.slice(0, 5)}
-          rowHref={(r) => `/landlord/units/${r.unit.id}`}
-          empty="Bạn chưa ký gửi căn nào."
-        />
+        <QueryView query={units}>
+          {(rows) => (
+            <DataTable<UnitRow>
+              columns={[
+                { key: "unit", header: "Căn", render: (r) => unitLabel(r) },
+                { key: "layout", header: "Loại căn", render: (r) => LAYOUT_LABEL[r.layoutKind] },
+                { key: "rent", header: "Giá thuê", align: "right", render: (r) => <span className="tnum">{vnd(r.rent)}đ</span> },
+                { key: "status", header: "Trạng thái", render: (r) => <UnitBadge r={r} now={now} /> },
+                { key: "viewings", header: "Lượt xem", align: "right", render: (r) => <span className="tnum">{r.totalViewings}</span> },
+              ]}
+              rows={rows.slice(0, 5)}
+              rowHref={(r) => `/landlord/units/${r.id}`}
+              empty="Bạn chưa ký gửi căn nào."
+            />
+          )}
+        </QueryView>
       </Section>
-
-      {/* Modal Lối tắt nhanh: Hộ chiếu bàn giao số (Digital Handover Passport) */}
-      <Modal
-        open={showPassportModal}
-        onClose={() => {
-          setShowPassportModal(false);
-          setSelectedPassportUnit(null);
-        }}
-        title="Hộ chiếu bàn giao số (Digital Handover Passport)"
-        description={
-          selectedPassportUnit
-            ? `Căn ${unitAddress(selectedPassportUnit)} · Vinhomes Ocean Park`
-            : "Niêm phong hiện trạng 10 hạng mục nội thất nhúng Timestamp + Geofence GPS"
-        }
-        variant="wide"
-        footer={
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", flexWrap: "wrap", gap: 8 }}>
-            <span className="muted xs" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <ShieldCheck size={14} style={{ color: "var(--kelp)" }} /> Mã hoá AES-256 · Có giá trị đối soát pháp lý
-            </span>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                setShowPassportModal(false);
-                setSelectedPassportUnit(null);
-              }}
-            >
-              Đóng
-            </button>
-          </div>
-        }
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div
-            style={{
-              padding: "12px 14px",
-              background: "var(--surface-2, #f8fafc)",
-              border: "1px solid var(--line, #e2e8f0)",
-              borderRadius: "var(--r, 8px)",
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: 12,
-              fontSize: 12.5,
-            }}
-          >
-            <div>
-              <span className="muted" style={{ display: "block" }}>Căn hộ kiểm định</span>
-              <b>{selectedPassportUnit ? unitAddress(selectedPassportUnit) : "VHOP-S1.03-1512"}</b>
-            </div>
-            <div>
-              <span className="muted" style={{ display: "block" }}>Thời điểm lập hộ chiếu</span>
-              <b>15/09/2026 14:30 (Timestamp chuẩn)</b>
-            </div>
-            <div>
-              <span className="muted" style={{ display: "block" }}>Địa điểm Geofence GPS</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <MapPin size={12} style={{ color: "var(--lagoon)" }} /> Phân khu Sapphire, VHOP
-              </span>
-            </div>
-            <div>
-              <span className="muted" style={{ display: "block" }}>Field Host thực địa</span>
-              <b>Lê Quốc Bảo (Thẻ cư dân H01)</b>
-            </div>
-          </div>
-
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>Hiện trạng 10 hạng mục nội thất trọng yếu:</span>
-              <span className="badge badge-kelp" style={{ fontSize: 11 }}>10/10 Đạt chuẩn bàn giao</span>
-            </div>
-            <div className={styles.passportGrid}>
-              {PASSPORT_ITEMS.map((item, idx) => (
-                <div key={item} className={styles.passportItem}>
-                  <CheckCircle2 size={16} style={{ color: "var(--kelp)", flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600 }}>{idx + 1}. {item}</div>
-                    <span className="muted xs">Đã chụp ảnh kiểm định · Nguyên vẹn khi bàn giao</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div
-            style={{
-              padding: "12px 14px",
-              background: "rgba(16, 185, 129, 0.05)",
-              border: "1px solid rgba(16, 185, 129, 0.2)",
-              borderRadius: "var(--r, 8px)",
-              display: "flex",
-              gap: 10,
-              fontSize: 12.5,
-              lineHeight: 1.5,
-            }}
-          >
-            <Info size={18} style={{ color: "var(--kelp)", flexShrink: 0, marginTop: 2 }} />
-            <div>
-              <b style={{ color: "var(--kelp)" }}>Bảo vệ tài sản chủ nhà (Quy chuẩn Điều 328 BLDS):</b>
-              <p style={{ margin: "2px 0 0", color: "var(--ink-700, #334155)" }}>
-                Ảnh chụp 10 hạng mục kèm timestamp là căn cứ pháp lý duy nhất khi đối soát trả phòng. Hư hỏng do bất cẩn (rách sofa, trầy sâu sàn gỗ, hỏng điều hoà...) sẽ tự động khấu trừ vào <b>Tiền Cọc Bảo Đảm Tài Sản</b> của khách. Hao mòn tự nhiên do chủ nhà chịu.
-              </p>
-            </div>
-          </div>
-        </div>
-      </Modal>
     </div>
+  );
+}
+
+function Kpis({ rows, f }: { rows: UnitRow[]; f: Finance }) {
+  const count = (pred: (r: UnitRow) => boolean) => rows.filter(pred).length;
+  const rented = count((r) => r.status === "rented");
+  const holding = count((r) => r.status === "holding");
+  const open = count((r) => r.status === "available" || r.status === "viewing");
+  const forfeit = f.thisMonth.forfeit ?? 0;
+  return (
+    <div className={styles.kpis}>
+      <StatTile
+        hero
+        label="Thực nhận tháng này"
+        value={vndShort(f.thisMonth.net)}
+        delta={{ text: forfeit ? `sau phí dịch vụ, gồm bồi thường ${vndShort(forfeit)}` : "sau phí dịch vụ ký gửi", tone: "flat" }}
+        spark={f.history.map((m) => m.net)}
+      />
+      <StatTile label="Đang cho thuê" value={String(rented)} unit={`/ ${rows.length}`} />
+      <StatTile label="Đang giữ căn" value={String(holding)} delta={{ text: "khách đã cọc, chờ ký hợp đồng", tone: "flat" }} />
+      <StatTile label="Còn trống, đang mở khách" value={String(open)} delta={{ text: "Host đón khách thay bạn", tone: "flat" }} />
+    </div>
+  );
+}
+
+function UnitBadge({ r, now }: { r: UnitRow; now: number | null }) {
+  const meta = UNIT_STATUS_META[r.status];
+  if (r.status === "holding" && now) {
+    const h = hoursLeft(r.holdExpiresAt, now);
+    return <StatusBadge tone={meta.tone}>{h === null ? meta.label : `${meta.label} · còn ${h} giờ`}</StatusBadge>;
+  }
+  return <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>;
+}
+
+const TONE_CLASS: Record<LandlordActivity["tone"], string> = { info: "", success: "t-success", warning: "t-warning" };
+
+function ActivityFeed({ items, now }: { items: LandlordActivity[]; now: number | null }) {
+  if (items.length === 0) {
+    return <p className="muted small" style={{ margin: 0 }}>Chưa có hoạt động. Khi khách đặt lịch, Host dẫn xem hoặc khách cọc, bạn sẽ thấy ở đây.</p>;
+  }
+  return (
+    <ul className={styles.feed}>
+      {items.map((n) => (
+        <li key={n.id} className={TONE_CLASS[n.tone] ? styles[TONE_CLASS[n.tone]] : ""}>
+          <div>
+            <b>{n.title}</b>
+            <p className="small muted">
+              <Link href={`/landlord/units/${n.unitId}`}>{n.unitCode}</Link> · {n.body}
+            </p>
+          </div>
+          <span className="xs muted">
+            {fmtTime(n.at)}
+            {now ? ` · ${relTime(n.at, now)}` : ""}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

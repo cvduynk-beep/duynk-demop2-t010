@@ -51,10 +51,10 @@ describe('Inspection — đọc & nhận ca', () => {
     expect(boardA.mine[0].landlordName).toBe('Nguyễn Thị Mai');
   });
 
-  it('board: không có hostId ⇒ Open Pool ngay; bản nháp chưa ký không hiện; done = ca tôi đã nộp', async () => {
+  it('board: không có hostId ⇒ Open Pool ngay; hồ sơ nháp cũ (trước khi bỏ nháp) không hiện; done = ca tôi đã nộp', async () => {
     const a = w.addInspector('a');
     const noHost = w.addCase({});
-    w.addCase({ stage: 'draft' });
+    w.addCase({ stage: 'draft' as any });
     const done = w.addCase({ stage: 'approved', hostId: a.id });
     (w.metaOf(done.mandate) as any).decidedBy = a.id;
     (w.metaOf(done.mandate) as any).decidedAt = '2026-10-05T00:00:00.000Z';

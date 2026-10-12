@@ -123,7 +123,7 @@ export class LandlordPhotoService {
 
   /** Sau khi Inspector nhận ca thẩm định thì hồ sơ đã khóa — ảnh bổ sung phải qua Inspector. */
   private assertEditable(stage: ConsignmentStage, verb: 'thêm' | 'xóa') {
-    if (stage !== 'draft' && stage !== 'awaiting_host') {
+    if (stage !== 'awaiting_host') {
       throw new ConflictException(`Hồ sơ đang thẩm định hoặc đã chốt, không thể ${verb} ảnh.`);
     }
   }

@@ -477,7 +477,7 @@ export const TEMPLATE_STEPS: TemplateStep[] = [
     actor: "landlord",
     step: "Đăng ký căn và ký uỷ quyền độc quyền bằng OTP",
     route: "/landlord/consign",
-    action: "signConsignment",
+    action: "submitConsignment",
     primary: "CORE-01",
     attached: ["LL-01", "LL-02", "CORE-00", "CORE-03"],
     produces: "mandate",
