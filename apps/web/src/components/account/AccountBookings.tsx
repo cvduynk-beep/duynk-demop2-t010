@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
-import { fmtDateTime, vnd } from "@/lib/mock/format";
+import { fmtDateTime, vnd } from "@/lib/format";
 import { bookingUnit, hostName, tenantAllIn } from "@/lib/mock/selectors";
 import { tenantPastBookings, tenantUpcomingBookings } from "@/lib/mock/selectors-tenant";
 import { useMock } from "@/lib/mock/store";

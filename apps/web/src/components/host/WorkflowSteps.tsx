@@ -35,8 +35,8 @@ import {
   sendReminder,
   tenantCheckIn,
 } from "@/lib/mock/actions";
-import { dayLabel, fmtTime, vnd } from "@/lib/mock/format";
-import { chainViewingUnits, holdHoursFor, holdMsLeft, hostEarnings, isHoldForfeited, similarUnits } from "@/lib/mock/selectors";
+import { dayLabel, fmtTime, vnd } from "@/lib/format";
+import { chainViewingUnits, holdHoursFor, holdMsLeft, hostEarnings, isHoldForfeited } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
 import type { Booking } from "@/lib/mock/types";
 import { hostById, zoneById, unitAddress, unitById, type Unit } from "@/lib/mock/units";

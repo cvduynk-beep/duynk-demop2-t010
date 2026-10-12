@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { clientRandomIndex, useClientValue } from "@/lib/useClientValue";
 import Link from "next/link";
 import {
-  Bell,
   Building,
   CalendarCheck,
   ChevronRight,
@@ -12,9 +12,7 @@ import {
   KeyRound,
   LogOut,
   ShieldCheck,
-  Sparkles,
   User,
-  Users,
 } from "lucide-react";
 import { LogoMark } from "@/components/brand/Logo";
 import { LuxeExplorer } from "@/components/explorer/LuxeExplorer";
@@ -26,10 +24,10 @@ import { VINNY_GREETINGS } from "@/components/mascot/ButlerMascot";
 import { useMock } from "@/lib/mock/store";
 import { useSession, signOut } from "@/lib/auth/client";
 import { chatAppend, chatSetCriteria, chatSetSearch, countGuestMessage } from "@/lib/mock/actions";
-import { interpret, searchUnits } from "@/lib/mock/matchmaker";
+import { interpret } from "@/lib/mock/matchmaker";
 import { unitStatus } from "@/lib/mock/selectors";
 import { UNITS } from "@/lib/mock/units";
-import { allInCost } from "@/lib/mock/cost";
+import { allInCost } from "@/lib/pricing/cost";
 import styles from "./MobileAppExperience.module.css";
 
 type MobileTab = "explore" | "chat" | "booking" | "saved" | "account";
@@ -41,11 +39,8 @@ export function MobileAppExperience({ initialTab = "explore" }: { initialTab?: M
   const { user } = useSession();
   const [thinking, setThinking] = useState<{ steps: string[] } | null>(null);
   const [freshId, setFreshId] = useState<string | null>(null);
-  const [greetingIdx, setGreetingIdx] = useState(0);
-
-  useEffect(() => {
-    setGreetingIdx(Math.floor(Math.random() * VINNY_GREETINGS.length));
-  }, []);
+  // Câu chào ngẫu nhiên cho lần tải trang (chỉ ở trình duyệt, không lệch markup khi hydrate).
+  const greetingIdx = useClientValue(() => clientRandomIndex(VINNY_GREETINGS.length), 0);
 
   const statusOf = (u: (typeof UNITS)[number]) => unitStatus(state, u);
   const openCount = UNITS.filter((u) => unitStatus(state, u) === "available").length;

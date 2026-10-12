@@ -5,7 +5,7 @@ import { MessageCircleMore } from "lucide-react";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { ZaloBubble } from "@/components/zalo/ZaloThread";
 import { requestOtp, verifyOtp } from "@/lib/mock/actions";
-import { fmtPhone, normalizePhone } from "@/lib/mock/format";
+import { fmtPhone, normalizePhone } from "@/lib/format";
 import { useMock } from "@/lib/mock/store";
 import type { OtpChallenge } from "@/lib/mock/types";
 import { useNow } from "@/lib/useNow";

@@ -305,7 +305,7 @@ describe("Calendar Date Picker helpers", () => {
 
   it("Xem tất cả căn: searchUnits với criteria trống trả về 100% căn hộ available", () => {
     const s = seedState(Date.now());
-    const statusOf = (u: any) => unitStatus(s, u);
+    const statusOf = (u: (typeof UNITS)[number]) => unitStatus(s, u);
     const availableUnits = UNITS.filter((u) => statusOf(u) === "available");
     const allMatches = searchUnits(
       { layouts: [], zones: [], buildings: [], items: [], household: { persons: 1, motorbikes: 1, cars: 0 } },

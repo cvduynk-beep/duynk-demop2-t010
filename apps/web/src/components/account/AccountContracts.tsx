@@ -5,7 +5,7 @@ import { KeyValue } from "@/components/ui/KeyValue";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { fmtDate, maskPhone, vnd } from "@/lib/mock/format";
+import { fmtDate, maskPhone, vnd } from "@/lib/format";
 import { bookingUnit } from "@/lib/mock/selectors";
 import { tenantContracts } from "@/lib/mock/selectors-tenant";
 import { useMock } from "@/lib/mock/store";

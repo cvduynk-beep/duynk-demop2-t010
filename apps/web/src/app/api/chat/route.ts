@@ -94,7 +94,8 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    let { message, budget_ceiling, occupants, motorbikes, cars } = body;
+    const { budget_ceiling, occupants, motorbikes, cars } = body;
+    let { message } = body;
 
     if (!message || typeof message !== "string" || !message.trim()) {
       return NextResponse.json({ ok: false, message: "Tin nhắn không được để trống" }, { status: 400 });
@@ -199,9 +200,9 @@ export async function POST(req: Request) {
       model: "gemini-flash-ready",
       message: "Agent ready for local deterministic execution",
     });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Internal server error" },
+      { ok: false, error: (error instanceof Error && error.message) || "Internal server error" },
       { status: 500 }
     );
   }

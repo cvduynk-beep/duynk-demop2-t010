@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { FileSignature, Users, FileText, BookOpen, ShieldCheck, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { signLease, saveTenantRefundAccount } from "@/lib/mock/actions";
 import { useMock } from "@/lib/mock/store";
 import { tenantLatestRefundAccount } from "@/lib/mock/selectors-tenant";
-import { RATES, type PaymentCycle } from "@/lib/mock/cost";
-import { vnd } from "@/lib/mock/format";
-import { HOUSE_RULES } from "@/lib/mock/house-rules";
+import { RATES, type PaymentCycle } from "@/lib/pricing/cost";
+import { vnd } from "@/lib/format";
+import { HOUSE_RULES } from "@/lib/legal/house-rules";
 import type { Booking } from "@/lib/mock/types";
 import { zoneById, type Unit } from "@/lib/mock/units";
 import styles from "./Deal.module.css";
@@ -58,65 +58,61 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
   const [accountNo, setAccountNo] = useState(savedAccount?.accountNo || "");
   const [holderName, setHolderName] = useState(initialHolderName);
 
-  // Tra cứu tự động Napas 247
+  // Tra cứu tự động Napas 247. Kết quả gắn với khoá (ngân hàng, số TK, tên KYC): số TK chưa hợp lệ ⇒ "idle", đã hợp lệ
+  // mà chưa có kết quả cho đúng khoá ⇒ "looking_up" — suy ra lúc render, effect chỉ chạy tra cứu bất đồng bộ.
   type NapasStatus = "idle" | "looking_up" | "verified" | "mismatch" | "not_found";
-  const [napasStatus, setNapasStatus] = useState<NapasStatus>(() => (savedAccount?.accountNo ? "verified" : "idle"));
-  const [napasOwner, setNapasOwner] = useState<string>(() => (savedAccount?.holderName || initialHolderName));
+  type NapasResult = { key: string; status: Exclude<NapasStatus, "idle" | "looking_up">; owner: string };
+  const kycName = String(booking.kyc?.fullName || booking.tenant?.name || "").toUpperCase();
+  const napasKeyOf = (bank: string, custom: string, account: string) =>
+    /^\d{6,19}$/.test(account.trim()) ? [bank, custom, account.trim(), kycName].join("|") : null;
+  const napasKey = napasKeyOf(selectedBank, customBank, accountNo);
+  const [napasResult, setNapasResult] = useState<NapasResult | null>(() => {
+    const key = napasKeyOf(initialBank, initialCustomBank, savedAccount?.accountNo || "");
+    return key ? { key, status: "verified", owner: savedAccount?.holderName || initialHolderName } : null;
+  });
+  const napasStatus: NapasStatus = !napasKey ? "idle" : napasResult?.key === napasKey ? napasResult.status : "looking_up";
+  const napasOwner = napasResult?.owner ?? (savedAccount?.holderName || initialHolderName);
   const [allowManualEdit, setAllowManualEdit] = useState(false);
 
-  // Chỉ khởi tạo 1 lần từ tài khoản đã lưu (không tự động đè lại khi người dùng chủ động xoá)
-  const hasInitializedFromSaved = useRef(Boolean(savedAccount?.accountNo));
-  useEffect(() => {
-    if (!hasInitializedFromSaved.current && savedAccount?.accountNo) {
-      hasInitializedFromSaved.current = true;
-      if (POPULAR_BANKS.includes(savedAccount.bankName)) {
-        setSelectedBank(savedAccount.bankName);
-      } else {
-        setSelectedBank("Khác");
-        setCustomBank(savedAccount.bankName);
-      }
-      setAccountNo(savedAccount.accountNo);
-      setHolderName(savedAccount.holderName || initialHolderName);
-      setNapasStatus("verified");
-      setNapasOwner(savedAccount.holderName || initialHolderName);
-    }
-  }, [savedAccount, initialHolderName]);
+  // Chỉ khởi tạo 1 lần từ tài khoản đã lưu khi nó có sau lần render đầu (không đè lại khi người dùng chủ động xoá).
+  // Điều chỉnh state ngay lúc render thay vì trong effect.
+  const [initializedFromSaved, setInitializedFromSaved] = useState(Boolean(savedAccount?.accountNo));
+  if (!initializedFromSaved && savedAccount?.accountNo) {
+    setInitializedFromSaved(true);
+    const popular = POPULAR_BANKS.includes(savedAccount.bankName);
+    const bank = popular ? savedAccount.bankName : "Khác";
+    const custom = popular ? customBank : savedAccount.bankName;
+    setSelectedBank(bank);
+    if (!popular) setCustomBank(savedAccount.bankName);
+    setAccountNo(savedAccount.accountNo);
+    setHolderName(savedAccount.holderName || initialHolderName);
+    const key = napasKeyOf(bank, custom, savedAccount.accountNo);
+    if (key) setNapasResult({ key, status: "verified", owner: savedAccount.holderName || initialHolderName });
+  }
 
-  // Tra cứu danh bạ Napas 247 khi nhập số tài khoản
+  // Tra cứu danh bạ Napas 247 khi số tài khoản (hợp lệ) / ngân hàng đổi
   useEffect(() => {
+    if (!napasKey) return;
     const clean = accountNo.trim();
-    if (!clean) {
-      setNapasStatus("idle");
-      return;
-    }
-    if (!/^\d{6,19}$/.test(clean)) {
-      setNapasStatus("idle");
-      return;
-    }
-
-    setNapasStatus("looking_up");
     const timer = setTimeout(() => {
       // Giả lập tra cứu Napas 247:
       // Test case: nếu kết thúc bằng 888 => mô phỏng lệch tên người khác
       if (clean.endsWith("888")) {
         const otherName = "NGUYỄN THỊ BÍCH";
-        setNapasStatus("mismatch");
-        setNapasOwner(otherName);
+        setNapasResult({ key: napasKey, status: "mismatch", owner: otherName });
         setHolderName(otherName);
       } else if (clean.endsWith("000000")) {
         // Test case: số tài khoản không tồn tại
-        setNapasStatus("not_found");
+        setNapasResult((prev) => ({ key: napasKey, status: "not_found", owner: prev?.owner ?? "" }));
       } else {
         // Hợp lệ chính chủ
-        const verifiedName = String(booking.kyc?.fullName || booking.tenant?.name || "").toUpperCase();
-        setNapasStatus("verified");
-        setNapasOwner(verifiedName);
-        setHolderName(verifiedName);
+        setNapasResult({ key: napasKey, status: "verified", owner: kycName });
+        setHolderName(kycName);
       }
     }, 450);
 
     return () => clearTimeout(timer);
-  }, [accountNo, selectedBank, customBank, booking.kyc?.fullName, booking.tenant.name]);
+  }, [napasKey, accountNo, kycName]);
 
   // Modal xem chi tiết điều khoản hợp đồng
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -360,7 +356,6 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
                   setAccountNo(val);
                   setFieldErrors((prev) => ({ ...prev, accountNo: "" }));
                   if (!val.trim()) {
-                    setNapasStatus("idle");
                     setHolderName("");
                     setAllowManualEdit(true);
                   }

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CalendarSearch, ChevronRight } from "lucide-react";
 import { STATUS_META } from "./status";
-import { dayLabel, fmtTime } from "@/lib/mock/format";
+import { dayLabel, fmtTime } from "@/lib/format";
 import { bookingByRef } from "@/lib/mock/selectors";
 import { accountPhone, ownsBooking, tenantBookings } from "@/lib/mock/selectors-tenant";
 import { useMock } from "@/lib/mock/store";

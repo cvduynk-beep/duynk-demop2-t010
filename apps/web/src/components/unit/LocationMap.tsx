@@ -1,5 +1,6 @@
 import { MapPin } from "lucide-react";
-import { zoneById, type ZoneId } from "@/lib/mock/units";
+import { zoneById, type ZoneId } from "@/lib/units";
+import { ZONE_NEARBY } from "@/lib/units/zone-geo";
 import styles from "./LocationMap.module.css";
 
 const ZONE_BOX: Record<ZoneId, { x: number; y: number; w: number; h: number; label: string }> = {
@@ -11,12 +12,14 @@ const ZONE_BOX: Record<ZoneId, { x: number; y: number; w: number; h: number; lab
 };
 
 /** Sơ đồ phân khu Ocean Park 1 (minh hoạ, không theo tỷ lệ) với vị trí căn đang xem. */
-export function LocationMap({ zoneId, building }: { zoneId: ZoneId; building: string }) {
+/** `zoneId` không rõ (tên phân khu trong DB chưa khớp) ⇒ vẫn vẽ sơ đồ, không ghim vị trí, không liệt kê địa danh. */
+export function LocationMap({ zoneId, building }: { zoneId?: ZoneId; building: string }) {
   const zone = zoneById(zoneId);
-  const at = ZONE_BOX[zoneId];
+  const at = zoneId ? ZONE_BOX[zoneId] : undefined;
+  const nearby = zoneId ? ZONE_NEARBY[zoneId] : [];
   return (
     <div className={styles.wrap}>
-      <svg viewBox="0 0 400 268" role="img" aria-label={`Sơ đồ phân khu: căn nằm ở ${zone.name}, toà ${building}`} className={styles.svg}>
+      <svg viewBox="0 0 400 268" role="img" aria-label={`Sơ đồ phân khu: căn nằm ở ${zone?.name ?? "Ocean Park 1"}, toà ${building}`} className={styles.svg}>
         <rect width="400" height="268" rx="16" className={styles.land} />
         <path d="M110 118c30-30 90-38 138-24 38 11 56 32 40 54-18 24-72 30-118 24-48-6-88-24-60-54z" className={styles.lake} />
         <text x="200" y="146" textAnchor="middle" className={styles.lakeLabel}>
@@ -34,13 +37,15 @@ export function LocationMap({ zoneId, building }: { zoneId: ZoneId; building: st
             </g>
           );
         })}
-        <g transform={`translate(${at.x + at.w - 16} ${at.y - 6})`}>
-          <circle r="13" className={styles.pin} />
-          <circle r="4.5" className={styles.pinDot} />
-        </g>
+        {at && (
+          <g transform={`translate(${at.x + at.w - 16} ${at.y - 6})`}>
+            <circle r="13" className={styles.pin} />
+            <circle r="4.5" className={styles.pinDot} />
+          </g>
+        )}
       </svg>
       <ul className={styles.near}>
-        {zone.nearby.map((n) => (
+        {nearby.map((n) => (
           <li key={n.label}>
             <MapPin size={14} />
             <span>{n.label}</span>

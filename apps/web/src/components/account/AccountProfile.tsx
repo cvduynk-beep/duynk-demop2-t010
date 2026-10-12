@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { toast } from "@/components/ui/Toast";
 import { accountApi } from "@/lib/apiClient";
 import { refreshSession, useSession } from "@/lib/auth/client";
-import { fmtDate, fmtPhone } from "@/lib/mock/format";
+import { fmtDate, fmtPhone } from "@/lib/format";
 import { tenantLatestKyc, tenantLatestRefundAccount } from "@/lib/mock/selectors-tenant";
 import { setTenantProfile, deleteTenantRefundAccount } from "@/lib/mock/actions";
 import { useMock } from "@/lib/mock/store";

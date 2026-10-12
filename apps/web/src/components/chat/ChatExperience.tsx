@@ -1,20 +1,19 @@
 "use client";
 
-import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
+import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { ArrowRight, BadgeCheck, CalendarClock, Plus, ReceiptText, Footprints, MapPin, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
-import { LogoMark } from "@/components/brand/Logo";
 import { matchmakerApi } from "@/lib/apiClient";
 import { chatAppend, chatReset, chatSetCriteria, chatSetSearch, countGuestMessage } from "@/lib/mock/actions";
-import { DEFAULT_HOUSEHOLD, isBargain } from "@/lib/mock/cost";
-import { vndShort } from "@/lib/mock/format";
+import { DEFAULT_HOUSEHOLD, isBargain } from "@/lib/pricing/cost";
+import { vndShort } from "@/lib/format";
 import { interpret, searchUnits } from "@/lib/mock/matchmaker";
 import { unitStatus } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
 import type { CriteriaState } from "@/lib/mock/types";
-import { UNITS } from "@/lib/mock/units";
+import { UNITS, type Unit } from "@/lib/mock/units";
 import { useUnits } from "@/lib/property/useUnits";
 import { useRole, useSession } from "@/lib/auth/client";
+import { clientRandomIndex, useClientValue } from "@/lib/useClientValue";
 import { ButlerMascot, VINNY_GREETINGS, type MascotMood } from "@/components/mascot/ButlerMascot";
 import { Composer } from "./Composer";
 import { InlineChatUnits } from "./InlineChatUnits";
@@ -29,40 +28,14 @@ const TRUST = [
   { icon: CalendarClock, text: "Giữ căn qua VietQR" },
 ];
 
-const MASCOT_POSITIONS = [
-  "pos_top_center",
-  "pos_top_right",
-  "pos_side_right",
-  "pos_top_left",
-  "pos_side_left",
-] as const;
-
-type MascotPosition = (typeof MASCOT_POSITIONS)[number];
-
-const POSITION_SPEECHES: Record<MascotPosition, { speech: string; badge: string }> = {
-  pos_top_center: {
-    speech: "Đang quan sát toàn bộ rổ hàng Ocean Park 1 ✨",
-    badge: "Đỉnh trung tâm",
-  },
-  pos_top_right: {
-    speech: "Góc này ngắm biển hồ Crystal Lagoon đẹp lắm nè! 🌊",
-    badge: "Góc trên phải",
-  },
-  pos_side_right: {
-    speech: "Bạn thích căn ban công Đông Nam hay view thoáng mát? 🍃",
-    badge: "Sườn phải",
-  },
-  pos_top_left: {
-    speech: "Mình giữ sẵn thẻ thang máy cho bạn rồi nhé! 🔑",
-    badge: "Góc trên trái",
-  },
-  pos_side_left: {
-    speech: "Host nội khu sẵn sàng đón bạn trong 3 phút nha! 🏢",
-    badge: "Sườn trái",
-  },
-};
-
 /** Trang chủ khách thuê: ban đầu là hero + khung chat; khi bắt đầu tìm căn, chat thu về cột trái và mở màn kết quả. */
+/** URL yêu cầu mở thẳng danh mục căn (`?view=all`, `?catalog=1`, `?tab=results`). */
+function urlWantsResults(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("view") === "all" || params.get("catalog") === "1" || params.get("tab") === "results";
+}
+
 export function ChatExperience({ below }: { below: ReactNode }) {
   const state = useMock();
   const role = useRole();
@@ -70,15 +43,19 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   const [thinking, setThinking] = useState<{ steps: string[] } | null>(null);
   const [freshId, setFreshId] = useState<string | null>(null);
   const [tab, setTab] = useState<"chat" | "results">("chat");
+  // `/?view=all` (hoặc `catalog=1`, `tab=results`) mở thẳng tab kết quả — đọc URL ở trình duyệt, áp một lần khi render.
+  const wantsResults = useClientValue(urlWantsResults, false);
+  const [appliedUrlTab, setAppliedUrlTab] = useState(false);
+  if (wantsResults && !appliedUrlTab) {
+    setAppliedUrlTab(true);
+    setTab("results");
+  }
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [mascotPos, setMascotPos] = useState<MascotPosition>("pos_top_center");
-  const [isCruising, setIsCruising] = useState(false);
-  const [mascotCustomSpeech, setMascotCustomSpeech] = useState<string | null>(null);
   const busy = useRef(false);
 
   const { units } = useUnits();
-  const statusOf = (u: any) => unitStatus(state, u);
+  const statusOf = (u: Unit) => unitStatus(state, u);
   const openCount = units.filter((u) => unitStatus(state, u) === "available").length;
   const results = searchUnits(chat.criteria, statusOf, units);
 
@@ -90,56 +67,14 @@ export function ChatExperience({ below }: { below: ReactNode }) {
     ? "listening"
     : "idle";
 
-  // Thỉnh thoảng linh vật tự động di chuyển tuần tra quanh khung chat tổng
-  useEffect(() => {
-    if (isTyping || !!thinking) return;
-
-    const timer = setInterval(() => {
-      setMascotPos((prev) => {
-        const nextIdx = (MASCOT_POSITIONS.indexOf(prev) + 1) % MASCOT_POSITIONS.length;
-        const nextPos = MASCOT_POSITIONS[nextIdx];
-        setIsCruising(true);
-        setTimeout(() => setIsCruising(false), 1400);
-        return nextPos;
-      });
-    }, 12000); // Tự động di chuyển mỗi 12 giây
-
-    return () => clearInterval(timer);
-  }, [isTyping, thinking]);
-
-  // Khi đang gõ phím, đưa robot về phía trên để không che khuất nội dung
-  useEffect(() => {
-    if (isTyping && (mascotPos === "pos_side_left" || mascotPos === "pos_side_right")) {
-      setIsCruising(true);
-      setMascotPos("pos_top_center");
-      setTimeout(() => setIsCruising(false), 1400);
-    }
-  }, [isTyping, mascotPos]);
-
-  // Chuyển góc tuần tra khi người dùng chạm vào robot hoặc huy hiệu
-  const cycleMascotPosition = () => {
-    setMascotPos((prev) => {
-      const nextIdx = (MASCOT_POSITIONS.indexOf(prev) + 1) % MASCOT_POSITIONS.length;
-      const nextPos = MASCOT_POSITIONS[nextIdx];
-      setIsCruising(true);
-      setTimeout(() => setIsCruising(false), 1400);
-      setMascotCustomSpeech(POSITION_SPEECHES[nextPos].speech);
-      setTimeout(() => setMascotCustomSpeech(null), 4000);
-      return nextPos;
-    });
-  };
-
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_LOGIN === "true";
   const GUEST_QUOTA = 15;
-  const locked = !isDemo && role === null && (state.guestSent || 0) >= GUEST_QUOTA;
+  const locked = role === null && (state.guestSent || 0) >= GUEST_QUOTA;
   const { user } = useSession();
   const first = role === "tenant" ? (user?.fullName?.split(" ").slice(-1)[0] ?? null) : null;
-  const [greetingIdx, setGreetingIdx] = useState(0);
-
-  useEffect(() => {
-    // Chọn ngẫu nhiên 1 trong 3 câu chào ấn tượng của Vinny khi vào trang
-    setGreetingIdx(Math.floor(Math.random() * VINNY_GREETINGS.length));
-  }, []);
+  // Chọn ngẫu nhiên 1 trong các câu chào của Vinny khi vào trang (chỉ ở trình duyệt); bấm vào robot để xoay vòng.
+  const greetingStart = useClientValue(() => clientRandomIndex(VINNY_GREETINGS.length), 0);
+  const [greetingOffset, setGreetingOffset] = useState(0);
+  const greetingIdx = (greetingStart + greetingOffset) % VINNY_GREETINGS.length;
 
   const activeGreeting = VINNY_GREETINGS[greetingIdx];
   const greeting = first ? `Chào ${first}! ${activeGreeting}` : activeGreeting;
@@ -188,7 +123,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
 
         if (isSearch && budget && budget >= 3000000) {
           const rawLayout = result.criteria.layouts?.[0]?.toLowerCase() || "";
-          let prismaLayout: any = undefined;
+          let prismaLayout: string | undefined;
           if (rawLayout.includes("studio")) prismaLayout = "STUDIO";
           else if (rawLayout.includes("1pn") || rawLayout.includes("one")) prismaLayout = "ONE_BED_PLUS";
           else if (rawLayout.includes("3pn") || rawLayout.includes("three")) prismaLayout = "THREE_BED";
@@ -208,7 +143,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
         const chatData = (await Promise.race([
           chatPromise,
           new Promise((resolve) => setTimeout(() => resolve(null), 1600)),
-        ])) as any;
+        ])) as { ok?: boolean; response?: string } | null;
 
         if (chatData?.ok && chatData?.response) {
           aiResponseText = chatData.response;
@@ -261,12 +196,8 @@ export function ChatExperience({ below }: { below: ReactNode }) {
     };
     window.addEventListener("vinstay:view-all-units", handleEvent);
 
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("view") === "all" || params.get("catalog") === "1" || params.get("tab") === "results") {
-        chatSetSearch({ layouts: [], zones: [], buildings: [], items: [], household: { ...DEFAULT_HOUSEHOLD } });
-        setTab("results");
-      }
+    if (urlWantsResults()) {
+      chatSetSearch({ layouts: [], zones: [], buildings: [], items: [], household: { ...DEFAULT_HOUSEHOLD } });
     }
 
     return () => {
@@ -275,7 +206,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   }, []);
 
   const renderedBelow = isValidElement(below)
-    ? cloneElement(below as any, { onViewAll: handleViewAllUnits })
+    ? cloneElement(below as ReactElement<{ onViewAll?: () => void }>, { onViewAll: handleViewAllUnits })
     : below;
 
   const onCriteria = (c: CriteriaState) => chatSetCriteria(c);
@@ -454,7 +385,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
                 className={styles.railActionBtn}
                 onClick={() => {
                   chatReset();
-                  setGreetingIdx((prev) => (prev + 1) % VINNY_GREETINGS.length);
+                  setGreetingOffset((prev) => prev + 1);
                 }}
                 title="Bắt đầu cuộc trò chuyện mới"
               >

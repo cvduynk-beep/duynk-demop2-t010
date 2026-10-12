@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Store chạy trên localStorage của trình duyệt; dựng một window tối giản cho môi trường node.
 const mem = new Map<string, string>();
@@ -19,8 +19,16 @@ const contracts = await import("@/lib/mock/contracts");
 const FIXED_NOW = new Date("2026-09-28T12:00:00.000Z").getTime();
 
 beforeEach(() => {
+  // Seed dựng theo FIXED_NOW nhưng action (completeMandateExit…) so với Date.now() ⇒ cố định cả đồng hồ, nếu không
+  // test phụ thuộc ngày chạy (vd. T10 đỏ từ 2026-10-10 khi mốc "còn 12 ngày" của seed đã trôi qua theo giờ thật).
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(FIXED_NOW);
   mem.clear();
   resetMockState(FIXED_NOW);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("Admin Contracts - WP1", () => {

@@ -102,10 +102,7 @@ export function ButlerMascot({
   // 3. Cơ chế Robot Vinny thỉnh thoảng tự nói để tạo tò mò cho người dùng
   useEffect(() => {
     const shouldSpeak = autoSpeak ?? size === "hero";
-    if (!shouldSpeak || mood !== "idle") {
-      setAutoSpeech(null);
-      return;
-    }
+    if (!shouldSpeak || mood !== "idle") return; // lời thoại cũ đã được xoá ở cleanup lượt trước
 
     let hideTimer: NodeJS.Timeout;
     let nextTimer: NodeJS.Timeout;
@@ -132,6 +129,7 @@ export function ButlerMascot({
     return () => {
       clearTimeout(nextTimer);
       clearTimeout(hideTimer);
+      setAutoSpeech(null); // dừng nói (đổi mood / tắt autoSpeak / unmount) ⇒ ẩn bong bóng đang hiện
     };
   }, [autoSpeak, size, mood]);
 

@@ -1,53 +1,54 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { SiteNav } from "@/components/nav/SiteNav";
 import { UnitDetail } from "@/components/unit/UnitDetail";
-import { registerDynamicUnits, UNITS, unitAddress, unitById, zoneById, type Unit } from "@/lib/mock/units";
-import { mapDbUnitToFrontendUnit } from "@/lib/property/unitAdapter";
+import { unitAddress, zoneById } from "@/lib/units";
+import { backendUrl } from "@/lib/auth/session";
+import { toUnit } from "@/lib/tenant/adapters";
+import type { TenantUnit } from "@/lib/tenant/types";
 
-const BACKEND_URL = (process.env.BACKEND_URL ?? "http://localhost:4001").replace(/\/+$/, "");
-
-async function getUnitOrFetch(id: string): Promise<Unit | undefined> {
-  const local = unitById(id);
-  if (local) return local;
-
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/v1/properties/units/${id}`, {
-      headers: { Accept: "application/json" },
-      next: { revalidate: 60 },
-    });
-    if (!res.ok) return undefined;
-    const json = await res.json();
-    const data = json.data || json;
-    const mapped = mapDbUnitToFrontendUnit(data);
-    registerDynamicUnits([mapped]);
-    return mapped;
-  } catch {
-    return undefined;
-  }
-}
-
-export function generateStaticParams() {
-  return UNITS.map((u) => ({ id: u.id }));
+/** null = backend trả 404 (căn không tồn tại / không công khai). Backend không với tới hoặc lỗi 5xx thì NÉM LỖI để
+ *  hiện trang lỗi tải, không giả làm "không tồn tại" (lỗi cũ: gọi nhầm cổng 3001 ⇒ mọi căn đều 404). */
+async function fetchUnit(codeOrId: string): Promise<TenantUnit | null> {
+  const res = await fetch(`${backendUrl()}/api/v1/properties/units/${encodeURIComponent(codeOrId)}`, {
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Không tải được căn ${codeOrId} (backend ${res.status})`);
+  const json = await res.json();
+  return json.data || json;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const unit = await getUnitOrFetch(id);
-  if (!unit) return {};
-  return { title: `Căn ${unitAddress(unit)} · ${zoneById(unit.zoneId).name}`, description: unit.title };
+  const dto = await fetchUnit(id).catch(() => null);
+  if (!dto) return {};
+  const unit = toUnit(dto);
+  return { title: `Căn ${unitAddress(unit)} · ${unit.zoneName || zoneById(unit.zoneId)?.name || "Ocean Park"}`, description: `Căn ${unitAddress(unit)} tại Vinhomes Ocean Park: ảnh đã kiểm định, chi phí All-in rõ ràng, có Field Host đón tại sảnh.` };
 }
 
-export default async function UnitPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ book?: string }> }) {
+export default async function UnitPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ book?: string }>;
+}) {
   const { id } = await params;
-  const unit = await getUnitOrFetch(id);
-  if (!unit) notFound();
   const { book } = await searchParams;
+
+  // Dữ liệu căn đến thẳng từ API A2 (DB thật). Mã không có trong DB ⇒ 404, không còn rơi về danh sách mock.
+  const dto = await fetchUnit(id);
+  if (!dto) notFound();
+
+  // Vào bằng UUID hoặc mã viết thường ⇒ chuyển về URL chuẩn theo mã căn.
+  if (dto.code !== id) redirect(`/units/${encodeURIComponent(dto.code)}${book === "1" ? "?book=1" : ""}`);
+
   return (
     <>
       <SiteNav />
       <main>
-        <UnitDetail unit={unit} autoOpenBooking={book === "1"} />
+        <UnitDetail unit={toUnit(dto)} autoOpenBooking={book === "1"} />
       </main>
     </>
   );

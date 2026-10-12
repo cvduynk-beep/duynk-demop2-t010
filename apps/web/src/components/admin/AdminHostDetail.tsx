@@ -11,7 +11,7 @@ import { Section } from "@/components/ui/Section";
 import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 import { toast } from "@/components/ui/Toast";
 import { setHostRoles, setHostSuspended, setHostZones } from "@/lib/mock/actions";
-import { fmtDate, fmtDateTime, fmtPhone, vnd } from "@/lib/mock/format";
+import { fmtDate, fmtDateTime, fmtPhone, vnd } from "@/lib/format";
 import {
   hostBookings,
   hostEarnings,

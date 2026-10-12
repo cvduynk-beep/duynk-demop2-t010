@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlarmClock, Check, ChevronRight, MessageSquareText, Sparkles, X } from "lucide-react";
 import { StatTile } from "@/components/charts/StatTile";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
@@ -14,8 +14,8 @@ import { STATUS_META } from "@/components/booking/status";
 import { VerifiedPhoto } from "@/components/unit/VerifiedPhoto";
 import { hostAccept, hostClaimBooking, hostReject, sendReminder } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { dayLabel, fmtPhone, fmtTime, vnd } from "@/lib/mock/format";
-import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/mock/cost";
+import { dayLabel, fmtPhone, fmtTime, vnd } from "@/lib/format";
+import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/pricing/cost";
 import { hostBookings, isOpenBooking, noticesFor, openTicketsFor } from "@/lib/mock/selectors";
 import { setMockState, useMock } from "@/lib/mock/store";
 import type { Booking } from "@/lib/mock/types";
@@ -101,13 +101,13 @@ export function DispatchBoard() {
   // Push notification real-time toast cho Host khi có ca mới/yêu cầu nối tiếp
   const hostNotices = noticesFor(state, "host", HOST_ID);
   const latestNotice = hostNotices[0];
-  const [lastNotifiedId, setLastNotifiedId] = useState(latestNotice?.id);
+  const lastNotifiedId = useRef(latestNotice?.id);
 
   useEffect(() => {
-    if (!latestNotice || latestNotice.id === lastNotifiedId) return;
-    setLastNotifiedId(latestNotice.id);
+    if (!latestNotice || latestNotice.id === lastNotifiedId.current) return;
+    lastNotifiedId.current = latestNotice.id;
     toast(`${latestNotice.title}: ${latestNotice.body}`, latestNotice.tone === "success" ? "success" : "info");
-  }, [latestNotice, lastNotifiedId]);
+  }, [latestNotice]);
 
   // Nhắc hẹn kép T-10m: hệ thống tự gửi khi còn ≤ 10 phút tới giờ hẹn.
   const dueReminders = now

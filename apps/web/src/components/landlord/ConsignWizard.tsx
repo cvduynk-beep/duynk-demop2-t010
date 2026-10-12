@@ -4,17 +4,11 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import {
   AlertTriangle,
-  BadgePercent,
-  Building,
   Building2,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  DollarSign,
   Flame,
-  Home,
-  Info,
-  Key,
   ShieldCheck,
   Sparkles,
   TrendingDown,
@@ -23,8 +17,8 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
-import { allInCost } from "@/lib/mock/cost";
-import { vnd } from "@/lib/mock/format";
+import { allInCost } from "@/lib/pricing/cost";
+import { vnd } from "@/lib/format";
 import { errorText, landlordApi } from "@/lib/landlord/api";
 import { LAYOUT_LABEL, LEASE_TERM_LABEL } from "@/lib/landlord/labels";
 import type { BuildingOption, Consignment, LayoutKind, LeaseTermPref, LockKind, MyProfile } from "@/lib/landlord/types";
@@ -34,7 +28,7 @@ import { invalidateLandlordData, useLandlordQuery } from "@/lib/landlord/useLand
 import { getMockState, setMockState } from "@/lib/mock/store";
 import { pickHostFor } from "@/lib/mock/selectors";
 import { HOSTS, hostById, zoneOfBuilding } from "@/lib/mock/units";
-import { pushToHost, toAdmin, withNotices, zaloToLandlord } from "@/lib/mock/actions";
+import { pushToHost, toAdmin, withNotices } from "@/lib/mock/actions";
 import { ConsignOtpSign } from "./ConsignOtpSign";
 import { PhotoPicker } from "./PhotoPicker";
 import { QueryView } from "./QueryView";
@@ -385,7 +379,6 @@ function Wizard({
 
   const rentDiff = benchmark.avg > 0 && rent > 0 ? (benchmark.avg - rent) / benchmark.avg : 0;
   const isDeal = rentDiff >= 0.1; // Tiết kiệm >= 10%
-  const isHigh = rentDiff <= -0.12; // Cao hơn >= 12%
 
   // Phân loại mức giá hiện tại theo 3 khung
   const isCompetitiveTier = rent > 0 && rent <= competitiveRent;
@@ -410,7 +403,6 @@ function Wizard({
 
   // Cơ chế Biên độ Giá Sàn Ủy Quyền (Fast-Close Floor Price Corridor)
   const floorRentNum = Number(f.floorRent) || 0;
-  const isFloorValid = !f.allowFastClose || (floorRentNum >= 3_000_000 && floorRentNum < rent);
   const fastCloseDiscount6m =
     f.allowFastClose && floorRentNum > 0 && floorRentNum < rent
       ? Math.round((rent - (rent - floorRentNum) * 0.5) / 50_000) * 50_000

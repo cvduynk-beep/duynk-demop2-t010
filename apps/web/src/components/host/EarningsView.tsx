@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clock3, CreditCard, Database, ShieldCheck, Wallet } from "lucide-react";
+import { CreditCard, Database, Wallet } from "lucide-react";
 import { STATUS_META } from "@/components/booking/status";
 import { StatTile } from "@/components/charts/StatTile";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
@@ -9,7 +9,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { hostApi } from "@/lib/apiClient";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { fmtDate, fmtDateTime, vnd } from "@/lib/mock/format";
+import { fmtDate, vnd } from "@/lib/format";
+import { useNow } from "@/lib/useNow";
 import { hostBookings, hostEarnings } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
 import type { Booking } from "@/lib/mock/types";
@@ -38,6 +39,7 @@ interface HostLiveEarnings {
 export function EarningsView() {
   const state = useMock();
   const [liveData, setLiveData] = useState<HostLiveEarnings | null>(null);
+  const now = useNow(60_000);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
 
   useEffect(() => {
@@ -69,7 +71,7 @@ export function EarningsView() {
           amount: 2500000,
           period: "Tuần 39 / 2026",
           status: "PAID",
-          createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
+          createdAt: new Date(now - 86400000 * 7).toISOString(),
         },
       ];
 

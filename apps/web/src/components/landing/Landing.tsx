@@ -2,13 +2,12 @@
 
 // VinStay AI - Landing Component (Clean & Refreshed)
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, EyeOff, FileCheck2, KeyRound, Star } from "lucide-react";
+import { BadgeCheck, EyeOff, FileCheck2, KeyRound, Star } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { VerifiedPhoto } from "@/components/unit/VerifiedPhoto";
-import { allInCost, DEFAULT_HOUSEHOLD, RATES } from "@/lib/mock/cost";
-import { vnd, vndShort } from "@/lib/mock/format";
+import { RATES } from "@/lib/pricing/cost";
+import { vnd, vndShort } from "@/lib/format";
 import { UNITS, ZONES, hostById, unitById } from "@/lib/mock/units";
-import { chatSetSearch } from "@/lib/mock/actions";
 import { AllInDemo } from "./AllInDemo";
 import { ProcessFlow } from "./ProcessFlow";
 import styles from "./Landing.module.css";
@@ -28,23 +27,8 @@ export interface LandingProps {
   onViewAll?: () => void;
 }
 
-export function Landing({ onViewAll }: LandingProps = {}) {
-  const handleViewAll = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (onViewAll) {
-      onViewAll();
-    } else {
-      chatSetSearch({ layouts: [], zones: [], buildings: [], items: [], household: { ...DEFAULT_HOUSEHOLD } });
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("vinstay:view-all-units"));
-        try {
-          window.history.pushState(null, "", "/?view=all");
-        } catch {}
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
-    }
-  };
-
+// `onViewAll` do ChatExperience gắn vào (cloneElement); landing hiện không có nút "Xem tất cả" nên chưa dùng.
+export function Landing(_props: LandingProps = {}) {
   return (
     <>
       <section className={styles.section} id="quy-trinh">
@@ -183,7 +167,7 @@ export function Landing({ onViewAll }: LandingProps = {}) {
       <footer className={styles.footer}>
         <div className={`wrap ${styles.footGrid}`}>
           <div>
-            <Logo inverse sub="Vinhomes Ocean Park 1, Gia Lâm, Hà Nội" />
+            <Logo inverse />
             <p className={styles.footNote}>Nền tảng cho thuê và vận hành căn hộ. VinStay AI chỉ giới thiệu thợ kỹ thuật ngoài, không nhận sửa chữa.</p>
           </div>
           <nav aria-label="Liên kết cuối trang">

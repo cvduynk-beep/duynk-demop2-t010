@@ -40,3 +40,17 @@
 .stamp b {
   font-weight: 700;
 }
+
+/* Căn chưa có ảnh trong hệ thống: không mượn ảnh căn khác. */
+.noPhoto {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: var(--slate);
+  background: var(--surface-2, #f1f5f4);
+  font-size: 12px;
+  text-align: center;
+}

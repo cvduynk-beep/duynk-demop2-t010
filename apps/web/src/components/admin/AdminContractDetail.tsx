@@ -15,7 +15,7 @@ import { adminVoidHold, completeMandateExit, remindLeaseRenewal } from "@/lib/mo
 import { DEMO_USERS } from "@/lib/mock/actors";
 import { contractByKey, contractEvents } from "@/lib/mock/contracts";
 import { templatesForKind } from "@/lib/mock/contract-templates";
-import { fmtDate, fmtDateTime, maskPhone, vnd } from "@/lib/mock/format";
+import { fmtDate, fmtDateTime, maskPhone, vnd } from "@/lib/format";
 import { holdHoursFor, holdOutcome, mandateRenewsAt } from "@/lib/mock/selectors";
 import { HOSTS } from "@/lib/mock/units";
 import { useMock } from "@/lib/mock/store";

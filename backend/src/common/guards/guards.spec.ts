@@ -5,8 +5,14 @@ import { SessionCookieService } from '../../modules/auth/session/session-cookies
 import { AuthenticatedUser } from '../../modules/auth/session/authenticated-user';
 import { fakeConfig } from '../../modules/auth/testing/fake-config';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { HOST_ROLES_KEY } from '../decorators/host-roles.decorator';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import { RolesGuard } from './roles.guard';
+import { VerificationGuard } from './verification.guard';
+import { HostViewingsController } from '../../modules/host-viewings/host-viewings.controller';
+import { InspectionController } from '../../modules/inspection/inspection.controller';
+import { LandlordController } from '../../modules/landlord/landlord.controller';
+import { REQUIRE_VERIFICATION_KEY } from '../decorators/require-verification.decorator';
 import { SupabaseAuthGuard } from './supabase-auth.guard';
 
 const user = (overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser => ({
@@ -17,6 +23,7 @@ const user = (overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser => 
   portal: 'tenant',
   isPhoneVerified: false,
   isHostVerified: false,
+  hostRoles: [],
   ...overrides,
 });
 
@@ -42,7 +49,7 @@ const codeOf = async (promise: Promise<unknown> | (() => unknown)) => {
 describe('SupabaseAuthGuard', () => {
   const build = (env: Record<string, string>, metadata: Record<string, unknown>, authenticate = jest.fn()) => {
     const config = fakeConfig(env);
-    return { authenticate, make: (reflector: Reflector) => new SupabaseAuthGuard(reflector, { authenticate } as any, new SessionCookieService(config), config) };
+    return { authenticate, make: (reflector: Reflector) => new SupabaseAuthGuard(reflector, { authenticate } as any, new SessionCookieService(config)) };
   };
 
   it('route @Public không cần token', async () => {
@@ -57,19 +64,65 @@ describe('SupabaseAuthGuard', () => {
     expect(await codeOf(build({}, {}).make(reflector).canActivate(ctx))).toBe('unauthorized');
   });
 
-  it('nhận token từ cookie hoặc Bearer (Bearer ưu tiên) và gắn request.user', async () => {
+  it('nhận token từ cookie vs_access_<portal> hoặc Bearer (Bearer ưu tiên) và gắn request.user', async () => {
     const authenticate = jest.fn(async () => user());
 
-    const viaCookie: any = { headers: {}, cookies: { vs_access: 'cookie-token' } };
+    const viaCookie: any = { headers: {}, cookies: { vs_access_tenant: 'cookie-token' } };
     let { reflector, ctx } = context(viaCookie);
     await build({}, {}, authenticate).make(reflector).canActivate(ctx);
-    expect(authenticate).toHaveBeenLastCalledWith('cookie-token');
+    expect(authenticate).toHaveBeenLastCalledWith('cookie-token', 'tenant');
     expect(viaCookie.user).toMatchObject({ id: 'u1' });
 
-    const viaBearer: any = { headers: { authorization: 'Bearer header-token' }, cookies: { vs_access: 'cookie-token' } };
+    const viaBearer: any = { headers: { authorization: 'Bearer header-token' }, cookies: { vs_access_tenant: 'cookie-token' } };
     ({ reflector, ctx } = context(viaBearer));
     await build({}, {}, authenticate).make(reflector).canActivate(ctx);
-    expect(authenticate).toHaveBeenLastCalledWith('header-token');
+    expect(authenticate).toHaveBeenLastCalledWith('header-token', undefined);
+  });
+
+  it('cookie dùng chung vs_access của bản cũ bị bỏ qua → 401', async () => {
+    const { reflector, ctx } = context({ headers: {}, cookies: { vs_access: 'old-token' } });
+    const authenticate = jest.fn();
+    expect(await codeOf(build({}, {}, authenticate).make(reflector).canActivate(ctx))).toBe('unauthorized');
+    expect(authenticate).not.toHaveBeenCalled();
+  });
+
+  describe('chọn cookie khi đăng nhập nhiều cổng cùng lúc', () => {
+    const cookies = { vs_access_tenant: 't-token', vs_access_landlord: 'l-token', vs_access_admin: 'a-token' };
+
+    it('header x-portal hợp lệ thắng: chỉ dùng cookie của cổng đó', async () => {
+      const authenticate = jest.fn(async () => user());
+      const { reflector, ctx } = context({ headers: { 'x-portal': 'landlord' }, cookies });
+      await build({}, {}, authenticate).make(reflector).canActivate(ctx);
+      expect(authenticate).toHaveBeenLastCalledWith('l-token', 'landlord');
+    });
+
+    it('x-portal không có cookie tương ứng → 401 (không rơi sang cookie cổng khác)', async () => {
+      const authenticate = jest.fn();
+      const { reflector, ctx } = context({ headers: { 'x-portal': 'host' }, cookies });
+      expect(await codeOf(build({}, {}, authenticate).make(reflector).canActivate(ctx))).toBe('unauthorized');
+      expect(authenticate).not.toHaveBeenCalled();
+    });
+
+    it('không có x-portal: theo @Roles của route (ops_admin ⇒ cookie admin)', async () => {
+      const authenticate = jest.fn(async () => user());
+      const { reflector, ctx } = context({ headers: {}, cookies }, { [ROLES_KEY]: ['ops_admin'] });
+      await build({}, {}, authenticate).make(reflector).canActivate(ctx);
+      expect(authenticate).toHaveBeenLastCalledWith('a-token', 'admin');
+    });
+
+    it('route @Roles(ops_admin) mà chỉ có cookie tenant ⇒ xác thực bằng token tenant (để RolesGuard trả 403, không phải 401)', async () => {
+      const authenticate = jest.fn(async () => user());
+      const { reflector, ctx } = context({ headers: {}, cookies: { vs_access_tenant: 't-token' } }, { [ROLES_KEY]: ['ops_admin'] });
+      await build({}, {}, authenticate).make(reflector).canActivate(ctx);
+      expect(authenticate).toHaveBeenLastCalledWith('t-token', 'tenant');
+    });
+
+    it('x-portal lạ bị bỏ qua (dùng @Roles), không ghép vào tên cookie', async () => {
+      const authenticate = jest.fn(async () => user());
+      const { reflector, ctx } = context({ headers: { 'x-portal': 'superuser' }, cookies }, { [ROLES_KEY]: ['landlord'] });
+      await build({}, {}, authenticate).make(reflector).canActivate(ctx);
+      expect(authenticate).toHaveBeenLastCalledWith('l-token', 'landlord');
+    });
   });
 
   it('token không hợp lệ → 401', async () => {
@@ -77,25 +130,11 @@ describe('SupabaseAuthGuard', () => {
     expect(await codeOf(build({}, {}, jest.fn(async () => null)).make(reflector).canActivate(ctx))).toBe('unauthorized');
   });
 
-  describe('header x-demo-role', () => {
-    const request = () => ({ headers: { 'x-demo-role': 'ops_admin' }, cookies: {} }) as any;
-
-    it('tắt mặc định', async () => {
-      const { reflector, ctx } = context(request());
-      expect(await codeOf(build({}, {}).make(reflector).canActivate(ctx))).toBe('unauthorized');
-    });
-
-    it('bật bằng AUTH_DEMO_MODE=true', async () => {
-      const req = request();
-      const { reflector, ctx } = context(req);
-      expect(await build({ AUTH_DEMO_MODE: 'true' }, {}).make(reflector).canActivate(ctx)).toBe(true);
-      expect(req.user).toMatchObject({ role: 'ops_admin', portal: 'admin' });
-    });
-
-    it('bị vô hiệu ở production dù cờ bật', async () => {
-      const { reflector, ctx } = context(request());
-      expect(await codeOf(build({ AUTH_DEMO_MODE: 'true', NODE_ENV: 'production' }, {}).make(reflector).canActivate(ctx))).toBe('unauthorized');
-    });
+  it('header x-demo-role / x-demo-userid không còn tác dụng, kể cả khi AUTH_DEMO_MODE=true', async () => {
+    const req: any = { headers: { 'x-demo-role': 'ops_admin', 'x-demo-userid': 'u-admin' }, cookies: {} };
+    const { reflector, ctx } = context(req);
+    expect(await codeOf(build({ AUTH_DEMO_MODE: 'true' }, {}).make(reflector).canActivate(ctx))).toBe('unauthorized');
+    expect(req.user).toBeUndefined();
   });
 });
 
@@ -118,8 +157,89 @@ describe('RolesGuard', () => {
     expect(() => run(['tenant'], user({ role: null }))()).toThrow();
   });
 
-  it('Field Host chưa nhập RFID không được dùng quyền Host', async () => {
-    expect(await codeOf(run(['field_host'], user({ role: 'field_host', isHostVerified: false })))).toBe('host_rfid_unverified');
+  it('Field Host chưa có hồ sơ Field Host (Admin chưa tạo) không được dùng quyền Host', async () => {
+    expect(await codeOf(run(['field_host'], user({ role: 'field_host', isHostVerified: false })))).toBe('host_not_provisioned');
     expect(run(['field_host'], user({ role: 'field_host', isHostVerified: true }))()).toBe(true);
+  });
+
+  describe('@HostRoles', () => {
+    const runWith = (roles: string[] | undefined, hostRoles: string[], current: AuthenticatedUser | undefined) => {
+      const { reflector, ctx } = context(
+        { user: current },
+        { ...(roles ? { [ROLES_KEY]: roles } : {}), [HOST_ROLES_KEY]: hostRoles },
+      );
+      return () => new RolesGuard(reflector).canActivate(ctx);
+    };
+    const host = (hostRoles: string[], over: Partial<AuthenticatedUser> = {}) =>
+      user({ role: 'field_host', portal: 'host', isHostVerified: true, hostRoles: hostRoles as never, ...over });
+
+    it('Host thiếu vai → host_role_missing kèm errors.required; đủ vai → qua', async () => {
+      expect(await codeOf(runWith(['field_host'], ['sale'], host(['inspector'])))).toBe('host_role_missing');
+      try {
+        runWith(['field_host'], ['sale'], host(['inspector']))();
+      } catch (err) {
+        expect((err as AuthException).getResponse()).toMatchObject({ errors: { required: ['sale'] } });
+      }
+      expect(runWith(['field_host'], ['sale'], host(['sale']))()).toBe(true);
+      expect(runWith(['field_host'], ['sale'], host(['inspector', 'sale']))()).toBe(true);
+    });
+
+    it('chỉ cần một trong các vai yêu cầu', () => {
+      expect(runWith(['field_host'], ['sale', 'inspector'], host(['inspector']))()).toBe(true);
+    });
+
+    it('@Roles("field_host","ops_admin") + @HostRoles("sale"): ops_admin không bị kiểm vai con', () => {
+      expect(runWith(['field_host', 'ops_admin'], ['sale'], user({ role: 'ops_admin', portal: 'admin' }))()).toBe(true);
+    });
+
+    it('Host chưa có hồ sơ + @HostRoles → host_not_provisioned (không phải host_role_missing)', async () => {
+      expect(await codeOf(runWith(['field_host'], ['sale'], host([], { isHostVerified: false })))).toBe('host_not_provisioned');
+    });
+
+    it('@HostRoles đứng một mình ngầm hiểu chỉ Field Host: tenant → 403', () => {
+      expect(() => runWith(undefined, ['sale'], user({ role: 'tenant' }))()).toThrow(/field_host/);
+      expect(runWith(undefined, ['sale'], host(['sale']))()).toBe(true);
+    });
+  });
+});
+
+describe('VerificationGuard', () => {
+  const run = (metadata: Record<string, unknown>, u: AuthenticatedUser | undefined) => {
+    const { reflector, ctx } = context({ user: u }, metadata);
+    return new VerificationGuard(reflector).canActivate(ctx);
+  };
+
+  it('route không gắn @RequireVerification ⇒ cho qua kể cả chưa xác thực SĐT', () => {
+    expect(run({}, user({ isPhoneVerified: false }))).toBe(true);
+  });
+
+  it('@RequireVerification("phone") + SĐT đã xác thực ⇒ cho qua', () => {
+    expect(run({ [REQUIRE_VERIFICATION_KEY]: 'phone' }, user({ isPhoneVerified: true }))).toBe(true);
+  });
+
+  it('@RequireVerification("phone") + chưa xác thực ⇒ 403 phone_not_verified', async () => {
+    expect(await codeOf(() => run({ [REQUIRE_VERIFICATION_KEY]: 'phone' }, user({ isPhoneVerified: false })))).toBe('phone_not_verified');
+  });
+
+  it('@RequireVerification("phone") + không có user ⇒ 403 phone_not_verified', async () => {
+    expect(await codeOf(() => run({ [REQUIRE_VERIFICATION_KEY]: 'phone' }, undefined))).toBe('phone_not_verified');
+  });
+});
+
+describe('Route "nhận việc / ký" phải gắn @RequireVerification("phone")', () => {
+  const gated: Array<[string, Function]> = [
+    ['Sale accept', HostViewingsController.prototype.accept],
+    ['Sale claim', HostViewingsController.prototype.claim],
+    ['Thẩm định accept', InspectionController.prototype.accept],
+    ['Thẩm định claim', InspectionController.prototype.claim],
+    ['Chủ nhà send-otp', LandlordController.prototype.sendSignOtp],
+    ['Chủ nhà sign', LandlordController.prototype.signConsignment],
+  ];
+  it.each(gated)('%s', (_name, handler) => {
+    expect(Reflect.getMetadata(REQUIRE_VERIFICATION_KEY, handler)).toBe('phone');
+  });
+  it('route chỉ đọc không bị chặn', () => {
+    expect(Reflect.getMetadata(REQUIRE_VERIFICATION_KEY, HostViewingsController.prototype.getBoard)).toBeUndefined();
+    expect(Reflect.getMetadata(REQUIRE_VERIFICATION_KEY, InspectionController.prototype.board)).toBeUndefined();
   });
 });

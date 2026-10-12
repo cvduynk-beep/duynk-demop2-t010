@@ -1,26 +1,41 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiCookieAuth } from '@nestjs/swagger';
+import { Controller, Post, Body, Param, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { IdentityService } from './identity.service';
-import { EkycVerificationRequestDto } from './dto/identity.dto';
+import { EkycScanRequestDto, SubmitEkycInputDto } from './dto/identity.dto';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('6. FPT.AI eKYC & Zero-Storage')
-@ApiCookieAuth('session-cookie')
-@Controller('identity')
+@Controller()
 export class IdentityController {
   constructor(private readonly identityService: IdentityService) {}
 
-  @Post('ekyc/verify')
+  @Roles('tenant')
+  @Post('bookings/:ref/ekyc/scan')
   @ApiOperation({
-    summary: 'FPT.AI eKYC: Quét CCCD 2 mặt, Face Liveness & Đối chiếu C06',
-    description: 'Cơ chế Zero-Storage RAM (0 byte ảnh lưu trên server), loại trừ rủi ro dữ liệu cá nhân theo NĐ 356/2025/NĐ-CP. Trả độ tin cậy theo từng trường.',
+    summary: 'A17: Quét CCCD (MÔ PHỎNG OCR — chưa tích hợp FPT.AI)',
+    description: 'Trả kết quả OCR giả lập + độ tin cậy từng trường và scanId ký HMAC hạn 15 phút. Chỉ chủ lịch, lịch đang giữ chỗ.',
   })
-  async verifyEkyc(@Body() dto: EkycVerificationRequestDto) {
-    return this.identityService.processEkyc(dto);
+  async scan(
+    @Param('ref') ref: string,
+    @CurrentUser() user: any,
+    @Body() dto: EkycScanRequestDto,
+  ) {
+    return this.identityService.scan(ref, user, dto);
   }
 
-  @Get(':depositId')
-  @ApiOperation({ summary: 'Lấy kết quả xác thực eKYC theo mã cọc' })
-  async getEkycResult(@Param('depositId') depositId: string) {
-    return this.identityService.getEkycResult(depositId);
+  @Roles('tenant')
+  @Post('bookings/:ref/ekyc')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'A18: Lưu thông tin CCCD đã xác nhận (mã hoá AES-256)',
+    description: 'Ghi IdentityVerification thật cho lịch đang giữ chỗ. Hợp đồng thuê lập ở POST /contracts/lease/sign.',
+  })
+  async submit(
+    @Param('ref') ref: string,
+    @CurrentUser() user: any,
+    @Body() dto: SubmitEkycInputDto,
+  ) {
+    return this.identityService.submit(ref, user, dto);
   }
 }

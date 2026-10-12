@@ -1,5 +1,4 @@
 import type { MockState } from "./types";
-import { HOSTS, UNITS } from "./units";
 
 export type TimeRangeKey = "today" | "week" | "month" | "quarter" | "custom";
 export type ClientType = "all" | "new" | "renewal" | "corporate";
@@ -525,7 +524,7 @@ export const RAW_DEALS: RawExportRow[] = [
 
 export function computeReportSummary(
   filter: ReportFilter,
-  state?: MockState
+  _state?: MockState
 ): {
   financials: FinancialSummary;
   agents: AgentKpiMetric[];

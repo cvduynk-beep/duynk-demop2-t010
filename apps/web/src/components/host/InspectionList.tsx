@@ -11,20 +11,21 @@ import { toast } from "@/components/ui/Toast";
 import { CONSIGN_STATUS_META } from "@/components/consign/status";
 import { hostAcceptInspection } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { fmtDateTime } from "@/lib/mock/format";
+import { fmtDateTime } from "@/lib/format";
 import { useEffect, useState } from "react";
-import { hostInspections, isInspectOverdue } from "@/lib/mock/selectors-inspection";
+import { isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { setMockState, useMock } from "@/lib/mock/store";
-import type { Consignment } from "@/lib/mock/types";
+import type { Consignment, ConsignmentStatus } from "@/lib/mock/types";
 import { landlordById, zoneOfBuilding, ZONES, type LayoutKind } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
 
 import { useSession } from "@/lib/auth/client";
 import { hostRoles, hostZones } from "@/lib/mock/selectors";
+import type { ApiInspectionItem } from "@/lib/apiClient";
 
 const DEFAULT_HOST_ID = DEMO_USERS.host.refId!;
 
-function parseLayoutKind(layout: string): LayoutKind {
+function parseLayoutKind(layout: string | undefined): LayoutKind {
   if (layout === "STUDIO" || layout === "Studio") return "Studio";
   if (layout === "ONE_BED_PLUS" || layout === "1PN") return "1PN";
   if (layout === "TWO_BED_ONE_BATH" || layout === "TWO_BED_TWO_BATH" || layout === "2PN") return "2PN";
@@ -50,12 +51,12 @@ export function InspectionList() {
         const list = Array.isArray(data) ? data : data?.data;
         if (!Array.isArray(list) || unmounted) return;
 
-        const mapped: Consignment[] = list.map((item: any) => {
+        const mapped: Consignment[] = list.map((item: ApiInspectionItem) => {
           const parts = (item.unitCode || "").split("-");
           const doorPart = parts[2] || "";
           const doorNum = doorPart.replace(new RegExp(`^${item.floor}`), "") || "01";
           return {
-            id: item.consignmentId || item.id,
+            id: item.consignmentId ?? item.id,
             landlordId: item.landlordName || "Chủ nhà Ocean Park",
             building: item.building,
             floor: item.floor,
@@ -68,7 +69,7 @@ export function InspectionList() {
             furnished: true,
             locks: ["smart"],
             auditByHost: true,
-            status: (item.status as any) || "awaiting_host",
+            status: (item.status as ConsignmentStatus | undefined) || "awaiting_host",
             createdAt: item.createdAt || new Date().toISOString(),
             signedAt: item.createdAt || new Date().toISOString(),
             hostId: item.hostId || undefined,
@@ -313,7 +314,7 @@ export function InspectionList() {
                         } catch {
                           // ignore
                         }
-                        const res = hostAcceptInspection(c.id, acceptHostId);
+                        hostAcceptInspection(c.id, acceptHostId);
                         setDbItems((prev) => prev.map((item) => (item.id === c.id ? { ...item, status: "inspecting" } : item)));
                         toast("Đã nhận thẩm định thành công. Mở phiếu thẩm định khi tới căn.", "success");
                       }}

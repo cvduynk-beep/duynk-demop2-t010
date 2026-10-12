@@ -105,9 +105,9 @@ QUY TẮC PHẢN HỒI:
       suggestBooking: localAnswer?.suggestBooking ?? true,
       source: "semantic-local",
     });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error?.message || "Lỗi xử lý yêu cầu" },
+      { ok: false, error: (error instanceof Error && error.message) || "Lỗi xử lý yêu cầu" },
       { status: 500 }
     );
   }

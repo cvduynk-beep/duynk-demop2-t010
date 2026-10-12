@@ -2,33 +2,35 @@
 
 Hệ thống API Backend toàn diện cho nền tảng thuê căn hộ Asset-Light tại **Vinhomes Ocean Park (The Sapphire 1 & 2)**.
 
-> **Công nghệ:** NestJS 10 + Prisma ORM + Supabase (PostgreSQL + Auth + Storage).  
+> **Công nghệ:** NestJS 10 + Prisma ORM + PostgreSQL trên Supabase; Storage dùng cho ảnh hồ sơ. Đăng nhập do backend quản lý, không dùng Supabase Auth.
 > **Tuân thủ chuẩn:** [SAD v2.0](../docs/SAD_v2.md), bộ văn bản pháp lý [`legal/`](../legal/) và [Interactive Prototype Guide](../docs/PROTOTYPE_GUIDE.md).  
-> **🎯 TRÌNH DIỄN SƠ ĐỒ & TÀI LIỆU BACKEND:** Mở tệp tin [`backend/BACKEND_SHOW.html`](./BACKEND_SHOW.html) (hoặc [`presentation/BACKEND_SHOW.html`](../presentation/BACKEND_SHOW.html)) để xem tài liệu cơ bản và bấm nút **"Mở Trình Chiếu Sơ Đồ (Show Mode)"** để xem 6 sơ đồ kiến trúc tương tác!
+> **🎯 TRÌNH DIỄN SƠ ĐỒ & TÀI LIỆU BACKEND:** Mở tệp tin [`backend/BACKEND_SHOW.html`](./BACKEND_SHOW.html) để xem tài liệu cơ bản và bấm nút **"Mở Trình Chiếu Sơ Đồ (Show Mode)"** để xem 6 sơ đồ kiến trúc tương tác!
 
 ---
 
 ## 1. DANH MỤC API THEO MÀN HÌNH & LUỒNG NGHIỆP VỤ
 
 Danh mục API được dựng từ **các màn hình và luồng nghiệp vụ** của 4 cổng (Khách thuê, Chủ nhà, Field Host, Admin).
-API phục vụ dữ liệu thật và bám theo quy tắc trong [`legal/`](../legal/) và [`AGENTS.md`](../AGENTS.md).
+API đọc/ghi dữ liệu nghiệp vụ bằng Prisma trên database Supabase và bám theo quy tắc trong [`legal/`](../legal/) và [`AGENTS.md`](../AGENTS.md).
+
+> **Nguồn hiện hành:** Bảng endpoint bên dưới có các hàng kế hoạch được viết trước khi API hoàn thiện. Hợp đồng route, quyền và trạng thái provider hiện tại được xác định bởi controller/service và Swagger tại `/api/docs`.
 
 - Base URL `/api/v1` · Swagger `/api/docs` · Phiên = cookie httpOnly (xem §4).
-- Các controller nghiệp vụ hiện vẫn `@Public()` — chưa gắn `@Roles`. Cột "Vai" là phân quyền đích.
+- Route công khai, xác thực và phân quyền được khai báo bằng decorators trên controller/route; backend là nguồn quyết định quyền thực tế.
 - Trạng thái so với code backend: ✅ đã có · ⚠️ đã có nhưng lệch nghiệp vụ (phải sửa) · ⬜ chưa có (đường dẫn là đề xuất).
 
 ### 1.0. Quy tắc nghiệp vụ API phải tuân thủ
 
-Các đơn giá và ngưỡng có thể thay đổi (phí quản lý, gửi xe, biến phí Host, thời hạn giữ chỗ…) lưu trong DB và do Admin cấu hình, không hard-code.
+Giá thuê và phí quản lý căn lấy từ bản ghi Supabase. Biểu giá gửi xe/điện nước và ngưỡng nghiệp vụ hiện theo quy tắc trong code; biến phí Host và thời hạn giữ chỗ đọc từ `FeeConfig` khi có cấu hình.
 
 | Quy tắc | Nội dung | Nguồn |
 |---|---|---|
-| All-in Cost | tiền thuê + phí quản lý BQL theo m² + phí gửi xe + điện nước ước tính theo số người; lọc loại căn vượt ngân sách trần | AGENTS (Khách thuê #2) |
+| All-in Cost | tiền thuê + phí quản lý lưu trên căn + biểu giá gửi xe + điện nước ước tính theo số người | AGENTS (Khách thuê #2) |
 | Badge "Căn hời phân khu" | rẻ hơn ≥ 10% so với layout cùng phân khu | AGENTS (Chủ nhà #1) |
 | Xác thực SĐT | OTP Zalo bắt buộc trước khi đặt lịch, mỗi SĐT xác thực một lần | AGENTS (Chủ nhà #2) |
 | Điều phối | 3 tầng: Host gần nhất → Open Pool 500m sau 3 phút → Area Lead; nhắc hẹn kép T-10m | AGENTS (Vận hành #3, #5) |
 | Mã cửa | chỉ cấp khi Host xác nhận xem phòng tại cửa; không Lockbox, không QR sảnh | AGENTS (Chủ nhà #2) |
-| Cọc giữ chỗ | 2.000.000đ qua VietQR động; căn khoá `holding` theo số giờ Admin cài (mặc định **48h**, 12–72h, chỉnh riêng từng căn) | [legal/02](../legal/02_HOLDING_AND_SECURITY_DEPOSIT_AGREEMENT.md) · ⚠️ backend đang cứng **7 ngày** |
+| Cọc giữ chỗ | 2.000.000đ qua VietQR cấu hình bằng tài khoản nhận thật; tạo giao dịch bị khóa nếu thiếu cấu hình nhận/đối soát | [legal/02](../legal/02_HOLDING_AND_SECURITY_DEPOSIT_AGREEMENT.md) |
 | Điều khoản cọc | khách tick đồng ý trước khi hiện VietQR — **không** ký thỏa thuận cọc riêng | AGENTS (Chủ nhà #3) |
 | Kết cục cọc | ký HĐ thuê → chuyển **100%** vào Tiền cọc bảo đảm (không trừ tiền thuê tháng đầu) · khách quá hạn/từ chối → mất cọc, chia 50% chủ nhà / 50% nền tảng · chủ nhà vi phạm → hoàn cọc + phạt tương đương · bất khả kháng → hoàn 100% | [legal/02 Điều 6](../legal/02_HOLDING_AND_SECURITY_DEPOSIT_AGREEMENT.md) |
 | Tiền cọc bảo đảm | 1–2 tháng tiền thuê; giữ nguyên suốt kỳ thuê để cấn trừ hư hỏng nội thất, phạt BQL, nợ điện nước; hoàn khách khi thanh lý HĐ | [legal/06 Điều 4](../legal/06_OFFICIAL_APARTMENT_LEASE_AGREEMENT.md) |
@@ -40,34 +42,32 @@ nhánh phụ `completed` (xem xong chưa thuê), `no_show`, `cancelled`, `reject
 
 ### 1.1. 👤 Công khai & Khách thuê
 
-Màn: trang chủ chat AI, danh sách/chi tiết căn, đặt lịch & theo dõi lịch hẹn, tài khoản (lịch hẹn, căn đã lưu, hợp đồng).
+Màn: trang chủ chat AI, danh sách/chi tiết căn, đặt lịch xem & OTP, theo dõi lịch hẹn và các cổng Chủ nhà/Host/Admin. VietQR yêu cầu cấu hình nhận/đối soát thật; eKYC và lập hợp đồng tạm khóa đến khi tích hợp nhà cung cấp thật.
 
-| Endpoint | Vai | Màn hình / bước nghiệp vụ | TT |
+| Endpoint | Vai | Nghiệp vụ / Contract | TT |
 |---|---|---|---|
-| `GET /properties/buildings` | công khai | bộ lọc toà | ✅ |
-| `GET /properties/units` | công khai | danh sách căn — lọc, All-in Cost, badge "Căn hời" | ✅ |
-| `GET /properties/units/:id` | công khai | chi tiết căn | ✅ |
-| `POST /matchmaker/recommend` | công khai | chat AI: nhu cầu (ngân sách trần, layout, phân khu, tầng, nội thất, thú cưng, số người/xe) → gợi ý căn | ✅ |
-| `POST /auth/otp/send` · `POST /auth/otp/verify` | công khai | xác thực SĐT trước khi đặt lịch | ✅ |
-| `POST /bookings` `{unitId, slot, name, phone, persons, note}` | tenant | form đặt lịch xem — tạo lịch và điều phối Host | ⬜ |
-| `GET /bookings/:id` · `GET /bookings/by-ref/:ref` | tenant | màn theo dõi lịch hẹn (tra theo mã lịch) | ✅ / ⬜ |
-| `POST /bookings/:id/cancel` `{reason}` · `POST /bookings/:id/reschedule` `{slot}` | tenant | huỷ / đổi lịch | ⬜ |
-| `POST /bookings/:id/lobby-checkin` | tenant | nút 1-chạm "Tôi đã có mặt tại sảnh" | ✅ |
-| `POST /bookings/:id/rating` `{stars}` | tenant | đánh giá Host sau buổi xem | ⬜ |
-| `GET /deposits/:id` | tenant | trạng thái cọc, đếm ngược giữ chỗ | ✅ |
-| `POST /identity/ekyc/verify` | tenant | chụp CCCD 2 mặt + chân dung; trường có độ tin cậy < 85% chuyển nhập tay | ⚠️ cần trả độ tin cậy theo từng trường |
-| `GET /me/bookings` · `GET /me/contracts` | tenant | tài khoản: lịch hẹn, hợp đồng + Hộ chiếu bàn giao | ⬜ |
-| `GET /me/favorites` · `PUT/DELETE /me/favorites/:unitId` | tenant | căn đã lưu | ⬜ |
-| `PATCH /me/profile` | mọi vai | hồ sơ tài khoản | ⬜ |
-| `GET /me/notifications` | mọi vai | thông báo trong app | ⬜ |
-
-### 1.2. 💳 Thanh toán (VietQR)
-
-| Endpoint | Vai | Màn hình / bước nghiệp vụ | TT |
-|---|---|---|---|
-| `POST /deposits/generate-vietqr` | field_host | Host bấm [Khách chốt] → sinh VietQR động `COC [Mã căn] [SĐT]` | ⚠️ đổi caller thành Host |
-| `POST /deposits/webhook-vietqr` | ngân hàng | gạch nợ cọc → khoá `holding`, Conflict Resolver huỷ lịch trùng + gợi ý căn thay thế | ⚠️ thời hạn theo cấu hình giữ chỗ |
-| `POST /deposits/:id/host-receipt` | field_host | Host tải ủy nhiệm chi khi webhook chậm (giữ tạm) | ⬜ |
+| `GET /properties/buildings` (A1) | công khai | Bộ lọc toà | ✅ |
+| `GET /properties/units` (A1) | công khai | Catalog căn hộ: All-in Cost, Căn hời, ẩn căn 0 ảnh | ✅ |
+| `GET /properties/units/:code` (A2) | công khai | Chi tiết căn hộ: `holdHours`, `activeViewingAt`, `photos` | ✅ |
+| `GET /properties/units/:code/busy-slots` (A3) | công khai | Khung giờ đã bận của căn hộ trong 14 ngày | ✅ |
+| `POST /auth/otp/send` (A4) | công khai | Gửi OTP qua provider thật; hiện trả lỗi nếu chưa cấu hình Zalo/SMS | ⚠ |
+| `POST /auth/otp/verify` (A5) | công khai | Xác thực OTP thật → sinh `actionToken` dùng 1 lần (15 phút) | ⚠ phụ thuộc A4 |
+| `POST /bookings` (A6) | tenant | Đặt lịch xem phòng với `actionToken` hợp lệ | ✅ |
+| `GET /me/bookings` (A7) | tenant | Danh sách lịch xem của tôi (chỉ xem lịch thuộc tài khoản) | ✅ |
+| `GET /bookings/:ref` (A8) | tenant | Chi tiết lịch xem (timeline 7 bước, DTO TenantBooking) | ✅ |
+| `POST /bookings/:ref/cancel` (A9) | tenant | Huỷ lịch xem phòng (trước ≥ 2h) | ✅ |
+| `POST /bookings/:ref/reschedule` (A10) | tenant | Đổi giờ xem phòng (trước ≥ 2h, kiểm tra slot bận) | ✅ |
+| `POST /bookings/:ref/late` (A11) | tenant | Báo xin đến muộn 10 phút | ✅ |
+| `POST /bookings/:ref/lobby-checkin` (A12) | tenant | Bấm "Tôi đã có mặt tại sảnh" | ✅ |
+| `POST /bookings/:ref/rating` (A13) | tenant | Chấm sao đánh giá Field Host | ✅ |
+| `GET /legal/deposit-terms` (A14) | công khai | Văn bản điều khoản cọc, 6 nội quy BQL, phiên bản pháp lý | ✅ |
+| `POST /bookings/:ref/deposit` (A15) | tenant | Tạo cọc và URL VietQR từ tài khoản nhận thật; từ chối nếu thiếu webhook secret | ⚠ thiếu cấu hình trong `.env` hiện tại |
+| `POST /vietqr/webhook` (A16) | ngân hàng/đối tác webhook | First-to-Pay Wins; cần cấu hình callback thật về endpoint này | ⚠ chưa có provider callback |
+| `POST /bookings/:ref/ekyc/scan` (A17) | tenant | Quét CCCD qua provider eKYC | ⚠ chưa tích hợp provider |
+| `POST /bookings/:ref/ekyc` (A18) | tenant | Xác minh danh tính và xác lập HĐ sau khi provider trả kết quả thật | ⚠ chưa tích hợp provider |
+| `GET /me/contracts` (A19) | tenant | Danh sách hợp đồng thuê: thời hạn, cọc, tiền thanh toán kỳ 1 | ✅ |
+| `GET /me/contracts/:id/pdf` (A20) | tenant | Tải PDF HĐ thuê chính thức tiếng Việt có niêm phong sha256 | ✅ |
+| `GET/PUT/DELETE /me/favorites[/:code]` | đăng nhập | Căn đã lưu theo tài khoản (bảng `favorite_units`), nhận mã căn hoặc UUID, trả DTO `TenantUnit` | ✅ |
 
 ### 1.3. 🏠 Chủ nhà
 
@@ -84,7 +84,7 @@ Màn: tổng quan, căn của tôi, ký gửi căn mới, hồ sơ ký gửi, t�
 | `POST /landlord/consignments` `{building, floor, door, layout, areaM2, askRent, suggestedDeposit, leaseTerm (mid\|long\|fixed), furnished, locks[], doorCode, note, draft}` | landlord | form ký gửi căn → tạo Unit `UNLISTED` + ủy quyền `PENDING_INSPECTION` (draft) | ✅ |
 | `POST /landlord/consignments/:id/photos` (multipart `files`) · `DELETE /landlord/consignments/:id/photos/:photoId` | landlord | đính kèm/xóa ảnh tham khảo của hồ sơ: JPG/PNG/WebP (kiểm tra theo nội dung file), ≤3MB/ảnh (web nén ảnh trước khi gửi), tối đa 8 ảnh; chỉ khi hồ sơ còn nháp hoặc chờ Host nhận. Lưu Supabase Storage bucket **private** `consignment-photos` (tự tạo lần đầu), xem qua link ký 1 giờ. **Không** ghi vào `UnitMedia` — ảnh Verified do Host chụp khi thẩm định | ✅ |
 | `POST /landlord/consignments/:id/send-otp` `{phone?}` | landlord | gửi OTP Zalo tới SĐT đã lưu của chủ nhà (chưa có SĐT thì dùng `phone` truyền lên) | ✅ |
-| `POST /landlord/consignments/:id/sign` `{ownershipWarranted, otp, phone?}` | landlord | ký ủy quyền bằng OTP (PHONE_VERIFY); hồ sơ chưa có SĐT thì OTP đúng đồng thời gắn SĐT; → giao Host phân khu, SLA 48h | ✅ |
+| `POST /landlord/consignments/:id/sign` `{ownershipWarranted, otp, phone?}` | landlord | ký ủy quyền bằng OTP (PHONE_VERIFY); số ĐÃ XÁC THỰC của tài khoản ⇒ KHÔNG cần OTP (`send-otp` trả `otpRequired:false`); nhập số khác hoặc tài khoản chưa có số ⇒ bắt buộc OTP trên số đó. Số ký lưu mã hoá trong hồ sơ ký gửi, KHÔNG gắn vào tài khoản, không kiểm trùng; → giao Inspector phân khu, SLA 48h | ✅ |
 | `GET /landlord/finance` | landlord | khoản thu: tháng này, 6 tháng, theo căn, cọc giữ hộ; phí dịch vụ đọc từ FeeConfig `landlord_service_fee_rate` (chưa có ⇒ 5% tạm, `feeSource: "default"`) | ✅ tính từ hợp đồng |
 | `POST /landlord/mandates/request-exit` `{mandateId, reason}` · `POST /landlord/mandates/cancel-exit` `{mandateId}` | landlord | thoát ủy quyền: chỉ khi căn `AVAILABLE`, báo trước 15 ngày | ✅ (chưa có job thu hồi mã cửa khi hết hạn) |
 
@@ -97,13 +97,18 @@ Màn: bảng điều phối, buổi xem phòng, thẩm định căn ký gửi, t
 
 | Endpoint | Vai | Màn hình / bước nghiệp vụ | TT |
 |---|---|---|---|
-| `GET /dispatch/tickets` | field_host | bảng điều phối: ticket được giao + ticket mở | ⚠️ thêm ticket mở |
-| `POST /dispatch/tickets/:id/accept` · `/reject` `{reason}` | field_host | nhận / từ chối ticket (từ chối → điều phối lại) | ✅ / ⬜ |
-| `POST /dispatch/tickets/:id/claim` | field_host | nhận ticket mở trong Open Pool | ⬜ |
-| `POST /dispatch/tickets/:id/elevator-rfid` | field_host | đón khách ở sảnh, quẹt thẻ thang máy | ✅ |
-| `POST /dispatch/tickets/:id/reveal-key` | field_host | [Xác nhận xem phòng] tại cửa → nhận mã cửa, báo chủ nhà | ✅ |
-| `POST /dispatch/tickets/:id/emergency` `{kind: smart_lock \| physical_key}` | field_host | hỗ trợ khẩn cấp khi khoá lỗi / mất chìa | ⬜ |
-| `POST /dispatch/tickets/:id/no-show` · `/not-interested` `{reason}` | field_host | khách không đến / xem xong chưa thuê | ⬜ |
+| `GET /host/board` | field_host (sale) | **Lịch & yêu cầu**: yêu cầu mới (ASSIGNED 3′ → Open Pool phân khu → mọi Sale) · lịch của tôi · lịch sử · KPI — 1 request, web poll 15″ | ✅ |
+| `POST /host/tickets/:id/accept` · `/reject` `{reason}` · `/claim` | field_host (sale) | nhận ticket được giao / từ chối (giao Sale khác) / nhận trong Open Pool (nguyên tử, ai nhận trước thắng) | ✅ |
+| `GET /host/viewings/:ref` | field_host (sale) | chi tiết ca — chỉ chủ ca (khác ⇒ 404), có SĐT đầy đủ của khách | ✅ |
+| `POST /host/viewings/:ref/remind` · `/receive` · `/no-show` | field_host (sale) | nhắc T-10 (chỉ ghi mốc) · đã đón khách ở sảnh · khách không đến (≥ giờ hẹn + 15′) | ✅ |
+| `POST /host/viewings/:ref/open-door` · `/door-code` | field_host (sale) | [Mở cửa] ca RECEIVING → VIEWING, trả mã cửa hiển thị 10′ + ghi `DOOR_KEY_REVEAL` cho chủ nhà; thiếu mã ⇒ 409 `door_code_missing` (không có PIN giả) | ✅ |
+| `POST /host/viewings/:ref/start-deposit` · `/not-interested` `{reason}` · `/emergency` | field_host (sale) | khách muốn cọc (⇒ CLOSING, khách tự quét VietQR — Host không đụng tiền) · khách chưa quyết · báo sự cố khoá/chìa (chỉ ghi nhật ký) | ✅ |
+| `PATCH /host/me/duty` `{status}` | field_host (sale) | bật/tắt trực (đang dẫn khách ⇒ 409 `host_busy`) | ✅ |
+| `GET /host/inspections` · `GET /host/inspections/:id` | field_host (inspector) | **Thẩm định ký gửi** (hồ sơ 16): ca giao cho tôi + Open Pool (sau 4h chưa nhận) + đã nộp; chi tiết kèm catalog 32 hạng mục, ảnh tham khảo chủ nhà, ảnh đã chụp | ✅ |
+| `POST /host/inspections/:id/accept` · `/claim` · `/door-code` | field_host (inspector) | nhận ca được giao · nhận ca Open Pool (nguyên tử) · lấy mã cửa (hiển thị 10′, ghi `DOOR_KEY_REVEAL`; thiếu mã ⇒ 409 `door_code_missing`) | ✅ |
+| `POST /host/inspections/:id/photos` (multipart `file`, `slot`, `room?`) · `DELETE .../photos/:photoId` | field_host (inspector) | ảnh hạng mục (1–4/dòng) + ảnh niêm yết (4–12); kiểm theo nội dung, cạnh ngắn ≥200px, ≤3MB; bucket private, đường dẫn `inspections/<mandateId>/…` | ✅ |
+| `POST /host/inspections/:id/submit` | field_host (inspector) | nộp phiếu 32 hạng mục. **Đạt ⇒ một giao dịch tự niêm yết** (ủy quyền ACTIVE, căn AVAILABLE + Verified, ảnh niêm yết vào `UnitMedia`) — KHÔNG qua Admin; không đạt ⇒ ủy quyền TERMINATED. Lỗi phiếu ⇒ 400 `report_invalid` kèm `field` | ✅ |
+| `GET /media/listing/:mandateId/:file` | public | ảnh niêm yết của căn đã đạt (ảnh hạng mục/hồ sơ chưa đạt ⇒ 404), cache 1 ngày | ✅ |
 | `GET /host/inspections` | field_host (inspector) | danh sách căn ký gửi cần thẩm định | ⬜ |
 | `POST /host/inspections/:consignmentId/accept` | field_host | nhận việc thẩm định | ⬜ |
 | `POST /host/inspections/:consignmentId/report` | field_host | nộp báo cáo: đối chiếu thông tin khai báo, kiểm kê nội thất có ảnh + % độ mới, diện tích thông thuỷ, đề xuất duyệt/từ chối | ⬜ |
@@ -126,11 +131,12 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 | `POST /admin/contracts/:id/complete-exit` | ops_admin | hoàn tất thoát uỷ quyền sau 15 ngày | ⬜ |
 | `POST /admin/contracts/:id/remind-renewal` | ops_admin | nhắc gia hạn HĐ thuê sắp hết hạn | ⬜ |
 | `GET /admin/contract-templates[/:id]` · `GET /admin/contract-parties[/:id]` | ops_admin | thư viện mẫu văn bản, danh bạ bên ký | ⬜ |
-| `GET /admin/field-hosts` | ops_admin | danh sách Field Host | ✅ |
-| `POST /admin/field-hosts` `{email, phone, name, assignedZone, roles[], rfidCardNumber?}` | ops_admin | Admin tạo thẳng tài khoản Field Host (không qua lời mời) → hệ thống gửi thông tin đăng nhập + mật khẩu tạm cho Sale qua email; lần đầu đăng nhập bắt buộc đổi mật khẩu | ⚠️ đang là cơ chế mời — phải viết lại |
-| `GET /admin/field-hosts/:id` | ops_admin | chi tiết Host: ticket, thẩm định, thu nhập, đánh giá | ⬜ |
-| `PATCH /admin/field-hosts/:id` `{name?, phone?, assignedZone?, roles?: (sale \| inspector)[], rfidCardNumber?}` | ops_admin | sửa thông tin, đổi phân khu, phân vai, thay thẻ RFID | ⬜ |
-| `DELETE /admin/field-hosts/:id` | ops_admin | khoá Host (xoá mềm — giữ lịch sử ticket, cọc, chi trả) | ⬜ |
+| `GET /admin/field-hosts` `?q&role=sale\|inspector\|both&zone&active=true\|false` | ops_admin | danh sách Field Host (tìm theo tên/email/SĐT, lọc vai, phân khu, tài khoản khoá) | ✅ |
+| `GET /admin/field-hosts/zones` | ops_admin | phân khu hợp lệ để gán cho Host | ✅ |
+| `POST /admin/field-hosts` `{email, fullName, assignedZone, roles[1..2], password?}` | ops_admin | Admin tạo Host: Profile `field_host` + hồ sơ Host cùng 1 giao dịch. Không có SĐT (Host tự xác thực OTP), không có số thẻ. Email là Profile `field_host` chưa có hồ sơ Host ⇒ nhận vào. Bỏ `password` ⇒ Host chỉ đăng nhập Google | ✅ |
+| `GET /admin/field-hosts/:id` | ops_admin | hồ sơ Host + `ticketStats` (7 trạng thái ticket); thu nhập/lịch xem chi tiết ở hồ sơ 15 | ✅ |
+| `PATCH /admin/field-hosts/:id` `{fullName?, assignedZone?, roles?, password?, isActive?}` | ops_admin | sửa tên/phân khu, đổi vai (AuditLog `HOST_ROLES_UPDATE`), đặt lại mật khẩu, khoá/mở. Email không sửa được. Phiên của Host đọc lại ngay | ✅ |
+| `DELETE /admin/field-hosts/:id` | ops_admin | khoá mềm (giữ lịch sử ticket/cọc/chi trả); Host đang có ticket OFFERED/ACCEPTED/CHECKED ⇒ 409 `host_has_active_tickets` | ✅ |
 | `GET /admin/commission-engine` · `POST /admin/commission-engine/config` | ops_admin | cấu hình biến phí + nhật ký thay đổi | ✅ |
 | `GET /admin/settings/hold-policy` · `PUT /admin/settings/hold-policy` `{unitId?, hours}` | ops_admin | thời hạn giữ chỗ toàn sàn / riêng từng căn + nhật ký | ⬜ |
 | `GET /contracts/:id/evidence-package` | ops_admin | gói chứng cứ hợp đồng | ✅ |
@@ -153,7 +159,6 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 backend/
 ├── prisma/
 │   ├── schema.prisma          # 27 model (IAM/Auth, Property, Door Key, Mandate, Viewing/Dispatch, VietQR, eKYC, E-Sign, Handover, Payout, Audit)
-│   ├── seed.ts                # Dữ liệu khởi tạo (Sapphire 1 & 2, Field Host, căn mẫu, Fee Configs)
 │   └── legacy/                # drop_web_schema.sql — gỡ schema cũ của apps/web
 │
 ├── src/
@@ -170,11 +175,14 @@ backend/
 │   │   └── interceptors/      # LoggingInterceptor, TransformInterceptor
 │   │
 │   └── modules/
-│       ├── auth/              # Đăng nhập, Google, phiên, OTP Zalo, xác thực RFID, tài khoản Field Host (§4)
+│       ├── auth/              # Đăng nhập, Google, phiên (kèm `hostRoles`), OTP Zalo (§4)
+│       ├── field-hosts/       # Admin CRUD Field Host + vai Sale/Thẩm định (§1.5)
 │       ├── property/          # Toà, căn hộ, All-in Cost
 │       ├── matchmaker/        # AI Matchmaker & badge "Căn hời"
 │       ├── booking/           # Lịch xem, check-in sảnh
-│       ├── dispatch/          # Ticket điều phối Host, RFID thang máy, cấp mã cửa
+│       ├── dispatch/          # DispatchAssignerService (chọn Sale), tầng 3 lớp tính lúc đọc — route `/dispatch/*` giả đã xoá (hồ sơ 15)
+│       ├── host-viewings/     # Cổng Sale `/host/board|tickets|viewings` — ViewingFlowService là nguồn duy nhất chuyển trạng thái ca (hồ sơ 15)
+│       ├── door/              # DoorCodeService: mã cửa `aes:<AES-256-GCM>` (`npm run rekey:door-codes`)
 │       ├── deposit/           # VietQR cọc giữ chỗ, webhook, Conflict Resolver
 │       ├── identity/          # eKYC CCCD
 │       ├── contract/          # Mandate, gói chứng cứ
@@ -209,7 +217,9 @@ npm install
 cp .env.example .env
 ```
 
-_(Nếu đã kết nối Supabase Cloud, điền `DATABASE_URL` và `SUPABASE_SERVICE_ROLE_KEY`. Nếu chạy local dev offline, khởi chạy Docker Compose)._
+_(Nếu dùng Supabase Cloud, điền `DATABASE_URL`, `SUPABASE_URL` và `SUPABASE_SERVICE_ROLE_KEY`. Nếu chạy local dev offline, cấu hình database local theo Docker Compose.)_
+
+**Trợ lý AI (relay `modules/assistant`):** `POST /api/v1/assistant/chat` (`@Public`, giới hạn 20 req/phút/IP) chuyển tiếp SSE nguyên văn tới ai-engine (`ai-engine/`). Cần 2 biến: `AI_ENGINE_URL` (vd `http://localhost:8001`) và `AI_ENGINE_INTERNAL_KEY` (trùng `INTERNAL_KEY` của ai-engine). Body `{messages[≤20, content≤2000], locale:'vi'|'en'}`; backend tự gắn tên gọi từ phiên (không gửi id/email/SĐT). Thiếu `AI_ENGINE_URL` hoặc ai-engine chết ⇒ 503 `AI_UPSTREAM_DOWN`, web rơi về bộ lọc cũ. Khách chưa đăng nhập chỉ được `ASSISTANT_GUEST_TURNS` (mặc định 2) lượt chấp nhận mỗi IP (X-Forwarded-For đầu tiên, bộ nhớ, cửa sổ 24h); lượt sau ⇒ 401 `{code:"LOGIN_REQUIRED"}` không gọi ai-engine.
 
 ### Bước 3: Khởi chạy Database local (Tùy chọn nếu không dùng Supabase Cloud)
 
@@ -217,13 +227,13 @@ _(Nếu đã kết nối Supabase Cloud, điền `DATABASE_URL` và `SUPABASE_SE
 docker compose up -d
 ```
 
-### Bước 4: Tạo Client & Seed dữ liệu mẫu
+### Bước 4: Tạo Prisma Client
 
 ```bash
 npx prisma generate
-npx prisma db push
-npx prisma db seed
 ```
+
+Backend dùng schema database Supabase hiện có. Không chạy seed hoặc `prisma db push` lên database thật.
 
 ### Bước 5: Khởi chạy Backend Server ở chế độ Development
 
@@ -238,9 +248,8 @@ npm run start:dev
 
 ```bash
 npm run create:admin -- you@example.com 'mat-khau-manh' "Ten"   # Admin (không có đăng ký trên UI)
-npm run seed:auth                # admin dev + 2 lời mời Field Host (host1/host2@vinstay.test, RFID-S1-0001/RFID-S2-0001)
-npm run seed:auth -- --demo      # thêm 4 tài khoản demo (bật AUTH_DEMO_MODE=true để dùng nút 1-click)
-npm test                         # unit + HTTP test (Prisma/Supabase giả)
+npm run create:admin -- you@example.com 'mat-khau-manh' "Ten"   # tạo Admin theo thông tin chỉ định
+npm run set:password -- you@example.com 'mat-khau-manh'         # đặt mật khẩu cho Profile có sẵn
 ```
 
 ## 4. ĐĂNG NHẬP & PHÂN QUYỀN (`modules/auth`)
@@ -255,21 +264,28 @@ tạo Profile rồi đăng nhập luôn; email đã có tài khoản (kể cả 
 API client có thể dùng `Authorization: Bearer <token>`. Vai trò đọc từ DB (`profiles.role`). Supabase chỉ còn dùng cho
 Postgres + Storage ảnh hồ sơ ký gửi.
 
-Hai cổng đăng nhập trên UI: `/login` (Khách thuê / Chủ nhà) và `/admin/login` (Sale – Field Host / Quản trị).
+Hai cổng đăng nhập trên UI: `/login` (Khách thuê / Chủ nhà) và `/admin/login` (Field Host – Sale / Thẩm định · Quản trị).
 
 | Endpoint | Mô tả |
 |---|---|
 | `POST /auth/login` `{email,password,portal}` | portal = tenant / landlord / host / admin |
-| `POST /auth/signup` | tenant / landlord (và Host đã được Admin mời email) — đăng ký xong đăng nhập luôn, không xác nhận email |
-| `POST /auth/demo-login` | đăng nhập 1-click tài khoản demo (chỉ khi `AUTH_DEMO_MODE=true`) |
+| `POST /auth/signup` | tenant / landlord — đăng ký xong đăng nhập luôn, không xác nhận email. Host/Admin ⇒ 403 `signup_not_allowed` |
 | `GET /auth/google?portal=` → `GET /auth/google/callback` | Google OAuth (Passport; `state` = `portal.nonce`, nonce nằm trong cookie httpOnly `vs_oauth`; luôn hiện màn chọn tài khoản; nhận `login_hint=<email>` để chọn sẵn tài khoản; thành công thì set cookie không-httpOnly `vs_google_hint` {name,email} để FE hiện "Tiếp tục bằng tên …") |
 | `GET /auth/session`, `POST /auth/logout` | phiên hiện tại, đăng xuất (xoá cookie) |
-| `npm run set:password -- <email> <mật khẩu>` | script đặt/đặt lại mật khẩu cho Profile có sẵn (tài khoản cũ chưa có `password_hash`); `create:admin` / `seed:auth` chỉ tạo mới |
-| `POST /auth/verify-rfid` | Field Host nhập RFID lần đầu; chưa xong thì bị chặn mọi quyền Host |
+| `npm run set:password -- <email> <mật khẩu>` | đặt/đặt lại mật khẩu cho Profile có sẵn |
+| `GET /host/me` | Field Host xem hồ sơ của chính mình (vai, phân khu, SĐT đã xác thực, ca trực). Không có số thẻ/mật khẩu |
 | `POST /auth/otp/send`, `/otp/verify`, `/phone/verify` | OTP xác thực SĐT (không phải đăng nhập); Khách thuê nhận action token dùng một lần |
-| `/admin/field-hosts` (ops_admin) | quản lý Field Host — xem §1.5 |
+| `/admin/field-hosts` (ops_admin) | Admin CRUD Field Host — xem §1.5. Host chỉ đăng nhập (email+mật khẩu hoặc Google); Profile `field_host` chưa có hồ sơ Host ⇒ 403 `host_not_provisioned`. Vai con: `@HostRoles('sale' \| 'inspector')` (guard `RolesGuard`, lỗi `host_role_missing`) |
 
 Portal `host` ↔ role `field_host`, `admin` ↔ `ops_admin`. Google: điền `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`JWT_SECRET` trong `.env`
 và thêm `${WEB_APP_URL}/api/v1/auth/google/callback` vào *Authorized redirect URIs* của OAuth client (Google Cloud Console) — không cần
 cấu hình gì ở Supabase Dashboard. Cùng email đã đăng ký bằng mật khẩu thì Google dùng chung Profile đó. Schema là nguồn chân lý duy nhất ở `prisma/schema.prisma`
 (`prisma/legacy/drop_web_schema.sql` gỡ schema cũ của apps/web nếu DB từng áp migration đó).
+
+### Seed nội thất DEMO cho căn chưa qua thẩm định (hồ sơ 18, fix4)
+```bash
+npm run seed:unit-inventory                 # chạy khô: bảng unit | furnishing | số món | độ mới TB
+npm run seed:unit-inventory -- --apply      # ghi thật (xoá dòng cũ của căn rồi tạo lại, 1 transaction)
+npm run seed:unit-inventory -- --overwrite  # ghi cả căn đã có dòng (mặc định bỏ qua)
+```
+Sinh định danh theo `unitCode`, theo `furnishing` (FULL ~85–100%, BASIC ~35–55%, EMPTY không món) trong 32 hạng mục catalog. Dữ liệu demo; căn thật sẽ bị ghi đè khi niêm yết qua thẩm định. `GET /units/:code` trả thêm `code` và `conditionPct` (độ mới %) cho từng dòng.

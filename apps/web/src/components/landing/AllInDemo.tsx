@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { AllInBar } from "@/components/unit/AllInBar";
-import { allInCost, RATES, type Household } from "@/lib/mock/cost";
-import { vnd, vndShort } from "@/lib/mock/format";
+import { allInCost, RATES, type Household } from "@/lib/pricing/cost";
+import { vnd, vndShort } from "@/lib/format";
 import { unitAddress, unitById } from "@/lib/mock/units";
 import styles from "./Landing.module.css";
 

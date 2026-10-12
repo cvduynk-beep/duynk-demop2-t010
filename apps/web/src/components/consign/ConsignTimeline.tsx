@@ -1,6 +1,6 @@
 import { Check, Clock, X } from "lucide-react";
 import type { Consignment } from "@/lib/mock/types";
-import { fmtDateTime } from "@/lib/mock/format";
+import { fmtDateTime } from "@/lib/format";
 import { isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import styles from "./Consign.module.css";

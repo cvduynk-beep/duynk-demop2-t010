@@ -1,7 +1,6 @@
 import { FURNISHING_LABEL, ITEM_LABEL, hostForUnit, type Unit } from "@/lib/mock/units";
-import { getUnitLivingFees } from "@/lib/mock/units";
 import { getUnitLivingInsights } from "./livingIntelligence";
-import { vnd, vndShort } from "@/lib/mock/format";
+import { vnd } from "@/lib/format";
 
 export interface ConciergeAnswer {
   text: string;
@@ -71,13 +70,11 @@ export function answerUnitQuestion(unit: Unit, question: string): ConciergeAnswe
   }
 
   const insights = getUnitLivingInsights(unit);
-  const fees = getUnitLivingFees(unit);
   const host = hostForUnit(unit);
 
   // Ước tính tiền điện theo diện tích & layout
   const estElecMin = unit.areaM2 <= 35 ? 350000 : unit.areaM2 <= 55 ? 450000 : 700000;
   const estElecMax = unit.areaM2 <= 35 ? 600000 : unit.areaM2 <= 55 ? 750000 : 1100000;
-  const estWater = unit.areaM2 <= 35 ? 60000 : unit.areaM2 <= 55 ? 90000 : 130000;
 
   // 2. Tiền điện / Tiền nước EVN / Chi phí điện nước (Giải quyết triệt để lỗi "tiền điên bao nhiu")
   if (

@@ -18,7 +18,7 @@ const server = http.createServer((req, res) => {
     try {
       res.writeHead(proxyRes.statusCode, proxyRes.headers);
       proxyRes.pipe(res, { end: true });
-    } catch (_) {}
+    } catch {}
   });
 
   proxyReq.on('error', (err) => {
@@ -27,15 +27,15 @@ const server = http.createServer((req, res) => {
         res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
       }
       res.end('Bad Gateway: ' + err.message);
-    } catch (_) {}
+    } catch {}
   });
 
   req.pipe(proxyReq, { end: true });
 });
 
-server.on('upgrade', (req, socket, head) => {
+server.on('upgrade', (req, socket, _head) => {
   socket.on('error', () => {
-    try { socket.destroy(); } catch (_) {}
+    try { socket.destroy(); } catch {}
   });
 
   const headers = { ...req.headers, host: 'localhost:3001' };
@@ -47,12 +47,12 @@ server.on('upgrade', (req, socket, head) => {
     headers,
   });
 
-  proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+  proxyReq.on('upgrade', (proxyRes, proxySocket, _proxyHead) => {
     proxySocket.on('error', () => {
-      try { proxySocket.destroy(); socket.destroy(); } catch (_) {}
+      try { proxySocket.destroy(); socket.destroy(); } catch {}
     });
     socket.on('error', () => {
-      try { proxySocket.destroy(); socket.destroy(); } catch (_) {}
+      try { proxySocket.destroy(); socket.destroy(); } catch {}
     });
 
     try {
@@ -65,13 +65,13 @@ server.on('upgrade', (req, socket, head) => {
       );
       proxySocket.pipe(socket);
       socket.pipe(proxySocket);
-    } catch (_) {
-      try { proxySocket.destroy(); socket.destroy(); } catch (_) {}
+    } catch {
+      try { proxySocket.destroy(); socket.destroy(); } catch {}
     }
   });
 
   proxyReq.on('error', () => {
-    try { socket.destroy(); } catch (_) {}
+    try { socket.destroy(); } catch {}
   });
 
   proxyReq.end();

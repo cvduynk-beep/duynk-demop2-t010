@@ -10,7 +10,7 @@ import { Section } from "@/components/ui/Section";
 import { toast } from "@/components/ui/Toast";
 import { VerifiedPhoto } from "@/components/unit/VerifiedPhoto";
 import { hostAccept } from "@/lib/mock/actions";
-import { dayLabel, fmtPhone, fmtTime, normalizePhone } from "@/lib/mock/format";
+import { dayLabel, fmtPhone, fmtTime, normalizePhone } from "@/lib/format";
 import { bookingById, noticesFor } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
 import type { Booking, Notice } from "@/lib/mock/types";

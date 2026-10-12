@@ -11,19 +11,20 @@ import { toast } from "@/components/ui/Toast";
 import { CONSIGN_STATUS_META } from "@/components/consign/status";
 import { approveConsignment, rejectConsignment, adminAssignConsignment, autoEscalateConsignments } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/mock/cost";
-import { fmtDate, vnd } from "@/lib/mock/format";
+import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/pricing/cost";
+import { fmtDate, vnd } from "@/lib/format";
 import { unitDisplayStatus } from "@/lib/mock/selectors";
 import { inspectionSummary, isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { useMock } from "@/lib/mock/store";
-import type { Consignment } from "@/lib/mock/types";
+import type { Consignment, ConsignmentStatus } from "@/lib/mock/types";
 import { FURNISHING_LABEL, LAYOUT_LABEL, UNITS, ZONES, hostById, hostForUnit, landlordById, unitAddress, unitById, zoneById, type Unit, type UnitDisplayStatus, type LayoutKind } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
 import styles from "./Admin.module.css";
+import type { ApiInspectionItem } from "@/lib/apiClient";
 
 type Tab = "units" | "requests" | "exit";
 
-function parseLayoutKind(layout: string): LayoutKind {
+function parseLayoutKind(layout: string | undefined): LayoutKind {
   if (layout === "STUDIO" || layout === "Studio") return "Studio";
   if (layout === "ONE_BED_PLUS" || layout === "1PN") return "1PN";
   if (layout === "TWO_BED_ONE_BATH" || layout === "TWO_BED_TWO_BATH" || layout === "2PN") return "2PN";
@@ -61,12 +62,12 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
         const list = Array.isArray(data) ? data : data?.data;
         if (!Array.isArray(list) || unmounted) return;
 
-        const mapped: Consignment[] = list.map((item: any) => {
+        const mapped: Consignment[] = list.map((item: ApiInspectionItem) => {
           const parts = (item.unitCode || "").split("-");
           const doorPart = parts[2] || "";
           const doorNum = doorPart.replace(new RegExp(`^${item.floor}`), "") || "01";
           return {
-            id: item.consignmentId || item.id,
+            id: item.consignmentId ?? item.id,
             landlordId: item.landlordName || "Chủ nhà Ocean Park",
             building: item.building,
             floor: item.floor,
@@ -79,7 +80,7 @@ export function AdminInventory({ initialTab }: { initialTab: Tab }) {
             furnished: true,
             locks: ["smart"],
             auditByHost: true,
-            status: (item.status as any) || "awaiting_host",
+            status: (item.status as ConsignmentStatus | undefined) || "awaiting_host",
             createdAt: item.createdAt || new Date().toISOString(),
             signedAt: item.createdAt || new Date().toISOString(),
             hostId: item.hostId || undefined,

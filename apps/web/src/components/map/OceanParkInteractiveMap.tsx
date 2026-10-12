@@ -1,21 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { LayerGroup, Map as LeafletMap, TileLayer } from "leaflet";
 import {
   Compass,
-  Footprints,
   GraduationCap,
   Layers,
   MapPin,
   Minus,
-  Navigation,
   Plus,
   RotateCcw,
   ShoppingBag,
-  Sparkles,
   Waves,
   X,
-  Zap,
 } from "lucide-react";
 import type { ZoneId } from "@/lib/mock/units";
 import styles from "./OceanParkInteractiveMap.module.css";
@@ -127,7 +124,6 @@ interface OceanParkInteractiveMapProps {
   selectedZone?: ZoneId | null;
   onSelectZone?: (zoneId: ZoneId | null) => void;
   height?: number | string;
-  totalUnits?: number;
   className?: string;
 }
 
@@ -135,13 +131,12 @@ export function OceanParkInteractiveMap({
   selectedZone = null,
   onSelectZone,
   height = 420,
-  totalUnits = 71,
   className,
 }: OceanParkInteractiveMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const tileLayerRef = useRef<any>(null);
-  const markersLayerRef = useRef<any>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const tileLayerRef = useRef<TileLayer | null>(null);
+  const markersLayerRef = useRef<LayerGroup | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapLayer, setMapLayer] = useState<"clean" | "satellite">("clean");
 
@@ -197,34 +192,37 @@ export function OceanParkInteractiveMap({
 
   // 2. Chuyển đổi giữa Layer Đô thị và Layer Vệ tinh
   useEffect(() => {
-    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
 
     import("leaflet").then((L) => {
+      if (mapRef.current !== map) return; // bản đồ đã bị tháo trong lúc chờ nạp leaflet
       if (tileLayerRef.current) {
-        mapRef.current.removeLayer(tileLayerRef.current);
+        map.removeLayer(tileLayerRef.current);
       }
 
       if (mapLayer === "clean") {
         tileLayerRef.current = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
           subdomains: "abcd",
           maxZoom: 19,
-        }).addTo(mapRef.current);
+        }).addTo(map);
       } else {
         // Ảnh vệ tinh thực tế độ phân giải cao của Esri
         tileLayerRef.current = L.tileLayer(
           "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
           { maxZoom: 18 }
-        ).addTo(mapRef.current);
+        ).addTo(map);
       }
     });
   }, [mapLayer, mapReady]);
 
   // 3. Render các Marker phân khu và Landmark
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !markersLayerRef.current) return;
+    const group = markersLayerRef.current;
+    if (!mapReady || !mapRef.current || !group) return;
 
     import("leaflet").then((L) => {
-      const group = markersLayerRef.current;
+      if (markersLayerRef.current !== group) return; // bản đồ đã bị tháo trong lúc chờ nạp leaflet
       group.clearLayers();
 
       // (A) Thêm Landmark Pins

@@ -3,9 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarPlus, Send, Sparkles, X } from "lucide-react";
 import type { Unit } from "@/lib/mock/units";
-import { answerUnitQuestion, askVinnyConcierge, QUICK_CHIPS } from "@/lib/property/unitConcierge";
+import { askVinnyConcierge, QUICK_CHIPS } from "@/lib/property/unitConcierge";
 import { ButlerMascot } from "@/components/mascot/ButlerMascot";
 import styles from "./UnitConciergeDrawer.module.css";
+
+/** Id tin nhắn (gọi trong handler gửi tin, không phải lúc render). */
+function messageId(prefix: "u" | "b"): string {
+  return `${prefix}-${Date.now()}`;
+}
 
 interface MessageItem {
   id: string;
@@ -137,7 +142,7 @@ export function UnitConciergeDrawer({ unit, open, onOpen, onClose, onBook }: Uni
     const q = (textToSend || input).trim();
     if (!q || isThinking) return;
 
-    const userMsgId = `u-${Date.now()}`;
+    const userMsgId = messageId("u");
     setMessages((prev) => [...prev, { id: userMsgId, sender: "user", text: q }]);
     setInput("");
     setIsThinking(true);
@@ -145,7 +150,7 @@ export function UnitConciergeDrawer({ unit, open, onOpen, onClose, onBook }: Uni
     try {
       // Kết nối AI Quản Gia (LLM Gemini Flash + Semantic Engine)
       const ans = await askVinnyConcierge(unit, q);
-      const botMsgId = `b-${Date.now()}`;
+      const botMsgId = messageId("b");
       setMessages((prev) => [
         ...prev,
         {
@@ -353,7 +358,6 @@ export function UnitConciergeDrawer({ unit, open, onOpen, onClose, onBook }: Uni
  * Giữ export FloatingConciergeBubble để tương thích hoàn toàn với các component khác
  */
 export function FloatingConciergeBubble({
-  unit,
   onClick,
 }: {
   unit: Unit;

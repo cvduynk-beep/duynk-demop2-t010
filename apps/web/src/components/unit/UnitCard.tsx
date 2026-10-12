@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { Bath, BedDouble, Compass, Ruler, Sparkles } from "lucide-react";
-import { vnd, vndShort } from "@/lib/mock/format";
-import type { CostBreakdown } from "@/lib/mock/cost";
-import { unitAddress, zoneById, type Unit } from "@/lib/mock/units";
+import { vnd } from "@/lib/format";
+import type { CostBreakdown } from "@/lib/pricing/cost";
+import type { UnitWithExtras } from "@/lib/tenant/adapters";
+import { unitAddress, zoneById } from "@/lib/units";
 import { FavoriteButton } from "./FavoriteButton";
 import { UnitBadges } from "./UnitBadges";
 import { VerifiedPhoto } from "./VerifiedPhoto";
 import styles from "./UnitCard.module.css";
 
 interface UnitCardProps {
-  unit: Unit;
+  unit: UnitWithExtras;
   cost: CostBreakdown;
   /** "feature" = thẻ lớn có lý do AI chọn; "grid" = thẻ gọn. */
   variant?: "grid" | "feature";
@@ -18,13 +19,13 @@ interface UnitCardProps {
   priority?: boolean;
 }
 
-export function UnitCard({ unit, cost, variant = "grid", rank, reasons, priority }: UnitCardProps) {
-  const zone = zoneById(unit.zoneId);
+export function UnitCard({ unit, variant = "grid", rank, reasons, priority }: UnitCardProps) {
+  const zoneName = unit.zoneName || zoneById(unit.zoneId)?.name || "Phân khu chưa cập nhật";
   const feature = variant === "feature";
   return (
     <article className={`${styles.card} ${feature ? styles.feature : ""}`}>
       <div className={styles.photo}>
-        <Link href={`/units/${unit.id}`} aria-label={`Xem chi tiết căn ${unitAddress(unit)}`} className={styles.photoLink}>
+        <Link href={`/units/${encodeURIComponent(unit.code)}`} aria-label={`Xem chi tiết căn ${unitAddress(unit)}`} className={styles.photoLink}>
           <VerifiedPhoto
             unit={unit}
             sizes={feature ? "(max-width: 900px) 100vw, 420px" : "(max-width: 640px) 100vw, (max-width: 1200px) 50vw, 340px"}
@@ -36,14 +37,15 @@ export function UnitCard({ unit, cost, variant = "grid", rank, reasons, priority
           {rank && <span className={`badge badge-plain ${styles.rank}`}>AI chọn #{rank}</span>}
           <UnitBadges unit={unit} />
         </div>
-        <FavoriteButton unitId={unit.id} />
+        <FavoriteButton unitCode={unit.code} />
       </div>
 
       <div className={styles.body}>
         <div>
           <h3 className={styles.addr}>{unitAddress(unit)}</h3>
           <p className={`muted small ${styles.zone}`}>
-            {zone.name} · {unit.view}
+            {zoneName}
+            {unit.view && unit.view !== "Chưa cập nhật" ? ` · ${unit.view}` : ""}
           </p>
         </div>
 

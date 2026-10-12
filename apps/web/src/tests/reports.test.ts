@@ -1,11 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   computeReportSummary,
-  exportReportToCsv,
   AGENT_KPIS,
   CAMPAIGN_DATA,
   HIGH_VALUE_PROSPECTS,
-  RAW_DEALS,
 } from "@/lib/mock/reports";
 
 describe("Admin Reports & Multi-dimensional Analytics", () => {

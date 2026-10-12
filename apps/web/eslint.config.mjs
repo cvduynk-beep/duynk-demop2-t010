@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
     },
   },
+  {
+    // Script Node CommonJS chạy tay (cầu nối cổng 3000 ⇄ 3001), không phải code TypeScript của app.
+    files: ["proxy-*.js"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

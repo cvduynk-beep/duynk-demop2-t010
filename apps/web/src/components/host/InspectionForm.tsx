@@ -12,7 +12,7 @@ import { ConsignTimeline } from "@/components/consign/ConsignTimeline";
 import { InspectionReportView } from "@/components/consign/InspectionReportView";
 import { hostAcceptInspection, submitInspection, approveConsignment } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { fmtTime, vnd } from "@/lib/mock/format";
+import { fmtTime, vnd } from "@/lib/format";
 import { compressInspectionPhoto } from "@/lib/host/inspectionPhotos";
 import { validateInspectionPhoto } from "@/lib/host/aiVisionValidator";
 import { InspectionPhotoModal } from "./InspectionPhotoModal";
@@ -23,14 +23,7 @@ import {
 } from "@/lib/mock/selectors-inspection";
 import { consignmentById } from "@/lib/mock/selectors-admin";
 import { setMockState, useMock } from "@/lib/mock/store";
-import type {
-  Consignment,
-  DeclaredField,
-  InspectionDraft,
-  InspectionReport,
-  InventoryGroup,
-  InventoryLine,
-} from "@/lib/mock/types";
+import type { Consignment, DeclaredField, InspectionDraft, InspectionReport, InventoryGroup, InventoryLine, ConsignmentStatus } from "@/lib/mock/types";
 import {
   INVENTORY_CATALOG,
   INVENTORY_GROUP_LABEL,
@@ -53,8 +46,8 @@ import { publishUnitToCatalog } from "@/lib/property/useUnits";
 import { useNow } from "@/lib/useNow";
 import styles from "@/components/consign/Consign.module.css";
 
-import { hostRoles } from "@/lib/mock/selectors";
 import { useSession } from "@/lib/auth/client";
+import type { ApiInspectionItem } from "@/lib/apiClient";
 
 const DEFAULT_HOST_ID = DEMO_USERS.host.refId!;
 const DECLARED_FIELDS: DeclaredField[] = [
@@ -105,7 +98,7 @@ export function InspectionForm({ id }: { id: string }) {
           return;
         }
         const item = list.find(
-          (x: any) =>
+          (x: ApiInspectionItem) =>
             x.consignmentId === id ||
             x.unitId === id ||
             x.id === id ||
@@ -130,7 +123,7 @@ export function InspectionForm({ id }: { id: string }) {
             furnished: true,
             locks: ["smart"],
             auditByHost: true,
-            status: (item.status as any) || "awaiting_host",
+            status: (item.status as ConsignmentStatus | undefined) || "awaiting_host",
             createdAt: item.createdAt || new Date().toISOString(),
             signedAt: item.createdAt || new Date().toISOString(),
             hostId: item.hostId || undefined,
@@ -189,7 +182,6 @@ export function InspectionForm({ id }: { id: string }) {
   }, [id]);
 
   const currentHostId = session.user?.pendingHostId || DEFAULT_HOST_ID;
-  const isInspector = hostRoles(state, currentHostId).includes("inspector");
   // Host được phép mở phiếu nếu được gán c.hostId hoặc c.hostId là currentHostId hoặc Host có quyền inspector
   const activeHostId = c?.hostId || currentHostId;
 
@@ -211,7 +203,7 @@ export function InspectionForm({ id }: { id: string }) {
   );
 
   // ─── 3. Bảng kê 32 dòng catalog — Tự động liên kết từ khai báo chủ nhà ──────
-  const { codes: resolvedCodes, landlordCodes, declaredKeys } = useMemo(() => {
+  const { landlordCodes, declaredKeys } = useMemo(() => {
     return resolveInventoryCodesFromLandlord(c?.items, c?.furnished, c?.note);
   }, [c?.items, c?.furnished, c?.note]);
 
@@ -316,25 +308,25 @@ export function InspectionForm({ id }: { id: string }) {
     locationTag?: string;
   } | null>(null);
 
-  // Đồng bộ thông tin khi nạp được căn hộ từ Database
-  useEffect(() => {
-    if (c) {
-      setNetAreaM2((prev) => (prev ? prev : String(c.areaM2)));
-      setFurnishing((prev) => (c.furnished ? prev : "empty"));
-      if (c.report?.inventory && c.report.inventory.length >= 32) {
-        setInventory(c.report.inventory.slice(0, 32));
-      } else {
-        const { codes } = resolveInventoryCodesFromLandlord(c.items, c.furnished, c.note);
-        setInventory((prev) =>
-          prev.map((line) => ({
-            ...line,
-            present: codes.has(line.code),
-            qty: 1,
-          }))
-        );
-      }
+  // Đồng bộ thông tin khi nạp được căn hộ từ Database (điều chỉnh state ngay lúc render khi `c` đổi, không qua effect)
+  const [syncedFrom, setSyncedFrom] = useState<typeof c>(undefined);
+  if (c && c !== syncedFrom) {
+    setSyncedFrom(c);
+    setNetAreaM2((prev) => (prev ? prev : String(c.areaM2)));
+    setFurnishing((prev) => (c.furnished ? prev : "empty"));
+    if (c.report?.inventory && c.report.inventory.length >= 32) {
+      setInventory(c.report.inventory.slice(0, 32));
+    } else {
+      const { codes } = resolveInventoryCodesFromLandlord(c.items, c.furnished, c.note);
+      setInventory((prev) =>
+        prev.map((line) => ({
+          ...line,
+          present: codes.has(line.code),
+          qty: 1,
+        }))
+      );
     }
-  }, [c]);
+  }
 
   if (!state.ready || !now || loadingDb) {
     return <div className="skeleton" style={{ height: 420 }} />;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { SessionUser } from "./portals";
+import type { Portal, SessionUser } from "./portals";
 
 /**
  * Phiên đăng nhập THẬT cho Client Component: đọc `GET /api/v1/auth/session` (cookie httpOnly do backend set),
@@ -22,7 +22,8 @@ function publish(next: SessionState) {
   for (const l of listeners) l();
 }
 
-function getPortalForPath(): string {
+/** Cổng của trang đang mở: chỉ hỏi phiên (cookie `vs_access_<portal>`) của đúng cổng này. */
+function getPortalForPath(): Portal {
   if (typeof window === "undefined") return "tenant";
   const p = window.location.pathname;
   if (p.startsWith("/host")) return "host";
@@ -32,31 +33,17 @@ function getPortalForPath(): string {
 }
 
 async function load() {
+  const portal = getPortalForPath();
   try {
-    const portal = getPortalForPath();
-    const url = portal ? `/api/v1/auth/session?portal=${portal}` : "/api/v1/auth/session";
-    const res = await fetch(url, {
+    const res = await fetch(`/api/v1/auth/session?portal=${portal}`, {
       credentials: "same-origin",
       cache: "no-store",
-      headers: portal ? { "x-portal": portal } : {},
+      headers: { "x-portal": portal },
     });
-    let user = res.ok ? ((await res.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null : null;
-    if (!user) {
-      // Fallback sang endpoint cục bộ /api/auth/session khi backend offline
-      const fb = await fetch(portal ? `/api/auth/session?portal=${portal}` : "/api/auth/session");
-      if (fb.ok) user = ((await fb.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null;
-    }
+    const user = res.ok ? ((await res.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null : null;
     publish({ ready: true, user });
   } catch {
-    try {
-      const portal = getPortalForPath();
-      const fb = await fetch(portal ? `/api/auth/session?portal=${portal}` : "/api/auth/session");
-      if (fb.ok) {
-        const user = ((await fb.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null;
-        return publish({ ready: true, user });
-      }
-    } catch {}
-    publish({ ready: true, user: null });
+    publish({ ready: true, user: null }); // backend không với tới được ⇒ coi như chưa đăng nhập (không có phiên dự phòng)
   }
 }
 
@@ -86,11 +73,18 @@ export function useRole(): SessionUser["portal"] {
   return useSession().user?.portal ?? null;
 }
 
-/** Đăng xuất: thu hồi phiên ở backend rồi tải lại toàn trang (xoá cache router của các trang có chắn quyền). */
-export async function signOut(redirectTo = "/login") {
+/**
+ * Đăng xuất cổng của trang đang mở: backend chỉ xoá cookie `vs_access_<portal>` của cổng đó (cổng khác giữ nguyên),
+ * rồi tải lại toàn trang (xoá cache router của các trang có chắn quyền).
+ */
+export async function signOut(redirectTo = "/login", portal: Portal = getPortalForPath()) {
   try {
-    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-    await fetch("/api/v1/auth/logout", { method: "POST" }).catch(() => {});
+    await fetch("/api/v1/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ portal }),
+    }).catch(() => {});
   } finally {
     window.location.assign(redirectTo);
   }

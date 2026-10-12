@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { ArrowRight, ChevronRight, Sparkles, Zap } from "lucide-react";
 import { VerifiedPhoto } from "@/components/unit/VerifiedPhoto";
-import { allInCost, DEFAULT_HOUSEHOLD, isBargain, savingsPct } from "@/lib/mock/cost";
-import { vnd, vndShort } from "@/lib/mock/format";
+import { isBargain, savingsPct } from "@/lib/pricing/cost";
+import { vnd } from "@/lib/format";
 import { unitAddress, unitById, zoneById, type Unit } from "@/lib/mock/units";
 import type { CriteriaState } from "@/lib/mock/types";
 import styles from "./InlineChatUnits.module.css";
@@ -16,14 +16,13 @@ interface InlineChatUnitsProps {
   title?: string;
 }
 
-export function InlineChatUnits({ unitIds, criteria, onShowResults, title }: InlineChatUnitsProps) {
+export function InlineChatUnits({ unitIds, onShowResults, title }: InlineChatUnitsProps) {
   const units = unitIds
     .map((id) => unitById(id))
     .filter((u): u is Unit => Boolean(u));
 
   if (units.length === 0) return null;
 
-  const household = criteria?.household || DEFAULT_HOUSEHOLD;
 
   return (
     <div className={styles.wrapper} aria-label="Băng chuyền căn hộ đề xuất thực tế">
@@ -40,7 +39,6 @@ export function InlineChatUnits({ unitIds, criteria, onShowResults, title }: Inl
 
       <div className={styles.carouselTrack} role="region" aria-label="Danh sách căn hộ vuốt ngang">
         {units.map((unit, idx) => {
-          const cost = allInCost(unit, household);
           const zone = zoneById(unit.zoneId);
           const bargain = isBargain(unit);
           const pct = savingsPct(unit);

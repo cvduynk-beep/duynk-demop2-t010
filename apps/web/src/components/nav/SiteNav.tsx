@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CalendarSearch, ChevronDown, FileText, Heart, LogIn, LogOut, Menu, User, X } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
-import { initials } from "@/lib/mock/format";
+import { initials } from "@/lib/format";
 import { ROLE_LABEL } from "@/lib/mock/actors";
 import { PORTAL_HOME } from "@/lib/auth/portals";
 import { signOut, useRole, useSession } from "@/lib/auth/client";
@@ -89,7 +89,7 @@ export function SiteNav({ variant = "solid" }: { variant?: "solid" | "clear" }) 
   return (
     <header className={`${styles.nav} ${variant === "clear" ? styles.clear : ""} no-print`}>
       <div className={`wrap ${styles.inner}`}>
-        <Logo sub="Vinhomes Ocean Park 1" />
+        <Logo />
 
         <nav className={styles.links} aria-label="Điều hướng chính">
           {LINKS.map((l) => (

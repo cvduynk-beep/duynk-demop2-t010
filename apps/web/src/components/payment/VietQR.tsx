@@ -1,4 +1,5 @@
-import { vnd } from "@/lib/mock/format";
+import Image from "next/image";
+import { vnd } from "@/lib/format";
 import styles from "./VietQR.module.css";
 
 const SIZE = 29;
@@ -43,20 +44,33 @@ function buildMatrix(seed: string): boolean[][] {
 interface VietQRProps {
   amount: number;
   content: string;
+  /** Khoá ổn định để vẽ QR mô phỏng khi backend chưa cấu hình tài khoản nhận VietQR thật. */
   qrRef: string;
+  /** Ảnh VietQR thật do backend dựng từ tài khoản nhận đã cấu hình (img.vietqr.io). Không có ⇒ QR mô phỏng. */
+  qrUrl?: string | null;
+  accountNo?: string;
+  accountName?: string;
+  bankName?: string;
   paid?: boolean;
 }
 
-/** Mã VietQR động (mô phỏng): số tiền cố định 2.000.000đ, nội dung COC [Mã căn] [SĐT]. */
-export function VietQR({ amount, content, qrRef, paid }: VietQRProps) {
-  const m = buildMatrix(qrRef + content);
+/**
+ * Mã VietQR động: số tiền + nội dung chuyển khoản do backend phát. Backend đã cấu hình tài khoản nhận ⇒ ảnh VietQR thật;
+ * chưa cấu hình (môi trường dev, MÔ PHỎNG VietQR) ⇒ vẽ QR minh hoạ không quét được, ghi rõ "mô phỏng".
+ */
+export function VietQR({ amount, content, qrRef, qrUrl, accountNo, accountName, bankName, paid }: VietQRProps) {
+  const m = qrUrl ? null : buildMatrix(qrRef + content);
   return (
     <div className={styles.card}>
       <div className={styles.qrWrap}>
-        <svg viewBox={`-2 -2 ${SIZE + 4} ${SIZE + 4}`} className={`${styles.qr} ${paid ? styles.faded : ""}`} role="img" aria-label="Mã VietQR cọc giữ chỗ (mô phỏng)">
-          <rect x="-2" y="-2" width={SIZE + 4} height={SIZE + 4} fill="#fff" />
-          {m.flatMap((row, y) => row.map((on, x) => (on ? <rect key={`${x}-${y}`} x={x} y={y} width="1.02" height="1.02" fill="#0b2530" /> : null)))}
-        </svg>
+        {qrUrl ? (
+          <Image src={qrUrl} width={256} height={256} unoptimized className={`${styles.qr} ${paid ? styles.faded : ""}`} alt={`VietQR thanh toán ${vnd(amount)} đồng`} />
+        ) : (
+          <svg viewBox={`-2 -2 ${SIZE + 4} ${SIZE + 4}`} className={`${styles.qr} ${paid ? styles.faded : ""}`} role="img" aria-label="Mã VietQR mô phỏng (chưa cấu hình tài khoản nhận thật)">
+            <rect x="-2" y="-2" width={SIZE + 4} height={SIZE + 4} fill="#fff" />
+            {m!.flatMap((row, y) => row.map((on, x) => (on ? <rect key={`${x}-${y}`} x={x} y={y} width="1.02" height="1.02" fill="#0b2530" /> : null)))}
+          </svg>
+        )}
         {paid && <span className={styles.paid}>Đã nhận tiền</span>}
       </div>
       <dl className={styles.info}>
@@ -70,8 +84,20 @@ export function VietQR({ amount, content, qrRef, paid }: VietQRProps) {
         </div>
         <div>
           <dt>Người nhận</dt>
-          <dd>Tài khoản định danh VinStay AI</dd>
+          <dd>{accountName || "Tài khoản định danh VinStay AI"}</dd>
         </div>
+        {accountNo && (
+          <div>
+            <dt>{bankName || "Số tài khoản"}</dt>
+            <dd>{accountNo}</dd>
+          </div>
+        )}
+        {!qrUrl && (
+          <div>
+            <dt>Ghi chú</dt>
+            <dd className="muted">QR mô phỏng — môi trường thử nghiệm chưa cấu hình tài khoản nhận VietQR thật.</dd>
+          </div>
+        )}
       </dl>
     </div>
   );

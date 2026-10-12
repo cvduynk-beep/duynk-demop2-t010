@@ -20,13 +20,11 @@ export function LogoMark({ size = 30, inverse = false }: { size?: number; invers
 export function Logo({
   href = "/",
   inverse = false,
-  sub,
   size = 28,
   compact = false,
 }: {
   href?: string;
   inverse?: boolean;
-  sub?: string;
   size?: number;
   compact?: boolean;
 }) {

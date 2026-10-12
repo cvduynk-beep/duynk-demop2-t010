@@ -18,18 +18,19 @@ import { InspectionReportView } from "@/components/consign/InspectionReportView"
 import { CONSIGN_STATUS_META } from "@/components/consign/status";
 import { approveConsignment, rejectConsignment, setHoldHours, adminDelistUnit, adminRelistUnit, DELIST_REASON_LABELS } from "@/lib/mock/actions";
 import { DEMO_USERS } from "@/lib/mock/actors";
-import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/mock/cost";
-import { fmtDate, fmtDateTime, fmtPhone, fmtTime, vnd } from "@/lib/mock/format";
+import { allInCost, DEFAULT_HOUSEHOLD } from "@/lib/pricing/cost";
+import { fmtDate, fmtDateTime, fmtPhone, fmtTime, vnd } from "@/lib/format";
 import { unitDisplayStatus, unitStatus, isOpenBooking } from "@/lib/mock/selectors";
 import { consignmentById, unitBookings } from "@/lib/mock/selectors-admin";
 import { isInspectOverdue } from "@/lib/mock/selectors-inspection";
 import { viewingLog, type ViewingLogEntry } from "@/lib/mock/selectors-viewing";
 import { setMockState, useMock } from "@/lib/mock/store";
-import type { Booking, Consignment, InspectionReport, DelistReason } from "@/lib/mock/types";
+import type { Booking, Consignment, InspectionReport, DelistReason, ConsignmentStatus } from "@/lib/mock/types";
 import { FURNISHING_LABEL, LAYOUT_LABEL, hostById, hostForUnit, landlordById, unitAddress, unitById, zoneById, type LayoutKind, type UnitStatus, type Unit } from "@/lib/mock/units";
 import { useNow } from "@/lib/useNow";
 import { Archive, RotateCcw, AlertTriangle } from "lucide-react";
 import styles from "./Admin.module.css";
+import type { ApiInspectionItem } from "@/lib/apiClient";
 
 const UNIT_STATUS_META: Record<UnitStatus, { label: string; tone: StatusTone }> = {
   available: { label: "Còn trống", tone: "ok" },
@@ -71,10 +72,7 @@ export function AdminInventoryDetail({ id }: { id: string }) {
   const consignment = existingConsignment || dbConsignment;
 
   useEffect(() => {
-    if (unit || existingConsignment) {
-      setLoadingDb(false);
-      return;
-    }
+    if (unit || existingConsignment) return; // đã có dữ liệu cục bộ: `loadingDb` bị bỏ qua khi render
     let unmounted = false;
     async function fetchConsignment() {
       try {
@@ -89,7 +87,7 @@ export function AdminInventoryDetail({ id }: { id: string }) {
           return;
         }
         const item = data.find(
-          (x: any) =>
+          (x: ApiInspectionItem) =>
             x.consignmentId === id ||
             x.unitId === id ||
             x.id === id ||
@@ -114,7 +112,7 @@ export function AdminInventoryDetail({ id }: { id: string }) {
             furnished: true,
             locks: ["smart"],
             auditByHost: true,
-            status: (item.status as any) || "awaiting_host",
+            status: (item.status as ConsignmentStatus | undefined) || "awaiting_host",
             createdAt: item.createdAt || new Date().toISOString(),
             signedAt: item.createdAt || new Date().toISOString(),
             hostId: item.hostId || undefined,
@@ -149,7 +147,7 @@ export function AdminInventoryDetail({ id }: { id: string }) {
     };
   }, [id, unit, existingConsignment]);
 
-  if (!state.ready || !now || loadingDb) return <div className="skeleton" style={{ height: 420 }} />;
+  if (!state.ready || !now || (loadingDb && !unit && !existingConsignment)) return <div className="skeleton" style={{ height: 420 }} />;
 
   if (!unit && !consignment) notFound();
 

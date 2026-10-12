@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useClientValue } from "@/lib/useClientValue";
 import { Download, Share, X } from "lucide-react";
 import { LogoMark } from "@/components/brand/Logo";
 import styles from "./PwaInstallPrompt.module.css";
@@ -13,9 +14,18 @@ interface BeforeInstallPromptEvent extends Event {
 const DISMISS_KEY = "vinstay_pwa_dismissed_until";
 const DISMISS_DAYS = 7;
 
+/** iOS Safari (không phải Chrome/Firefox trên iOS). */
+function isIosSafari(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = window.navigator.userAgent.toLowerCase();
+  const isIosDevice = /iphone|ipad|ipod/.test(ua);
+  const isSafari = ua.includes("safari") && !ua.includes("crios") && !ua.includes("fxios");
+  return isIosDevice && isSafari;
+}
+
 export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isIos, setIsIos] = useState(false);
+  const isIos = useClientValue(isIosSafari, false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -50,13 +60,8 @@ export function PwaInstallPrompt() {
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
 
-    // 5. Kiểm tra iOS Safari
-    const ua = window.navigator.userAgent.toLowerCase();
-    const isIosDevice = /iphone|ipad|ipod/.test(ua);
-    const isSafari = ua.includes("safari") && !ua.includes("crios") && !ua.includes("fxios");
-
-    if (isIosDevice && isSafari) {
-      setIsIos(true);
+    // 5. iOS Safari (không có beforeinstallprompt): hiện hướng dẫn "Thêm vào màn hình chính"
+    if (isIosSafari()) {
       // Hiện banner sau 3 giây để không che khuất màn hình lúc mới vào
       const timer = setTimeout(() => setVisible(true), 3000);
       return () => {

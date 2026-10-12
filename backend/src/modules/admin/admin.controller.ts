@@ -1,24 +1,49 @@
-import { Controller, Get, Post, Patch, Body, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiCookieAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Param, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { AdminFeeService } from './admin-fee.service';
+import { AdminPayoutService } from './admin-payout.service';
+import { AdminDispatchService } from './admin-dispatch.service';
+import { AdminBiService } from './admin-bi.service';
+import { AdminInventoryService } from './admin-inventory.service';
+import { AdminDepositService } from './admin-deposit.service';
+import { AdminKeyService } from './admin-key.service';
+import { AdminContractRegistryService } from './admin-contract-registry.service';
 import {
+  TerminateMandateDto,
   UpdateCommissionParamDto,
-  CreateFieldHostDto,
-  UpdateFieldHostDto,
   ApproveConsignmentDto,
   RejectConsignmentDto,
   ReassignBookingDto,
+  EscalateTicketDto,
   VoidHoldDto,
-  UpdateHoldPolicyDto,
+  UpdateUnitHoldHoursDto,
+  // UpdateLandlordFeeDto, // tạm tắt cùng endpoint phí dịch vụ chủ nhà
+  PayoutQueryDto,
+  ResolveUncDto,
+  KeyReasonDto,
+  DepositQueryDto,
+  UpdateDepositPolicyDto,
 } from './dto/admin.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('10. Admin Portal & Quản trị vận hành')
-@ApiCookieAuth('session-cookie')
 @Roles('ops_admin')
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly feeService: AdminFeeService,
+    private readonly payoutService: AdminPayoutService,
+    private readonly dispatchService: AdminDispatchService,
+    private readonly biService: AdminBiService,
+    private readonly inventoryService: AdminInventoryService,
+    private readonly depositService: AdminDepositService,
+    private readonly keyService: AdminKeyService,
+    private readonly registryService: AdminContractRegistryService,
+  ) {}
 
   @Get('bi-funnel')
   @ApiOperation({
@@ -26,7 +51,7 @@ export class AdminController {
     description: 'Phễu 6 giai đoạn thời gian thực (no-show 3.8%) và Heatmap phân khu Sapphire 1 & 2',
   })
   async getBiFunnel() {
-    return this.adminService.getBiFunnelAndHeatmap();
+    return this.biService.getBiFunnelAndHeatmap();
   }
 
   @Get('exclusive-inventory')
@@ -35,7 +60,31 @@ export class AdminController {
     description: 'Theo dõi 128 căn hộ và countdown widget đếm ngược thoát ủy quyền linh hoạt',
   })
   async getInventory() {
-    return this.adminService.getExclusiveInventory();
+    return this.inventoryService.getExclusiveInventory();
+  }
+
+  @Get('exclusive-inventory/:id')
+  @ApiOperation({ summary: 'Chi tiết căn hộ trong rổ hàng độc quyền' })
+  async getInventoryDetail(@Param('id') id: string) {
+    return this.inventoryService.getExclusiveInventoryDetail(id);
+  }
+
+  @Post('exclusive-inventory/:id/hold-hours')
+  @ApiOperation({
+    summary: 'Đặt thời gian khoá căn (12–72 giờ, mặc định 48) cho MỘT căn còn trống, có Audit Log',
+    description: 'Từ chối (409) khi căn không còn AVAILABLE. hours = null để về mặc định.',
+  })
+  async updateHoldHours(@Param('id') id: string, @Body() dto: UpdateUnitHoldHoursDto, @CurrentUser() user: any) {
+    return this.inventoryService.updateHoldHours(id, dto.hours, dto.reason, { id: user.id, role: user.role });
+  }
+
+  @Post('mandates/:id/terminate')
+  @ApiOperation({
+    summary: 'Chấm dứt ủy quyền độc quyền sau khi chủ nhà báo thoát đủ 15 ngày',
+    description: 'Từ chối (409) khi căn HOLDING hoặc có hợp đồng hiệu lực (SAD_v2 §10.4)',
+  })
+  async terminateMandate(@Param('id') id: string, @Body() dto: TerminateMandateDto, @CurrentUser() user: any) {
+    return this.inventoryService.terminateMandate(id, dto.reason, user);
   }
 
   @Post('consignments/:id/approve')
@@ -56,43 +105,72 @@ export class AdminController {
     description: 'Giám sát thời gian phản hồi ca trực 3-5 phút, cảnh báo đỏ khi quá hạn cho Area Lead',
   })
   async getDispatchSla() {
-    return this.adminService.getDispatchSlaMonitoring();
+    return this.dispatchService.getSlaMonitoring();
+  }
+
+  @Get('dispatch-sla/summary')
+  @ApiOperation({ summary: 'Tóm tắt SLA theo tầng và số ticket quá hạn' })
+  async getDispatchSlaSummary() {
+    return this.dispatchService.getSlaSummary();
+  }
+
+  @Post('dispatch/:ticketId/escalate')
+  @ApiOperation({ summary: 'Leo thang ticket điều phối lên tầng kế tiếp (tối đa tầng 3)' })
+  async escalateTicket(@Param('ticketId') ticketId: string, @Body() dto: EscalateTicketDto, @CurrentUser() user: any) {
+    return this.dispatchService.escalate(ticketId, dto, user);
   }
 
   @Post('bookings/:id/reassign')
-  @ApiOperation({ summary: 'Điều phối tay lịch hẹn sang Field Host khác' })
-  async reassignBooking(@Param('id') id: string, @Body() dto: ReassignBookingDto) {
-    return this.adminService.reassignBooking(id, dto);
+  @ApiOperation({ summary: 'Điều phối tay lịch hẹn sang Field Host khác (:id = Viewing id)' })
+  async reassignBooking(@Param('id') id: string, @Body() dto: ReassignBookingDto, @CurrentUser() user: any) {
+    return this.dispatchService.reassign(id, dto, user);
   }
 
-  @Get('hosts')
-  @ApiOperation({ summary: 'Danh sách Field Host và trạng thái ca trực' })
-  async getFieldHosts() {
-    return this.adminService.getFieldHosts();
+  @Get('deposits')
+  @ApiOperation({ summary: 'Giám sát cọc giữ chỗ (lọc theo trạng thái, phân trang)' })
+  async listDeposits(@Query() q: DepositQueryDto) {
+    return this.depositService.listDeposits(q);
   }
 
-  @Get('hosts/:id')
-  @ApiOperation({ summary: 'Chi tiết Field Host và hiệu suất' })
-  async getFieldHostById(@Param('id') id: string) {
-    return this.adminService.getFieldHostById(id);
+  @Post('deposits/:id/resolve-unc')
+  @ApiOperation({ summary: 'Duyệt/từ chối UNC thủ công (409 nếu căn không còn AVAILABLE)' })
+  async resolveUnc(@Param('id') id: string, @Body() dto: ResolveUncDto, @CurrentUser() user: any) {
+    return this.depositService.resolveUnc(id, dto, user);
   }
 
-  @Post('hosts')
-  @ApiOperation({ summary: 'Tạo mới hồ sơ Field Host' })
-  async createFieldHost(@Body() dto: CreateFieldHostDto) {
-    return this.adminService.createFieldHost(dto);
+  @Get('door-keys')
+  @ApiOperation({ summary: 'Danh sách mã khóa cửa (chỉ metadata, không trả mã)' })
+  async listDoorKeys() {
+    return this.keyService.listKeys();
   }
 
-  @Patch('hosts/:id')
-  @ApiOperation({ summary: 'Cập nhật thông tin Field Host' })
-  async updateFieldHost(@Param('id') id: string, @Body() dto: UpdateFieldHostDto) {
-    return this.adminService.updateFieldHost(id, dto);
+  @Post('door-keys/:id/rotate')
+  @ApiOperation({ summary: 'Xoay mã khóa điện tử (không trả plaintext)' })
+  async rotateDoorKey(@Param('id') id: string, @Body() dto: KeyReasonDto, @CurrentUser() user: any) {
+    return this.keyService.rotateKey(id, dto, user);
+  }
+
+  @Post('door-keys/:id/revoke')
+  @ApiOperation({ summary: 'Thu hồi mã khóa cửa' })
+  async revokeDoorKey(@Param('id') id: string, @Body() dto: KeyReasonDto, @CurrentUser() user: any) {
+    return this.keyService.revokeKey(id, dto, user);
+  }
+  @Get('contract-registry')
+  @ApiOperation({ summary: 'Sổ hợp đồng hợp nhất 4 loại: ký gửi, cọc giữ chỗ, thuê, đối tác Field Host' })
+  getContractRegistry() {
+    return this.registryService.list();
+  }
+
+  @Get('contract-registry/:kind/:id')
+  @ApiOperation({ summary: 'Chi tiết một văn bản trong sổ hợp đồng (kind = mandate | holding | lease | partnership)' })
+  getContractRegistryDetail(@Param('kind') kind: string, @Param('id') id: string) {
+    return this.registryService.detail(kind, id);
   }
 
   @Get('contracts')
-  @ApiOperation({ summary: 'Sổ hợp đồng toàn hệ thống (Ủy quyền, Giữ chỗ, Thuê)' })
+  @ApiOperation({ summary: 'Danh sách hợp đồng thuê (giữ cho các màn đang dùng; sổ đầy đủ ở contract-registry)' })
   async getContracts() {
-    return this.adminService.getContracts();
+    return this.depositService.getContracts();
   }
 
   @Get('contracts/:id')
@@ -103,14 +181,14 @@ export class AdminController {
 
   @Post('contracts/:id/void-hold')
   @ApiOperation({ summary: 'Hủy cọc giữ chỗ (Chủ nhà vi phạm hoặc Bất khả kháng)' })
-  async voidHold(@Param('id') id: string, @Body() dto: VoidHoldDto) {
-    return this.adminService.voidHold(id, dto);
+  async voidHold(@Param('id') id: string, @Body() dto: VoidHoldDto, @CurrentUser() user: any) {
+    return this.depositService.voidHold(id, dto, user);
   }
 
   @Post('contracts/:id/complete-exit')
   @ApiOperation({ summary: 'Hoàn tất thoát ủy quyền sau 15 ngày đếm ngược' })
-  async completeExit(@Param('id') id: string) {
-    return this.adminService.completeExit(id);
+  async completeExit(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.adminService.completeExit(id, { id: user.id, role: user.role });
   }
 
   @Post('contracts/:id/remind-renewal')
@@ -144,32 +222,67 @@ export class AdminController {
   }
 
   @Get('commission-engine')
-  @ApiOperation({
-    summary: 'Module 4: Dynamic Commission & Incentive Engine',
-    description: 'Bảng kê thanh toán tuần của Host và 4 tham số biến phí tự động tính toán',
-  })
+  @ApiOperation({ summary: 'Module 4: Dynamic Commission & Incentive Engine (đọc FeeConfig)' })
   async getCommissionEngine() {
-    return this.adminService.getCommissionEngine();
+    return this.feeService.getCommissionEngine();
+  }
+
+  @Get('commission-engine/audit')
+  @ApiOperation({ summary: 'Nhật ký thay đổi tham số biến phí (30 lần gần nhất)' })
+  getCommissionAudit() {
+    return this.feeService.getCommissionAudit();
   }
 
   @Post('commission-engine/config')
-  @ApiOperation({
-    summary: 'Điều chỉnh tham số biến phí (Dynamic Commission) có ghi nhận Audit Log',
-    description: 'Thay đổi thù lao dẫn, hoa hồng chốt cọc, hệ số sao 5-star, ghi lại audit old/new/reason',
-  })
-  async updateCommissionParam(@Body() dto: UpdateCommissionParamDto) {
-    return this.adminService.updateCommissionParam(dto);
+  @ApiOperation({ summary: 'Điều chỉnh tham số biến phí, có kiểm tra khoảng SAD_v2 §3.2 và Audit Log' })
+  async updateCommissionParam(@Body() dto: UpdateCommissionParamDto, @CurrentUser() user: any) {
+    return this.feeService.updateCommissionParam(dto, { id: user.id, role: user.role });
   }
 
-  @Get('settings/hold-policy')
-  @ApiOperation({ summary: 'Chính sách thời hạn giữ chỗ toàn sàn & riêng từng căn' })
-  getHoldPolicy() {
-    return this.adminService.getHoldPolicy();
+  // TẠM TẮT: cài đặt phí dịch vụ ký gửi (chủ nhà). Đang dùng mặc định 5% (landlord.mappers DEFAULT_SERVICE_FEE_PERCENT).
+  // Bỏ comment cùng mục LandlordFeeSettings ở AdminSettings.tsx và 2 dòng trong admin.http.spec.ts để bật lại.
+  // @Get('settings/landlord-fee')
+  // @ApiOperation({ summary: 'Phí dịch vụ ký gửi thu của chủ nhà (% tiền thuê, khoá landlord_service_fee_rate)' })
+  // getLandlordFee() {
+  //   return this.feeService.getLandlordFee();
+  // }
+  //
+  // @Post('settings/landlord-fee')
+  // @ApiOperation({ summary: 'Cập nhật phí dịch vụ ký gửi (0–30%), có Audit Log' })
+  // updateLandlordFee(@Body() dto: UpdateLandlordFeeDto, @CurrentUser() user: any) {
+  //   return this.feeService.updateLandlordFee(dto, { id: user.id, role: user.role });
+  // }
+
+  @Get('settings/deposit-policy')
+  @ApiOperation({ summary: 'Xem quy định tiền cọc (tối thiểu 50%, tối đa 4 lần giá thuê tháng)' })
+  getDepositPolicy() {
+    return this.feeService.getDepositPolicy();
   }
 
-  @Post('settings/hold-policy')
-  @ApiOperation({ summary: 'Cập nhật chính sách thời hạn giữ chỗ' })
-  updateHoldPolicy(@Body() dto: UpdateHoldPolicyDto) {
-    return this.adminService.updateHoldPolicy(dto);
+  @Post('settings/deposit-policy')
+  @ApiOperation({ summary: 'Cập nhật quy định tiền cọc theo giá thuê, có Audit Log' })
+  updateDepositPolicy(@Body() dto: UpdateDepositPolicyDto, @CurrentUser() user: any) {
+    return this.feeService.updateDepositPolicy(dto, { id: user.id, role: user.role });
+  }
+
+  @Get('payouts')
+  @ApiOperation({ summary: 'Bảng kê thu nhập Host theo tuần ISO' })
+  getPayouts(@Query() q: PayoutQueryDto) {
+    return this.payoutService.getWeeklyStatement(q.period);
+  }
+
+  @Get('payouts.csv')
+  @ApiOperation({ summary: 'Xuất CSV bảng kê thu nhập Host theo tuần ISO' })
+  async exportPayoutsCsv(@Query() q: PayoutQueryDto, @CurrentUser() user: any, @Res() res: Response) {
+    const csv = await this.payoutService.toCsv(q.period, { id: user.id, role: user.role });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="host-payouts-' + (q.period ?? 'current') + '.csv"');
+    res.send(csv);
+  }
+
+  @Post('payouts/sweep')
+  @ApiOperation({ summary: 'Quét và ghi các khoản thu nhập Host còn thiếu (idempotent theo transRef)' })
+  sweepPayouts(@CurrentUser() user: any) {
+    return this.payoutService.sweep({ id: user.id, role: user.role });
   }
 }

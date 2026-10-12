@@ -4,10 +4,11 @@ import { PrismaClient } from '@prisma/client';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
-  public isConnected = false;
 
   constructor() {
     super({
+      // DB ở xa (mỗi vòng truy vấn 0,25–1s): giao dịch nhiều câu lệnh dễ vượt 5s mặc định ⇒ "Transaction already closed".
+      transactionOptions: { maxWait: 10_000, timeout: 20_000 },
       // Băm mật khẩu không bao giờ rò sang response của module khác; AuthService.login tự bật lại cho mình.
       omit: { profile: { passwordHash: true } },
       log: [
@@ -22,17 +23,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   async onModuleInit() {
     try {
       await this.$connect();
-      this.isConnected = true;
       this.logger.log('🚀 Connected successfully to PostgreSQL (Supabase) via Prisma ORM');
     } catch (error) {
-      this.isConnected = false;
-      this.logger.warn('⚠️ Prisma could not connect to PostgreSQL immediately (check DATABASE_URL). Continuing in mock/offline mode.');
+      this.logger.error('Unable to connect to the configured PostgreSQL database.');
+      throw error;
     }
   }
 
   async onModuleDestroy() {
     await this.$disconnect();
-    this.isConnected = false;
     this.logger.log('🔌 Disconnected Prisma client from PostgreSQL');
   }
 }
