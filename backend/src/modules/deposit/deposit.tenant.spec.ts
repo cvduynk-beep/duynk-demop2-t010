@@ -205,8 +205,26 @@ describe('Deposit & VietQR Backend Tests (SPEC-P03 §8: Cases 1–11)', () => {
   let phoneService: PhoneService;
   let bookingAccess: BookingAccessService;
 
+  // Test tự cấp cấu hình VietQR (tài khoản giả) và TẮT DEMO_TOOLS — không dựa vào backend/.env máy dev
+  // (@prisma/client tự nạp .env; CI không có .env ⇒ trước đây đỏ 7 ca vì vietqr_not_configured).
+  const VIETQR_ENV = {
+    VIETQR_BANK_ID: '970436',
+    VIETQR_ACCOUNT_NO: '1234567890',
+    VIETQR_ACCOUNT_NAME: 'VINSTAY TEST',
+    VIETQR_WEBHOOK_SECRET: 'test_vietqr_webhook_secret_key',
+  };
+  const savedEnv: Record<string, string | undefined> = {};
+  afterEach(() => {
+    for (const [k, v] of Object.entries(savedEnv)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
   beforeEach(() => {
-    process.env.VIETQR_WEBHOOK_SECRET = 'test_vietqr_webhook_secret_key';
+    for (const k of [...Object.keys(VIETQR_ENV), 'DEMO_TOOLS']) savedEnv[k] = process.env[k];
+    Object.assign(process.env, VIETQR_ENV);
+    delete process.env.DEMO_TOOLS;
     fixture = fakePrisma();
     const config = new ConfigService({
       AES_SECRET_KEY: 'a-test-master-secret-of-32-chars!!',
