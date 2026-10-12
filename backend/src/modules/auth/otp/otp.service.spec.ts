@@ -62,6 +62,29 @@ describe('OtpService', () => {
       expect(await errorCode(otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_send_failed');
     });
 
+    it('OTP_DEV_CODE (4 số, ngoài production) ⇒ mã cố định, vẫn băm + xác thực qua otp_codes như mã thật', async () => {
+      const { otp, prisma } = setup({ OTP_DEV_CODE: '4829' });
+      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
+      expect(devCode).toBe('4829');
+      expect(JSON.stringify(prisma.otpCode.rows[0])).not.toContain('4829');
+      expect((await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: '4829' })).status).toBe('VERIFIED');
+    });
+
+    it('OTP_DEV_CODE bị bỏ qua ở production và khi sai định dạng (mã ngẫu nhiên)', async () => {
+      const prod = setup({ OTP_DEV_CODE: '4829', NODE_ENV: 'production' });
+      expect(await errorCode(prod.otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_send_failed');
+
+      const bad = setup({ OTP_DEV_CODE: '12ab' });
+      const codes = new Set<string>();
+      for (let i = 0; i < 8; i++) {
+        const { devCode } = await bad.otp.send({ phone: '+849123456' + String(10 + i), purpose: OtpPurpose.TENANT_VIEWING });
+        codes.add(devCode as string);
+      }
+      expect([...codes].every((c) => /^\d{4}$/.test(c))).toBe(true);
+      expect(codes.has('12ab')).toBe(false);
+      expect(codes.size).toBeGreaterThan(1);
+    });
+
     it('chặn gửi lại trong thời gian chờ', async () => {
       const { otp } = setup({ OTP_RESEND_SECONDS: '60' });
       await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });

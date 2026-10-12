@@ -33,6 +33,11 @@ export class OtpService {
   private readonly resendSeconds: number;
   /** Chỉ bật được ngoài production: khi không có nhà cung cấp thật thì trả mã qua API để dev/demo. */
   private readonly echoDevCode: boolean;
+  /**
+   * MÔ PHỎNG Zalo (giữ có chủ đích): mã cố định thay cho mã ngẫu nhiên, chỉ khi khai `OTP_DEV_CODE` (đúng 4 chữ số) và
+   * không phải production. Mã vẫn đi qua bảng otp_codes (băm, TTL, giới hạn thử, khoá) như mã thật.
+   */
+  private readonly fixedDevCode?: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -49,6 +54,8 @@ export class OtpService {
     this.lockoutSeconds = Number(config.get('OTP_LOCKOUT_SECONDS') ?? 600);
     this.resendSeconds = Number(config.get('OTP_RESEND_SECONDS') ?? 60);
     this.echoDevCode = String(config.get('OTP_ECHO_DEV_CODE')) === 'true' && config.get('NODE_ENV') !== 'production';
+    const fixed = String(config.get('OTP_DEV_CODE') ?? '').trim();
+    this.fixedDevCode = config.get('NODE_ENV') !== 'production' && /^\d{4}$/.test(fixed) ? fixed : undefined;
   }
 
   get expiresInSeconds(): number {
@@ -76,7 +83,7 @@ export class OtpService {
       }
     }
 
-    const code = generateOtpCode();
+    const code = this.fixedDevCode ?? generateOtpCode();
     const { channel, echoed } = await this.deliver(phone, code);
 
     await this.prisma.$transaction([

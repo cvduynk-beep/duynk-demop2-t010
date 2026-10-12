@@ -2,7 +2,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
   ValidateNested,
@@ -47,23 +46,6 @@ export class SubmitEkycFieldsDto {
   address: string;
 }
 
-export class SubmitEkycLeaseDto {
-  @ApiProperty({ example: '2026-10-15' })
-  @IsNotEmpty()
-  @IsString()
-  startDate: string;
-
-  @ApiProperty({ example: 12 })
-  @IsNotEmpty()
-  @IsNumber()
-  months: number;
-
-  @ApiProperty({ example: 1, enum: [1, 3, 6] })
-  @IsNotEmpty()
-  @IsNumber()
-  paymentCycle: 1 | 3 | 6;
-}
-
 export class SubmitEkycInputDto {
   @ApiProperty({ description: 'Mã phiên quét eKYC' })
   @IsNotEmpty()
@@ -88,9 +70,4 @@ export class SubmitEkycInputDto {
   @IsOptional()
   @IsBoolean()
   confirmedNameMismatch?: boolean;
-
-  @ApiProperty({ type: SubmitEkycLeaseDto })
-  @ValidateNested()
-  @Type(() => SubmitEkycLeaseDto)
-  lease: SubmitEkycLeaseDto;
 }

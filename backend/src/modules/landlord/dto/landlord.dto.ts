@@ -125,6 +125,23 @@ export class CreateConsignmentDto {
   @IsString({ each: true })
   inventoryCodes?: string[];
 
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Ủy quyền AI Chốt Nhanh: cho phép VinStay/Field Host chiết khấu trong biên độ giá sàn khi khách trả trước / cọc nhanh',
+  })
+  @IsOptional()
+  @IsBoolean()
+  allowFastClose?: boolean;
+
+  @ApiPropertyOptional({
+    example: 6_000_000,
+    description: 'Giá sàn tối thiểu (VNĐ/tháng): ≥ 3.000.000 và < giá chào. Bắt buộc khi allowFastClose=true. Không bao giờ hiển thị cho khách thuê.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  floorRent?: number;
+
   @ApiPropertyOptional({ default: false, description: 'true = bản nháp: bỏ kiểm tra tiền cọc đề xuất' })
   @IsOptional()
   @IsBoolean()

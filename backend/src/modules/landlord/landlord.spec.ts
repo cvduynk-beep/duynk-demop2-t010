@@ -214,6 +214,30 @@ describe('LandlordConsignmentService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['1PN vượt trần 25 triệu', { askRent: 25_000_001, suggestedDeposit: 25_000_001 }, 'rent_above_ceiling'],
+    ['Studio vượt trần 18 triệu', { layout: 'Studio', askRent: 18_500_000, suggestedDeposit: 18_500_000 }, 'rent_above_ceiling'],
+    ['bật chốt nhanh nhưng thiếu giá sàn', { allowFastClose: true }, 'floor_rent_invalid'],
+    ['giá sàn dưới 3 triệu', { allowFastClose: true, floorRent: 2_900_000 }, 'floor_rent_invalid'],
+    ['giá sàn bằng giá chào', { allowFastClose: true, floorRent: 6_500_000 }, 'floor_rent_invalid'],
+  ])('guardrail giá: %s ⇒ 400 %s, không ghi gì (kể cả bản nháp)', async (_name, patch, code) => {
+    for (const draft of [false, true]) {
+      await expect(service.create(ME, { ...dto, ...patch, draft } as any)).rejects.toMatchObject({ status: 400, response: { code } });
+    }
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('giá sàn hợp lệ: lưu trong meta hồ sơ (không có ở bảng units), chỉ trả cho chủ nhà; tắt chốt nhanh ⇒ floorRent null', async () => {
+    const out = await service.create(ME, { ...dto, allowFastClose: true, floorRent: 5_800_000 } as any);
+    expect(out).toMatchObject({ allowFastClose: true, floorRent: 5_800_000 });
+    expect(JSON.stringify(prisma.tx.unit.create.mock.calls[0][0].data)).not.toContain('5800000');
+    const meta = prisma.tx.exclusiveMandate.create.mock.calls[0][0].data.doorAccessConfig.consignment;
+    expect(meta.form).toMatchObject({ allowFastClose: true, floorRent: 5_800_000 });
+
+    const off = await service.create(ME, { ...dto, door: '09', floorRent: 5_800_000 } as any);
+    expect(off).toMatchObject({ allowFastClose: false, floorRent: null });
+  });
+
   it('bản nháp bỏ kiểm tra tiền cọc đề xuất', async () => {
     await expect(service.create(ME, { ...dto, suggestedDeposit: 1_000_000, draft: true } as any)).resolves.toBeDefined();
   });

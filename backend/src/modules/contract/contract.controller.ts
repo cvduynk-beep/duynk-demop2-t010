@@ -1,14 +1,32 @@
-import { Controller, Post, Body, Get, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Req, HttpCode, HttpStatus } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ContractService } from './contract.service';
-import { CreateMandateDto } from './dto/contract.dto';
+import { CreateMandateDto, SignLeaseDto } from './dto/contract.dto';
+import { LeaseSigningService } from './lease-signing.service';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('7. Hợp đồng & Ký số OTP (E-Sign)')
 @Controller('contracts')
 export class ContractController {
-  constructor(private readonly contractService: ContractService) {}
+  constructor(
+    private readonly contractService: ContractService,
+    private readonly leaseSigning: LeaseSigningService,
+  ) {}
+
+  @Roles('tenant')
+  @Post('lease/sign')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Khách thuê ký Hợp đồng thuê chính thức (sau eKYC, khi đang giữ chỗ)',
+    description:
+      'Tạo Contract ACTIVE + chuyển 100% cọc giữ chỗ thành một phần Tiền cọc bảo đảm (không trừ tháng đầu), căn → RENTED, ' +
+      'sinh PDF (SHA-256 thật) và SignedDocument/Signature. MÔ PHỎNG: OTP ký số và dấu thời gian TSA.',
+  })
+  async signLease(@CurrentUser() user: { id: string }, @Body() dto: SignLeaseDto, @Req() req: Request) {
+    return this.leaseSigning.sign(user, dto, { ipAddress: req.ip, userAgent: req.headers['user-agent'] });
+  }
 
   @Roles('landlord')
   @Post('mandate/create')

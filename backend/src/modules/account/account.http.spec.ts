@@ -92,7 +92,11 @@ describe('/me (Nest thật + Prisma giả)', () => {
     })
     class TestAppModule {}
 
-    const moduleRef = await Test.createTestingModule({ imports: [TestAppModule] }).compile();
+    // Một số module (deposit/tenant qua ContractModule) tự import PrismaModule thật ⇒ ép mọi nơi dùng Prisma giả.
+    const moduleRef = await Test.createTestingModule({ imports: [TestAppModule] })
+      .overrideProvider(PrismaService)
+      .useValue(prisma)
+      .compile();
     app = moduleRef.createNestApplication();
     app.useLogger(false);
     app.use(cookieParser());

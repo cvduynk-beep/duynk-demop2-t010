@@ -5,7 +5,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { Furnishing, MandateStatus, OtpPurpose, PhysicalKeyState, UnitStatus } from '@prisma/client';
+import { Furnishing, LayoutType, MandateStatus, OtpPurpose, PhysicalKeyState, UnitStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { OtpService } from '../auth/otp/otp.service';
@@ -19,8 +19,11 @@ import { LandlordPhotoService } from './landlord-photo.service';
 import { mgmtFeePerM2 } from './mgmt-fee';
 import { CreateConsignmentDto, SignConsignmentDto } from './dto/landlord.dto';
 import {
+  ABSOLUTE_RENT_CEILING,
   ConsignmentMeta,
   INSPECT_SLA_HOURS,
+  MIN_FLOOR_RENT,
+  RENT_CEILING_BY_KIND,
   LockKind,
   consignmentStage,
   isCatalogCode,
@@ -62,6 +65,30 @@ export class LandlordConsignmentService {
   }
 
   /** Cọc bảo đảm phải trong [min, max] × giá thuê tháng (Admin cấu hình, mặc định 0.5–4). */
+  /** Giá chào không được vượt trần theo layout / trần tuyệt đối (chặn cứng ở backend, không chỉ ở form). */
+  private assertRentWithinCeiling(layout: LayoutType, askRent: number): void {
+    const ceiling = Math.min(RENT_CEILING_BY_KIND[toLayoutKind(layout)], ABSOLUTE_RENT_CEILING);
+    if (askRent > ceiling) {
+      throw new BadRequestException({
+        message: `Giá thuê vượt trần cho loại căn này (tối đa ${ceiling.toLocaleString('vi-VN')}đ/tháng).`,
+        code: 'rent_above_ceiling',
+        ceiling,
+      });
+    }
+  }
+
+  /** null = không ủy quyền chốt nhanh. Bật ⇒ bắt buộc giá sàn ≥ 3.000.000 và < giá chào. */
+  private parseFloorRent(allowFastClose: boolean, floorRent: number | undefined, askRent: number): number | null {
+    if (!allowFastClose) return null;
+    if (floorRent == null || !Number.isInteger(floorRent) || floorRent < MIN_FLOOR_RENT || floorRent >= askRent) {
+      throw new BadRequestException({
+        message: `Giá sàn phải từ ${MIN_FLOOR_RENT.toLocaleString('vi-VN')}đ và thấp hơn giá chào thuê.`,
+        code: 'floor_rent_invalid',
+      });
+    }
+    return floorRent;
+  }
+
   private async assertDepositInRange(askRent: number, deposit: number): Promise<void> {
     const minRatio = await this.configValue('deposit_min_ratio', 0.5);
     const maxRatio = await this.configValue('deposit_max_ratio', 4.0);
@@ -124,6 +151,8 @@ export class LandlordConsignmentService {
     if (unknown) throw new BadRequestException(`Hạng mục không có trong bảng kê: ${unknown}`);
 
     const locks = this.parseLocks(dto.locks);
+    this.assertRentWithinCeiling(layout, dto.askRent);
+    const floorRent = this.parseFloorRent(dto.allowFastClose === true, dto.floorRent, dto.askRent);
     const suggestedDeposit = dto.suggestedDeposit ?? dto.askRent;
     if (!dto.draft) await this.assertDepositInRange(dto.askRent, suggestedDeposit);
 
@@ -154,6 +183,8 @@ export class LandlordConsignmentService {
         locks,
         note: dto.note?.trim() || null,
         ...(dto.inventoryCodes ? { inventoryCodes } : {}),
+        allowFastClose: floorRent !== null,
+        floorRent,
       },
     };
 
@@ -350,6 +381,9 @@ export class LandlordConsignmentService {
       furnished: form?.furnished ?? null,
       locks: form?.locks ?? [toLockKind(unit.doorLockType)],
       note: form?.note ?? null,
+      // Chỉ chủ nhà của hồ sơ thấy (route /landlord/* lọc theo landlordId); không có trong API của khách thuê.
+      allowFastClose: form?.allowFastClose === true,
+      floorRent: form?.allowFastClose ? (form.floorRent ?? null) : null,
       photoCount: meta?.photos?.length ?? 0,
       createdAt: mandate.createdAt,
       signedAt: mandate.signedAt,

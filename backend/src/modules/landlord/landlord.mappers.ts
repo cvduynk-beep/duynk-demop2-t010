@@ -78,7 +78,24 @@ export interface ConsignmentForm {
   note: string | null;
   /** Mã hạng mục (catalog 32 món, Điều 5) chủ nhà khai là có sẵn; màn thẩm định tick sẵn các món này. Hồ sơ cũ không có khoá này. */
   inventoryCodes?: string[];
+  /**
+   * Ủy quyền AI Chốt Nhanh & Giá sàn an toàn (AGENTS.md §1). Chỉ nằm trong meta hồ sơ ký gửi — KHÔNG có trong bảng
+   * `units` nên API catalog/chi tiết căn của khách thuê không bao giờ đọc được. Hồ sơ cũ không có khoá này.
+   */
+  allowFastClose?: boolean;
+  floorRent?: number | null;
 }
+
+/** Trần giá thuê theo layout (AGENTS.md nguyên tắc 4) — không cho nhập/lưu giá vượt trần; trần tuyệt đối 80 triệu. */
+export const RENT_CEILING_BY_KIND: Record<'Studio' | '1PN' | '2PN' | '3PN', number> = {
+  Studio: 18_000_000,
+  '1PN': 25_000_000,
+  '2PN': 35_000_000,
+  '3PN': 50_000_000,
+};
+export const ABSOLUTE_RENT_CEILING = 80_000_000;
+/** Giá sàn chốt nhanh tối thiểu (VNĐ/tháng). */
+export const MIN_FLOOR_RENT = 3_000_000;
 
 /**
  * Phần mở rộng của hồ sơ ký gửi mà schema chưa có cột riêng. Các bước sau (Inspector nhận/nộp phiếu thẩm định)

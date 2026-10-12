@@ -150,6 +150,8 @@ export interface EkycScanResult {
   confidence: Record<'fullName' | 'idNumber' | 'dob' | 'issuedDate' | 'address', number>;
   lowConfidenceKeys: string[];
   faceMatch: number;
+  /** true = kết quả OCR mô phỏng (chưa tích hợp nhà cung cấp eKYC thật). */
+  simulated?: boolean;
 }
 
 export interface SubmitEkycDto {
