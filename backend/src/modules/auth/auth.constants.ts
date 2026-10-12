@@ -53,23 +53,7 @@ export const GOOGLE_HINT_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 /** Cookie tạm giữ nonce chống CSRF (khớp với `state`) trong lúc đi vòng qua Google. */
 export const OAUTH_COOKIE = 'vs_oauth';
 
-/** Phiên mặc định sống 7 ngày; hết hạn thì đăng nhập lại (không có refresh token). Env: `SESSION_TTL_SECONDS`. */
+/** Phiên sống 7 ngày; hết hạn thì đăng nhập lại (không có refresh token). */
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
-/** Phiên Admin ngắn hơn (8 giờ — một ca làm việc) vì quyền rộng nhất. Env: `SESSION_TTL_ADMIN_SECONDS`. */
-export const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
-
-/** Số giây phiên sống theo cổng; giá trị env không phải số nguyên dương ⇒ dùng mặc định. */
-export function sessionTtlByPortal(env: { get(key: string): string | undefined }): Record<Portal, number> {
-  const seconds = (key: string, fallback: number) => {
-    const value = Number(env.get(key));
-    return Number.isInteger(value) && value > 0 ? value : fallback;
-  };
-  const standard = seconds('SESSION_TTL_SECONDS', SESSION_TTL_SECONDS);
-  return { tenant: standard, landlord: standard, host: standard, admin: seconds('SESSION_TTL_ADMIN_SECONDS', ADMIN_SESSION_TTL_SECONDS) };
-}
-
-/** Khoá đăng nhập theo email sau nhiều lần sai mật khẩu liên tiếp (chống dò mật khẩu phân tán nhiều IP). */
-export const LOGIN_MAX_FAILURES = 5;
-export const LOGIN_LOCKOUT_SECONDS = 15 * 60;
 
 export const OAUTH_COOKIE_MAX_AGE_MS = 10 * 60 * 1000;

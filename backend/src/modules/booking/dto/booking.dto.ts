@@ -1,77 +1,90 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsDateString,
-  IsInt,
-  IsNotEmpty,
-  IsNumber,
-  IsOptional,
-  IsString,
-  Length,
-  Max,
-  MaxLength,
-  Min,
-} from 'class-validator';
+import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 
-export class CreateBookingDto {
-  @ApiProperty({ example: 'VHOP-S1.02-0405', description: 'Mã căn hộ (hoặc ID căn)' })
-  @IsNotEmpty()
-  @IsString()
-  unitCode: string;
-
-  @ApiProperty({ example: '2026-10-06T01:30:00.000Z', description: 'Khung giờ xem phòng (ISO UTC, khớp SLOT_TIMES giờ VN)' })
-  @IsNotEmpty()
-  @IsDateString()
-  slot: string;
-
-  @ApiProperty({ example: 'Nguyễn Văn An', description: 'Họ và tên người xem' })
-  @IsNotEmpty()
-  @IsString()
-  @Length(2, 100)
-  contactName: string;
-
-  @ApiProperty({ example: '0912345678', description: 'Số điện thoại liên hệ' })
+export class RequestBookingOtpDto {
+  @ApiProperty({ example: '0912345678', description: 'Số điện thoại nhận mã Zalo OTP' })
   @IsNotEmpty()
   @IsString()
   phone: string;
 
-  @ApiPropertyOptional({ default: 1, example: 2, description: 'Số người tham gia xem (1-10)' })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(10)
-  partySize?: number = 1;
+  @ApiProperty({ example: 'Nguyễn Văn An', description: 'Họ và tên khách thuê' })
+  @IsNotEmpty()
+  @IsString()
+  fullName: string;
+}
 
-  @ApiPropertyOptional({ example: 'Cần xem thêm chỗ gửi xe', description: 'Ghi chú cho Field Host' })
+export class ConfirmBookingDto {
+  @ApiProperty({ example: '0912345678', description: 'Số điện thoại đã nhận OTP' })
+  @IsNotEmpty()
+  @IsString()
+  phone: string;
+
+  @ApiProperty({ example: '4829', description: 'Mã xác thực OTP (mặc định thử nghiệm: 4829)' })
+  @IsNotEmpty()
+  @IsString()
+  otp: string;
+
+  @ApiProperty({ description: 'ID căn hộ muốn xem' })
+  @IsString()
+  unitId: string;
+
+  @ApiProperty({ example: '2026-09-25T15:30:00Z', description: 'Khung giờ hẹn xem phòng' })
+  @IsDateString()
+  viewingSlot: string;
+}
+
+export class CreateBookingDto {
+  @ApiProperty({ description: 'ID căn hộ muốn xem' })
+  @IsString()
+  unitId: string;
+
+  @ApiProperty({ example: '2026-10-03T14:00:00Z', description: 'Khung giờ hẹn xem phòng' })
+  @IsDateString()
+  slot: string;
+
+  @ApiProperty({ example: 'Nguyễn Văn An', description: 'Họ và tên khách thuê' })
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @ApiProperty({ example: '0912345678', description: 'Số điện thoại khách thuê' })
+  @IsNotEmpty()
+  @IsString()
+  phone: string;
+
+  @ApiPropertyOptional({ example: 2, description: 'Số người ở dự kiến' })
+  @IsOptional()
+  @IsNumber()
+  persons?: number;
+
+  @ApiPropertyOptional({ example: 'Cần xem thêm chỗ để xe máy', description: 'Ghi chú thêm' })
   @IsOptional()
   @IsString()
-  @MaxLength(300)
   note?: string;
-
-  @ApiPropertyOptional({ description: 'Token OTP mục đích TENANT_VIEWING' })
-  @IsOptional()
-  @IsString()
-  actionToken?: string;
 }
 
 export class CancelBookingDto {
-  @ApiProperty({ example: 'Tôi bận công tác đột xuất', description: 'Lý do hủy lịch (3..200 ký tự)' })
+  @ApiProperty({ example: 'Bận đột xuất', description: 'Lý do hủy lịch' })
   @IsNotEmpty()
   @IsString()
-  @Length(3, 200)
   reason: string;
 }
 
 export class RescheduleBookingDto {
-  @ApiProperty({ example: '2026-10-07T07:30:00.000Z', description: 'Khung giờ mới (ISO UTC)' })
-  @IsNotEmpty()
+  @ApiProperty({ example: '2026-10-04T10:00:00Z', description: 'Khung giờ mới muốn đổi' })
   @IsDateString()
   slot: string;
 }
 
 export class RateBookingDto {
-  @ApiProperty({ example: 5, description: 'Số sao đánh giá (1..5)' })
+  @ApiProperty({ example: 5, description: 'Số sao đánh giá (1-5)' })
   @IsNumber()
   @Min(1)
   @Max(5)
   stars: number;
+
+  @ApiPropertyOptional({ example: 'Host đón đúng giờ, tư vấn nhiệt tình' })
+  @IsOptional()
+  @IsString()
+  comment?: string;
 }

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
+import styles from "./Section.module.css";
 
 interface SectionProps {
-  title?: string;
+  title?: ReactNode;
   description?: string;
   actions?: ReactNode;
   children: ReactNode;
@@ -13,17 +14,17 @@ interface SectionProps {
 export function Section({ title, description, actions, children, flush }: SectionProps) {
   const hasHead = Boolean(title || description || actions);
   return (
-    <section className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm flex flex-col">
+    <section className={styles.section}>
       {hasHead && (
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 md:p-6 border-b border-border/50 bg-muted/20">
-          <div className="flex flex-col gap-1">
-            {title && <h2 className="text-xl font-bold tracking-tight text-foreground">{title}</h2>}
-            {description && <p className="text-sm font-medium text-muted-foreground">{description}</p>}
+        <header className={styles.head}>
+          <div>
+            {title && <h2 className={styles.title}>{title}</h2>}
+            {description && <p className="muted small">{description}</p>}
           </div>
-          {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
+          {actions && <div className={styles.actions}>{actions}</div>}
         </header>
       )}
-      <div className={flush ? "" : "p-5 md:p-6"}>{children}</div>
+      <div className={flush ? styles.bodyFlush : styles.body}>{children}</div>
     </section>
   );
 }

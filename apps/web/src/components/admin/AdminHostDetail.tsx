@@ -1,186 +1,337 @@
 "use client";
 
-import { CrumbLabel } from "@/components/ui/Breadcrumbs";
-import { useState } from "react";
-import Link from "next/link";
-import { Lock, ShieldCheck, Unlock } from "lucide-react";
-import { vnd } from "@/lib/format";
-import { AcceptTime, DutyStatus } from "./AdminHosts";
+import { useMemo, useState } from "react";
+import { notFound } from "next/navigation";
+import { AlertTriangle, Lock, MapPin, ShieldCheck, Unlock } from "lucide-react";
+import { STATUS_META } from "@/components/booking/status";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { KeyValue } from "@/components/ui/KeyValue";
-import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
-import { StatusBadge } from "@/components/ui/StatusBadge";
+import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 import { toast } from "@/components/ui/Toast";
+import { setHostRoles, setHostSuspended, setHostZones } from "@/lib/mock/actions";
+import { fmtDate, fmtDateTime, fmtPhone, vnd } from "@/lib/mock/format";
 import {
-  adminHostsApi,
-  choiceOfRoles,
-  hostErrorText,
-  hostRoleLabel,
-  invalidateHosts,
-  rolesOfChoice,
-  useHost,
-  useHostZones,
-  type HostAdminDetail,
-  type HostRoleChoice,
-  type TicketStatusKey,
-  type UpdateHostInput,
-} from "@/lib/admin/hosts";
-import { HostRoleRadios } from "./HostRoleRadios";
+  hostBookings,
+  hostEarnings,
+  hostRoles,
+  hostStatus,
+  hostZones,
+  isHostSuspended,
+  pickHostFor,
+} from "@/lib/mock/selectors";
+import { useMock } from "@/lib/mock/store";
+import {
+  hostById,
+  unitAddress,
+  unitById,
+  ZONES,
+  zoneById,
+  type HostRole,
+  type HostStatus,
+  type ZoneId,
+} from "@/lib/mock/units";
+import type { Booking } from "@/lib/mock/types";
 import styles from "./Admin.module.css";
 
-const TICKET_LABEL: Record<TicketStatusKey, string> = {
-  OFFERED: "Đang chào ca",
-  ACCEPTED: "Đã nhận",
-  CHECKED: "Đã có mặt",
-  COMPLETED: "Hoàn tất",
-  EXPIRED: "Quá hạn",
-  ESCALATED: "Chuyển cấp",
-  CANCELLED: "Đã huỷ",
+const mm = (s: number) => `${Math.floor(s / 60)}′${String(s % 60).padStart(2, "0")}″`;
+
+const STATUS_TONE: Record<HostStatus, { label: string; tone: StatusTone }> = {
+  active: { label: "Đang trực", tone: "ok" },
+  busy: { label: "Đang bận", tone: "warn" },
+  off_duty: { label: "Nghỉ ca", tone: "neutral" },
+  suspended: { label: "Tạm đóng", tone: "danger" },
 };
 
-/** Hồ sơ một Field Host (dữ liệu thật qua `/admin/field-hosts/:id`). */
+/** Hồ sơ một Field Host. */
 export function AdminHostDetail({ id }: { id: string }) {
-  const q = useHost(id);
+  const state = useMock();
+  const host = hostById(id);
 
-  if (q.state.status === "loading") return <div className="skeleton" style={{ height: 420 }} />;
-  if (q.state.status === "error") {
-    return (
-      <div className={styles.page}>
-        <PageHeader title="Field Host" back={{ href: "/admin/hosts", label: "Field Host" }} />
-        <p role="alert">{q.state.httpStatus === 404 ? "Không tìm thấy Field Host." : q.state.message}</p>
-        <Link href="/admin/hosts" className="btn btn-quiet">
-          Về danh sách
-        </Link>
-      </div>
-    );
-  }
-  // `key` theo toàn bộ dữ liệu máy chủ ⇒ sau khi lưu, các form nội bộ nạp lại giá trị mới.
-  return <HostForms key={JSON.stringify(q.state.data)} host={q.state.data} reload={q.reload} />;
-}
+  const initialRoles = useMemo<HostRole[]>(
+    () => (state.ready && host ? hostRoles(state, host.id) : (["sale"] as HostRole[])),
+    [state, host],
+  );
 
-function HostForms({ host, reload }: { host: HostAdminDetail; reload: () => void }) {
-  const zones = useHostZones();
-  const zoneOptions = zones.state.status === "ready" ? zones.state.data : [host.assignedZone];
+  const initialZones = useMemo<ZoneId[]>(
+    () => (state.ready && host ? hostZones(state, host.id) : (host?.zones ?? [])),
+    [state, host],
+  );
 
-  const [roleChoice, setRoleChoice] = useState<HostRoleChoice>(choiceOfRoles(host.roles));
-  const [fullName, setFullName] = useState(host.fullName ?? "");
-  const [zone, setZone] = useState(host.assignedZone);
-  const [password, setPassword] = useState("");
-  const [confirmLock, setConfirmLock] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [roles, setRoles] = useState<HostRole[]>(initialRoles);
+  const [roleError, setRoleError] = useState("");
 
-  async function save(dto: UpdateHostInput, okText: string): Promise<boolean> {
-    setBusy(true);
-    const res = await adminHostsApi.update(host.id, dto);
-    setBusy(false);
-    if (!res.ok) {
-      toast(hostErrorText(res), "info");
-      return false;
+  const [zones, setZones] = useState<ZoneId[]>(initialZones);
+  const [zoneError, setZoneError] = useState("");
+
+  if (!state.ready) return <div className="skeleton" style={{ height: 420 }} />;
+  if (!host) notFound();
+
+  const e = hostEarnings(state, host, state.fees);
+  const bookings = hostBookings(state, host.id).sort((a, b) => b.slot.localeCompare(a.slot));
+
+  const toggleRole = (r: HostRole) => {
+    setRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
+    setRoleError("");
+  };
+
+  const toggleZone = (z: ZoneId) => {
+    setZones((prev) => (prev.includes(z) ? prev.filter((x) => x !== z) : [...prev, z]));
+    setZoneError("");
+  };
+
+  const handleSaveRoles = () => {
+    if (roles.length === 0) {
+      setRoleError("Field Host phải có ít nhất một vai.");
+      return;
     }
-    toast(okText, "success");
-    invalidateHosts();
-    reload();
-    return true;
+    const res = setHostRoles(host.id, roles, "Admin");
+    if (res.ok) {
+      toast(`Đã cập nhật vai cho Field Host ${host.name}`, "success");
+      setRoleError("");
+    } else {
+      toast(res.reason, "info");
+    }
+  };
+
+  const handleSaveZones = () => {
+    if (zones.length === 0) {
+      setZoneError("Field Host phải phụ trách ít nhất một phân khu.");
+      return;
+    }
+    const res = setHostZones(host.id, zones, "Admin");
+    if (res.ok) {
+      toast(`Đã cập nhật phân khu cho ${host.name} (kèm quyền Thẩm định & Dẫn khách)`, "success");
+      setZoneError("");
+      setRoles((prev) => Array.from(new Set([...prev, "sale", "inspector"])));
+    } else {
+      toast(res.reason, "info");
+    }
+  };
+
+  // Cảnh báo nếu phân khu bị thiếu vai
+  const roleWarnings: string[] = [];
+  for (const z of zones) {
+    const zoneObj = zoneById(z);
+    for (const r of ["sale", "inspector"] as HostRole[]) {
+      // Giả lập state tạm thời nếu roles này được lưu
+      const simulatedState = {
+        ...state,
+        hostRoles: {
+          ...state.hostRoles,
+          [host.id]: roles,
+        },
+        hostZones: {
+          ...state.hostZones,
+          [host.id]: zones,
+        },
+      };
+      const candidate = pickHostFor(simulatedState, z, r);
+      if (candidate.fallback) {
+        roleWarnings.push(
+          `Phân khu ${zoneObj.short} sẽ không còn Host ${r === "sale" ? "Sale" : "Thẩm định"} — ticket mới sẽ giao tạm cho Host mặc định và báo Admin.`,
+        );
+      }
+    }
   }
 
-  async function saveRoles() {
-    await save({ roles: rolesOfChoice(roleChoice) }, `Đã cập nhật vai cho ${host.fullName ?? host.email}`);
-  }
+  const currentAssignedZones = hostZones(state, host.id);
 
-  async function savePassword() {
-    if (password.length < 8) return toast("Mật khẩu tối thiểu 8 ký tự.", "info");
-    if (await save({ password }, "Đã đặt lại mật khẩu")) setPassword("");
-  }
-
-  async function lock() {
-    setBusy(true);
-    const res = await adminHostsApi.deactivate(host.id);
-    setBusy(false);
-    setConfirmLock(false);
-    if (!res.ok) return toast(hostErrorText(res), "info");
-    toast("Đã khoá tài khoản Field Host", "success");
-    invalidateHosts();
-    reload();
-  }
-
-  const s = host.stats;
-  const lockBlocked = host.isActive && s.openTickets > 0;
+  const isSuspended = isHostSuspended(state, host.id);
+  const currentStatus = hostStatus(state, host.id);
 
   return (
     <div className={styles.page}>
-      <CrumbLabel label={host.fullName ?? host.email} />
       <PageHeader
-        title={host.fullName ?? host.email ?? "Field Host"}
-        description={`${host.assignedZone} · ${hostRoleLabel(host.roles)} · tham gia ${new Date(host.createdAt).toLocaleDateString("vi-VN")}`}
+        title={host.name}
         back={{ href: "/admin/hosts", label: "Field Host" }}
         actions={
-          host.isActive ? (
-            <button
-              type="button"
-              className="btn btn-quiet"
-              style={{ color: "var(--danger)" }}
-              disabled={busy || lockBlocked}
-              title={lockBlocked ? "Host còn ca đang mở — điều phối lại trước khi khoá" : undefined}
-              onClick={() => setConfirmLock(true)}
-            >
-              <Lock size={15} /> Khoá tài khoản
-            </button>
-          ) : (
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => save({ isActive: true }, "Đã mở khoá tài khoản")}>
-              <Unlock size={15} /> Mở khoá tài khoản
-            </button>
-          )
+          <button
+            type="button"
+            className={isSuspended ? "btn btn-primary" : "btn btn-quiet"}
+            style={isSuspended ? {} : { color: "var(--danger)", border: "1px solid #fecaca" }}
+            onClick={() => {
+              const res = setHostSuspended(host.id, !isSuspended, "Admin");
+              if (res.ok) {
+                toast(
+                  !isSuspended
+                    ? `Đã tạm đóng tài khoản ${host.name}. Toàn bộ quyền đã bị thu hồi và ngừng đổ căn.`
+                    : `Đã mở lại tài khoản ${host.name}. Quyền hạn và phân bổ căn đã khôi phục.`,
+                  !isSuspended ? "info" : "success"
+                );
+              }
+            }}
+          >
+            {isSuspended ? (
+              <>
+                <Unlock size={15} /> Mở lại tài khoản
+              </>
+            ) : (
+              <>
+                <Lock size={15} /> Tạm đóng tài khoản
+              </>
+            )}
+          </button>
         }
       />
 
-      {!host.isActive && (
-        <div role="status" className={styles.lockBanner}>
-          <Lock size={20} />
+      {isSuspended && (
+        <div
+          style={{
+            padding: "14px 18px",
+            borderRadius: "var(--r-sm)",
+            background: "var(--danger-050)",
+            border: "1px solid #fca5a5",
+            color: "#991b1b",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            fontSize: "var(--fs-14)",
+          }}
+        >
+          <Lock size={20} style={{ flexShrink: 0, color: "var(--danger)" }} />
           <div>
-            <b>Tài khoản đang bị khoá.</b> Host không đăng nhập được, không xuất hiện trong điều phối nên không nhận ca dẫn khách hay
-            thẩm định mới. Lịch sử ca và thu nhập vẫn được giữ nguyên. Bấm “Mở khoá tài khoản” để khôi phục.
+            <strong>Tài khoản Field Host đang bị tạm đóng:</strong> Host này đã mất toàn bộ các quyền trên hệ thống và thuật toán điều phối sẽ <strong>không đổ bất kỳ căn nào (cả dẫn khách và thẩm định)</strong> về Host này nữa.
           </div>
         </div>
       )}
 
-      <div className={styles.kpiStrip}>
-        <div className={styles.kpiCard}>
-          <div>
-            <div className={styles.kpiLabel}>Trạng thái trực</div>
-            <div className={styles.kpiVal}>
-              <DutyStatus host={host} />
-            </div>
-          </div>
-        </div>
-        <Stat label="Ca đã dẫn xong" value={String(s.completedViewings)} sub={s.openTickets > 0 ? `${s.openTickets} ca đang mở` : "Không có ca đang mở"} />
-        <Stat label="Deal chốt cọc" value={String(s.deals)} sub="Cọc 2.000.000đ đã thu" />
-        <div className={styles.kpiCard}>
-          <div>
-            <div className={styles.kpiLabel}>Nhận ca trung bình</div>
-            <div className={styles.kpiVal}>
-              <AcceptTime seconds={s.avgAcceptSeconds} />
-            </div>
-            <div className={styles.kpiLabel}>Mục tiêu ≤ 3′00″</div>
-          </div>
-        </div>
-        <Stat
-          label="Khách bỏ hẹn"
-          value={s.noShowRate === null ? "—" : `${String(s.noShowRate).replace(".", ",")}%`}
-          sub={`Đánh giá ${String(host.rating).replace(".", ",")}★`}
-        />
-        <Stat label="Thu nhập tuần này" value={`${vnd(s.weekEarnings)}đ`} sub="Theo bảng kê biến phí" />
-      </div>
-
       <Section
-        title="Phân quyền & Vai đảm nhiệm"
-        description="Mỗi Host luôn là Sale; có thể kiêm Thẩm định. Vai quyết định menu truy cập và quy trình phân bổ ticket tự động."
+        title="Phân quyền Khu vực phụ trách"
+        description="Admin chỉ định các phân khu mà Field Host phụ trách. Hệ thống tự động cấp trọn gói cả quyền Thẩm định căn hộ (48h) và quyền Dẫn khách xem phòng (thẻ RFID) cho các phân khu này."
       >
         <div className="card" style={{ padding: "var(--s-4)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
-            <HostRoleRadios name="host-role" value={roleChoice} onChange={setRoleChoice} />
-            <div>
-              <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={saveRoles}>
+            <div
+              style={{
+                padding: "10px 14px",
+                borderRadius: "var(--r-sm)",
+                background: "var(--lagoon-050)",
+                border: "1px solid #c3cfd2",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                fontSize: "var(--fs-13)",
+                color: "var(--lagoon-700)",
+              }}
+            >
+              <ShieldCheck size={16} style={{ flexShrink: 0, color: "var(--lagoon)" }} />
+              <span>
+                <strong>Quy chế phân quyền trọn gói:</strong> Khi được phân quyền theo khu vực nào, Field Host sẽ tự động kèm cả quyền <strong>Thẩm định ký gửi 48h</strong> và quyền <strong>Dẫn khách xem phòng</strong> cho toàn bộ phân khu đó.
+              </span>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+              {ZONES.map((z) => {
+                const checked = zones.includes(z.id);
+                return (
+                  <label
+                    key={z.id}
+                    className="check"
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "var(--r-sm)",
+                      border: `1px solid ${checked ? "var(--teal)" : "var(--border)"}`,
+                      background: checked ? "rgba(14, 82, 99, 0.04)" : "transparent",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleZone(z.id)}
+                      style={{ marginTop: 3 }}
+                    />
+                    <div>
+                      <strong style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <MapPin size={13} style={{ color: checked ? "var(--teal)" : "var(--slate)" }} />
+                        {z.name}
+                      </strong>
+                      <p className="muted xs" style={{ margin: "2px 0 0" }}>
+                        {z.buildings.slice(0, 4).join(", ")}
+                        {z.buildings.length > 4 ? ` +${z.buildings.length - 4} tòa` : ""}
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            {zoneError && <p className="field-error" style={{ margin: 0 }}>{zoneError}</p>}
+
+            <div style={{ display: "flex", justifyContent: "flex-start", marginTop: "var(--s-2)" }}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleSaveZones}>
+                <MapPin size={14} /> Lưu phân quyền khu vực
+              </button>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Phân quyền & Vai đảm nhiệm" description="Mỗi Host có thể đảm nhiệm một hoặc cả hai vai. Vai quyết định menu truy cập và quy trình phân bổ ticket tự động.">
+        <div className="card" style={{ padding: "var(--s-4)" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+            <label className="check" style={{ alignItems: "flex-start", gap: 10 }}>
+              <input
+                type="checkbox"
+                checked={roles.includes("sale")}
+                onChange={() => toggleRole("sale")}
+                style={{ marginTop: 3 }}
+              />
+              <div>
+                <strong>Sale (Tiếp đón & Dẫn xem phòng)</strong>
+                <p className="muted small" style={{ margin: "2px 0 0" }}>
+                  Nhận lịch xem, đón khách tại sảnh phân khu, dùng thẻ cư dân thang máy dẫn lên phòng và cấp mã cửa.
+                </p>
+              </div>
+            </label>
+
+            <label className="check" style={{ alignItems: "flex-start", gap: 10 }}>
+              <input
+                type="checkbox"
+                checked={roles.includes("inspector")}
+                onChange={() => toggleRole("inspector")}
+                style={{ marginTop: 3 }}
+              />
+              <div>
+                <strong>Thẩm định (Kiểm định hiện trạng ký gửi)</strong>
+                <p className="muted small" style={{ margin: "2px 0 0" }}>
+                  Nhận ticket ký gửi từ chủ nhà, tới kiểm tra hiện trạng theo bảng kê 32 hạng mục Điều 5 và đo diện tích thông thuỷ trong 48 giờ.
+                </p>
+              </div>
+            </label>
+
+            {roleError && <p className="field-error" style={{ margin: 0 }}>{roleError}</p>}
+
+            {roleWarnings.length > 0 && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "var(--r-sm)",
+                  background: "var(--amber-050)",
+                  border: "1px solid #fde68a",
+                  color: "#92400e",
+                  fontSize: "var(--fs-13)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                <div>
+                  {roleWarnings.map((w) => (
+                    <div key={w}>{w}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-start", marginTop: "var(--s-2)" }}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleSaveRoles}>
                 <ShieldCheck size={14} /> Lưu phân quyền vai
               </button>
             </div>
@@ -189,44 +340,21 @@ function HostForms({ host, reload }: { host: HostAdminDetail; reload: () => void
       </Section>
 
       <Section title="Hồ sơ Field Host">
-        <div className="card" style={{ padding: "var(--s-4)", display: "grid", gap: 12, maxWidth: 420 }}>
-          <label className="field">
-            <span className="label">Họ và tên</span>
-            <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-          </label>
-          <label className="field">
-            <span className="label">Phân khu phụ trách</span>
-            <select className="select" value={zone} onChange={(e) => setZone(e.target.value)}>
-              {!zoneOptions.includes(zone) && <option value={zone}>{zone}</option>}
-              {zoneOptions.map((z) => (
-                <option key={z} value={z}>
-                  {z}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={busy || fullName.trim().length < 2 || (fullName.trim() === (host.fullName ?? "") && zone === host.assignedZone)}
-              onClick={() => save({ fullName: fullName.trim(), assignedZone: zone }, "Đã lưu hồ sơ")}
-            >
-              Lưu hồ sơ
-            </button>
-          </div>
-        </div>
         <KeyValue
           items={[
-            { label: "Email đăng nhập", value: host.email ?? "—" },
-            { label: "Số điện thoại", value: host.phone ? `${host.phone}${host.isPhoneVerified ? " (đã xác thực)" : ""}` : "Host chưa xác thực" },
+            { label: "Số điện thoại", value: fmtPhone(host.phone) },
+            { label: "Khu phụ trách", value: currentAssignedZones.map((z) => zoneById(z).name).join(", ") },
+            { label: "Thẻ RFID", value: host.rfid },
             { label: "Đánh giá", value: `${String(host.rating).replace(".", ",")} ★` },
-            { label: "Tham gia", value: new Date(host.createdAt).toLocaleDateString("vi-VN") },
-            { label: "Đăng nhập gần nhất", value: host.lastLoginAt ? new Date(host.lastLoginAt).toLocaleString("vi-VN") : "Chưa đăng nhập" },
+            { label: "Nhận ca trung bình", value: `${mm(host.avgAcceptSec)} (SLA 3′00″)` },
+            { label: "Khách bỏ hẹn", value: `${Math.round(host.noShowRate * 100)}%` },
+            { label: "Tham gia", value: fmtDate(host.joined) },
             {
-              label: "Tài khoản",
+              label: "Trạng thái",
               value: (
-                <StatusBadge tone={host.isActive ? "ok" : "neutral"}>{host.isActive ? "Đang hoạt động" : "Đã khoá"}</StatusBadge>
+                <StatusBadge tone={STATUS_TONE[currentStatus].tone}>
+                  {STATUS_TONE[currentStatus].label}
+                </StatusBadge>
               ),
             },
           ]}
@@ -234,84 +362,53 @@ function HostForms({ host, reload }: { host: HostAdminDetail; reload: () => void
       </Section>
 
       <Section
-        title="Mật khẩu"
-        description={host.hasPassword ? "Host đang có mật khẩu. Đặt lại sẽ thay mật khẩu cũ." : "Host chưa có mật khẩu (chỉ đăng nhập bằng Google). Đặt mật khẩu để cho phép đăng nhập bằng email."}
+        title="Thu nhập tháng"
+        description="Tính theo tuần hiện tại, cộng dồn thành số tháng trên bảng kê thanh toán."
       >
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", maxWidth: 420 }}>
-          <input
-            className="input"
-            type="password"
-            autoComplete="new-password"
-            placeholder="Mật khẩu mới (≥ 8 ký tự)"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <button type="button" className="btn btn-quiet btn-sm" disabled={busy || password.length < 8} onClick={savePassword}>
-            {host.hasPassword ? "Đặt lại mật khẩu" : "Đặt mật khẩu"}
-          </button>
-        </div>
-      </Section>
-
-      <Section
-        title="Trạng thái tài khoản"
-        description="Khoá là tạm ngừng tài khoản, không xoá dữ liệu. Dùng khi Host nghỉ việc, vi phạm quy chuẩn tiếp đón hoặc làm mất thẻ cư dân."
-      >
-        <div className="card" style={{ padding: "var(--s-4)", display: "grid", gap: 10 }}>
-          <p>
-            Hiện tại:{" "}
-            {host.isActive ? <StatusBadge tone="ok">Đang hoạt động</StatusBadge> : <StatusBadge tone="danger">Đã khoá</StatusBadge>}
-          </p>
-          <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
-            <li>Khoá ⇒ Host bị đăng xuất ngay, không đăng nhập lại được và không được điều phối ca mới (dẫn khách lẫn thẩm định).</li>
-            <li>Lịch sử ca, đánh giá và các khoản thu nhập đã ghi nhận được giữ nguyên để đối soát.</li>
-            <li>Host đang có ca được giao, đã nhận hoặc đang đón khách thì không khoá được — điều phối lại ca đó trước.</li>
-            <li>Mở khoá ⇒ Host đăng nhập lại bình thường, bắt đầu ở trạng thái “Nghỉ ca” cho tới khi tự bật trực.</li>
-          </ul>
-          {lockBlocked && (
-            <p className="small" style={{ color: "var(--danger)" }}>
-              Host đang có {s.openTickets} ca mở nên chưa khoá được.{" "}
-              <Link href="/admin/bookings" className="link">
-                Mở màn điều phối
-              </Link>
-            </p>
-          )}
-        </div>
-      </Section>
-
-      <Section title="Hoạt động ticket" description="Số ticket điều phối của Host theo trạng thái.">
         <KeyValue
-          items={(Object.keys(TICKET_LABEL) as TicketStatusKey[]).map((k) => ({
-            label: TICKET_LABEL[k],
-            value: host.ticketStats[k] ?? 0,
-          }))}
+          items={[
+            { label: "Lượt dẫn", value: e.viewings },
+            { label: "Thù lao lượt dẫn", value: `${vnd(e.viewingFee)}đ` },
+            { label: "Deal chốt cọc", value: e.deals },
+            {
+              label: "Hoa hồng",
+              value: `${vnd(e.commission)}đ${e.multiplier > 1 ? ` (×${String(e.multiplier).replace(".", ",")})` : ""}`,
+            },
+            { label: "Thưởng nóng", value: `${vnd(e.bonus)}đ` },
+            { label: "Tổng thực nhận", value: <b>{vnd(e.total)}đ</b> },
+          ]}
         />
       </Section>
 
-      <Modal
-        open={confirmLock}
-        onClose={() => setConfirmLock(false)}
-        title={`Khoá tài khoản ${host.fullName ?? host.email ?? "Field Host"}?`}
-        description="Host sẽ bị đăng xuất ngay, không đăng nhập được và không nhận ca mới. Lịch sử ca và thu nhập được giữ nguyên. Có thể mở khoá bất cứ lúc nào."
-        footer={
-          <button type="button" className="btn btn-primary btn-block" disabled={busy} onClick={lock}>
-            Khoá tài khoản
-          </button>
-        }
-      >
-        <p className="muted small">Host đang có ca được giao hoặc đang dẫn sẽ không khoá được cho tới khi điều phối lại.</p>
-      </Modal>
-    </div>
-  );
-}
-
-function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <div className={styles.kpiCard}>
-      <div>
-        <div className={styles.kpiLabel}>{label}</div>
-        <div className={styles.kpiVal}>{value}</div>
-        <div className={styles.kpiLabel}>{sub}</div>
-      </div>
+      <Section title="Lịch xem" flush>
+        <DataTable<Booking>
+          columns={
+            [
+              { key: "slot", header: "Giờ hẹn", render: (b) => fmtDateTime(b.slot) },
+              {
+                key: "unit",
+                header: "Căn hộ",
+                render: (b) => {
+                  const u = unitById(b.unitId);
+                  return u ? unitAddress(u) : b.unitId;
+                },
+              },
+              { key: "tenant", header: "Khách", render: (b) => b.tenant.name },
+              {
+                key: "status",
+                header: "Trạng thái",
+                render: (b) => (
+                  <span className={`badge ${STATUS_META[b.status].badge}`}>
+                    {STATUS_META[b.status].label}
+                  </span>
+                ),
+              },
+            ] satisfies DataTableColumn<Booking>[]
+          }
+          rows={bookings}
+          empty={<span className="muted">Chưa có lịch xem nào.</span>}
+        />
+      </Section>
     </div>
   );
 }

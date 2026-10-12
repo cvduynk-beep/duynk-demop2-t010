@@ -153,11 +153,16 @@ graph TB
   * **Huy hiệu "Căn hời phân khu" (Dynamic Deal Badge):** Khi căn hộ có mức giá All-in tiết kiệm $\ge 10\%$ so với mức bình quân các căn cùng layout trong phân khu, hệ thống tự động gắn huy hiệu và đẩy lên vị trí hiển thị ưu tiên.
 
 ### Engine 3: Mạng lưới Auto-Dispatch 3 Tầng & Cấp mã mở cửa JIT
-* **Mục tiêu:** Giải phóng chủ nhà 100% khỏi cực hình đi xa 20–30km mở cửa; xóa sổ nạn khách "bỏ bom" (no-show); tuyệt đối tuân thủ quy chế BQL Vinhomes (không dùng Lockbox).
-* **Cơ chế phân bổ 3 tầng (SLA tiếp nhận 3 phút):**
+* **Mục tiêu:** Giải phóng chủ nhà 100% khỏi cực hình đi xa 20–30km mở cửa; xóa sổ nạn khách "bỏ bom" (no-show); tuyệt đối tuân thủ quy chế BQL Vinhomes (không dùng Lockbox); xử lý thần tốc hồ sơ ký gửi không để ngâm quá 2h.
+* **Cơ chế phân bổ 3 tầng (SLA tiếp nhận ca dẫn 3 phút):**
   * *Tầng 1 (Local Host):* Bắn ticket trực tiếp cho Field Host đang trực tại cùng phân khu (< 200m).
   * *Tầng 2 (Open Pool):* Sau 3 phút nếu chưa nhận, ticket mở rộng cho toàn bộ Host trong bán kính 500m.
   * *Tầng 3 (Area Lead):* Sau 5 phút, chuyển tiếp khẩn cấp cho Trưởng khu vực điều phối nhân sự dự phòng.
+* **Cơ chế Auto-Escalation Hồ sơ Ký gửi & Thẩm định (SLA 2h) + Admin Manual Override:**
+  * *(0 – 30 phút):* Ưu tiên Field Host phân khu nhận kiểm định căn hộ.
+  * *(30 phút – 2 giờ):* Tự động đẩy vào Open Pool liên phân khu (First-to-Claim) để bất kỳ Host/Sale nào rảnh nhận ngay.
+  * *(Quá 2 giờ - SLA Breach):* Kích hoạt còi đỏ trên Admin Portal, tự động gán cho Area Lead xử lý khẩn cấp.
+  * *Admin Manual Override:* Quản trị viên luôn có quyền can thiệp tay chỉ định trực tiếp Field Host bất kỳ lúc nào để đảm bảo rổ hàng chủ nhà luôn được thẩm định kịp thời.
 * **Cơ chế mở cửa:** Field Host dùng thẻ cư dân nội khu đã đăng ký để quẹt thang máy dẫn khách lên tầng. Khi đứng trước cửa phòng, Host bấm nút "Xác nhận đã tới cửa" trên ứng dụng $\rightarrow$ Backend cấp mã PIN mở khóa điện tử tức thời (JIT Access Code) có hiệu lực trong 45 phút ca xem.
 
 ### Engine 4: First-to-Pay Wins & AI Conflict Resolver

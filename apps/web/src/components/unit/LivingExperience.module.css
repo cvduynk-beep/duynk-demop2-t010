@@ -1,0 +1,102 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ─── Lưới 4 thẻ di chuyển ─── */
+.grid4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .grid4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .grid4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--lagoon-400);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.icon {
+  color: var(--lagoon-600);
+  flex-shrink: 0;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-700);
+  letter-spacing: 0.01em;
+}
+
+.val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-900);
+  line-height: 1.25;
+}
+
+.sub {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+/* ─── Lưới 3 thẻ điểm sáng không gian ─── */
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .grid3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.featureCard {
+  background: #fafaf9;
+  border: 1px solid #e7e5e4;
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.featureTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-800);
+  line-height: 1.45;
+}

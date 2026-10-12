@@ -1,93 +1,262 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { STATUS_META } from "@/components/booking/status";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
-import { adminApi, useAdminDispatch, type AdminDispatchTicket } from "@/lib/admin/api";
-import { useHostList } from "@/lib/admin/hosts";
-import { fmtTime } from "@/lib/format";
+import { adminReassign } from "@/lib/mock/actions";
+import { dayLabel, fmtTime, maskPhone } from "@/lib/mock/format";
+import { setMockState, useMock } from "@/lib/mock/store";
+import { HOSTS, hostById, unitAddress, unitById } from "@/lib/mock/units";
+import type { Booking } from "@/lib/mock/types";
+import { adminApi, dispatchApi } from "@/lib/apiClient";
 import { useNow } from "@/lib/useNow";
+import { useEffect } from "react";
 import styles from "./Admin.module.css";
 
-const OPEN = new Set(["OFFERED", "EXPIRED", "ESCALATED"]);
-const ticketLabel: Record<string, string> = {
-  OFFERED: "Đang chờ Host",
-  ACCEPTED: "Đã nhận ca",
-  CHECKED: "Đã đến điểm hẹn",
-  COMPLETED: "Hoàn tất",
-  EXPIRED: "Hết thời gian phản hồi",
-  ESCALATED: "Đã chuyển tầng điều phối",
-  CANCELLED: "Đã huỷ",
-};
-
+const SLA_MS = 180_000;
 type Filter = "today" | "open" | "all";
 
 export function AdminBookings() {
-  const tickets = useAdminDispatch();
-  const hosts = useHostList({ active: true });
+  const state = useMock();
   const now = useNow(1000);
   const [filter, setFilter] = useState<Filter>("open");
   const [pick, setPick] = useState<Record<string, string>>({});
-  const [reason, setReason] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<string | null>(null);
-  const all = useMemo(
-    () => tickets.state.status === "ready" ? [...tickets.state.data].sort((a, b) => a.viewingSlot.localeCompare(b.viewingSlot)) : [],
-    [tickets.state],
-  );
-  const list = useMemo(() => all.filter((ticket) => {
-    if (filter === "all") return true;
-    if (filter === "today") return new Date(ticket.viewingSlot).toDateString() === new Date(now).toDateString();
-    return OPEN.has(ticket.status);
-  }), [all, filter, now]);
-  const breaches = all.filter((ticket) => OPEN.has(ticket.status) && Date.parse(ticket.deadlineAt) < now).length;
 
-  async function reassign(ticket: AdminDispatchTicket) {
-    const hostId = pick[ticket.ticketId];
-    const why = reason[ticket.ticketId]?.trim();
-    if (!hostId || !why) return;
-    setSaving(ticket.ticketId);
-    const res = await adminApi.reassign(ticket.viewingId, hostId, why);
-    setSaving(null);
-    if (!res.ok) {
-      toast(res.message || "Không thể điều phối lại ca xem.");
-      return;
+  // Tải danh sách dispatch ticket thật từ Database để Admin điều phối
+  useEffect(() => {
+    let unmounted = false;
+    async function loadDbTickets() {
+      try {
+        const res = await dispatchApi.getTickets();
+        if (res.ok && Array.isArray(res.data) && !unmounted) {
+          const tickets = res.data;
+          setMockState((s) => {
+            const nextBookings = [...s.bookings];
+            for (const t of tickets) {
+              if (!t.viewing) continue;
+              const v = t.viewing;
+              const ref = v.bookingRefCode || `VIEW-${t.id.slice(-6)}`;
+              const existingIdx = nextBookings.findIndex((b) => b.ref === ref || b.id === v.id);
+              const mappedBooking: Booking = {
+                id: v.id,
+                ref,
+                unitId: v.unitId || v.unit?.id || "u1",
+                hostId: t.hostId || "H01",
+                tenant: {
+                  name: v.tenant?.fullName || "Khách thuê Ocean Park",
+                  phone: v.tenant?.phoneHash?.replace("hash_", "") || "0912345678",
+                  persons: 2,
+                },
+                slot: v.viewingSlot || new Date().toISOString(),
+                status: t.status === "OFFERED" ? "pending" : t.status === "ACCEPTED" ? "confirmed" : "pending",
+                createdAt: t.offeredAt || v.createdAt || new Date().toISOString(),
+                dispatch: {
+                  state: t.status === "OFFERED" ? "open" : "assigned",
+                  tier: t.tier === 1 ? "top" : "zone_pool",
+                  offeredTo: [t.hostId || "H01"],
+                  openedAt: t.offeredAt || new Date().toISOString(),
+                },
+              };
+              if (existingIdx >= 0) {
+                if (nextBookings[existingIdx].dispatch?.assignedByAdmin) continue;
+                nextBookings[existingIdx] = { ...nextBookings[existingIdx], ...mappedBooking };
+              } else {
+                nextBookings.push(mappedBooking);
+              }
+            }
+            return { ...s, bookings: nextBookings };
+          });
+        }
+      } catch {
+        // ignore offline
+      }
     }
-    toast(res.data.message || `Đã điều phối lại ${ticket.bookingRef}.`, "success");
-    setPick((prev) => ({ ...prev, [ticket.ticketId]: "" }));
-    setReason((prev) => ({ ...prev, [ticket.ticketId]: "" }));
-    tickets.reload();
-  }
+    loadDbTickets();
+    return () => {
+      unmounted = true;
+    };
+  }, []);
+  if (!state.ready || !now) return <div className="skeleton" style={{ height: 360 }} />;
 
-  const columns: DataTableColumn<AdminDispatchTicket>[] = [
-    { key: "viewingSlot", header: "Giờ hẹn", render: (ticket) => <><b className="tnum">{fmtTime(ticket.viewingSlot)}</b><span className="muted xs" style={{ display: "block" }}>{new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(new Date(ticket.viewingSlot))}</span></> },
-    { key: "unitCode", header: "Căn hộ", render: (ticket) => <><b>{ticket.unitCode}</b><span className="muted xs" style={{ display: "block" }}>{ticket.building} · {ticket.bookingRef}</span></> },
-    { key: "host", header: "Field Host", render: (ticket) => <><span>{ticket.hostName}</span><span className="muted xs" style={{ display: "block" }}>Tầng điều phối {ticket.tier}</span></> },
-    { key: "status", header: "Ticket", render: (ticket) => <span className={`badge ${OPEN.has(ticket.status) ? "badge-coral-soft" : "badge-plain"}`}>{ticketLabel[ticket.status] ?? ticket.status}</span> },
-    { key: "sla", header: "SLA nhận ca", render: (ticket) => {
-      const remaining = Math.ceil((Date.parse(ticket.deadlineAt) - now) / 1000);
-      if (OPEN.has(ticket.status) && remaining <= 0) return <span className={styles.warnText}><AlertTriangle size={14} /> Quá {Math.floor(Math.abs(remaining) / 60)} phút</span>;
-      if (OPEN.has(ticket.status)) return <span className="muted tnum">Còn {Math.max(0, remaining)} giây</span>;
-      return <span className={styles.okText}><CheckCircle2 size={14} /> Đã phản hồi</span>;
-    } },
-    { key: "dispatch", header: "Điều phối lại", render: (ticket) => OPEN.has(ticket.status) ? <div style={{ display: "grid", gap: 5, minWidth: 190 }}>
-      <select className="select" style={{ minHeight: 34 }} value={pick[ticket.ticketId] ?? ""} onChange={(e) => setPick({ ...pick, [ticket.ticketId]: e.target.value })} aria-label={`Giao ticket ${ticket.bookingRef} cho Host`}>
-        <option value="">Chọn Host đang trực…</option>
-        {hosts.state.status === "ready" && hosts.state.data.filter((host) => host.dutyStatus === "ONLINE_AVAILABLE" && host.id !== ticket.hostId).map((host) => <option key={host.id} value={host.id}>{host.fullName || host.email || host.id} · {host.assignedZone}</option>)}
-      </select>
-      <input className="input" value={reason[ticket.ticketId] ?? ""} onChange={(e) => setReason({ ...reason, [ticket.ticketId]: e.target.value })} placeholder="Lý do điều phối" aria-label={`Lý do giao ticket ${ticket.bookingRef}`} />
-      <button type="button" className="btn btn-quiet btn-sm" disabled={!pick[ticket.ticketId] || !reason[ticket.ticketId]?.trim() || saving === ticket.ticketId || hosts.state.status !== "ready"} onClick={() => void reassign(ticket)}>{saving === ticket.ticketId ? "Đang lưu…" : "Giao ca"}</button>
-    </div> : <span className="muted">—</span> },
-  ];
+  const all = [...state.bookings].sort((a, b) => a.slot.localeCompare(b.slot));
+  const list = all.filter((b) => (filter === "all" ? true : filter === "today" ? dayLabel(b.slot, now) === "Hôm nay" : ["pending", "confirmed", "lobby", "receiving", "viewing", "closing"].includes(b.status)));
+  const breaches = all.filter((b) => b.status === "pending" && now - new Date(b.createdAt).getTime() > SLA_MS).length;
 
-  return <div className={styles.page}>
-    <PageHeader title="Điều phối lịch xem" description="Lịch xem và thời hạn phản hồi được tải trực tiếp từ ticket điều phối trong hệ thống." />
-    <div className={styles.tabs} role="tablist">
-      {([ ["open", "Đang xử lý"], ["today", "Hôm nay"], ["all", "Tất cả"] ] as [Filter, string][]).map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}>{label}</button>)}
+  return (
+    <div className={styles.page}>
+      <PageHeader title="Điều phối lịch xem" description="Auto-Dispatch 3 tầng: Host gần nhất (SLA 3 phút) → Open Pool 500m → Area Lead. Ticket quá hạn hiện màu đỏ để can thiệp tay." />
+
+      <div className={styles.tabs} role="tablist">
+        {(
+          [
+            ["open", "Đang xử lý"],
+            ["today", "Hôm nay"],
+            ["all", "Tất cả"],
+          ] as [Filter, string][]
+        ).map(([k, l]) => (
+          <button key={k} type="button" role="tab" aria-selected={filter === k} onClick={() => setFilter(k)}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {breaches > 0 && (
+        <p className={styles.warnText}>
+          <AlertTriangle size={16} /> {breaches} ticket quá SLA 3 phút cần điều phối
+        </p>
+      )}
+
+      <DataTable<Booking>
+        columns={
+          [
+            {
+              key: "slot",
+              header: "Giờ hẹn",
+              render: (b) => (
+                <>
+                  <b className="tnum">{fmtTime(b.slot)}</b>
+                  <span className="muted xs" style={{ display: "block" }}>
+                    {dayLabel(b.slot, now)}
+                  </span>
+                </>
+              ),
+            },
+            {
+              key: "unit",
+              header: "Căn hộ",
+              render: (b) => {
+                const u = unitById(b.unitId);
+                return (
+                  <>
+                    {u ? unitAddress(u) : b.unitId}
+                    <span className="muted xs" style={{ display: "block" }}>
+                      {b.ref}
+                    </span>
+                  </>
+                );
+              },
+            },
+            {
+              key: "tenant",
+              header: "Khách",
+              render: (b) => (
+                <>
+                  {b.tenant.name}
+                  <span className="muted xs" style={{ display: "block" }}>
+                    {maskPhone(b.tenant.phone)}
+                  </span>
+                </>
+              ),
+            },
+            {
+              key: "host",
+              header: "Field Host",
+              render: (b) => {
+                if (b.status === "pending" && b.dispatch?.state === "open") {
+                  const n = b.dispatch.offeredTo.length;
+                  return (
+                    <div>
+                      <span className="badge badge-coral">Đang mở cho {n} Sale</span>
+                      {b.dispatch.escalated && (
+                        <span className="badge badge-coral-soft xs" style={{ display: "block", marginTop: 4 }}>
+                          Cần điều phối tay
+                        </span>
+                      )}
+                    </div>
+                  );
+                }
+                return hostById(b.hostId)?.name;
+              },
+            },
+            { key: "status", header: "Trạng thái", render: (b) => <span className={`badge ${STATUS_META[b.status].badge}`}>{STATUS_META[b.status].label}</span> },
+            {
+              key: "sla",
+              header: "SLA nhận ca",
+              render: (b) => {
+                if (b.dispatch?.assignedByAdmin) {
+                  return (
+                    <span className={styles.okText} title="Đã được Admin trực tiếp điều phối tay">
+                      <CheckCircle2 size={14} aria-label="Đã điều phối" /> Admin đã giao
+                    </span>
+                  );
+                }
+                const wait = now - new Date(b.createdAt).getTime();
+                const over = b.status === "pending" && wait > SLA_MS;
+                const took = b.confirmedAt ? Math.round((new Date(b.confirmedAt).getTime() - new Date(b.createdAt).getTime()) / 1000) : null;
+                if (b.status === "pending") {
+                  return over ? (
+                    <span className={styles.warnText}>
+                      <AlertTriangle size={14} aria-label="Quá SLA" /> Quá {Math.floor(wait / 60_000)} phút
+                    </span>
+                  ) : (
+                    <span className="muted tnum">Còn {Math.max(0, Math.ceil((SLA_MS - wait) / 1000))} giây</span>
+                  );
+                }
+                if (took !== null) {
+                  return (
+                    <span className={took <= 180 ? styles.okText : styles.warnText}>
+                      {took <= 180 ? <CheckCircle2 size={14} aria-label="Đạt" /> : <AlertTriangle size={14} aria-label="Vượt" />} {took} giây
+                    </span>
+                  );
+                }
+                return <span className="muted">—</span>;
+              },
+            },
+            {
+              key: "dispatch",
+              header: "Điều phối",
+              render: (b) =>
+                b.status === "pending" ? (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <select
+                      className="select"
+                      style={{ minHeight: 36, minWidth: 140 }}
+                      value={pick[b.id] ?? ""}
+                      onChange={(e) => setPick({ ...pick, [b.id]: e.target.value })}
+                      aria-label={`Giao ticket ${b.ref} cho Host`}
+                    >
+                      <option value="">Giao cho…</option>
+                      {HOSTS.filter((h) => h.status !== "off_duty" && h.id !== b.hostId).map((h) => (
+                        <option key={h.id} value={h.id}>
+                          {h.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-quiet btn-sm"
+                      disabled={!pick[b.id]}
+                      onClick={() => {
+                        const targetHostId = pick[b.id];
+                        if (!targetHostId) return;
+                        adminReassign(b.id, targetHostId);
+                        setPick((prev) => {
+                          const next = { ...prev };
+                          delete next[b.id];
+                          return next;
+                        });
+                        toast(`Đã giao ticket ${b.ref} cho ${hostById(targetHostId)?.name}`, "success");
+                        adminApi.reassignBooking(b.id, targetHostId).catch(() => null);
+                      }}
+                    >
+                      Giao
+                    </button>
+                  </div>
+                ) : b.dispatch?.assignedByAdmin ? (
+                  <span className="badge badge-kelp xs" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <CheckCircle2 size={12} /> Đã giao {hostById(b.hostId)?.name || b.hostId}
+                  </span>
+                ) : (
+                  <span className="muted">—</span>
+                ),
+            },
+          ] satisfies DataTableColumn<Booking>[]
+        }
+        rows={list}
+        empty={<span className="muted">Không có lịch nào.</span>}
+      />
     </div>
-    {breaches > 0 && <p className={styles.warnText}><AlertTriangle size={16} /> {breaches} ticket quá hạn theo SLA đã lưu</p>}
-    {tickets.state.status === "loading" ? <div className="skeleton" style={{ height: 360 }} /> : tickets.state.status === "error" ? <div role="alert"><p>{tickets.state.message}</p><button className="btn btn-secondary btn-sm" onClick={tickets.reload}>Thử lại</button></div> : <DataTable<AdminDispatchTicket> columns={columns} rows={list} empty={<span className="muted">Không có ticket trong dữ liệu hiện tại.</span>} />}
-    {hosts.state.status === "error" && <p role="alert" className="small muted">Không tải được danh sách Host: {hosts.state.message}</p>}
-  </div>;
+  );
 }

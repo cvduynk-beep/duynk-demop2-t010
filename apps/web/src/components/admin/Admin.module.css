@@ -3,9 +3,6 @@
   flex-direction: column;
   gap: 20px;
   max-width: 1320px;
-  width: 100%;
-  margin-inline: auto;
-  animation: vst-fade-up 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 .head {
@@ -132,6 +129,287 @@
 .search :global(.input) {
   padding-left: 38px;
   min-width: 260px;
+}
+
+/* ── Thanh tính năng & Bộ lọc chuyên nghiệp (Pro Filter Toolbar) ── */
+.filterToolbar {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(14, 82, 99, 0.12);
+  border-radius: 16px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 20px -2px rgba(10, 61, 74, 0.05), 0 2px 6px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.filterMainRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.searchBox {
+  position: relative;
+  flex: 1 1 300px;
+  min-width: 260px;
+}
+
+.searchBox input {
+  width: 100%;
+  height: 42px;
+  padding-left: 40px;
+  padding-right: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(14, 82, 99, 0.18);
+  background: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  color: #0f172a;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.searchBox input:hover {
+  border-color: #0e5263;
+}
+
+.searchBox input:focus {
+  border-color: #0e5263;
+  box-shadow: 0 0 0 3px rgba(14, 82, 99, 0.12);
+  outline: none;
+}
+
+.searchBox svg.searchIcon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+
+.clearSearchBtn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clearSearchBtn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.filterControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.selectBox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.selectBox svg.selectIcon {
+  position: absolute;
+  left: 12px;
+  color: #0e5263;
+  pointer-events: none;
+}
+
+.selectBox select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 42px;
+  padding-left: 36px;
+  padding-right: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(14, 82, 99, 0.18);
+  background: #ffffff;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.selectBox select:hover {
+  border-color: #0e5263;
+  background: #f8fafc;
+}
+
+.selectBox select:focus {
+  border-color: #0e5263;
+  box-shadow: 0 0 0 3px rgba(14, 82, 99, 0.12);
+  outline: none;
+}
+
+.selectBox svg.selectChevron {
+  position: absolute;
+  right: 12px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+/* Hàng thứ 2: Nút trạng thái nhanh dạng Segmented Pills + Thống kê kết quả */
+.filterQuickRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid rgba(14, 82, 99, 0.08);
+}
+
+.segmentedPills {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 10px;
+  gap: 3px;
+}
+
+.pillBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.pillBtn:hover {
+  color: #0f172a;
+}
+
+.pillBtnActive {
+  background: #ffffff !important;
+  color: #0e5263 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 6px rgba(10, 61, 74, 0.08) !important;
+}
+
+.statusDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dotActive {
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.dotBusy {
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.dotOff {
+  background: #94a3b8;
+}
+
+.filterSummary {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.resultsCount {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #0e5263;
+}
+
+.resetBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.resetBtn:hover {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: #dc2626;
+}
+
+/* Thẻ chỉ số tổng quan nhanh (KPI Grid) */
+.kpiSummaryStrip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.kpiCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: #ffffff;
+  border: 1px solid rgba(14, 82, 99, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(10, 61, 74, 0.04);
+}
+
+.kpiIconWrap {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.kpiVal {
+  font-size: 17px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.kpiLabel {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+  margin-top: 2px;
 }
 
 .tableCard {
@@ -382,179 +660,65 @@
   }
 }
 
-/* ── Field Host: dải KPI + thanh lọc nhanh (bố cục theo bản duynk, màu theo biến theme) ── */
-.kpiStrip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 12px;
-}
-
-.kpiCard {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-}
-
-.kpiIcon {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
-  flex-shrink: 0;
-  background: var(--surface-2);
-  color: var(--lagoon);
-}
-
-.kpiVal {
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--ink);
-  line-height: 1.2;
-}
-
-.kpiLabel {
-  font-size: 12px;
-  color: var(--ink-600);
-  margin-top: 2px;
-}
-
-.toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-}
-
-.quickRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-
-.pills {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  background: var(--surface-2);
-  padding: 4px;
-  border-radius: 10px;
-  gap: 3px;
-}
-
-.pill {
+/* ── Sub-navigation Strip giữa Danh sách Host & Biến phí ── */
+.adminSubNavStrip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  border-radius: 7px;
-  border: 0;
-  background: transparent;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ink-600);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.pill:hover {
-  color: var(--ink);
-}
-
-.pillActive {
-  background: var(--surface);
-  color: var(--ink);
-  font-weight: 700;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 8%);
-}
-
-.dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: none;
-}
-
-.dotOn {
-  background: #10b981;
-  box-shadow: 0 0 0 2px rgb(16 185 129 / 20%);
-}
-
-.dotBusy {
-  background: #f59e0b;
-  box-shadow: 0 0 0 2px rgb(245 158 11 / 20%);
-}
-
-.dotOff {
-  background: #94a3b8;
-}
-
-.dutyCell {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.lockedBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(14, 82, 99, 0.12);
   border-radius: 999px;
-  background: var(--danger-050);
-  color: var(--danger);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(10, 61, 74, 0.04);
+  width: fit-content;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.resultCount {
-  font-size: 13px;
-  color: var(--ink-600);
-}
-
-.resetBtn {
+.adminSubNavLink {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin-left: 10px;
-  padding: 4px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--danger);
-  font-size: 12.5px;
+  gap: 8px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 13.5px;
   font-weight: 600;
-  cursor: pointer;
+  color: #475569;
+  text-decoration: none;
+  transition: all 0.18s ease;
 }
 
-.lockBanner {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 18px;
-  border-radius: 12px;
-  background: var(--danger-050);
-  border: 1px solid var(--danger);
-  color: var(--ink);
-  font-size: 14px;
+.adminSubNavLink:hover {
+  color: #0e5263;
+  background: rgba(14, 82, 99, 0.05);
 }
 
-.lockBanner > svg {
-  flex: none;
-  color: var(--danger);
+.adminSubNavLinkActive {
+  background: #0e5263 !important;
+  color: #ffffff !important;
+  box-shadow: 0 3px 10px rgba(14, 82, 99, 0.25);
 }
+
+.adminSubNavLinkActive svg {
+  color: #f59e0b;
+}
+
+.subCountBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.adminSubNavLink:not(.adminSubNavLinkActive) .subCountBadge {
+  background: rgba(14, 82, 99, 0.1);
+  color: #0e5263;
+}
+

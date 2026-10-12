@@ -8,34 +8,32 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { toast } from "@/components/ui/Toast";
 import { accountApi } from "@/lib/apiClient";
 import { refreshSession, useSession } from "@/lib/auth/client";
-import { fmtDate, fmtPhone } from "@/lib/format";
-import { useApiQuery } from "@/lib/query/useApiQuery";
-import { tenantQueries } from "@/lib/tenant/queries";
+import { fmtDate, fmtPhone } from "@/lib/mock/format";
+import { tenantLatestKyc, tenantLatestRefundAccount } from "@/lib/mock/selectors-tenant";
+import { setTenantProfile, deleteTenantRefundAccount } from "@/lib/mock/actions";
+import { useMock } from "@/lib/mock/store";
 
 export function AccountProfile() {
+  const state = useMock();
   const { user } = useSession();
+  // SĐT chỉ có khi khách đã nhập và xác thực OTP Zalo (lúc đặt lịch xem). Chưa có thì để trống, không điền số giả.
+  const phone = state.tenantProfile?.phone ?? "";
   const [name, setName] = useState(user?.fullName ?? "");
-  const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
-
-  // A7: Đọc thông tin eKYC gần nhất từ danh sách lịch xem của tài khoản
-  const { state: bookingsState } = useApiQuery(tenantQueries.bookings());
 
   useEffect(() => {
     accountApi.getProfile().then((res) => {
       if (!res.ok || !res.data) return;
       if (res.data.fullName) setName(res.data.fullName);
-      if (res.data.phone) setPhone(res.data.phone);
       setPhoneVerified(Boolean(res.data.isPhoneVerified));
     });
   }, []);
 
-  const bookings = bookingsState.status === "ready" ? bookingsState.data : [];
-  const latestKycBooking = bookings
-    .filter((b) => b.kyc?.verifiedAt)
-    .sort((a, b) => new Date(b.kyc!.verifiedAt).getTime() - new Date(a.kyc!.verifiedAt).getTime())[0];
-  const kyc = latestKycBooking?.kyc;
+  if (!state.ready) return <div className="skeleton" style={{ height: 320 }} />;
+
+  const kyc = phone ? tenantLatestKyc(state, phone) : undefined;
+  const refundAccount = phone ? tenantLatestRefundAccount(state, phone) : undefined;
   const email = user?.email ?? "";
 
   const onSubmit = async (e: FormEvent) => {
@@ -46,6 +44,7 @@ export function AccountProfile() {
     const res = await accountApi.updateProfile({ fullName });
     setSaving(false);
     if (!res.ok) return toast("Không lưu được thay đổi. Thử lại sau.");
+    if (phone) setTenantProfile({ name: fullName, phone }); // giữ tên mặc định khi đặt lịch ở bản mock
     await refreshSession();
     toast("Đã lưu thay đổi", "success");
   };
@@ -87,6 +86,41 @@ export function AccountProfile() {
         ) : (
           <p>
             <StatusBadge tone="neutral">Chưa xác minh — sẽ làm khi đặt cọc</StatusBadge>
+          </p>
+        )}
+      </Section>
+
+      <Section title="Tài khoản ngân hàng nhận hoàn cọc" description="Thông tin dùng để hoàn cọc tự động khi thanh lý hợp đồng.">
+        {refundAccount ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13.5 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
+              <div>
+                <div>
+                  Ngân hàng: <b>{refundAccount.bankName}</b> · Số tài khoản: <b>{refundAccount.accountNo}</b>
+                </div>
+                <div>
+                  Chủ tài khoản: <b>{refundAccount.holderName}</b>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-quiet btn-xs"
+                style={{ color: "var(--danger)" }}
+                onClick={() => {
+                  deleteTenantRefundAccount(phone);
+                  toast("Đã xóa tài khoản nhận hoàn cọc", "success");
+                }}
+              >
+                Xóa tài khoản đã lưu
+              </button>
+            </div>
+            <p className="muted small" style={{ margin: "4px 0 0", color: "var(--kelp)" }}>
+              ✓ Thông tin tài khoản đã được lưu và sẽ tự động điền khi bạn thuê thêm căn hộ mới.
+            </p>
+          </div>
+        ) : (
+          <p>
+            <StatusBadge tone="neutral">Chưa lưu — hệ thống sẽ tự động lưu sau lần đầu bạn nhập khi ký hợp đồng thuê</StatusBadge>
           </p>
         )}
       </Section>

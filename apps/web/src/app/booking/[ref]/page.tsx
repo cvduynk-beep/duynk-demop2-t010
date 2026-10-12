@@ -10,7 +10,7 @@ export default async function BookingStatusPage({ params }: { params: Promise<{ 
     <>
       <SiteNav />
       <main>
-        <BookingStatusView refCode={ref.toUpperCase()} />
+        <BookingStatusView refCode={String(ref || "").toUpperCase()} />
       </main>
     </>
   );

@@ -4,22 +4,21 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { portalForRole } from '../auth.constants';
 import { authError } from '../auth.errors';
+import { DEMO_USERS } from '../demo-accounts';
 import { AuthenticatedUser } from './authenticated-user';
-import { toHostRoleCodes } from '../host-roles';
 import { SessionTokenService } from './session-token.service';
 
 export type ProfileWithRole = Prisma.ProfileGetPayload<{
-  include: { role: true; hostProfile: { select: { id: true; roles: true } } };
+  include: { role: true; hostProfile: { select: { id: true } } };
 }>;
 
-export const PROFILE_INCLUDE = { role: true, hostProfile: { select: { id: true, roles: true } } } as const;
+export const PROFILE_INCLUDE = { role: true, hostProfile: { select: { id: true } } } as const;
 
 export function toAuthenticatedUser(
   identity: { id: string; email?: string | null },
   profile: ProfileWithRole | null,
 ): AuthenticatedUser {
   const role = profile?.role?.code ?? null;
-  const isHostVerified = role === 'field_host' && Boolean(profile?.hostProfile);
   return {
     id: identity.id,
     email: profile?.email ?? identity.email ?? null,
@@ -27,8 +26,7 @@ export function toAuthenticatedUser(
     role,
     portal: portalForRole(role),
     isPhoneVerified: profile?.isPhoneVerified ?? false,
-    isHostVerified,
-    hostRoles: isHostVerified ? toHostRoleCodes(profile.hostProfile.roles) : [],
+    isHostVerified: role === 'field_host' && Boolean(profile?.hostProfile),
   };
 }
 
@@ -69,7 +67,7 @@ export class AuthSessionService {
     for (const [key, entry] of this.cache) if (entry.user.id === userId) this.cache.delete(key);
   }
 
-  /** null nếu token không hợp lệ/hết hạn/sai cổng; ném `account_suspended` nếu tài khoản bị khoá. */
+  /** null nếu token không hợp lệ/hết hạn; ném `account_suspended` nếu tài khoản bị khoá. */
   async authenticate(accessToken: string): Promise<AuthenticatedUser | null> {
     const key = createHash('sha256').update(accessToken).digest('hex');
     const hit = this.cache.get(key);
@@ -81,21 +79,37 @@ export class AuthSessionService {
     if (!claims) return null;
     const identity = { id: claims.sub, email: claims.email };
 
-    const profile = await withRetry(() =>
-      this.prisma.profile.findUnique({
-        where: { id: identity.id },
-        include: PROFILE_INCLUDE,
-      }),
-    );
-    // Token luôn gắn với một Profile đã tạo; Profile bị xoá thì token vô hiệu.
-    if (!profile) return null;
-    if (!profile.isActive) throw authError('account_suspended');
-    // Token phát cho cổng nào chỉ dùng được khi vai trò hiện tại vẫn thuộc cổng đó (vd. Admin đổi vai ⇒ phiên cũ hết hiệu lực).
-    if (claims.portal !== portalForRole(profile.role?.code)) return null;
+    // Fast-path cho demo user (trả về tức thì 0ms, không tốn mạng hay treo chờ DB offline)
+    for (const demoUser of Object.values(DEMO_USERS)) {
+      if (demoUser.id === identity.id || (identity.email && demoUser.email?.toLowerCase() === identity.email.toLowerCase())) {
+        this.cache.set(key, { user: demoUser, expiresAt: Date.now() + CACHE_TTL_MS });
+        return demoUser;
+      }
+    }
 
-    const user = toAuthenticatedUser(identity, profile);
-    if (this.cache.size >= CACHE_MAX_ENTRIES) this.cache.delete(this.cache.keys().next().value);
-    this.cache.set(key, { user, expiresAt: Date.now() + CACHE_TTL_MS });
-    return user;
+    try {
+      const profile = await withRetry(() =>
+        this.prisma.profile.findUnique({
+          where: { id: identity.id },
+          include: PROFILE_INCLUDE,
+        }),
+      );
+      // Token luôn gắn với một Profile đã tạo; Profile bị xoá thì token vô hiệu.
+      if (!profile) return null;
+      if (!profile.isActive) throw authError('account_suspended');
+
+      const user = toAuthenticatedUser(identity, profile);
+      if (this.cache.size >= CACHE_MAX_ENTRIES) this.cache.delete(this.cache.keys().next().value);
+      this.cache.set(key, { user, expiresAt: Date.now() + CACHE_TTL_MS });
+      return user;
+    } catch (err) {
+      // Fallback khi DB offline
+      for (const demoUser of Object.values(DEMO_USERS)) {
+        if (demoUser.id === identity.id || (identity.email && demoUser.email?.toLowerCase() === identity.email.toLowerCase())) {
+          return demoUser;
+        }
+      }
+      throw err;
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, Min } from 'class-validator';
 import { LayoutType } from '@prisma/client';
 
 export class MatchmakerRequestDto {
@@ -13,22 +13,18 @@ export class MatchmakerRequestDto {
   @IsEnum(LayoutType)
   preferredLayout?: LayoutType;
 
-  @ApiProperty({ default: 1, description: 'Số lượng xe máy' })
-  @IsNumber()
-  motorbikes: number = 1;
-
-  @ApiProperty({ default: 0, description: 'Số lượng ô tô' })
-  @IsNumber()
-  cars: number = 0;
-
-  @ApiProperty({ default: 2, description: 'Số lượng người ở' })
-  @IsNumber()
-  occupants: number = 2;
-
-  @ApiPropertyOptional({ default: 3, minimum: 1, maximum: 50, description: 'Số căn tối đa trả về (mặc định 3)' })
+  @ApiPropertyOptional({ default: 1, description: 'Số lượng xe máy' })
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(50)
-  limit?: number;
+  @IsNumber()
+  motorbikes?: number = 1;
+
+  @ApiPropertyOptional({ default: 0, description: 'Số lượng ô tô' })
+  @IsOptional()
+  @IsNumber()
+  cars?: number = 0;
+
+  @ApiPropertyOptional({ default: 2, description: 'Số lượng người ở' })
+  @IsOptional()
+  @IsNumber()
+  occupants?: number = 2;
 }

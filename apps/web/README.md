@@ -1,45 +1,46 @@
-# VinStay AI Web
+# VinStay AI — Web (Next.js)
 
-Giao diện Next.js cho khách thuê, chủ nhà, Field Host và Admin. Dữ liệu nghiệp vụ tải qua NestJS API; backend đọc và ghi PostgreSQL trên Supabase bằng Prisma. Frontend không dùng store localStorage để tạo căn, lịch xem, hồ sơ, hợp đồng hoặc số liệu giả.
+Giao diện 4 cổng (Khách thuê, Chủ nhà, Field Host, Admin). **Bản MVP hiện chạy hoàn toàn bằng dữ liệu mock**: không gọi
+backend, không cần Supabase. Backend NestJS (`../../backend`) đang tạm dừng.
 
-## Chạy ứng dụng
-
-```bash
-pnpm install
-pnpm dev
-```
-
-Web mặc định chạy tại `http://localhost:3000` và cần backend ở `http://localhost:4000`. Đặt `BACKEND_URL` trong `apps/web/.env.local` nếu backend dùng địa chỉ khác.
-
-```env
-BACKEND_URL=http://localhost:4000
-```
-
-## Nguồn dữ liệu
-
-- Trang chi tiết căn hiện "Nội thất chi tiết" theo phòng: tên, số lượng, mô tả, "Mới ~X%" và ảnh minh hoạ `public/inventory/<code>.jpg` (xem README thư mục đó; thiếu ảnh thì ẩn).
-- Trang chủ, tìm căn và chi tiết căn dùng catalog API; giá thuê, phí quản lý, trạng thái, hình ảnh, phân khu, lượt quan tâm và khung giờ bận lấy từ Supabase.
-- Khách thuê dùng API cho đăng nhập, hồ sơ, yêu thích, lịch xem, hợp đồng và PDF.
-- Chủ nhà, Field Host và Admin đọc/ghi qua các API theo vai trò; dữ liệu mẫu trong thư mục cũ `lib/mock` không được import vào luồng production.
-- Chat tìm căn gọi trợ lý AI qua `POST /api/v1/assistant/chat` (SSE, `lib/assistant/stream.ts`): `delta` hiện dần vào tin, `units` mở tab kết quả đúng các mã đó (lọc từ catalog). Khi relay 503 / `LLM_UNAVAILABLE` / quá 25s chưa có `delta` đầu, lượt đó rơi về bộ lọc cũ `parseQuery` + `searchUnits` kèm dòng "Trợ lý AI tạm bận — đang dùng bộ lọc nhanh". Rewrite `/api/v1/*` của Next cho SSE đi qua không đệm (đã đo). Bộ lọc FilterTray/ResultsPanel vẫn lọc catalog thật. Lịch trống được đối chiếu với endpoint busy-slots và được backend kiểm tra lại khi đặt.
-
-## Giao diện công khai (header & trợ lý)
-
-- Mọi route công khai (`/`, `/units*`, `/booking*`, `/account*`) dùng chung `SiteNav`. Bộ link khai báo một nơi ở `src/lib/nav/siteNav.ts` (`SITE_NAV`: Trang chủ · Tìm căn · Cách hoạt động; `TENANT_MENU` cho menu Khách thuê). Lối chủ nhà duy nhất là nút "Cho thuê nhà". VI/EN và sáng/tối chỉ hiện ở `/`.
-- Route và anchor dùng tiếng Anh (`#how-it-works`, `#for-owners`, …); nhãn hiển thị vẫn tiếng Việt. `landing-anchors.test.ts` chặn slug cũ, anchor treo và link `#assistant` thuần.
-- Trợ lý tìm nhà là ô chat ở hero trang chủ (`section#assistant`). Mọi lối mở trợ lý đi qua `useAssistant().focusAssistant()` (`components/chat/AssistantProvider.tsx`); nút nổi `AssistantLauncher` chỉ có ở `/` và tự ẩn khi ô chat đang trong khung nhìn. Không tạo bản chat thứ hai.
-
-## Tích hợp cần cấu hình trước khi dùng
-
-- OTP cần thông tin provider Zalo/SMS thật.
-- VietQR chỉ cho tạo giao dịch khi có cấu hình tài khoản nhận và webhook đối soát thật.
-- eKYC và lập hợp đồng thuê bị khóa cho đến khi có provider eKYC thật; ứng dụng không giả kết quả xác minh.
-
-Backend dùng `.env` riêng. Chỉ chạy Prisma Client generation cho cấu hình Supabase hiện hữu; không nạp seed mẫu vào database thật.
-
-## Kiểm tra mã
+## Chạy
 
 ```bash
-pnpm typecheck
-pnpm build
+pnpm install && pnpm dev   # http://localhost:3000
 ```
+
+| Lệnh | Mục đích |
+|---|---|
+| `pnpm dev` / `build` / `start` | chạy / build |
+| `pnpm lint` / `typecheck` / `test` | ESLint / tsc / Vitest |
+
+## Cách demo hoạt động
+
+- **Đăng nhập (mock)**: hai cổng duy nhất — `/login` có tab Khách thuê/Chủ nhà; `/admin/login` có tab Sale (Field Host)/Quản trị. `/host/login` chỉ chuyển hướng về `/admin/login` (tab Sale mặc định), không còn là lối vào riêng. Tài khoản thử trong `src/lib/mock/auth.ts` (`DEMO_CREDENTIALS`): `minhanh@vinstay.demo` / `hung.nguyen@vinstay.demo` / `0934556201` (mật khẩu `demo1234`, RFID `VS-0412`) / `ops@vinstay.vn` (`admin1234`). Phiên dùng cookie `vs_role=v2.<role>`; `src/proxy.ts` chặn `/account`, `/booking`, `/booking/*`, `/landlord`, `/host`, `/admin` và đưa về đúng trang đăng nhập của cổng. Nút "Demo" ở góc màn hình đổi vai trò tức thì và đặt lại dữ liệu.
+- **Một store dùng chung** (`src/lib/mock/store.ts`, localStorage): khách đặt lịch (điều phối tự động 3 tầng) → Host nhận (hoặc claim ticket mở) → khách bấm 'Tôi đã tới sảnh' → Host dẫn, lấy mã cửa → Host báo khách cọc → khách đồng ý điều khoản cọc + nội quy + VietQR (giữ chỗ theo giờ Admin cài đặt, mặc định 48h, 12–72h) → khách eKYC + khai người cùng ở + TK hoàn cọc + ký HĐ thuê điện tử (không OTP) → thanh toán kỳ đầu (demo báo có), mọi vai trò cùng thấy một dòng sự kiện. Cọc bị bỏ chia 50/50 (chủ nhà/nền tảng); Admin có thể huỷ cọc do chủ nhà vi phạm (hoàn khách gấp đôi) hoặc bất khả kháng tại `/admin/contracts/[key]`.
+  Dữ liệu seed gắn với ngày hiện tại; qua ngày mới sẽ tự dựng lại.
+- **Zalo / OTP / VietQR / OCR đều là mô phỏng**: mã OTP hiện ngay trong khung "tin Zalo mô phỏng"; nút "Demo" trong màn Host/khách
+  cho phép tua (T-10 phút, ngân hàng báo có, khách bấm có mặt).
+- **Cổng Chủ nhà đã nối API thật** (trừ trang Tổng quan `/landlord/dashboard` vẫn dùng mock): Căn hộ, Chi tiết căn, Ký gửi (tạo hồ sơ → OTP Zalo → ký), Hồ sơ ký gửi, Khoản thu, Thoát ủy quyền, Tài khoản. Mã nằm ở `src/lib/landlord/` (`types.ts` khớp backend, `api.ts` gọi `/api/v1/landlord/*`, `useLandlordQuery.ts` tải dữ liệu) và `src/components/landlord/`. Cần backend chạy (`BACKEND_URL`) và đăng nhập tab Chủ nhà bằng tài khoản thật có căn trong DB; muốn thấy mã OTP khi thử, đặt `OTP_ECHO_DEV_CODE=true` trong `backend/.env`.
+- **Tải ảnh ở `/landlord/consign`**: chọn ở bước 2, tải lên ngay sau khi tạo hồ sơ nháp (trước khi gửi OTP). `next.config.ts` đặt `experimental.proxyClientMaxBodySize: "30mb"` — thiếu dòng này thì Next cắt body ở 10MB và proxy lỗi 500 khi tải nhiều ảnh (8 × 3MB). Ảnh được nén trên trình duyệt (cạnh dài ≤1600px, JPEG) trước khi tải, thường còn 200–500KB, để tiết kiệm dung lượng Supabase. Giới hạn ảnh nằm ở `src/lib/landlord/photos.ts`, phải khớp `backend/src/modules/landlord/landlord.mappers.ts`.
+- Căn hộ mẫu ở `src/lib/mock/units.ts`, ảnh ở `public/units/` (lấy từ `tech data/caodata`, giá/mã căn đã chuẩn hoá cho demo).
+- Logic thuần (All-in Cost, Matchmaker, luồng nghiệp vụ) có test ở `src/tests/`.
+
+## Route
+
+| Cổng | Route |
+|---|---|
+| Công khai | `/` (chat AI), `/units`, `/units/[id]` |
+| Xác thực | `/login`, `/register`, `/forgot-password`, `/reset-password`, `/admin/login` (`/host/login` → chuyển hướng `/admin/login`) |
+| Khách thuê (yêu cầu vai `tenant`) | `/booking`, `/booking/[ref]`, `/account`, `/account/bookings`, `/account/saved`, `/account/contracts` |
+| Chủ nhà | `/landlord/dashboard`, `/landlord/units`, `/landlord/units/[id]`, `/landlord/consign`, `/landlord/consignments/[id]`, `/landlord/finance`, `/landlord/exit-request`, `/landlord/account` |
+| Field Host | `/host/dispatch`, `/host/viewing/[id]`, `/host/inspections`, `/host/inspections/[id]`, `/host/earnings`, `/host/handbook`, `/host/account` (trang cổng nằm trong route group `app/host/(portal)/`) |
+| Admin | `/admin/dashboard`, `/admin/inventory`, `/admin/inventory/[id]`, `/admin/bookings`, `/admin/contracts`, `/admin/contracts/[key]`, `/admin/contracts/templates`, `/admin/contracts/templates/[id]`, `/admin/contracts/parties`, `/admin/contracts/parties/[key]`, `/admin/hosts`, `/admin/hosts/[id]`, `/admin/commission`, `/admin/settings` (route group `app/admin/(portal)/`) |
+
+Giao diện dùng hệ token "kinh doanh tối giản" trong `src/app/globals.css` và các primitive ở `src/components/ui/` (`AuthLayout`, `PageHeader`, `Section`, `DataTable`, `StatusBadge`, `EmptyState`, `Field`, `PasswordInput`, `KeyValue`).
+
+## Khôi phục đăng nhập thật qua backend
+
+Mã cũ vẫn còn: `src/lib/auth/*`, `src/components/auth/*`, `src/app/login/LoginTabs.tsx`, `src/app/admin/login/AdminLoginTabs.tsx`
+và cấu hình rewrite `/api/v1/*` → `BACKEND_URL` trong `next.config.ts`. Muốn dùng lại: thay `src/proxy.ts` bằng bản gọi
+`GET /api/v1/auth/session` (xem lịch sử git) và gắn lại các trang `/login`, `/admin/login`.

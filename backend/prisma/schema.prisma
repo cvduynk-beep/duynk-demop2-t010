@@ -69,6 +69,7 @@ model Profile {
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   role              Role                   @relation(fields: [roleId], references: [id])
+  claimedHostInvite HostInvite?            @relation("HostInviteClaim")
   ownedUnits        Unit[]                 @relation("LandlordUnits")
   hostProfile       FieldHost?
   viewings          Viewing[]              @relation("TenantViewings")
@@ -77,9 +78,25 @@ model Profile {
   landlordContracts Contract[]             @relation("LandlordContracts")
   signatures        Signature[]
   auditActions      AuditLog[]
-  favoriteUnits     FavoriteUnit[]
 
   @@map("profiles")
+}
+
+/// Allowlist của Field Host: Admin tạo trước (email + mã thẻ RFID). Người có email đó
+/// đăng ký/đăng nhập rồi nhập đúng mã RFID thì `claimedAt` được set và bản ghi FieldHost
+/// được tạo. Email không có invite thì không đăng ký được vai trò Field Host.
+model HostInvite {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String    @unique @db.VarChar(100)
+  assignedZone   String    @default("The Sapphire 1") @map("assigned_zone") @db.VarChar(50)
+  rfidCardNumber String    @map("rfid_card_number") @db.VarChar(50)
+  claimedById    String?   @unique @map("claimed_by_id") @db.Uuid
+  claimedAt      DateTime? @map("claimed_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  claimedBy Profile? @relation("HostInviteClaim", fields: [claimedById], references: [id], onDelete: SetNull)
+
+  @@map("host_invites")
 }
 
 enum OtpPurpose {
@@ -173,26 +190,6 @@ enum LayoutType {
   THREE_BED
 }
 
-enum Furnishing {
-  FULL
-  BASIC
-  EMPTY
-}
-
-enum Amenity {
-  AC
-  FRIDGE
-  WASHER
-  KITCHEN
-  HEATER
-  BED
-  WARDROBE
-  SOFA
-  TV
-  CURTAIN
-  BALCONY
-}
-
 enum DoorLockType {
   ELECTRONIC_PIN
   PHYSICAL_KEY
@@ -212,70 +209,24 @@ model Unit {
   utilityCostEstimate Decimal      @default(600000) @map("utility_cost_estimate") @db.Decimal(12, 2)
   marketAvgPrice      Decimal      @map("market_avg_price") @db.Decimal(12, 2)
   doorLockType        DoorLockType @default(ELECTRONIC_PIN) @map("door_lock_type")
-  doorNumber          String?      @map("door_number") @db.VarChar(10)
-  hasExtraRoom        Boolean      @default(false) @map("has_extra_room")
-  bathrooms           Int          @default(1)
-  direction           String?      @db.VarChar(20)
-  viewLabel           String?      @map("view_label") @db.VarChar(60)
-  furnishing          Furnishing   @default(FULL)
-  amenities           Amenity[]    @default([])
-  petFriendly         Boolean      @default(false) @map("pet_friendly")
-  minLeaseMonths      Int          @default(6) @map("min_lease_months")
-  securityDeposit     Decimal?     @map("security_deposit") @db.Decimal(12, 2) // null ⇒ = baseRentPrice (Q3)
-  highlights          String[]     @default([]) // tối đa 3, mỗi dòng ≤ 60 ký tự
-  holdHoursOverride   Int?         @map("hold_hours_override")
-  verifiedAt          DateTime?    @map("verified_at") @db.Timestamptz
   isVerified          Boolean      @default(false) @map("is_verified")
   status              UnitStatus   @default(AVAILABLE)
   isHot               Boolean      @default(false) @map("is_hot")
   createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz
 
-  building       Building            @relation(fields: [buildingId], references: [id])
-  landlord       Profile             @relation("LandlordUnits", fields: [landlordId], references: [id])
-  doorKey        DoorAccessKey?
-  media          UnitMedia[]
-  mandates       ExclusiveMandate[]
-  viewings       Viewing[]
-  deposits       HoldingDeposit[]
-  contract       Contract[]
-  favorites      FavoriteUnit[]
-  inventoryItems UnitInventoryItem[]
+  building Building           @relation(fields: [buildingId], references: [id])
+  landlord Profile            @relation("LandlordUnits", fields: [landlordId], references: [id])
+  doorKey  DoorAccessKey?
+  media    UnitMedia[]
+  mandates ExclusiveMandate[]
+  viewings Viewing[]
+  deposits HoldingDeposit[]
+  contract Contract[]
 
   @@index([status, buildingId])
   @@index([baseRentPrice])
   @@map("units")
-}
-
-/// Nội thất thật của căn, ghi khi niêm yết từ 32 dòng thẩm định (hồ sơ 18 SPEC-P01 §3).
-model UnitInventoryItem {
-  id        String   @id @default(uuid()) @db.Uuid
-  unitId    String   @map("unit_id") @db.Uuid
-  code      String   @db.VarChar(10) // mã catalog "1".."32"
-  groupCode String   @map("group_code") @db.VarChar(5) // I..VIII
-  name      String   @db.VarChar(80)
-  qty       Int      @default(1)
-  spec      String?  @db.VarChar(120)
-  condition Int? // độ mới 0–100 (%), công khai dạng "Mới ~X%"; compensation/photoIds vẫn kín
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
-
-  @@unique([unitId, code])
-  @@map("unit_inventory_items")
-}
-
-/// Căn hộ khách đã bấm tim (lưu theo tài khoản, sống qua restart và đồng bộ giữa các thiết bị).
-model FavoriteUnit {
-  profileId String   @map("profile_id") @db.Uuid
-  unitId    String   @map("unit_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-
-  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  unit    Unit    @relation(fields: [unitId], references: [id], onDelete: Cascade)
-
-  @@id([profileId, unitId])
-  @@index([unitId])
-  @@map("favorite_units")
 }
 
 model UnitMedia {
@@ -402,12 +353,6 @@ model ExclusiveMandate {
 // 6. FIELD HOST & DISPATCH SYSTEM
 // ====================================================================
 
-/// Vai của Field Host (UI_FLOW_SPEC §5 Màn 4). Một Host có thể có cả hai.
-enum HostRole {
-  SALE
-  INSPECTOR
-}
-
 enum HostDutyStatus {
   ONLINE_AVAILABLE
   BUSY_VIEWING
@@ -418,7 +363,6 @@ model FieldHost {
   id               String         @id @default(uuid()) @db.Uuid
   profileId        String         @unique @map("profile_id") @db.Uuid
   assignedZone     String         @map("assigned_zone") @db.VarChar(50)
-  roles            HostRole[]     @default([SALE]) // Admin sửa qua PATCH /admin/field-hosts/:id → AuditLog HOST_ROLES_UPDATE
   rfidCardNumber   String?        @map("rfid_card_number") @db.VarChar(50)
   dutyStatus       HostDutyStatus @default(OFF_DUTY) @map("duty_status")
   currentLatitude  Decimal?       @map("current_latitude") @db.Decimal(10, 7)
@@ -441,41 +385,20 @@ enum ViewingStatus {
   COMPLETED
   NO_SHOW
   CANCELLED
-  LOBBY
-  RECEIVING
-  VIEWING
-  CLOSING
-  HOLDING
-  LEASED
-  REJECTED
 }
 
 model Viewing {
-  id               String        @id @default(uuid()) @db.Uuid
-  bookingRefCode   String        @unique @map("booking_ref_code") @db.VarChar(50)
-  unitId           String        @map("unit_id") @db.Uuid
-  tenantId         String        @map("tenant_id") @db.Uuid
-  contactName      String?       @map("contact_name") @db.VarChar(100)
-  contactPhoneEnc  String?       @map("contact_phone_enc")
-  contactPhoneHash String?       @map("contact_phone_hash") @db.VarChar(64)
-  partySize        Int           @default(1) @map("party_size")
-  tenantNote       String?       @map("tenant_note") @db.VarChar(300)
-  rescheduleCount  Int           @default(0) @map("reschedule_count")
-  viewingSlot      DateTime      @map("viewing_slot") @db.Timestamptz
-  status           ViewingStatus @default(PENDING_CONFIRMATION)
-  cancelReason     String?       @map("cancel_reason") @db.VarChar(60)
-  closedReason     String?       @map("closed_reason") @db.VarChar(200)
-  lobbyCheckInAt   DateTime?     @map("lobby_check_in_at") @db.Timestamptz
-  confirmedAt      DateTime?     @map("confirmed_at") @db.Timestamptz
-  reminderSentAt   DateTime?     @map("reminder_sent_at") @db.Timestamptz
-  lateRequestedAt  DateTime?     @map("late_requested_at") @db.Timestamptz
-  receivingAt      DateTime?     @map("receiving_at") @db.Timestamptz
-  viewingStartedAt DateTime?     @map("viewing_started_at") @db.Timestamptz
-  viewEndedAt      DateTime?     @map("view_ended_at") @db.Timestamptz
-  completedAt      DateTime?     @map("completed_at") @db.Timestamptz
-  tenantRating     Int?          @map("tenant_rating")
-  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime?     @updatedAt @map("updated_at") @db.Timestamptz
+  id             String        @id @default(uuid()) @db.Uuid
+  bookingRefCode String        @unique @map("booking_ref_code") @db.VarChar(50)
+  unitId         String        @map("unit_id") @db.Uuid
+  tenantId       String        @map("tenant_id") @db.Uuid
+  viewingSlot    DateTime      @map("viewing_slot") @db.Timestamptz
+  status         ViewingStatus @default(PENDING_CONFIRMATION)
+  cancelReason   String?       @map("cancel_reason") @db.VarChar(60)
+  lobbyCheckInAt DateTime?     @map("lobby_check_in_at") @db.Timestamptz
+  completedAt    DateTime?     @map("completed_at") @db.Timestamptz
+  tenantRating   Int?          @map("tenant_rating")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
   unit    Unit             @relation(fields: [unitId], references: [id])
   tenant  Profile          @relation("TenantViewings", fields: [tenantId], references: [id])
@@ -483,7 +406,6 @@ model Viewing {
   deposit HoldingDeposit?
 
   @@index([viewingSlot, status])
-  @@index([contactPhoneHash])
   @@map("viewings")
 }
 
@@ -498,16 +420,14 @@ enum TicketStatus {
 }
 
 model DispatchTicket {
-  id           String       @id @default(uuid()) @db.Uuid
-  viewingId    String       @map("viewing_id") @db.Uuid
-  hostId       String?      @map("host_id") @db.Uuid
-  tier         Int          @default(1) // 1: Assigned Host (5m), 2: Open Pool <=500m (3m), 3: Broadcast Area Lead
-  slaSeconds   Int          @map("sla_seconds")
-  status       TicketStatus @default(OFFERED)
-  offeredAt    DateTime     @default(now()) @map("offered_at") @db.Timestamptz
-  acceptedAt   DateTime?    @map("accepted_at") @db.Timestamptz
-  rejectReason String?      @map("reject_reason") @db.VarChar(120) // lý do Sale từ chối (ticket chuyển ESCALATED)
-  closedAt     DateTime?    @map("closed_at") @db.Timestamptz // lúc ticket rời trạng thái OFFERED/ACCEPTED
+  id         String       @id @default(uuid()) @db.Uuid
+  viewingId  String       @map("viewing_id") @db.Uuid
+  hostId     String?      @map("host_id") @db.Uuid
+  tier       Int          @default(1) // 1: Assigned Host (5m), 2: Open Pool <=500m (3m), 3: Broadcast Area Lead
+  slaSeconds Int          @map("sla_seconds")
+  status     TicketStatus @default(OFFERED)
+  offeredAt  DateTime     @default(now()) @map("offered_at") @db.Timestamptz
+  acceptedAt DateTime?    @map("accepted_at") @db.Timestamptz
 
   viewing Viewing    @relation(fields: [viewingId], references: [id], onDelete: Cascade)
   host    FieldHost? @relation(fields: [hostId], references: [id])
@@ -538,12 +458,8 @@ model HoldingDeposit {
   attributedHostId String?       @map("attributed_host_id") @db.Uuid // Attribution Lock
   amount           Decimal       @default(2000000) @db.Decimal(12, 2)
   vietqrRef        String        @map("vietqr_ref") @db.VarChar(100)
-  transferContent  String?       @map("transfer_content") @db.VarChar(100)
   paymentStatus    DepositStatus @default(PENDING_PAYMENT) @map("payment_status")
   paidAt           DateTime?     @map("paid_at") @db.Timestamptz
-  termsAcceptedAt  DateTime?     @map("terms_accepted_at") @db.Timestamptz
-  termsVersion     String?       @map("terms_version") @db.VarChar(20)
-  holdHours        Int?          @map("hold_hours")
   expiresAt        DateTime?     @map("expires_at") @db.Timestamptz // +7 ngày sau paidAt
   agreementDocId   String?       @unique @map("agreement_doc_id") @db.Uuid
   createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz
@@ -579,10 +495,6 @@ model IdentityVerification {
   providerName    String         @default("FPT.AI") @map("provider_name") @db.VarChar(50)
   providerRefId   String         @map("provider_reference_id") @db.VarChar(100)
   confidenceScore Float?         @map("confidence_score")
-  fieldConfidence Json?          @map("field_confidence")
-  faceMatchScore  Float?         @map("face_match_score")
-  manuallyEdited  Boolean        @default(false) @map("manually_edited")
-  mismatchFields  String[]       @default([]) @map("mismatch_fields")
   c06Confirmed    Boolean        @default(false) @map("c06_confirmed")
   status          IdentityStatus @default(SUBMITTED)
   verifiedDataRef String?        @map("verified_data_ref") // Ciphertext trong Vault
@@ -614,24 +526,21 @@ enum ContractStatus {
 }
 
 model Contract {
-  id                     String         @id @default(uuid()) @db.Uuid
-  contractNumber         String         @unique @map("contract_number") @db.VarChar(50)
-  unitId                 String         @map("unit_id") @db.Uuid
-  holdingDepositId       String         @unique @map("holding_deposit_id") @db.Uuid
-  tenantId               String         @map("tenant_id") @db.Uuid
-  landlordId             String         @map("landlord_id") @db.Uuid
-  documentId             String?        @unique @map("document_id") @db.Uuid
-  leaseTermMonths        Int            @default(12) @map("lease_term_months")
-  startDate              DateTime       @map("start_date") @db.Date
-  endDate                DateTime       @map("end_date") @db.Date
-  monthlyRentPrice       Decimal        @map("monthly_rent_price") @db.Decimal(12, 2)
-  securityDepositAmount  Decimal        @map("security_deposit_amount") @db.Decimal(12, 2)
-  paymentCycleMonths     Int            @default(1) @map("payment_cycle_months")
-  convertedHoldingAmount Decimal?       @map("converted_holding_amount") @db.Decimal(12, 2)
-  status                 ContractStatus @default(DRAFT)
-  signedAt               DateTime?      @map("signed_at") @db.Timestamptz
-  createdAt              DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt              DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  id                    String         @id @default(uuid()) @db.Uuid
+  contractNumber        String         @unique @map("contract_number") @db.VarChar(50)
+  unitId                String         @map("unit_id") @db.Uuid
+  holdingDepositId      String         @unique @map("holding_deposit_id") @db.Uuid
+  tenantId              String         @map("tenant_id") @db.Uuid
+  landlordId            String         @map("landlord_id") @db.Uuid
+  documentId            String?        @unique @map("document_id") @db.Uuid
+  leaseTermMonths       Int            @default(12) @map("lease_term_months")
+  startDate             DateTime       @map("start_date") @db.Date
+  endDate               DateTime       @map("end_date") @db.Date
+  monthlyRentPrice      Decimal        @map("monthly_rent_price") @db.Decimal(12, 2)
+  securityDepositAmount Decimal        @map("security_deposit_amount") @db.Decimal(12, 2)
+  status                ContractStatus @default(DRAFT)
+  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
   unit           Unit              @relation(fields: [unitId], references: [id])
   holdingDeposit HoldingDeposit    @relation(fields: [holdingDepositId], references: [id])

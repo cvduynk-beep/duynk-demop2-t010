@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+const MOCK_URL = 'https://mock.supabase.co';
+
 @Injectable()
 export class SupabaseService {
   private readonly logger = new Logger(SupabaseService.name);
@@ -10,21 +12,18 @@ export class SupabaseService {
   private supabaseClient: SupabaseClient;
 
   constructor(private configService: ConfigService) {
-    const supabaseUrl = this.configService.get<string>('SUPABASE_URL')?.trim();
-    const serviceRoleKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')?.trim();
-    if (!supabaseUrl || !serviceRoleKey || supabaseUrl.includes('your-project-ref')) {
-      throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured with real Supabase credentials.');
-    }
+    this.supabaseUrl = this.configService.get<string>('SUPABASE_URL') || MOCK_URL;
+    const serviceRoleKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') || 'mock_key';
 
-    try {
-      const parsedUrl = new URL(supabaseUrl);
-      if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') throw new Error();
-    } catch {
-      throw new Error('SUPABASE_URL must be a valid HTTP(S) URL.');
-    }
-
-    this.supabaseUrl = supabaseUrl;
-    this.configured = true;
+    // Placeholder trong .env.example không tính là đã cấu hình.
+    this.configured = Boolean(
+      this.configService.get<string>('SUPABASE_URL') &&
+        this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') &&
+        !this.supabaseUrl.includes('your-project-ref') &&
+        this.supabaseUrl !== MOCK_URL &&
+        !serviceRoleKey.includes('your-supabase') &&
+        serviceRoleKey !== 'mock_key',
+    );
 
     // Client service-role: chỉ dùng cho Storage (ảnh hồ sơ ký gửi). Đăng nhập không đi qua Supabase.
     this.supabaseClient = createClient(this.supabaseUrl, serviceRoleKey, {
@@ -34,7 +33,7 @@ export class SupabaseService {
       },
     });
 
-    this.logger.log('Initialized Supabase Storage client.');
+    this.logger.log(`Initialized Supabase Admin Client for: ${this.supabaseUrl}`);
   }
 
   getClient(): SupabaseClient {

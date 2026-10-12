@@ -22,19 +22,42 @@ function publish(next: SessionState) {
   for (const l of listeners) l();
 }
 
-/** Số thứ tự lần đọc phiên gần nhất: lần đọc cũ về muộn (vd. tải lúc mở trang) không được ghi đè lần mới hơn. */
-let latestLoad = 0;
+function getPortalForPath(): string {
+  if (typeof window === "undefined") return "tenant";
+  const p = window.location.pathname;
+  if (p.startsWith("/host")) return "host";
+  if (p.startsWith("/landlord")) return "landlord";
+  if (p.startsWith("/admin")) return "admin";
+  return "tenant";
+}
 
-async function load(): Promise<SessionState> {
-  const mine = ++latestLoad;
+async function load() {
   try {
-    const res = await fetch("/api/v1/auth/session", { credentials: "same-origin", cache: "no-store" });
-    const body = res.ok ? ((await res.json()) as { data?: { user: SessionUser | null } }) : null;
-    if (mine === latestLoad) publish({ ready: true, user: body?.data?.user ?? null });
+    const portal = getPortalForPath();
+    const url = portal ? `/api/v1/auth/session?portal=${portal}` : "/api/v1/auth/session";
+    const res = await fetch(url, {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: portal ? { "x-portal": portal } : {},
+    });
+    let user = res.ok ? ((await res.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null : null;
+    if (!user) {
+      // Fallback sang endpoint cục bộ /api/auth/session khi backend offline
+      const fb = await fetch(portal ? `/api/auth/session?portal=${portal}` : "/api/auth/session");
+      if (fb.ok) user = ((await fb.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null;
+    }
+    publish({ ready: true, user });
   } catch {
-    if (mine === latestLoad) publish({ ready: true, user: null }); // backend không với tới được ⇒ coi như chưa đăng nhập
+    try {
+      const portal = getPortalForPath();
+      const fb = await fetch(portal ? `/api/auth/session?portal=${portal}` : "/api/auth/session");
+      if (fb.ok) {
+        const user = ((await fb.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null;
+        return publish({ ready: true, user });
+      }
+    } catch {}
+    publish({ ready: true, user: null });
   }
-  return state;
 }
 
 /** Đọc lại phiên (sau khi đổi họ tên…) để header và các màn hình khác cập nhật ngay. */
@@ -66,7 +89,8 @@ export function useRole(): SessionUser["portal"] {
 /** Đăng xuất: thu hồi phiên ở backend rồi tải lại toàn trang (xoá cache router của các trang có chắn quyền). */
 export async function signOut(redirectTo = "/login") {
   try {
-    await fetch("/api/v1/auth/logout", { method: "POST", credentials: "same-origin" });
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    await fetch("/api/v1/auth/logout", { method: "POST" }).catch(() => {});
   } finally {
     window.location.assign(redirectTo);
   }

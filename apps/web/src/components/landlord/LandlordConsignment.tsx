@@ -8,15 +8,15 @@ import { KeyValue } from "@/components/ui/KeyValue";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConsignTimeline } from "@/components/consign/ConsignTimeline";
-import { InspectionReportPanel } from "@/components/consign/InspectionReportPanel";
-import { PricingProposalCard } from "@/components/consign/PricingProposalCard";
+import { InspectionReportView } from "@/components/consign/InspectionReportView";
 import { CONSIGN_STATUS_META } from "@/components/consign/status";
-import { fmtDateTime, vnd } from "@/lib/format";
-import { FURNISHING_LABEL } from "@/lib/units";
+import { fmtDateTime, vnd } from "@/lib/mock/format";
+import type { InspectionReport } from "@/lib/mock/types";
+import { FURNISHING_LABEL } from "@/lib/mock/units";
 import { queries } from "@/lib/landlord/queries";
 import { LAYOUT_LABEL, LEASE_TERM_LABEL } from "@/lib/landlord/labels";
 import type { Consignment } from "@/lib/landlord/types";
-import { invalidateLandlordData, useLandlordQuery } from "@/lib/landlord/useLandlordQuery";
+import { useLandlordQuery } from "@/lib/landlord/useLandlordQuery";
 import { useNow } from "@/lib/useNow";
 import { QueryView } from "./QueryView";
 import styles from "./Landlord.module.css";
@@ -25,18 +25,17 @@ export function LandlordConsignment({ id }: { id: string }) {
   const query = useLandlordQuery(queries.consignment(id));
   return (
     <div className={styles.page}>
-      <QueryView query={query} skeleton="detail">{(c) => <ConsignmentBody c={c} onReload={() => { invalidateLandlordData(); query.reload(); }} />}</QueryView>
+      <QueryView query={query} skeleton="detail">{(c) => <ConsignmentBody c={c} />}</QueryView>
     </div>
   );
 }
 
-function ConsignmentBody({ c, onReload }: { c: Consignment; onReload: () => void }) {
+function ConsignmentBody({ c }: { c: Consignment }) {
   const now = useNow(10_000);
   const meta = CONSIGN_STATUS_META[c.status];
   const can = `${c.building} · Tầng ${c.floor} · Căn ${c.door ?? "—"}`;
-  // Phiếu thẩm định do Inspector nộp (E10): kèm ảnh, link ký 1h. null khi chưa nộp.
-  const inspection = c.inspection ?? null;
-  const report = inspection?.report;
+  // Báo cáo thẩm định do module Host ghi; nhận đúng cấu trúc InspectionReport (null khi Host chưa nộp).
+  const report = (c.report ?? undefined) as InspectionReport | undefined;
   const timeline = {
     status: c.status,
     signedAt: c.signedAt ?? undefined,
@@ -44,7 +43,7 @@ function ConsignmentBody({ c, onReload }: { c: Consignment; onReload: () => void
     decidedAt: c.decidedAt ?? undefined,
     note: c.decisionNote ?? undefined,
     inspectDueAt: c.inspectDueAt ?? undefined,
-    report: inspection ? { submittedAt: inspection.submittedAt } : undefined,
+    report,
   };
   const lockText =
     c.locks.includes("smart") && c.locks.includes("physical")
@@ -79,8 +78,8 @@ function ConsignmentBody({ c, onReload }: { c: Consignment; onReload: () => void
           style={{ background: "var(--danger-050)", borderColor: "var(--danger)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--s-3)" }}
         >
           <div>
-            <b style={{ color: "var(--danger)" }}>Lý do thẩm định không đạt:</b>
-            <p style={{ margin: "var(--s-1) 0 0", color: "var(--ink)", fontSize: "var(--fs-13)" }}>{c.decisionNote || inspection?.report.note || "Không đạt điều kiện tiếp nhận của phân khu."}</p>
+            <b style={{ color: "var(--danger)" }}>Lý do không duyệt ký gửi:</b>
+            <p style={{ margin: "var(--s-1) 0 0", color: "var(--ink)", fontSize: "var(--fs-13)" }}>{c.decisionNote || "Không đạt điều kiện tiếp nhận của phân khu."}</p>
           </div>
           <Link href="/landlord/consign" className="btn btn-primary btn-sm">
             <RefreshCw size={14} /> Ký gửi lại
@@ -96,17 +95,13 @@ function ConsignmentBody({ c, onReload }: { c: Consignment; onReload: () => void
           <div>
             <b style={{ color: "var(--ink)" }}>Hồ sơ chưa hoàn tất ký ủy quyền</b>
             <p style={{ margin: "var(--s-1) 0 0", color: "var(--ink-2)", fontSize: "var(--fs-13)" }}>
-              Ký ủy quyền để Field Host nhận ca đi thẩm định thực tế.
+              Vui lòng ký ủy quyền qua Zalo OTP để Field Host nhận ticket đi thẩm định thực tế.
             </p>
           </div>
           <Link href={`/landlord/consign?draft=${c.id}`} className="btn btn-amber btn-sm">
             <FileSignature size={14} /> Ký ủy quyền ngay <ArrowRight size={14} />
           </Link>
         </div>
-      )}
-
-      {c.status === "awaiting_landlord" && c.pricingProposal && (
-        <PricingProposalCard consignmentId={c.id} proposal={c.pricingProposal} onReload={onReload} />
       )}
 
       <ConsignTimeline c={timeline} now={now} />
@@ -131,7 +126,7 @@ function ConsignmentBody({ c, onReload }: { c: Consignment; onReload: () => void
       </Section>
 
       {(c.photos?.length ?? 0) > 0 && (
-        <Section title={`Ảnh bạn đính kèm (${c.photos!.length})`} description="Ảnh tham khảo cho Field Host — không phải ảnh niêm yết chính thức.">
+        <Section title={`Ảnh bạn đính kèm (${c.photos!.length})`} description="Ảnh tham khảo cho Field Host và Admin — không phải ảnh niêm yết chính thức.">
           <div className={styles.photoGrid}>
             {c.photos!.map((p) => (
               <a key={p.id} className={styles.photoItem} href={p.url ?? undefined} target="_blank" rel="noopener noreferrer" aria-label={`Mở ảnh ${p.name}`}>
@@ -151,17 +146,10 @@ function ConsignmentBody({ c, onReload }: { c: Consignment; onReload: () => void
       )}
 
       <Section title="Kết quả thẩm định thực tế">
-        {inspection ? (
-          <InspectionReportPanel unit={c} report={inspection.report} photos={inspection.photos} hostName={inspection.hostName} />
+        {report ? (
+          <InspectionReportView c={{ building: c.building, floor: c.floor, door: c.door ?? "", layout: c.layoutKind, areaM2: c.areaM2, furnished: c.furnished ?? true, locks: c.locks, report }} />
         ) : (
-          <EmptyState title="Field Host chưa nộp báo cáo" description="Field Host thẩm định phân khu đang tiếp nhận và sẽ kiểm tra thực tế trong vòng 48 giờ." />
-        )}
-        {c.status === "approved" && (
-          <div style={{ marginTop: "var(--s-4)" }}>
-            <Link href={`/landlord/units/${c.unitId}`} className="btn btn-primary btn-sm">
-              Xem căn <ArrowRight size={14} />
-            </Link>
-          </div>
+          <EmptyState title="Field Host chưa nộp báo cáo" description="Field Host phân khu đang tiếp nhận và sẽ kiểm tra thực tế trong vòng 48 giờ." />
         )}
       </Section>
     </>

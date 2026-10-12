@@ -6,13 +6,21 @@ import { UNITS, ZONES } from "./units";
 /** Số căn ký gửi tổng và số căn đã thuê/giữ chỗ nền theo toà (dữ liệu tuần, mock) — cộng thêm thay đổi phát sinh trong phiên demo. */
 const BUILDING_BASE: Record<string, { total: number; used: number }> = {
   "S1.01": { total: 42, used: 37 },
+  "S1.02": { total: 40, used: 32 },
   "S1.03": { total: 38, used: 34 },
+  "S1.05": { total: 40, used: 30 },
+  "S1.08": { total: 42, used: 35 },
   "S1.09": { total: 45, used: 33 },
   "S1.10": { total: 40, used: 26 },
+  "S1.12": { total: 44, used: 36 },
+  "S2.01": { total: 46, used: 38 },
   "S2.02": { total: 52, used: 47 },
+  "S2.05": { total: 50, used: 42 },
+  "S2.07": { total: 48, used: 39 },
   "S2.09": { total: 48, used: 41 },
   "S2.12": { total: 50, used: 36 },
   "S2.16": { total: 44, used: 39 },
+  "S2.18": { total: 46, used: 37 },
   "S2.19": { total: 46, used: 30 },
   ZR1: { total: 36, used: 31 },
   ZR2: { total: 34, used: 24 },
@@ -29,7 +37,7 @@ export function heatRows(state: MockState) {
   return ZONES.map((z) => ({
     zone: z.short,
     cells: z.buildings.map((b) => {
-      const base = BUILDING_BASE[b];
+      const base = BUILDING_BASE[b] ?? { total: 40, used: 28 };
       const delta = UNITS.filter((u) => u.building === b).reduce((sum, u) => {
         const now = unitStatus(state, u) !== "available" ? 1 : 0;
         const was = u.baseStatus !== "available" ? 1 : 0;

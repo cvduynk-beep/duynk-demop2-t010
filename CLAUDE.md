@@ -34,17 +34,7 @@ npm run start:dev   # :4000, Swagger /api/docs
 npm test            # jest (Prisma/Supabase giả)
 ```
 
-**AI Engine** (`ai-engine/`, hồ sơ 18) — Python + uv, chatbot LLM (FastAPI + OpenRouter, `openai/gpt-4o-mini`), service riêng với `.venv` riêng; web gọi qua relay Nest `POST /api/v1/assistant/chat`, lỗi ⇒ bộ lọc regex cũ. Thư mục `src/` + `.venv` ở root vẫn là template cũ, không dùng:
-
-```bash
-cd ai-engine
-uv sync && cp .env.example .env     # điền OPENROUTER_API_KEY, INTERNAL_KEY
-uv run uvicorn app.main:app --reload --port 8100
-uv run ruff check . && uv run pytest   # không cần key thật
-uv run python -m app.eval              # eval với LLM thật (cần key)
-```
-
-**Next.js side** (`apps/web/`) — pnpm, UI 4 cổng. **Cổng Chủ nhà và Khách thuê đã nối backend NestJS thật** (`/api/v1/*`); cổng Admin và các màn Field Host chưa nối (thu nhập, sổ tay) tiếp tục dùng mock hỗ trợ demo; Field Host "Lịch & yêu cầu" (`/host/dispatch`, `/host/viewing/[ref]`) và "Thẩm định ký gửi" (`/host/inspections*`, đạt ⇒ tự niêm yết, không qua Admin) đã nối API (xem `apps/web/README.md`):
+**Next.js side** (`apps/web/`) — pnpm, UI 4 cổng. **Hiện chạy hoàn toàn bằng dữ liệu mock** (đăng nhập demo bằng cookie `vs_role`, store localStorage, không cần backend — xem `apps/web/README.md`); mã gọi backend NestJS còn giữ lại để khôi phục:
 
 ```bash
 cd apps/web
@@ -56,8 +46,8 @@ pnpm build lint typecheck test
 
 The backend is split across two independent apps, matching `docs/SAD.md`'s multi-service design but with the Core Service's stack swapped:
 
-- **`backend/`** — NestJS + Prisma + Supabase, nơi duy nhất xử lý đăng nhập/phân quyền/dữ liệu (SAD v2). `backend/prisma/schema.prisma` là nguồn chân lý của database (`database/schema.sql` và schema Prisma cũ của `apps/web` đã bị thay thế). Auth: `backend/src/modules/auth` (email+mật khẩu băm scrypt ngay trong `profiles.password_hash` và Google qua Passport, cả hai phát JWT phiên do backend ký — không dùng Supabase Auth, đăng ký không xác nhận email, Field Host do Admin tạo ở `/admin/hosts` (`modules/field-hosts`, có vai Sale/Thẩm định, không tự đăng ký, không lưu số thẻ RFID), OTP Zalo xác thực SĐT — không phải phương thức đăng nhập). Phiên = cookie httpOnly do backend set; vai trò đọc từ DB. Các controller nghiệp vụ hiện vẫn `@Public()` (chưa gắn `@Roles`), trừ `landlord`, `field-hosts`, `account`, `inspection` (cổng Thẩm định, `@HostRoles('inspector')`; chỉ `GET /media/listing/*` công khai) và cổng Sale `host-viewings` (`/host/board|tickets|viewings`, khoá `@HostRoles('sale')` — điều phối ca, đón khách, mở cửa; mã cửa chỉ dạng `aes:`).
-- **`apps/web/`** — Next.js (App Router), **cổng Chủ nhà và Khách thuê đã nối backend NestJS thật** (xem `apps/web/README.md`); UI 4 cổng + `src/proxy.ts` chặn trang theo phiên + rewrite `/api/v1/*` sang backend.
+- **`backend/`** — NestJS + Prisma + Supabase, nơi duy nhất xử lý đăng nhập/phân quyền/dữ liệu (SAD v2). `backend/prisma/schema.prisma` là nguồn chân lý của database (`database/schema.sql` và schema Prisma cũ của `apps/web` đã bị thay thế). Auth: `backend/src/modules/auth` (email+mật khẩu băm scrypt ngay trong `profiles.password_hash` và Google qua Passport, cả hai phát JWT phiên do backend ký — không dùng Supabase Auth, đăng ký không xác nhận email, Field Host nhập RFID theo lời mời của Admin, OTP Zalo xác thực SĐT — không phải phương thức đăng nhập). Phiên = cookie httpOnly do backend set; vai trò đọc từ DB. Các controller nghiệp vụ hiện vẫn `@Public()` (chưa gắn `@Roles`).
+- **`apps/web/`** — Next.js (App Router), **bản MVP mock hiện không gọi backend** (xem `apps/web/README.md`; luồng đăng nhập backend bên dưới là thiết kế cũ, đang tạm dừng); chỉ có UI 4 cổng + `src/proxy.ts` chặn trang theo phiên + rewrite `/api/v1/*` sang backend.
 - **`src/`** — still the original Python/FastAPI+LangGraph AI20K template skeleton, reserved for the future AI Engine service (Matchmaker/OCR/Dispatcher per SAD §5.2). A FastAPI app (`src/main.py`, router mounted at `/api/v1`) calls a compiled LangGraph `agent` (`src/agents/graph.py`: `analyze` → conditional → `respond`). State is a `total=False` TypedDict (`src/agents/state.py`). Nodes return partial-state dicts. Settings come from `src/config.py` (pydantic-settings, `.env`, cached `get_settings()`). The LLM client is `src/services/llm.py` (OpenAI, `gpt-4o-mini` by default). The nodes and tools are still placeholders — nothing VinStay-specific has been built here.
 
 **The target design lives in docs.** Treat these as the spec when implementing:

@@ -6,20 +6,9 @@ import { randomUUID } from 'node:crypto';
  */
 type Row = Record<string, any>;
 
-type Relations = (row: Row, key: string) => Row | null | undefined;
-
-const matches = (row: Row, where: Row = {}, relation?: Relations): boolean =>
+const matches = (row: Row, where: Row = {}): boolean =>
   Object.entries(where).every(([key, expected]) => {
-    if (key === 'NOT') return !matches(row, expected, relation);
-    if (expected && typeof expected === 'object' && !(expected instanceof Date)) {
-      // Bộ lọc mảng của Prisma (cột enum[]): has / hasEvery.
-      if ('has' in expected) return Array.isArray(row[key]) && row[key].includes(expected.has);
-      if ('hasEvery' in expected) return Array.isArray(row[key]) && expected.hasEvery.every((v: unknown) => row[key].includes(v));
-      if ('in' in expected) return expected.in.includes(row[key]);
-      // Bộ lọc theo quan hệ (vd. fieldHost.where.profile = { isActive }).
-      const related = relation?.(row, key);
-      if (related !== undefined) return related !== null && matches(related, expected);
-    }
+    if (key === 'NOT') return !matches(row, expected);
     return (row[key] ?? null) === expected;
   });
 
@@ -33,7 +22,6 @@ class FakeTable {
     private readonly defaults: () => Row = () => ({}),
     // Luôn trả bản sao (snapshot) như DB thật — trả tham chiếu sống sẽ che lỗi race trong test.
     private readonly resolveInclude: (row: Row, include?: Row) => Row = (row) => ({ ...row }),
-    private readonly relation?: Relations,
   ) {}
 
   private assertUnique(candidate: Row, ignore?: Row) {
@@ -44,11 +32,7 @@ class FakeTable {
   }
 
   private find(where: Row) {
-    return this.rows.find((row) => matches(row, where, this.relation));
-  }
-
-  private filter(where?: Row) {
-    return this.rows.filter((row) => matches(row, where, this.relation));
+    return this.rows.find((row) => matches(row, where));
   }
 
   findUnique = jest.fn(async ({ where, include }: Row) => {
@@ -57,35 +41,14 @@ class FakeTable {
   });
 
   findFirst = jest.fn(async ({ where, orderBy }: Row = {}) => {
-    let hits = this.filter(where);
+    let hits = this.rows.filter((row) => matches(row, where));
     if (orderBy?.createdAt === 'desc') hits = [...hits].sort((a, b) => b.createdAt - a.createdAt);
     return hits[0] ? { ...hits[0] } : null;
   });
 
-  findMany = jest.fn(async ({ where, include, distinct, orderBy, select }: Row = {}) => {
-    let hits = this.filter(where);
-    const order = Array.isArray(orderBy) ? orderBy[0] : orderBy;
-    if (order) {
-      const [key, dir] = Object.entries(order)[0] as [string, string];
-      hits = [...hits].sort((a, b) => (a[key] > b[key] ? 1 : a[key] < b[key] ? -1 : 0) * (dir === 'desc' ? -1 : 1));
-    }
-    if (distinct?.length) {
-      const seen = new Set<unknown>();
-      hits = hits.filter((r) => (seen.has(r[distinct[0]]) ? false : (seen.add(r[distinct[0]]), true)));
-    }
-    return hits.map((row) => {
-      const full = this.resolveInclude(row, include);
-      return select ? Object.fromEntries(Object.keys(select).map((k) => [k, full[k]])) : full;
-    });
-  });
-
-  count = jest.fn(async ({ where }: Row = {}) => this.filter(where).length);
-
-  groupBy = jest.fn(async ({ by, where }: Row) => {
-    const groups = new Map<unknown, number>();
-    for (const row of this.filter(where)) groups.set(row[by[0]], (groups.get(row[by[0]]) ?? 0) + 1);
-    return [...groups].map(([value, n]) => ({ [by[0]]: value, _count: n }));
-  });
+  findMany = jest.fn(async ({ where, include }: Row = {}) =>
+    this.rows.filter((row) => matches(row, where)).map((row) => this.resolveInclude(row, include)),
+  );
 
   create = jest.fn(async ({ data, include }: Row) => {
     const row = { id: randomUUID(), createdAt: new Date(), ...this.defaults(), ...data };
@@ -111,7 +74,7 @@ class FakeTable {
   });
 
   updateMany = jest.fn(async ({ where, data }: Row) => {
-    const hits = this.filter(where);
+    const hits = this.rows.filter((row) => matches(row, where));
     hits.forEach((row) => this.apply(row, data));
     return { count: hits.length };
   });
@@ -128,16 +91,7 @@ class FakeTable {
 
 export function createFakePrisma() {
   const role = new FakeTable(['id', 'code']);
-  // Mặc định khớp @default trong schema.prisma (roles = [SALE], duty OFF_DUTY).
-  const fieldHost: FakeTable = new FakeTable(
-    ['id', 'profileId'],
-    () => ({ roles: ['SALE'], dutyStatus: 'OFF_DUTY', rating: 5, assignedZone: 'The Sapphire 1' }),
-    (row, include) => ({
-      ...row,
-      ...(include?.profile ? { profile: profile.rows.find((p) => p.id === row.profileId) } : {}),
-    }),
-    (row, key) => (key === 'profile' ? (profile.rows.find((p) => p.id === row.profileId) ?? null) : undefined),
-  );
+  const fieldHost = new FakeTable(['id', 'profileId']);
   const profile: FakeTable = new FakeTable(
     ['id', 'email', 'phoneHash'],
     () => ({ isActive: true, isPhoneVerified: false, fullName: null, lastLoginAt: null, passwordHash: null }),
@@ -147,6 +101,11 @@ export function createFakePrisma() {
       ...(include?.hostProfile ? { hostProfile: fieldHost.rows.find((f) => f.profileId === row.id) ?? null } : {}),
     }),
   );
+  // Mặc định khớp @default trong schema.prisma.
+  const hostInvite = new FakeTable(['id', 'email', 'claimedById'], () => ({ assignedZone: 'The Sapphire 1', claimedAt: null, claimedById: null }), (row, include) => ({
+    ...row,
+    ...(include?.claimedBy ? { claimedBy: profile.rows.find((p) => p.id === row.claimedById) ?? null } : {}),
+  }));
   const otpCode = new FakeTable(['id'], () => ({
     attemptCount: 0,
     lockedUntil: null,
@@ -155,34 +114,18 @@ export function createFakePrisma() {
     status: 'PENDING',
   }));
   const authAuditLog = new FakeTable(['id']);
-  const auditLog = new FakeTable(['id']);
-  const building = new FakeTable(['id']);
-  const dispatchTicket = new FakeTable(['id']);
-  const holdingDeposit = new FakeTable(['id']);
-  const hostPayout = new FakeTable(['id']);
 
-  const prisma: Record<string, any> = {
-    role,
-    profile,
-    fieldHost,
-    otpCode,
-    authAuditLog,
-    auditLog,
-    building,
-    dispatchTicket,
-    holdingDeposit,
-    hostPayout,
-  };
+  const prisma: Record<string, any> = { role, profile, fieldHost, hostInvite, otpCode, authAuditLog };
   prisma.$transaction = jest.fn(async (arg: any) => (typeof arg === 'function' ? arg(prisma) : Promise.all(arg)));
   return prisma;
 }
 
 export type FakePrisma = ReturnType<typeof createFakePrisma>;
 
-/** Seed nhanh: role + profile (+ FieldHost nếu là host đã có hồ sơ Field Host do Admin tạo). */
+/** Seed nhanh: role + profile (+ FieldHost nếu là host đã xác nhận RFID). */
 export function seedProfile(
   prisma: FakePrisma,
-  params: { id?: string; email: string; roleCode: string; isActive?: boolean; withFieldHost?: boolean; hostRoles?: string[]; fullName?: string; passwordHash?: string | null },
+  params: { id?: string; email: string; roleCode: string; isActive?: boolean; withFieldHost?: boolean; fullName?: string; passwordHash?: string | null },
 ) {
   let role = prisma.role.rows.find((r: Row) => r.code === params.roleCode);
   if (!role) {
@@ -200,16 +143,6 @@ export function seedProfile(
     createdAt: new Date(),
   };
   prisma.profile.rows.push(profile);
-  if (params.withFieldHost) {
-    prisma.fieldHost.rows.push({
-      id: randomUUID(),
-      profileId: profile.id,
-      roles: params.hostRoles ?? ['SALE'],
-      dutyStatus: 'OFF_DUTY',
-      rating: 5,
-      assignedZone: 'The Sapphire 1',
-      createdAt: new Date(),
-    });
-  }
+  if (params.withFieldHost) prisma.fieldHost.rows.push({ id: randomUUID(), profileId: profile.id });
   return profile;
 }

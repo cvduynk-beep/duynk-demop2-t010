@@ -7,9 +7,7 @@ import type {
   DoorAuditEntry,
   ExitResult,
   Finance,
-  InventoryCatalogEntry,
   MyProfile,
-  PricingDecisionResult,
   SignOtpInfo,
   UnitDetail,
   UnitRow,
@@ -37,12 +35,8 @@ export const landlordApi = {
     api.delete<ConsignmentPhoto[]>(`${BASE}/consignments/${encodeURIComponent(id)}/photos/${encodeURIComponent(photoId)}`),
   sendSignOtp: (id: string, phone?: string) =>
     api.post<SignOtpInfo>(`${BASE}/consignments/${encodeURIComponent(id)}/send-otp`, phone ? { phone } : {}),
-  signConsignment: (id: string, body: { ownershipWarranted: boolean; otp?: string; phone?: string }) =>
+  signConsignment: (id: string, body: { ownershipWarranted: boolean; otp: string; phone?: string }) =>
     api.post<Consignment>(`${BASE}/consignments/${encodeURIComponent(id)}/sign`, body),
-
-  /** Chủ nhà đồng ý / không đồng ý giá + cọc bảo đảm do Inspector đề xuất. 409 `PRICING_NOT_PENDING`, 403 `NOT_OWNER`. */
-  decidePricing: (id: string, decision: "accept" | "decline") =>
-    api.post<PricingDecisionResult>(`${BASE}/consignments/${encodeURIComponent(id)}/pricing-decision`, { decision }),
 
   finance: () => api.get<Finance>(`${BASE}/finance`),
 
@@ -50,7 +44,6 @@ export const landlordApi = {
   cancelExit: (mandateId: string) => api.post<{ mandateId: string; status: "active" }>(`${BASE}/mandates/cancel-exit`, { mandateId }),
 
   buildings: () => api.get<BuildingOption[]>("/properties/buildings"),
-  inventoryCatalog: () => api.get<InventoryCatalogEntry[]>(`${BASE}/inventory-catalog`),
   profile: () => api.get<MyProfile>("/me/profile"),
 };
 

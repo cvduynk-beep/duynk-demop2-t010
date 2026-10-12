@@ -1,0 +1,239 @@
+.mascotWrap {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  touch-action: manipulation;
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.mascotWrap:hover {
+  transform: scale(1.05);
+}
+
+.mascotWrap:active {
+  transform: scale(0.97);
+}
+
+/* Kích thước linh vật */
+.hero {
+  width: 140px;
+  height: 140px;
+}
+
+.compact {
+  width: 80px;
+  height: 80px;
+}
+
+.mini {
+  width: 44px;
+  height: 44px;
+}
+
+/* Lơ lửng mềm mại (Gentle Floating) */
+.floatBody {
+  transform-origin: center bottom;
+  animation: floatMotion 3.8s ease-in-out infinite;
+}
+
+@keyframes floatMotion {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(1deg);
+  }
+}
+
+/* Bóng đổ phản chiếu */
+.shadow {
+  transform-origin: center center;
+  animation: shadowPulse 3.8s ease-in-out infinite;
+}
+
+@keyframes shadowPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.28;
+  }
+  50% {
+    transform: scale(0.85);
+    opacity: 0.16;
+  }
+}
+
+/* Nghiêng đầu khi lắng nghe (Listening Tilt) */
+.tiltListening {
+  transform-origin: 50px 50px;
+  animation: tiltSway 2.4s ease-in-out infinite;
+}
+
+@keyframes tiltSway {
+  0%, 100% {
+    transform: rotate(4deg);
+  }
+  50% {
+    transform: rotate(7deg) translateY(-2px);
+  }
+}
+
+/* Vui sướng gật đầu khi có kết quả (Happy Bounce) */
+.happyBounce {
+  transform-origin: 50px 50px;
+  animation: happyGiggle 1.8s ease-in-out infinite;
+}
+
+@keyframes happyGiggle {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-5px) rotate(-3deg);
+  }
+  75% {
+    transform: translateY(-2px) rotate(3deg);
+  }
+}
+
+/* Vẫy thẻ cư dân (Card Wave) */
+.cardWave {
+  transform-origin: 22px 64px;
+  animation: waveCard 2s ease-in-out infinite;
+}
+
+@keyframes waveCard {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-14deg) translateY(-2px);
+  }
+}
+
+/* Chớp mắt tự nhiên */
+.blinkTop {
+  transition: transform 0.12s ease-in-out;
+}
+
+.isBlinking {
+  transform: scaleY(0.08) !important;
+}
+
+/* Xoay radar khi AI đang phân tích dữ liệu */
+.radarRotate {
+  transform-origin: center center;
+  animation: spinRadar 1.5s linear infinite;
+}
+
+@keyframes spinRadar {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Hào quang tai nghe phát tín hiệu */
+.antennaGlow {
+  animation: pulseGlow 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes pulseGlow {
+  0% {
+    opacity: 0.5;
+    filter: drop-shadow(0 0 2px #06b6d4);
+  }
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px #06b6d4) drop-shadow(0 0 14px #0284c7);
+  }
+}
+
+/* Bong bóng hội thoại tương tác (Speech Bubble) */
+.bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 290px;
+  width: max-content;
+  white-space: normal;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(14, 165, 233, 0.32);
+  border-radius: 14px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.42;
+  color: #0f172a;
+  box-shadow: 0 10px 25px -4px rgba(14, 165, 233, 0.22), 0 4px 10px -2px rgba(0, 0, 0, 0.06);
+  pointer-events: none;
+  animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  z-index: 30;
+}
+
+.bubble::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.96) transparent transparent transparent;
+}
+
+/* Bong bóng nổi bật khi Vinny tự chủ động mở lời khơi gợi tò mò */
+.bubbleProactive {
+  border-color: rgba(14, 165, 233, 0.5);
+  box-shadow: 0 12px 30px -4px rgba(14, 165, 233, 0.35), 0 0 16px rgba(56, 189, 248, 0.25);
+}
+
+/* Miệng mấp máy khi linh vật tự nói chuyện */
+.talkingMouth {
+  animation: mouthTalk 0.35s ease-in-out infinite alternate;
+  transform-origin: 50px 55px;
+}
+
+@keyframes mouthTalk {
+  0% {
+    transform: scaleY(0.65);
+  }
+  100% {
+    transform: scaleY(1.3);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0px) scale(1);
+  }
+}
+
+.bubbleEmoji {
+  margin-right: 6px;
+  display: inline-block;
+  animation: waveEmoji 1.5s ease-in-out infinite;
+}
+
+@keyframes waveEmoji {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(18deg);
+  }
+}

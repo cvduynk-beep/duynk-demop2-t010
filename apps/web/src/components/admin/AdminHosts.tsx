@@ -1,345 +1,543 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Activity, AlertTriangle, CheckCircle2, Compass, Lock, Moon, RotateCcw, Search, UserPlus, Users } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  Compass,
+  Lock,
+  MapPin,
+  RotateCcw,
+  Search,
+  Shield,
+  SlidersHorizontal,
+  Unlock,
+  UserCheck,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
-import { fmtPhone, vnd } from "@/lib/format";
+import { setHostSuspended } from "@/lib/mock/actions";
+import { fmtPhone, initials, isValidVnPhone, vnd } from "@/lib/mock/format";
+import { hostEarnings, hostRoles, hostStatus, hostZones, isHostSuspended } from "@/lib/mock/selectors";
+import { useMock } from "@/lib/mock/store";
 import {
-  ACCEPT_SLA_SECONDS,
-  adminHostsApi,
-  hostErrorText,
-  invalidateHosts,
-  mmss,
-  rolesOfChoice,
-  useHostList,
-  useHostZones,
-  type HostAdminView,
-  type HostFilters,
-  type HostRoleChoice,
-} from "@/lib/admin/hosts";
-import { HostRoleRadios } from "./HostRoleRadios";
-import { HostsSubnav } from "./HostsSubnav";
+  HOSTS,
+  ZONES,
+  zoneById,
+  type FieldHost,
+  type HostRole,
+  type HostStatus,
+} from "@/lib/mock/units";
 import styles from "./Admin.module.css";
 
-export const DUTY_LABEL: Record<HostAdminView["dutyStatus"], { label: string; badge: string; dot: string; hint: string }> = {
-  ONLINE_AVAILABLE: { label: "Đang trực", badge: "badge-kelp", dot: styles.dotOn, hint: "Sẵn sàng nhận ca" },
-  BUSY_VIEWING: { label: "Đang dẫn khách", badge: "badge-amber-soft", dot: styles.dotBusy, hint: "Đang trong ca xem" },
-  OFF_DUTY: { label: "Nghỉ ca", badge: "badge-plain", dot: styles.dotOff, hint: "Không nhận ca mới" },
+const STATUS: Record<HostStatus, { label: string; badge: string }> = {
+  active: { label: "Đang trực", badge: "badge-kelp" },
+  busy: { label: "Đang bận", badge: "badge-amber-soft" },
+  off_duty: { label: "Nghỉ ca", badge: "badge-plain" },
+  suspended: { label: "Tạm đóng", badge: "badge-plain" },
 };
 
-type RoleFilter = "all" | "sale" | "inspector";
-type StatusFilter = "all" | HostAdminView["dutyStatus"] | "locked";
+const mm = (s: number) => `${Math.floor(s / 60)}′${String(s % 60).padStart(2, "0")}″`;
 
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(-2)
-    .map((w) => w[0]!.toUpperCase())
-    .join("");
-
-/** Trạng thái hiển thị: tài khoản bị khoá luôn ưu tiên hơn trạng thái trực. */
-const statusOf = (h: HostAdminView): StatusFilter => (h.isActive ? h.dutyStatus : "locked");
-
-export function DutyStatus({ host }: { host: HostAdminView }) {
-  if (!host.isActive) {
-    return (
-      <span className={styles.lockedBadge} title="Tài khoản bị khoá: không đăng nhập, không nhận ca">
-        <Lock size={11} /> Đã khoá
-      </span>
-    );
-  }
-  const d = DUTY_LABEL[host.dutyStatus];
-  return (
-    <span className={styles.dutyCell} title={d.hint}>
-      <span className={`${styles.dot} ${d.dot}`} />
-      {d.label}
-    </span>
-  );
-}
-
-export function AcceptTime({ seconds }: { seconds: number | null }) {
-  if (seconds === null) return <span className="muted">—</span>;
-  const slow = seconds > ACCEPT_SLA_SECONDS;
-  return (
-    <span className={`${slow ? styles.warnText : styles.okText} tnum`} title={slow ? "Vượt SLA 3 phút" : "Trong SLA 3 phút"}>
-      {slow ? <AlertTriangle size={14} aria-label="Vượt SLA" /> : <CheckCircle2 size={14} aria-label="Đạt SLA" />}
-      {mmss(seconds)}
-    </span>
-  );
-}
+type RoleFilter = "all" | "sale" | "inspector" | "both";
 
 export function AdminHosts() {
+  const state = useMock();
   const [q, setQ] = useState("");
-  const [debouncedQ, setDebouncedQ] = useState("");
+  const [status, setStatus] = useState<HostStatus | "all">("all");
   const [zone, setZone] = useState("all");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
-  const [status, setStatus] = useState<StatusFilter>("all");
-  const [creating, setCreating] = useState(false);
+  const [invite, setInvite] = useState(false);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(q), 300);
-    return () => clearTimeout(t);
-  }, [q]);
+  if (!state.ready) return <div className="skeleton" style={{ height: 360 }} />;
 
-  // Bộ đếm KPI/pill tính trên toàn bộ Host; bộ lọc tìm/phân khu/vai gửi backend.
-  const all = useHostList({});
-  const filters: HostFilters = {
-    q: debouncedQ,
-    role: roleFilter === "all" ? undefined : roleFilter,
-    zone: zone === "all" ? undefined : zone,
-  };
-  const list = useHostList(filters);
-  const zones = useHostZones();
-  const zoneOptions = zones.state.status === "ready" ? zones.state.data : [];
+  const list = HOSTS.filter((h) => {
+    const roles = hostRoles(state, h.id);
+    const zones = hostZones(state, h.id);
+    const hStatus = hostStatus(state, h.id);
+    const roleMatch =
+      roleFilter === "all" ||
+      (roleFilter === "both" && roles.includes("sale") && roles.includes("inspector")) ||
+      (roleFilter === "sale" && roles.includes("sale") && !roles.includes("inspector")) ||
+      (roleFilter === "inspector" && roles.includes("inspector") && !roles.includes("sale"));
 
-  const everyone = all.state.status === "ready" ? all.state.data : [];
-  const count = (s: StatusFilter) => everyone.filter((h) => statusOf(h) === s).length;
-  const sale = everyone.filter((h) => h.roles.includes("sale")).length;
-  const inspector = everyone.filter((h) => h.roles.includes("inspector")).length;
+    return (
+      (status === "all" || hStatus === status) &&
+      (zone === "all" || zones.includes(zone as never)) &&
+      roleMatch &&
+      (q === "" ||
+        h.name.toLowerCase().includes(q.toLowerCase()) ||
+        h.phone.replace(/\s/g, "").includes(q.replace(/\s/g, "")))
+    );
+  });
 
-  const matched = list.state.status === "ready" ? list.state.data : [];
-  const rows = status === "all" ? matched : matched.filter((h) => statusOf(h) === status);
-  const isFiltered = q !== "" || zone !== "all" || roleFilter !== "all" || status !== "all";
+  const totalCount = HOSTS.length;
+  const activeCount = HOSTS.filter((h) => hostStatus(state, h.id) === "active").length;
+  const busyCount = HOSTS.filter((h) => hostStatus(state, h.id) === "busy").length;
+  const offDutyCount = HOSTS.filter((h) => hostStatus(state, h.id) === "off_duty").length;
+  const suspendedCount = HOSTS.filter((h) => hostStatus(state, h.id) === "suspended").length;
+  const saleCount = HOSTS.filter((h) => hostRoles(state, h.id).includes("sale")).length;
+  const inspectorCount = HOSTS.filter((h) => hostRoles(state, h.id).includes("inspector")).length;
 
-  function resetFilters() {
+  const isFiltered = q !== "" || status !== "all" || zone !== "all" || roleFilter !== "all";
+
+  const handleResetFilters = () => {
     setQ("");
+    setStatus("all");
     setZone("all");
     setRoleFilter("all");
-    setStatus("all");
-  }
-
-  const pills: { key: StatusFilter; label: string; dot?: string; icon?: typeof Lock }[] = [
-    { key: "all", label: "Tất cả" },
-    { key: "ONLINE_AVAILABLE", label: "Đang trực", dot: styles.dotOn },
-    { key: "BUSY_VIEWING", label: "Đang dẫn khách", dot: styles.dotBusy },
-    { key: "OFF_DUTY", label: "Nghỉ ca", dot: styles.dotOff },
-    { key: "locked", label: "Đã khoá", icon: Lock },
-  ];
-
-  const columns: DataTableColumn<HostAdminView>[] = [
-    {
-      key: "host",
-      header: "Field Host",
-      render: (h) => (
-        <span className={styles.person}>
-          <span className={styles.avatar}>{initials(h.fullName ?? h.email ?? "?")}</span>
-          <span>
-            <b>{h.fullName ?? "(chưa có tên)"}</b>
-            <span className="muted xs" style={{ display: "block" }}>
-              {h.phone ? fmtPhone(h.phone) : h.email}
-            </span>
-          </span>
-        </span>
-      ),
-    },
-    { key: "zone", header: "Phân khu", render: (h) => h.assignedZone },
-    {
-      key: "roles",
-      header: "Vai",
-      render: (h) => (
-        <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
-          {h.roles.includes("sale") && <span className="badge badge-kelp">Sale</span>}
-          {h.roles.includes("inspector") && <span className="badge badge-plain">Thẩm định</span>}
-        </span>
-      ),
-    },
-    { key: "status", header: "Trạng thái", render: (h) => <DutyStatus host={h} /> },
-    { key: "viewings", header: "Ca đã dẫn", align: "right", render: (h) => h.stats.completedViewings },
-    { key: "deals", header: "Deal", align: "right", render: (h) => h.stats.deals },
-    { key: "accept", header: "Nhận ca TB", render: (h) => <AcceptTime seconds={h.stats.avgAcceptSeconds} /> },
-    {
-      key: "noshow",
-      header: "Bỏ hẹn",
-      align: "right",
-      render: (h) => (h.stats.noShowRate === null ? <span className="muted">—</span> : `${String(h.stats.noShowRate).replace(".", ",")}%`),
-    },
-    { key: "rating", header: "Đánh giá", align: "right", render: (h) => `${String(h.rating).replace(".", ",")}★` },
-    { key: "earn", header: "Thu nhập tuần", align: "right", render: (h) => <b>{vnd(h.stats.weekEarnings)}đ</b> },
-  ];
+  };
 
   return (
     <div className={styles.page}>
       <PageHeader
         title="Danh sách Field Host"
-        description="Mạng lưới Host đón khách tại sảnh và thẩm định căn ký gửi · thù lao biến phí theo hiệu quả, không lương cứng"
+        description="Mạng lưới Host đón tại sảnh & thẩm định căn hộ nội khu · Thù lao biến phí theo hiệu quả, 0đ lương cứng"
         actions={
-          <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-            <UserPlus size={17} /> Thêm Field Host
+          <button type="button" className="btn btn-primary" onClick={() => setInvite(true)}>
+            <UserPlus size={17} /> Mời Field Host
           </button>
         }
       />
 
-      <HostsSubnav />
-
-      <div className={styles.kpiStrip}>
-        <Kpi icon={Users} value={`${everyone.length} Field Host`} label={`${sale} Sale · ${inspector} Thẩm định`} />
-        <Kpi icon={Activity} value={`${count("ONLINE_AVAILABLE")} đang trực`} label="Sẵn sàng đón khách tại sảnh" />
-        <Kpi icon={Compass} value={`${count("BUSY_VIEWING")} đang dẫn khách`} label="Đang trong ca xem thực địa" />
-        <Kpi icon={Moon} value={`${count("OFF_DUTY")} nghỉ ca`} label={count("locked") > 0 ? `${count("locked")} tài khoản đã khoá` : "Không nhận ca mới"} />
+      {/* Chuyển đổi nhanh giữa Danh sách Host và Chính sách Biến phí */}
+      <div className={styles.adminSubNavStrip}>
+        <Link href="/admin/hosts" className={`${styles.adminSubNavLink} ${styles.adminSubNavLinkActive}`}>
+          <Users size={15} />
+          <span>Danh sách Field Host</span>
+          <span className={styles.subCountBadge}>{totalCount}</span>
+        </Link>
+        <Link href="/admin/commission" className={styles.adminSubNavLink}>
+          <SlidersHorizontal size={15} />
+          <span>Chính sách Biến phí & Thù lao</span>
+        </Link>
       </div>
 
-      <div className={styles.toolbar}>
-        <div className={styles.tools}>
-          <label className={styles.search}>
-            <Search size={16} />
-            <span className="sr-only">Tìm Host</span>
-            <input className="input" placeholder="Tìm theo tên, email hoặc số điện thoại" value={q} onChange={(e) => setQ(e.target.value)} />
-          </label>
-          <select className="select" value={zone} onChange={(e) => setZone(e.target.value)} aria-label="Lọc theo phân khu">
-            <option value="all">Mọi phân khu</option>
-            {zoneOptions.map((z) => (
-              <option key={z} value={z}>
-                {z}
-              </option>
-            ))}
-          </select>
-          <select className="select" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as RoleFilter)} aria-label="Lọc theo vai">
-            <option value="all">Mọi vai</option>
-            <option value="sale">Sale (dẫn khách)</option>
-            <option value="inspector">Kiêm Thẩm định (ký gửi)</option>
-          </select>
-        </div>
-        <div className={styles.quickRow}>
-          <div className={styles.pills} role="tablist" aria-label="Lọc nhanh trạng thái">
-            {pills.map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                role="tab"
-                aria-selected={status === p.key}
-                className={`${styles.pill} ${status === p.key ? styles.pillActive : ""}`}
-                onClick={() => setStatus(p.key)}
-              >
-                {p.dot && <span className={`${styles.dot} ${p.dot}`} />}
-                {p.icon && <p.icon size={12} />}
-                {p.label} ({p.key === "all" ? everyone.length : count(p.key)})
-              </button>
-            ))}
+      {/* 1. Dải KPI thể hiện trực quan sức khỏe đội ngũ thực địa */}
+      <div className={styles.kpiSummaryStrip}>
+        <div className={styles.kpiCard}>
+          <div className={styles.kpiIconWrap} style={{ background: "rgba(14, 82, 99, 0.08)", color: "#0e5263" }}>
+            <Users size={20} />
           </div>
-          <span className={styles.resultCount}>
-            Hiển thị <b>{rows.length}</b> / {everyone.length} Host
+          <div>
+            <div className={styles.kpiVal}>{totalCount} Field Host</div>
+            <div className={styles.kpiLabel}>{saleCount} Sale · {inspectorCount} Thẩm định</div>
+          </div>
+        </div>
+
+        <div className={styles.kpiCard}>
+          <div className={styles.kpiIconWrap} style={{ background: "rgba(16, 185, 129, 0.12)", color: "#10b981" }}>
+            <Activity size={20} />
+          </div>
+          <div>
+            <div className={styles.kpiVal} style={{ color: "#047857" }}>{activeCount} Đang trực</div>
+            <div className={styles.kpiLabel}>Sẵn sàng đón khách tại sảnh</div>
+          </div>
+        </div>
+
+        <div className={styles.kpiCard}>
+          <div className={styles.kpiIconWrap} style={{ background: "rgba(245, 158, 11, 0.12)", color: "#d97706" }}>
+            <Compass size={20} />
+          </div>
+          <div>
+            <div className={styles.kpiVal} style={{ color: "#b45309" }}>{busyCount} Đang bận</div>
+            <div className={styles.kpiLabel}>Đang dẫn xem thực địa</div>
+          </div>
+        </div>
+
+        <div className={styles.kpiCard}>
+          <div className={styles.kpiIconWrap} style={{ background: "rgba(148, 163, 184, 0.15)", color: "#64748b" }}>
+            <UserCheck size={20} />
+          </div>
+          <div>
+            <div className={styles.kpiVal} style={{ color: "#475569" }}>{offDutyCount} Nghỉ ca</div>
+            <div className={styles.kpiLabel}>Chưa nhận ca trực hôm nay</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Thanh tính năng & Bộ lọc chuyên nghiệp (Pro Filter Toolbar) */}
+      <div className={styles.filterToolbar}>
+        {/* Hàng trên: Ô tìm kiếm đa năng + Dropdowns phân loại */}
+        <div className={styles.filterMainRow}>
+          <div className={styles.searchBox}>
+            <Search size={17} className={styles.searchIcon} />
+            <input
+              type="text"
+              placeholder="Tìm theo tên hoặc số điện thoại..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              aria-label="Tìm theo tên hoặc số điện thoại"
+            />
+            {q && (
+              <button
+                type="button"
+                className={styles.clearSearchBtn}
+                onClick={() => setQ("")}
+                title="Xóa tìm kiếm"
+                aria-label="Xóa từ khóa tìm kiếm"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className={styles.filterControls}>
+            {/* Bộ lọc phân khu */}
+            <div className={styles.selectBox}>
+              <MapPin size={15} className={styles.selectIcon} />
+              <select
+                value={zone}
+                onChange={(e) => setZone(e.target.value)}
+                aria-label="Lọc theo phân khu"
+              >
+                <option value="all">Tất cả phân khu</option>
+                {ZONES.map((z) => (
+                  <option key={z.id} value={z.id}>
+                    {z.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={15} className={styles.selectChevron} />
+            </div>
+
+            {/* Bộ lọc vai trò */}
+            <div className={styles.selectBox}>
+              <Shield size={15} className={styles.selectIcon} />
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
+                aria-label="Lọc theo vai trò"
+              >
+                <option value="all">Tất cả vai trò</option>
+                <option value="sale">Vai trò Sale (Dẫn khách)</option>
+                <option value="inspector">Vai trò Thẩm định (Ký gửi)</option>
+                <option value="both">Đảm nhiệm cả hai vai</option>
+              </select>
+              <ChevronDown size={15} className={styles.selectChevron} />
+            </div>
+
+            {/* Bộ lọc trạng thái */}
+            <div className={styles.selectBox}>
+              <Activity size={15} className={styles.selectIcon} />
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as HostStatus | "all")}
+                aria-label="Lọc theo trạng thái"
+              >
+                <option value="all">Tất cả trạng thái</option>
+                <option value="active">Đang trực</option>
+                <option value="busy">Đang bận</option>
+                <option value="off_duty">Nghỉ ca</option>
+                <option value="suspended">Tạm đóng</option>
+              </select>
+              <ChevronDown size={15} className={styles.selectChevron} />
+            </div>
+          </div>
+        </div>
+
+        {/* Hàng dưới: Lọc nhanh 1-chạm (Segmented Pills) + Thống kê kết quả */}
+        <div className={styles.filterQuickRow}>
+          <div className={styles.segmentedPills} role="tablist" aria-label="Lọc nhanh trạng thái">
+            <button
+              type="button"
+              className={`${styles.pillBtn} ${status === "all" ? styles.pillBtnActive : ""}`}
+              onClick={() => setStatus("all")}
+            >
+              Tất cả ({totalCount})
+            </button>
+            <button
+              type="button"
+              className={`${styles.pillBtn} ${status === "active" ? styles.pillBtnActive : ""}`}
+              onClick={() => setStatus("active")}
+            >
+              <span className={`${styles.statusDot} ${styles.dotActive}`} />
+              Đang trực ({activeCount})
+            </button>
+            <button
+              type="button"
+              className={`${styles.pillBtn} ${status === "busy" ? styles.pillBtnActive : ""}`}
+              onClick={() => setStatus("busy")}
+            >
+              <span className={`${styles.statusDot} ${styles.dotBusy}`} />
+              Đang bận ({busyCount})
+            </button>
+            <button
+              type="button"
+              className={`${styles.pillBtn} ${status === "off_duty" ? styles.pillBtnActive : ""}`}
+              onClick={() => setStatus("off_duty")}
+            >
+              <span className={`${styles.statusDot} ${styles.dotOff}`} />
+              Nghỉ ca ({offDutyCount})
+            </button>
+            {suspendedCount > 0 && (
+              <button
+                type="button"
+                className={`${styles.pillBtn} ${status === "suspended" ? styles.pillBtnActive : ""}`}
+                onClick={() => setStatus("suspended")}
+                style={{ color: status === "suspended" ? "#991b1b" : "var(--danger)" }}
+              >
+                <Lock size={12} />
+                Tạm đóng ({suspendedCount})
+              </button>
+            )}
+          </div>
+
+          <div className={styles.filterSummary}>
+            <span className={styles.resultsCount}>
+              Hiển thị <strong>{list.length}</strong> / {totalCount} Field Host
+            </span>
             {isFiltered && (
-              <button type="button" className={styles.resetBtn} onClick={resetFilters}>
+              <button
+                type="button"
+                className={styles.resetBtn}
+                onClick={handleResetFilters}
+                title="Xóa tất cả bộ lọc"
+              >
                 <RotateCcw size={13} /> Đặt lại bộ lọc
               </button>
             )}
-          </span>
+          </div>
         </div>
       </div>
 
-      {list.state.status === "loading" && <div className="skeleton" style={{ height: 360 }} />}
-      {list.state.status === "error" && (
-        <div role="alert" className="card">
-          <p>{list.state.message}</p>
-          <button type="button" className="btn btn-quiet" onClick={list.reload}>
-            Thử lại
-          </button>
-        </div>
-      )}
-      {list.state.status === "ready" && (
-        <section className={`card ${styles.tableCard}`}>
-          <DataTable<HostAdminView>
-            columns={columns}
-            rows={rows}
-            rowHref={(h) => `/admin/hosts/${h.id}`}
-            empty={<span className="muted">Không có Host nào khớp bộ lọc.</span>}
-          />
-        </section>
-      )}
-      <p className="muted xs">
-        Nhận ca TB: thời gian từ lúc hệ thống mời đến lúc Host bấm nhận, mục tiêu ≤ 3 phút. Bỏ hẹn: tỷ lệ khách không đến trên các ca Host đã nhận. Bấm vào một hàng để mở hồ sơ Host.
-      </p>
+      <DataTable<FieldHost>
+        columns={
+          [
+            {
+              key: "host",
+              header: "Field Host",
+              render: (h) => (
+                <span className={styles.person}>
+                  <span className={styles.avatar}>{initials(h.name)}</span>
+                  <span>
+                    <b>{h.name}</b>
+                    <span className="muted xs">{fmtPhone(h.phone)}</span>
+                  </span>
+                </span>
+              ),
+            },
+            {
+              key: "zone",
+              header: "Phân khu",
+              render: (h) => hostZones(state, h.id).map((z) => zoneById(z).short).join(", "),
+            },
+            {
+              key: "roles",
+              header: "Vai",
+              render: (h) => {
+                const roles = hostRoles(state, h.id);
+                return (
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    {roles.includes("sale") && <span className="badge badge-kelp">Sale</span>}
+                    {roles.includes("inspector") && (
+                      <span className="badge badge-plain">Thẩm định</span>
+                    )}
+                  </div>
+                );
+              },
+            },
+            {
+              key: "status",
+              header: "Trạng thái",
+              render: (h) => {
+                const st = hostStatus(state, h.id);
+                if (st === "suspended") {
+                  return (
+                    <span
+                      className="badge"
+                      style={{
+                        background: "var(--danger-050)",
+                        color: "var(--danger)",
+                        border: "1px solid #fecaca",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <Lock size={11} /> Tạm đóng
+                    </span>
+                  );
+                }
+                return <span className={`badge ${STATUS[st].badge}`}>{STATUS[st].label}</span>;
+              },
+            },
+            {
+              key: "tickets",
+              header: "Ticket",
+              align: "right",
+              render: (h) => hostEarnings(state, h, state.fees).viewings,
+            },
+            {
+              key: "deals",
+              header: "Deal",
+              align: "right",
+              render: (h) => hostEarnings(state, h, state.fees).deals,
+            },
+            {
+              key: "accept",
+              header: "Nhận ca TB",
+              render: (h) => {
+                const slow = h.avgAcceptSec > 180;
+                return (
+                  <span className={`${slow ? styles.warnText : styles.okText} tnum`}>
+                    {slow ? (
+                      <AlertTriangle size={14} aria-label="Vượt SLA" />
+                    ) : (
+                      <CheckCircle2 size={14} aria-label="Đạt SLA" />
+                    )}
+                    {mm(h.avgAcceptSec)}
+                  </span>
+                );
+              },
+            },
+            {
+              key: "noshow",
+              header: "Bỏ hẹn",
+              align: "right",
+              render: (h) => `${Math.round(h.noShowRate * 100)}%`,
+            },
+            {
+              key: "rating",
+              header: "Đánh giá",
+              align: "right",
+              render: (h) => `${String(h.rating).replace(".", ",")}★`,
+            },
+            {
+              key: "earn",
+              header: "Thu nhập tuần",
+              align: "right",
+              render: (h) => <b>{vnd(hostEarnings(state, h, state.fees).total)}đ</b>,
+            },
+            {
+              key: "actions",
+              header: "Thao tác",
+              render: (h) => {
+                const suspended = isHostSuspended(state, h.id);
+                return (
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${suspended ? "btn-primary" : "btn-quiet"}`}
+                    style={
+                      suspended
+                        ? { padding: "3px 8px", fontSize: 12 }
+                        : { padding: "3px 8px", fontSize: 12, color: "var(--danger)", border: "1px solid #fecaca" }
+                    }
+                    title={suspended ? "Mở lại tài khoản Field Host" : "Tạm đóng tài khoản Field Host"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      const res = setHostSuspended(h.id, !suspended, "Admin");
+                      if (res.ok) {
+                        toast(
+                          !suspended
+                            ? `Đã tạm đóng tài khoản ${h.name}. Toàn bộ quyền đã thu hồi và ngừng đổ căn.`
+                            : `Đã mở lại tài khoản ${h.name}. Quyền hạn và điều phối đã khôi phục.`,
+                          !suspended ? "info" : "success"
+                        );
+                      }
+                    }}
+                  >
+                    {suspended ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <Unlock size={11} /> Mở lại
+                      </span>
+                    ) : (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <Lock size={11} /> Tạm đóng
+                      </span>
+                    )}
+                  </button>
+                );
+              },
+            },
+          ] satisfies DataTableColumn<FieldHost>[]
+        }
+        rows={list}
+        rowHref={(h) => `/admin/hosts/${h.id}`}
+        empty={<span className="muted">Không có Host nào khớp bộ lọc.</span>}
+      />
 
-      <CreateHostModal open={creating} zones={zoneOptions} onClose={() => setCreating(false)} />
+      <InviteModal open={invite} onClose={() => setInvite(false)} />
     </div>
   );
 }
 
-function Kpi({ icon: Icon, value, label }: { icon: typeof Users; value: string; label: string }) {
-  return (
-    <div className={styles.kpiCard}>
-      <div className={styles.kpiIcon}>
-        <Icon size={20} />
-      </div>
-      <div>
-        <div className={styles.kpiVal}>{value}</div>
-        <div className={styles.kpiLabel}>{label}</div>
-      </div>
-    </div>
-  );
-}
-
-function CreateHostModal({ open, zones, onClose }: { open: boolean; zones: string[]; onClose: () => void }) {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [zone, setZone] = useState("");
-  const [roleChoice, setRoleChoice] = useState<HostRoleChoice>("sale");
-  const [password, setPassword] = useState("");
+function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [zone, setZone] = useState<string>(ZONES[0].id);
+  const [roles, setRoles] = useState<HostRole[]>(["sale"]);
   const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
 
-  const chosenZone = zone || zones[0] || "";
-  async function submit() {
-    if (!/^\S+@\S+\.\S+$/.test(email.trim()) || fullName.trim().length < 2) {
-      return setErr("Nhập email và họ tên hợp lệ.");
-    }
-    if (!chosenZone) return setErr("Chọn phân khu phụ trách.");
-    if (password && password.length < 8) return setErr("Mật khẩu tối thiểu 8 ký tự (hoặc để trống).");
-    setBusy(true);
-    setErr("");
-    const res = await adminHostsApi.create({
-      email: email.trim(),
-      fullName: fullName.trim(),
-      assignedZone: chosenZone,
-      roles: rolesOfChoice(roleChoice),
-      ...(password ? { password } : {}),
-    });
-    setBusy(false);
-    if (!res.ok) return setErr(hostErrorText(res));
-    toast(`Đã thêm Field Host ${res.data.fullName ?? res.data.email}`, "success");
-    invalidateHosts();
-    setEmail("");
-    setFullName("");
-    setPassword("");
-    setRoleChoice("sale");
-    onClose();
-    router.push(`/admin/hosts/${res.data.id}`);
-  }
+  const toggleRole = (r: HostRole) => {
+    setRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
+  };
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       variant="sheet"
-      title="Thêm Field Host"
-      description="Admin tạo tài khoản. Host đăng nhập bằng email này (Google hoặc mật khẩu) và tự xác thực số điện thoại trong hồ sơ."
+      title="Mời Field Host mới"
+      description="Host nhận lời mời qua Zalo, đăng nhập và kích hoạt tài khoản theo vai được gán."
       footer={
-        <button type="button" className="btn btn-primary btn-block" disabled={busy} onClick={submit}>
-          Thêm Host
+        <button
+          type="button"
+          className="btn btn-primary btn-block"
+          onClick={() => {
+            if (name.trim().length < 2 || !isValidVnPhone(phone)) {
+              setErr("Nhập họ tên và số điện thoại hợp lệ.");
+              return;
+            }
+            if (roles.length === 0) {
+              setErr("Chọn ít nhất một vai cho Field Host.");
+              return;
+            }
+            toast(
+              `Đã gửi lời mời vai ${roles.map((r) => (r === "sale" ? "Sale" : "Thẩm định")).join(" + ")} qua Zalo tới ${name.trim()}`,
+              "success",
+            );
+            setName("");
+            setPhone("");
+            setRoles(["sale"]);
+            setErr("");
+            onClose();
+          }}
+        >
+          Gửi lời mời
         </button>
       }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <label className="field">
-          <span className="label">Email đăng nhập</span>
-          <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <span className="label">Họ và tên</span>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
-          <span className="label">Họ và tên</span>
-          <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <span className="label">Số điện thoại Zalo</span>
+          <input
+            className="input"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
         </label>
         <label className="field">
           <span className="label">Phân khu phụ trách</span>
-          <select className="select" value={chosenZone} onChange={(e) => setZone(e.target.value)}>
-            {zones.map((z) => (
-              <option key={z} value={z}>
-                {z}
+          <select className="select" value={zone} onChange={(e) => setZone(e.target.value)}>
+            {ZONES.map((z) => (
+              <option key={z.id} value={z.id}>
+                {z.name}
               </option>
             ))}
           </select>
@@ -347,20 +545,27 @@ function CreateHostModal({ open, zones, onClose }: { open: boolean; zones: strin
 
         <div className="field">
           <span className="label">Vai đảm nhiệm</span>
-          <HostRoleRadios name="create-host-role" value={roleChoice} onChange={setRoleChoice} />
+          <div style={{ display: "flex", gap: 16, marginTop: 4 }}>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={roles.includes("sale")}
+                onChange={() => toggleRole("sale")}
+              />
+              <span>Sale (Dẫn khách xem phòng)</span>
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={roles.includes("inspector")}
+                onChange={() => toggleRole("inspector")}
+              />
+              <span>Thẩm định (Kiểm tra 32 hạng mục)</span>
+            </label>
+          </div>
         </div>
 
-        <label className="field">
-          <span className="label">Mật khẩu ban đầu (tuỳ chọn)</span>
-          <input className="input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <span className="muted xs">Để trống nếu Host chỉ đăng nhập bằng Google.</span>
-        </label>
-
-        {err && (
-          <p className="field-error" role="alert">
-            {err}
-          </p>
-        )}
+        {err && <p className="field-error">{err}</p>}
       </div>
     </Modal>
   );

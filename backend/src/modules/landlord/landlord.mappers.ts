@@ -1,5 +1,4 @@
 import { DoorLockType, LayoutType, MandateStatus, UnitStatus } from '@prisma/client';
-import { INSPECTION_CATALOG } from '../inspection/inspection.catalog';
 
 /** Điều khoản thoát ủy quyền: báo trước 15 ngày (legal/01 Điều 8). */
 export const EXIT_NOTICE_DAYS = 15;
@@ -62,8 +61,7 @@ export function toUiMandateStatus(status: MandateStatus): UiMandateStatus {
 
 // ─── Hồ sơ ký gửi (lưu trong ExclusiveMandate.doorAccessConfig.consignment) ────────────────────
 
-/** Chuỗi hợp lệ: draft → awaiting_host → inspecting → approved | rejected | awaiting_landlord (đổi giá/cọc ⇒ chủ duyệt: accept ⇒ approved, decline ⇒ rejected — hồ sơ 18). */
-export type ConsignmentStage = 'draft' | 'awaiting_host' | 'inspecting' | 'awaiting_landlord' | 'approved' | 'rejected';
+export type ConsignmentStage = 'draft' | 'awaiting_host' | 'inspecting' | 'reviewing' | 'approved' | 'rejected';
 
 export interface ConsignmentForm {
   building: string;
@@ -72,18 +70,19 @@ export interface ConsignmentForm {
   areaM2: number;
   askRent: number;
   suggestedDeposit: number;
-  leaseTerm: 'mid' | 'long' | 'fixed' | null;
+  leaseTerm: 'flexible' | 'mid' | 'long' | 'fixed' | null;
   furnished: boolean | null;
   locks: ('smart' | 'physical')[];
   note: string | null;
-  /** Mã hạng mục (catalog 32 món, Điều 5) chủ nhà khai là có sẵn; màn thẩm định tick sẵn các món này. Hồ sơ cũ không có khoá này. */
-  inventoryCodes?: string[];
+  bankName?: string | null;
+  bankAccount?: string | null;
+  bankAccountHolder?: string | null;
+  saveAsDefaultPayout?: boolean | null;
 }
 
 /**
- * Phần mở rộng của hồ sơ ký gửi mà schema chưa có cột riêng. Các bước sau (Inspector nhận/nộp phiếu thẩm định)
- * ghi `stage`, `hostAcceptedAt`, `inspection`, `report`, `decidedAt`, `decidedBy`, `decisionNote` vào cùng khóa này.
- * Mọi lần ghi phải đi qua `ConsignmentMetaStore.mutate()` (khóa dòng) — không ghi đọc-sửa-ghi trần.
+ * Phần mở rộng của hồ sơ ký gửi mà schema chưa có cột riêng. Các bước sau (Host nhận/nộp báo cáo, Admin duyệt)
+ * ghi `stage`, `hostAcceptedAt`, `report`, `decidedAt`, `decidedBy`, `decisionNote` vào cùng khóa này.
  * TUYỆT ĐỐI không lưu mã cửa ở đây — mã cửa nằm trong DoorAccessKey.vaultSecretRef (đã mã hóa).
  */
 /** Ảnh tham khảo chủ nhà đính kèm hồ sơ. KHÔNG phải ảnh Verified: ảnh niêm yết chính thức do Host chụp khi thẩm định. */
@@ -101,127 +100,18 @@ export const MAX_PHOTOS = 8;
 /** Trần dung lượng MỖI ảnh lưu trên Storage (bản free của Supabase có hạn mức lưu trữ nhỏ). Web nén ảnh xuống dưới mức này trước khi gửi. */
 export const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
-/** Ô ảnh: `listing` = ảnh niêm yết; `1`..`32` = hạng mục Điều 5; `X1`..`X10` = hạng mục phát sinh. */
-export type PhotoSlot = 'listing' | `${number}` | `X${number}`;
-export type ListingRoom = 'living_room' | 'bedroom' | 'kitchen' | 'bathroom' | 'balcony' | 'view' | 'other';
-
-/** Ảnh do Inspector chụp lúc thẩm định. `uploadedAt` là giờ MÁY CHỦ — mốc timestamp chính thức; các số đo do máy Host tính chỉ để tham khảo. */
-export interface InspectionPhoto {
-  id: string;
-  /** `inspections/<mandateId>/<id>.<ext>` — chỉ backend dùng. */
-  path: string;
-  slot: PhotoSlot;
-  /** Chỉ khi slot = 'listing'. */
-  room?: ListingRoom;
-  mime: string;
-  size: number;
-  width: number;
-  height: number;
-  /** Phương sai Laplacian do máy Host tính (tham khảo). */
-  sharpness: number | null;
-  /** Độ sáng trung bình 0..255 (tham khảo). */
-  brightness: number | null;
-  takenAt: string | null;
-  uploadedAt: string;
-  hostId: string;
-}
-
-export interface InspectionMeta {
-  photos: InspectionPhoto[];
-  doorRevealedAt?: string[];
-}
-
-/** Trách nhiệm hạng mục theo catalog Điều 5: lỗi do dùng, hoặc hao mòn/lỗi dùng. (01-CONTRACTS ghi `wear|misuse` nhưng catalog thật dùng `wear_or_misuse` — theo catalog, xem report R02.) */
-export type Liability = 'misuse' | 'wear_or_misuse';
-
-export interface InventoryLineReport {
-  code: string;
-  group: 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI' | 'VII' | 'VIII';
-  name: string;
-  present: boolean;
-  qty?: number;
-  /** Bội của 10, 0..100. */
-  condition?: number;
-  spec?: string;
-  note?: string;
-  liability: Liability;
-  compensation?: number;
-  photoIds: string[];
-}
-
-export type UnitLayoutKind = 'Studio' | '1PN' | '2PN' | '3PN';
-
-/** Thông tin thực tế do Inspector xác nhận (hồ sơ 18 01 §4.2). Chỉ bắt buộc khi `approve`. */
-export interface InspectionFacts {
-  areaM2: number;
-  layout: UnitLayoutKind;
-  bathrooms: number;
-  direction: string | null;
-  floor: number;
-}
-
-/** Giá/cọc bảo đảm Inspector đề xuất (VNĐ nguyên). `reason` bắt buộc khi khác giá/cọc chủ khai. */
-export interface InspectionPricing {
-  rent: number;
-  securityDeposit: number;
-  reason?: string;
-}
-
-/** Nội dung công khai Inspector có thể sửa so với bản chủ khai. */
-export interface InspectionListing {
-  highlights: string[];
-}
-
-/** Đề xuất giá/cọc chờ chủ nhà duyệt (stage `awaiting_landlord`). */
-export interface PricingProposal {
-  rent: number;
-  securityDeposit: number;
-  reason: string | null;
-  proposedAt: string;
-  original: { rent: number; securityDeposit: number };
-}
-
-export interface InspectionReport {
-  hostId: string;
-  submittedAt: string;
-  declared: { field: 'identity' | 'layout' | 'areaM2' | 'furnishing' | 'lock'; ok: boolean; actual?: string }[];
-  inventory: InventoryLineReport[];
-  functions: { ac: boolean; kitchen: boolean; waterHeater: boolean; drainage: boolean };
-  netAreaM2: number;
-  furnishing: 'full' | 'basic' | 'empty';
-  /** Thứ tự hiển thị trên tin. */
-  listingPhotoIds: string[];
-  recommendation: 'approve' | 'reject';
-  note?: string;
-  /** Hồ sơ 18: có khi Inspector nộp phiếu mới; báo cáo cũ (trước hồ sơ 18) và phiếu `reject` có thể không có. */
-  facts?: InspectionFacts;
-  pricing?: InspectionPricing;
-  listing?: InspectionListing;
-  /** Server tính, không nhận từ client. */
-  avgCondition: number;
-}
-
 export interface ConsignmentMeta {
   form: ConsignmentForm;
   photos?: ConsignmentPhoto[];
   stage?: ConsignmentStage;
   ownershipWarrantedAt?: string;
-  /** SĐT đã ký OTP, mã hoá AES (cùng `PhoneService`); KHÔNG gắn vào Profile. */
-  signedPhoneEnc?: string;
   inspectDueAt?: string;
-  /** FieldHost.id được GIAO (lúc ký) hoặc NHẬN (accept/claim). */
   hostId?: string;
-  /** Mốc giao cho `hostId` — tính tầng Open Pool. */
-  offeredAt?: string;
   hostAcceptedAt?: string;
-  inspection?: InspectionMeta;
-  report?: InspectionReport;
+  report?: unknown;
   decidedAt?: string;
   decidedBy?: string;
   decisionNote?: string;
-  /** Có khi stage = `awaiting_landlord`; giữ lại sau khi chủ quyết định (đối soát). */
-  pricingProposal?: PricingProposal;
-  pricingDecision?: { decision: 'accept' | 'decline'; decidedAt: string };
 }
 
 export function readConsignmentMeta(doorAccessConfig: unknown): ConsignmentMeta | null {
@@ -328,16 +218,3 @@ export function lastMonths(count: number, now: Date): MonthWindow[] {
     return { key, label: `T${start.getMonth() + 1}`, start, end };
   });
 }
-
-export interface InventoryCatalogEntry {
-  code: string;
-  group: string;
-  name: string;
-}
-
-/** Danh sách 32 hạng mục để chủ nhà chọn món có sẵn (chỉ mã/nhóm/tên; gợi ý chụp và trách nhiệm đền bù là việc của Host). */
-export const inventoryCatalogView = (): InventoryCatalogEntry[] =>
-  INSPECTION_CATALOG.map(({ code, group, name }) => ({ code, group, name }));
-
-const CATALOG_CODES = new Set(INSPECTION_CATALOG.map((i) => i.code));
-export const isCatalogCode = (code: string): boolean => CATALOG_CODES.has(code);

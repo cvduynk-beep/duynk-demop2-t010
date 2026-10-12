@@ -1,0 +1,731 @@
+/* ── VinStay AI — Luxe Glassmorphic Real Estate Explorer ───────────────────────── */
+
+.container {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  background: 
+    radial-gradient(circle at 12% 8%, rgba(246, 232, 214, 0.95) 0%, rgba(246, 232, 214, 0.3) 35%, transparent 65%),
+    radial-gradient(circle at 88% 45%, rgba(10, 61, 74, 0.8) 0%, rgba(10, 61, 74, 0.25) 45%, transparent 70%),
+    radial-gradient(circle at 50% 90%, rgba(14, 82, 99, 0.5) 0%, transparent 60%),
+    linear-gradient(145deg, #e7edf0 0%, #dce4e8 50%, #c8d6dc 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 16px 40px;
+  overflow-x: hidden;
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+/* Khung mô phỏng thiết bị di động sang trọng */
+.phoneFrame {
+  width: 100%;
+  max-width: 440px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 2;
+}
+
+/* Vệt sáng lấp lánh (Lens Flare accents) */
+.flareTL {
+  position: absolute;
+  top: 15px;
+  right: -25px;
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 70%);
+  filter: blur(12px);
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.flareBL {
+  position: absolute;
+  bottom: 120px;
+  left: -40px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 70%);
+  filter: blur(16px);
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* ── 1. Top App Bar ────────────────────────────────────────────── */
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.brandTitle {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: #0b2530;
+  font-family: var(--font-head, Georgia, serif);
+}
+
+.brandAITag {
+  color: #e0a03c;
+  font-style: italic;
+  font-family: sans-serif;
+  font-weight: 800;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.iconBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #132a31;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(10, 61, 74, 0.08);
+}
+
+.iconBtn:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.notifDot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e63946;
+  border: 1.5px solid #fff;
+}
+
+/* ── 2. Floating Search Bar & Filter Pills ─────────────────────── */
+.searchWrapper {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 28px;
+  box-shadow: 0 16px 36px -8px rgba(10, 61, 74, 0.16);
+  padding: 12px 14px 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.searchMain {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.searchIcon {
+  color: #51656b;
+  flex-shrink: 0;
+}
+
+.searchInputWrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.searchInput {
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 600;
+  color: #132a31;
+  outline: none;
+  padding: 0;
+  width: 100%;
+}
+
+.searchInput::placeholder {
+  color: #3a5058;
+  font-weight: 600;
+}
+
+.searchSubtext {
+  font-size: 11.5px;
+  color: #7d8e93;
+  margin-top: 2px;
+}
+
+.searchCircleBtn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #0a3d4a;
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(10, 61, 74, 0.35);
+}
+
+.searchCircleBtn:hover {
+  background: #0e5263;
+  transform: scale(1.04);
+}
+
+/* Filter Pills */
+.filterPillsRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.filterPillsRow::-webkit-scrollbar {
+  display: none;
+}
+
+.filterPill {
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #132a31;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.filterPill:hover, .filterPillActive {
+  background: #0a3d4a;
+  color: #ffffff;
+  border-color: #0a3d4a;
+}
+
+/* ── 3. Interactive Ocean Park Map Section ─────────────────────── */
+.mapCard {
+  position: relative;
+  width: 100%;
+  height: 290px;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 16px 36px -8px rgba(10, 61, 74, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: #d8e5e8;
+  transition: height 0.35s ease;
+}
+
+.mapCardExpanded {
+  height: 380px;
+}
+
+.mapCanvas {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+
+/* Map Controls (Zoom, Compass, Locate) */
+.mapControls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 25;
+}
+
+.mapControlBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0a3d4a;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.mapControlBtn:hover {
+  background: #ffffff;
+  transform: scale(1.08);
+}
+
+/* Ghim giá trên bản đồ (Price Pins) có Radar Pulse Ring */
+.mapPin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 10;
+}
+
+.mapPin:hover, .mapPinActive {
+  transform: translate(-50%, -115%) scale(1.18);
+  z-index: 25;
+}
+
+.pinRadarRing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: pulseRadar 2s infinite ease-out;
+}
+
+@keyframes pulseRadar {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0.85;
+    box-shadow: 0 0 0 0 rgba(10, 61, 74, 0.45);
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 1;
+    box-shadow: 0 0 0 10px rgba(10, 61, 74, 0);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+    box-shadow: 0 0 0 0 rgba(10, 61, 74, 0);
+  }
+}
+
+.pinBadge {
+  position: relative;
+  background: #0a3d4a;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 14px;
+  box-shadow: 0 6px 16px rgba(10, 61, 74, 0.35);
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pinBadgeDeal {
+  background: #e0a03c;
+  color: #0b2530;
+}
+
+.pinPointer {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #0a3d4a;
+  margin-top: -1px;
+}
+
+.pinPointerDeal {
+  border-top-color: #e0a03c;
+}
+
+/* Tooltip trên pin khi active */
+.pinTooltip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  background: rgba(11, 37, 48, 0.95);
+  color: #ffffff;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mapOverlayBadge {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  padding: 5px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0a3d4a;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* ── 4. Interactive Bottom Sheet & Stacked Cards ──────────────── */
+.bottomSheet {
+  position: relative;
+  width: 100%;
+  margin-top: -40px; /* Đè lơ lửng lên bản đồ */
+  z-index: 30;
+  transition: transform 0.35s cubic-bezier(0.18, 0.89, 0.32, 1.15);
+  will-change: transform;
+}
+
+.bottomSheetHeader {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-bottom: none;
+  border-radius: 26px 26px 0 0;
+  padding: 10px 16px 8px;
+  box-shadow: 0 -8px 24px -4px rgba(10, 61, 74, 0.12);
+  cursor: grab;
+  user-select: none;
+}
+
+.bottomSheetHeader:active {
+  cursor: grabbing;
+}
+
+.dragHandleBar {
+  width: 42px;
+  height: 5px;
+  background: rgba(19, 42, 49, 0.25);
+  border-radius: 4px;
+  margin: 0 auto 8px;
+  transition: background 0.2s ease;
+}
+
+.bottomSheetHeader:hover .dragHandleBar {
+  background: #0a3d4a;
+}
+
+.sheetSummaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #51656b;
+  font-weight: 600;
+}
+
+.sheetSummaryCount {
+  color: #0b2530;
+  font-weight: 700;
+}
+
+.sheetModeToggle {
+  background: rgba(10, 61, 74, 0.08);
+  border: none;
+  border-radius: 14px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0a3d4a;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s ease;
+}
+
+.sheetModeToggle:hover {
+  background: rgba(10, 61, 74, 0.15);
+}
+
+.cardsList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: transparent;
+}
+
+.glassCard {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  box-shadow: 0 16px 36px -10px rgba(10, 61, 74, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.4);
+  padding: 12px;
+  display: flex;
+  gap: 14px;
+  position: relative;
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+
+.glassCard:hover, .glassCardActive {
+  background: rgba(255, 255, 255, 0.92);
+  transform: translateY(-2px);
+  box-shadow: 0 20px 42px -8px rgba(10, 61, 74, 0.24);
+  border-color: #ffffff;
+}
+
+/* Cột trái: Ảnh căn hộ */
+.photoWrap {
+  position: relative;
+  width: 125px;
+  height: 125px;
+  border-radius: 18px;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.cardPhoto {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.glassCard:hover .cardPhoto {
+  transform: scale(1.05);
+}
+
+.rankBadge {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  color: #0b2530;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.dealTag {
+  position: absolute;
+  bottom: 7px;
+  left: 7px;
+  background: rgba(224, 160, 60, 0.95);
+  color: #0b2530;
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Cột phải: Thông tin căn */
+.cardContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cardTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0b2530;
+  margin: 0;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.favBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #7d8e93;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.favBtn:hover, .favBtnActive {
+  color: #e63946;
+}
+
+.priceLocRow {
+  margin-top: 3px;
+}
+
+.priceMain {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #0a3d4a;
+}
+
+.locText {
+  font-size: 11.5px;
+  color: #51656b;
+  margin-left: 6px;
+}
+
+.specsRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7d8e93;
+  margin: 6px 0 8px;
+}
+
+.specItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Hàng chân thẻ (Host avatar + Nút Xem) */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.hostWrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hostAvatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #0a3d4a;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.hostLabel {
+  font-size: 10.5px;
+  color: #51656b;
+  line-height: 1.1;
+}
+
+.hostRole {
+  display: block;
+  font-weight: 700;
+  color: #0b2530;
+}
+
+.footerActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewBtn {
+  background: #0a3d4a;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 18px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(10, 61, 74, 0.25);
+}
+
+.viewBtn:hover {
+  background: #0e5263;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0 0 calc(72px + env(safe-area-inset-bottom, 16px)) 0;
+    min-height: 100dvh;
+  }
+
+  .phoneFrame {
+    max-width: 100%;
+    padding: 10px 12px 0;
+    gap: 12px;
+  }
+
+  .mapCard {
+    height: 310px;
+    border-radius: 22px;
+  }
+
+  .bottomSheet {
+    margin-top: -24px;
+  }
+}
+

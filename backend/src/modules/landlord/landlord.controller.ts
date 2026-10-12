@@ -14,20 +14,17 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { RequireVerification } from '../../common/decorators/require-verification.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { LandlordConsignmentService } from './landlord-consignment.service';
 import { LandlordFinanceService } from './landlord-finance.service';
 import { LandlordMandateService } from './landlord-mandate.service';
-import { LandlordPricingService } from './landlord-pricing.service';
 import { LandlordPhotoService, UploadedImage } from './landlord-photo.service';
-import { MAX_PHOTOS, MAX_PHOTO_BYTES, inventoryCatalogView } from './landlord.mappers';
+import { MAX_PHOTOS, MAX_PHOTO_BYTES } from './landlord.mappers';
 import { LandlordUnitsService } from './landlord-units.service';
 import { LandlordService } from './landlord.service';
 import {
   CancelExitMandateDto,
   CreateConsignmentDto,
-  PricingDecisionDto,
   RequestExitMandateDto,
   SendConsignmentOtpDto,
   SignConsignmentDto,
@@ -49,19 +46,12 @@ export class LandlordController {
     private readonly finance: LandlordFinanceService,
     private readonly mandates: LandlordMandateService,
     private readonly photos: LandlordPhotoService,
-    private readonly pricing: LandlordPricingService,
   ) {}
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Tổng quan chủ nhà (bản tối thiểu — UI dashboard làm sau)' })
   getDashboard(@CurrentUser('id') landlordId: string) {
     return this.dashboard.getLandlordDashboard(landlordId);
-  }
-
-  @Get('inventory-catalog')
-  @ApiOperation({ summary: '32 hạng mục trang thiết bị (Điều 5) để chủ nhà chọn món có sẵn khi ký gửi' })
-  getInventoryCatalog() {
-    return inventoryCatalogView();
   }
 
   @Get('units')
@@ -134,7 +124,6 @@ export class LandlordController {
   }
 
   @Post('consignments/:id/send-otp')
-  @RequireVerification('phone')
   @HttpCode(200)
   @ApiOperation({ summary: 'Gửi OTP Zalo để ký ủy quyền (tới SĐT đã lưu; chưa có SĐT thì gửi tới số truyền lên)' })
   sendSignOtp(
@@ -146,7 +135,6 @@ export class LandlordController {
   }
 
   @Post('consignments/:id/sign')
-  @RequireVerification('phone')
   @HttpCode(200)
   @ApiOperation({ summary: 'Ký ủy quyền độc quyền bằng OTP → giao Field Host phân khu thẩm định (SLA 48h)' })
   signConsignment(
@@ -155,20 +143,6 @@ export class LandlordController {
     @Body() dto: SignConsignmentDto,
   ) {
     return this.consignments.sign(landlordId, id, dto);
-  }
-
-  @Post('consignments/:id/pricing-decision')
-  @HttpCode(200)
-  @ApiOperation({
-    summary: 'Chấp nhận / từ chối giá + cọc bảo đảm do Inspector đề xuất',
-    description: 'accept ⇒ niêm yết với giá đề xuất; decline ⇒ đóng hồ sơ (không niêm yết). Chỉ khi hồ sơ ở trạng thái awaiting_landlord, nếu không 409 PRICING_NOT_PENDING.',
-  })
-  decidePricing(
-    @CurrentUser('id') landlordId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: PricingDecisionDto,
-  ) {
-    return this.pricing.decide(landlordId, id, dto.decision);
   }
 
   @Get('finance')

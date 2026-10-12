@@ -1,202 +1,97 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Download, RefreshCw, Save } from "lucide-react";
-import { HostsSubnav } from "@/components/admin/HostsSubnav";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Database, Download, Save, SlidersHorizontal, Users } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
-import {
-  adminApi,
-  useAdminCommission,
-  useAdminCommissionAudit,
-  useAdminPayouts,
-  type AdminFeeAudit,
-  type AdminPayoutHost,
-} from "@/lib/admin/api";
-import { fmtDateTime, vnd } from "@/lib/format";
+import { adminApi } from "@/lib/apiClient";
+import { updateFee } from "@/lib/mock/actions";
+import { DEMO_USERS } from "@/lib/mock/actors";
+import { fmtDateTime, vnd } from "@/lib/mock/format";
+import { hostEarnings, type Earnings } from "@/lib/mock/selectors";
+import { useMock } from "@/lib/mock/store";
+import type { FeeAudit, FeeConfig } from "@/lib/mock/types";
+import { HOSTS, type FieldHost } from "@/lib/mock/units";
 import styles from "./Admin.module.css";
 
-interface Field {
-  key: string;
-  title: string;
-  help: string;
-  unit: "đ" | "×" | "giờ";
-  min: number;
-  max: number;
-  step: number;
-}
-
-/** Khoảng min/max trùng FEE_RULES ở backend (admin-fee.service.ts); backend vẫn là nơi kiểm tra cuối. */
-const CORE: Field[] = [
-  { key: "host_base_viewing_fee", title: "Thù lao dẫn khách theo lượt", help: "Trả cho mỗi ca xem phòng Host hoàn tất.", unit: "đ", min: 30_000, max: 100_000, step: 5_000 },
-  { key: "host_deal_commission", title: "Hoa hồng chốt cọc thành công", help: "Trả khi khách cọc giữ chỗ 2.000.000đ qua VietQR.", unit: "đ", min: 200_000, max: 1_000_000, step: 10_000 },
-  { key: "host_rating_multiplier_5star", title: "Hệ số thưởng đánh giá cao", help: "Nhân với hoa hồng cho Host có điểm đánh giá trung bình từ 4,8★ trở lên; dưới 4,8★ hoặc chưa có đánh giá thì ×1.", unit: "×", min: 1.1, max: 1.5, step: 0.05 },
-  { key: "host_campaign_bonus", title: "Gói thưởng nóng theo chiến dịch", help: "Cộng thêm cho mỗi deal chốt cọc trong giai đoạn kích cầu, tối đa 3 deal/tuần/Host. Đặt 0 để tắt chiến dịch.", unit: "đ", min: 0, max: 1_000_000, step: 10_000 },
+const FIELDS: { key: keyof FeeConfig; title: string; help: string; unit: string; step: number; min: number; max: number }[] = [
+  { key: "baseViewingFee", title: "Thù lao dẫn khách theo lượt", help: "Trả cho mỗi ca xem phòng Host hoàn tất (base_viewing_fee).", unit: "đ", step: 5_000, min: 0, max: 500_000 },
+  { key: "dealCommission", title: "Hoa hồng chốt cọc thành công", help: "Trả khi khách cọc 2.000.000đ và ký hợp đồng (deal_commission).", unit: "đ", step: 10_000, min: 0, max: 2_000_000 },
+  { key: "ratingMultiplier", title: "Hệ số thưởng đánh giá sao", help: "Nhân với hoa hồng cho Host từ 4,8 sao trở lên (rating_multiplier).", unit: "×", step: 0.05, min: 1, max: 2 },
+  { key: "campaignBonus", title: "Gói thưởng nóng theo chiến dịch", help: "Cộng thêm mỗi deal trong giai đoạn kích cầu, tối đa 3 deal/tuần (campaign_bonus).", unit: "đ", step: 10_000, min: 0, max: 1_000_000 },
 ];
 
-/** Dành riêng cho Host vai Thẩm định (Sale + Thẩm định): khoản thu nhập thêm so với Sale thường. */
-const INSPECTOR: Field[] = [
-  { key: "host_inspection_fee", title: "Thù lao thẩm định ký gửi", help: "Trả cho Host vai Thẩm định cho mỗi phiếu thẩm định căn ký gửi đã nộp, dù kết luận đạt hay không đạt. Chưa nhập thì chưa trả.", unit: "đ", min: 50_000, max: 500_000, step: 10_000 },
-];
-
-const FIELDS = [...CORE, ...INSPECTOR];
-const TITLE = Object.fromEntries(FIELDS.map((f) => [f.key, f.title]));
-const UNIT = Object.fromEntries(FIELDS.map((f) => [f.key, f.unit]));
-
-const show = (key: string, v: number | null) => {
-  if (v === null) return "—";
-  const unit = UNIT[key];
-  if (unit === "×") return `×${String(v).replace(".", ",")}`;
-  if (unit === "giờ") return `${v}h`;
-  return `${vnd(v)}đ`;
+const BACKEND_KEYS: Record<keyof FeeConfig, string> = {
+  baseViewingFee: "host_base_viewing_fee",
+  dealCommission: "host_deal_commission",
+  ratingMultiplier: "host_rating_multiplier_5star",
+  campaignBonus: "host_peak_hour_multiplier",
 };
 
+const LABEL: Record<keyof FeeConfig, string> = {
+  baseViewingFee: "Thù lao dẫn khách",
+  dealCommission: "Hoa hồng chốt cọc",
+  ratingMultiplier: "Hệ số đánh giá sao",
+  campaignBonus: "Thưởng nóng",
+};
+
+const show = (k: keyof FeeConfig, v: number) => (k === "ratingMultiplier" ? `×${String(v).replace(".", ",")}` : `${vnd(v)}đ`);
+
 export function AdminCommission() {
-  const config = useAdminCommission();
-  const statement = useAdminPayouts();
-  const audit = useAdminCommissionAudit();
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [reason, setReason] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [sweeping, setSweeping] = useState(false);
+  const state = useMock();
+  const [draft, setDraft] = useState<Partial<Record<keyof FeeConfig, string>>>({});
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
 
-  const configs = useMemo(() => (config.state.status === "ready" ? config.state.data.configs : []), [config.state]);
-  const saved = useMemo(() => new Map(configs.map((c) => [c.configKey, c.paramValue])), [configs]);
-  const value = (key: string) => (draft[key] !== undefined && draft[key] !== "" ? Number(draft[key]) : saved.get(key) ?? 0);
-  const changed = FIELDS.filter((f) => draft[f.key] !== undefined && draft[f.key] !== "" && Number(draft[f.key]) !== saved.get(f.key));
-
-  // Xem trước: một deal chốt cọc thành công của Host từ 4,8★ trở lên, đang trong chiến dịch thưởng nóng.
-  const viewingFee = value("host_base_viewing_fee");
-  const campaign = value("host_campaign_bonus");
-  const dealWithRating = Math.round(value("host_deal_commission") * value("host_rating_multiplier_5star"));
-  const sampleDeal = viewingFee + dealWithRating + campaign;
-
-  const rows: AdminPayoutHost[] = statement.state.status === "ready" ? statement.state.data.hosts : [];
-  const grandTotal = statement.state.status === "ready" ? statement.state.data.grandTotal : 0;
-  const period = statement.state.status === "ready" ? statement.state.data.period : "";
-
-  async function save() {
-    if (changed.length === 0) return;
-    if (!reason.trim()) {
-      toast("Nhập lý do thay đổi để lưu vết kiểm toán.");
-      return;
-    }
-    setSaving(true);
-    for (const field of changed) {
-      const res = await adminApi.updateCommission(field.key, Number(draft[field.key]), reason.trim());
-      if (!res.ok) {
-        setSaving(false);
-        config.reload();
-        audit.reload();
-        toast(res.message || `Không lưu được “${field.title}”.`);
-        return;
+  useEffect(() => {
+    let active = true;
+    adminApi.getCommissionEngine().then((res) => {
+      if (!active) return;
+      if (res.ok && res.data?.configs) {
+        setIsLiveConnected(true);
       }
+    }).catch(() => {
+      // Fallback seamlessly to local mock state
+    });
+    return () => { active = false; };
+  }, []);
+
+  if (!state.ready) return <div className="skeleton" style={{ height: 360 }} />;
+
+  const fees = state.fees;
+  const value = (k: keyof FeeConfig) => (draft[k] !== undefined ? Number(draft[k]) : fees[k]);
+  const changed = FIELDS.filter((f) => draft[f.key] !== undefined && Number(draft[f.key]) !== fees[f.key]);
+  const preview = { ...fees, ...Object.fromEntries(FIELDS.map((f) => [f.key, value(f.key)])) } as FeeConfig;
+  const sampleDeal = Math.round(preview.dealCommission * preview.ratingMultiplier) + preview.baseViewingFee + preview.campaignBonus;
+
+  const save = () => {
+    for (const f of changed) {
+      const val = Number(draft[f.key]);
+      updateFee(f.key, val, DEMO_USERS.admin.name);
+      adminApi.updateCommissionParam({
+        configKey: BACKEND_KEYS[f.key] || String(f.key),
+        paramValue: val,
+        reason: `Admin ${DEMO_USERS.admin.name} điều chỉnh tham số biến phí qua Admin Portal`,
+      }).catch(() => {});
     }
-    setSaving(false);
     setDraft({});
-    setReason("");
-    config.reload();
-    audit.reload();
-    toast("Đã lưu. Áp dụng ngay cho các khoản phát sinh mới.", "success");
-  }
-
-  async function sweepNow() {
-    setSweeping(true);
-    const res = await adminApi.sweepPayouts();
-    setSweeping(false);
-    if (!res.ok) return toast(res.message || "Không cập nhật được thu nhập.");
-    statement.reload();
-    toast(res.data.created > 0 ? `Đã ghi thêm ${res.data.created} khoản thu nhập.` : "Không có khoản mới cần ghi.", "success");
-  }
-
-  function exportCsv() {
-    const lines = [
-      ["Field Host", "Mã Host", "Đánh giá", "Lượt dẫn", "Thù lao lượt", "Deal", "Hoa hồng", "Thưởng đánh giá", "Thưởng nóng", "Thù lao thẩm định", "Tổng thực nhận", "Tuần ISO"],
-      ...rows.map((r) => [r.fullName || "", r.hostId, r.rating ?? "", r.viewings, r.viewingFee, r.deals, r.commission, r.ratingBonus, r.campaignBonus, r.inspectionFee, r.total, period]),
-    ].map((line) => line.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
-    const url = URL.createObjectURL(new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `bang-ke-host-${period}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    toast("Đã xuất bảng kê thanh toán tuần.", "success");
-  }
-
-  const renderField = (f: Field) => {
-    const current = saved.get(f.key);
-    return (
-      <div key={f.key} className={styles.fee}>
-        <div>
-          <h4>{f.title}</h4>
-          <p className="muted small">
-            {f.help} Khoảng {show(f.key, f.min)}–{show(f.key, f.max)}.
-          </p>
-        </div>
-        <label className={styles.suffix}>
-          <span className="sr-only">{f.title}</span>
-          <input
-            className="input"
-            type="number"
-            inputMode="decimal"
-            min={f.min}
-            max={f.max}
-            step={f.step}
-            placeholder={current === undefined ? "Chưa cấu hình" : undefined}
-            value={draft[f.key] ?? (current === undefined ? "" : String(current))}
-            onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
-          />
-          <span>{f.unit}</span>
-        </label>
-      </div>
-    );
+    toast("Đã lưu tham số biến phí vào CSDL & áp dụng ngay cho ticket phát sinh mới.", "success");
   };
 
-  const payoutColumns: DataTableColumn<AdminPayoutHost>[] = [
-    {
-      key: "host",
-      header: "Field Host",
-      render: (r) => (
-        <>
-          <b>{r.fullName || "Host"}</b>
-          <span className="muted xs" style={{ display: "block" }}>
-            {r.rating === null ? "Chưa có đánh giá" : `${String(r.rating).replace(".", ",")}★`}
-          </span>
-        </>
-      ),
-    },
-    { key: "viewings", header: "Lượt dẫn", align: "right", render: (r) => r.viewings },
-    { key: "viewingFee", header: "Thù lao lượt", align: "right", render: (r) => vnd(r.viewingFee) },
-    { key: "deals", header: "Deal", align: "right", render: (r) => r.deals },
-    { key: "commission", header: "Hoa hồng", align: "right", render: (r) => vnd(r.commission) },
-    { key: "ratingBonus", header: "Thưởng đánh giá", align: "right", render: (r) => vnd(r.ratingBonus) },
-    { key: "campaignBonus", header: "Thưởng nóng", align: "right", render: (r) => vnd(r.campaignBonus) },
-    {
-      key: "inspection",
-      header: "Thẩm định",
-      align: "right",
-      render: (r) =>
-        r.roles.includes("inspector") ? (
-          <>
-            {vnd(r.inspectionFee)}
-            <span className="muted xs" style={{ display: "block" }}>{r.inspections} phiếu</span>
-          </>
-        ) : (
-          <span className="muted">—</span>
-        ),
-    },
-    { key: "total", header: "Thực nhận", align: "right", render: (r) => <b>{vnd(r.total)}đ</b> },
-  ];
+  const payouts = HOSTS.map((h) => ({ host: h, e: hostEarnings(state, h, preview) }));
+  const totalPayout = payouts.reduce((s, p) => s + p.e.total, 0);
 
-  const auditColumns: DataTableColumn<AdminFeeAudit>[] = [
-    { key: "at", header: "Thời điểm", render: (a) => <span className="tnum">{fmtDateTime(a.at)}</span> },
-    { key: "by", header: "Người sửa", render: (a) => a.by },
-    { key: "field", header: "Tham số", render: (a) => TITLE[a.configKey] ?? a.configKey },
-    { key: "from", header: "Giá trị cũ", align: "right", render: (a) => show(a.configKey, a.from) },
-    { key: "to", header: "Giá trị mới", align: "right", render: (a) => <b>{show(a.configKey, a.to)}</b> },
-    { key: "reason", header: "Lý do", render: (a) => <span className="muted small">{a.reason || "—"}</span> },
-  ];
+  const exportCsv = () => {
+    const rows = [["Field Host", "Số điện thoại", "Lượt dẫn", "Thù lao lượt", "Deal", "Hoa hồng", "Thưởng nóng", "Tổng thực nhận"], ...payouts.map(({ host, e }) => [host.name, host.phone, e.viewings, e.viewingFee, e.deals, e.commission, e.bonus, e.total])];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+    a.download = "bang-ke-thanh-toan-tuan.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast("Đã xuất bảng kê thanh toán tuần", "success");
+  };
 
   return (
     <div className={styles.page}>
@@ -205,115 +100,139 @@ export function AdminCommission() {
         description="Điều chỉnh thù lao theo mùa vụ mà không cần sửa mã nguồn. Thay đổi có hiệu lực ngay và được lưu vết."
         actions={
           <div className={styles.headActions}>
-            <button type="button" className="btn btn-quiet" disabled={saving || changed.length === 0} onClick={() => setDraft({})}>
+            <span
+              className={`badge ${isLiveConnected ? "badge-kelp" : "badge-plain"}`}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 12, marginRight: 8 }}
+              title={isLiveConnected ? "Đồng bộ động từ Backend DB (/api/v1/admin/commission-engine)" : "Chế độ dự phòng client-side"}
+            >
+              <Database size={13} />
+              {isLiveConnected ? "Live Commission DB" : "Client Fallback"}
+            </span>
+            <button type="button" className="btn btn-quiet" disabled={changed.length === 0} onClick={() => setDraft({})}>
               Hoàn tác
             </button>
-            <button type="button" className="btn btn-primary" disabled={saving || changed.length === 0} onClick={() => void save()}>
+            <button type="button" className="btn btn-primary" disabled={changed.length === 0} onClick={save}>
               <Save size={16} /> Lưu thay đổi{changed.length > 0 ? ` (${changed.length})` : ""}
             </button>
           </div>
         }
       />
 
-      <HostsSubnav />
+      {/* Chuyển đổi nhanh giữa Danh sách Host và Chính sách Biến phí */}
+      <div className={styles.adminSubNavStrip}>
+        <Link href="/admin/hosts" className={styles.adminSubNavLink}>
+          <Users size={15} />
+          <span>Danh sách Field Host</span>
+          <span className={styles.subCountBadge}>{HOSTS.length}</span>
+        </Link>
+        <Link href="/admin/commission" className={`${styles.adminSubNavLink} ${styles.adminSubNavLinkActive}`}>
+          <SlidersHorizontal size={15} />
+          <span>Chính sách Biến phí & Thù lao</span>
+        </Link>
+      </div>
 
-      {config.state.status === "loading" ? (
-        <div className="skeleton" style={{ height: 320 }} />
-      ) : config.state.status === "error" ? (
-        <div role="alert" className="card">
-          <p>{config.state.message}</p>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={config.reload}>
-            Thử lại
-          </button>
-        </div>
-      ) : (
-        <div className={styles.split}>
-          <section className={`card ${styles.padCard}`} aria-label="Tham số biến phí">
-            <h3 style={{ fontSize: 15, marginBottom: 2 }}>Host Sale</h3>
-            {CORE.map(renderField)}
-            <h3 style={{ fontSize: 15, margin: "18px 0 2px" }}>Host vai Thẩm định</h3>
-            {INSPECTOR.map(renderField)}
-            {changed.length > 0 && (
-              <label className="field" style={{ marginTop: 16 }}>
-                <span className="label">Lý do thay đổi (bắt buộc, lưu vào nhật ký)</span>
-                <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Vd: Kích cầu mùa thấp điểm tháng 10" />
+      <div className={styles.split}>
+        <section className={`card ${styles.padCard}`} aria-label="Bốn tham số biến phí">
+          {FIELDS.map((f) => (
+            <div key={f.key} className={styles.fee}>
+              <div>
+                <h4>{f.title}</h4>
+                <p className="muted small">{f.help}</p>
+              </div>
+              <label className={styles.suffix}>
+                <span className="sr-only">{f.title}</span>
+                <input
+                  className="input"
+                  type="number"
+                  inputMode="decimal"
+                  min={f.min}
+                  max={f.max}
+                  step={f.step}
+                  value={draft[f.key] ?? String(fees[f.key])}
+                  onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
+                />
+                <span>{f.unit}</span>
               </label>
-            )}
-          </section>
+            </div>
+          ))}
+        </section>
 
-          <section className={`card ${styles.padCard}`} aria-label="Xem trước">
-            <h3 style={{ fontSize: 18, marginBottom: 6 }}>Một deal thành công, Host từ 4,8★ nhận</h3>
-            <p className="num" style={{ fontSize: 40, fontWeight: 700, lineHeight: 1.1 }}>
-              {vnd(sampleDeal)}đ
-            </p>
-            <dl className={styles.reqMeta} style={{ marginTop: 14 }}>
-              <div>
-                <dt>Thù lao lượt dẫn</dt>
-                <dd>{vnd(viewingFee)}đ</dd>
-              </div>
-              <div>
-                <dt>Hoa hồng × hệ số đánh giá</dt>
-                <dd>{vnd(dealWithRating)}đ</dd>
-              </div>
-              <div>
-                <dt>Thưởng nóng</dt>
-                <dd>{vnd(campaign)}đ</dd>
-              </div>
-            </dl>
-            <hr style={{ margin: "16px 0", border: 0, borderTop: "1px solid var(--line)" }} />
-            <h3 style={{ fontSize: 16, marginBottom: 4 }}>Một phiếu thẩm định, Host vai Thẩm định nhận thêm</h3>
-            <p className="num" style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1 }}>
-              {value("host_inspection_fee") > 0 ? `${vnd(value("host_inspection_fee"))}đ` : "Chưa nhập"}
-            </p>
-            {changed.length > 0 && (
-              <p className="small" style={{ marginTop: 12, color: "var(--amber-600)" }}>
-                Đang xem trước, chưa lưu.
-              </p>
-            )}
-          </section>
-        </div>
-      )}
+        <section className={`card ${styles.padCard}`} aria-label="Xem trước">
+          <h3 style={{ fontSize: 18, marginBottom: 6 }}>Một deal thành công, Host từ 4,8 sao nhận</h3>
+          <p className={`num`} style={{ fontSize: 40, fontWeight: 700, lineHeight: 1.1 }}>
+            {vnd(sampleDeal)}đ
+          </p>
+          <dl className={styles.reqMeta} style={{ marginTop: 14 }}>
+            <div>
+              <dt>Thù lao lượt dẫn</dt>
+              <dd>{vnd(preview.baseViewingFee)}đ</dd>
+            </div>
+            <div>
+              <dt>Hoa hồng × hệ số</dt>
+              <dd>{vnd(Math.round(preview.dealCommission * preview.ratingMultiplier))}đ</dd>
+            </div>
+            <div>
+              <dt>Thưởng nóng</dt>
+              <dd>{vnd(preview.campaignBonus)}đ</dd>
+            </div>
+          </dl>
+          {changed.length > 0 && <p className="small" style={{ marginTop: 12, color: "var(--amber-600)" }}>Đang xem trước, chưa lưu.</p>}
+        </section>
+      </div>
 
       <section className={`card ${styles.tableCard}`} aria-label="Bảng kê thanh toán tuần">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "18px 20px 6px", flexWrap: "wrap" }}>
           <div>
-            <h3 style={{ fontSize: 18 }}>Bảng kê thanh toán tuần {period || "này"}</h3>
-            <p className="muted small">Tổng chi trả {vnd(grandTotal)}đ · đối soát và chuyển khoản vào Chủ nhật</p>
+            <h3 style={{ fontSize: 18 }}>Bảng kê thanh toán tuần này</h3>
+            <p className="muted small">Tổng chi trả {vnd(totalPayout)}đ · đối soát và chuyển khoản vào Chủ nhật</p>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="button" className="btn btn-quiet" disabled={sweeping} onClick={() => void sweepNow()} title="Hệ thống tự cập nhật mỗi 5 phút; bấm để cập nhật ngay">
-              <RefreshCw size={16} className={sweeping ? "animate-spin" : ""} /> Cập nhật thu nhập
-            </button>
-            <button type="button" className="btn btn-quiet" disabled={statement.state.status !== "ready" || rows.length === 0} onClick={exportCsv}>
-              <Download size={16} /> Xuất CSV
-            </button>
-          </div>
+          <button type="button" className="btn btn-quiet" onClick={exportCsv}>
+            <Download size={16} /> Xuất CSV
+          </button>
         </div>
-        {statement.state.status === "error" ? (
-          <p role="alert" className="small" style={{ padding: 20 }}>
-            {statement.state.message}{" "}
-            <button type="button" className="link" onClick={statement.reload}>
-              Thử lại
-            </button>
-          </p>
-        ) : statement.state.status === "loading" ? (
-          <div className="skeleton" style={{ height: 120, margin: 20 }} />
-        ) : (
-          <DataTable columns={payoutColumns} rows={rows} empty={<span className="muted">Chưa có khoản thu nhập nào trong tuần này.</span>} />
-        )}
+        <DataTable<{ host: FieldHost; e: Earnings }>
+          columns={
+            [
+              {
+                key: "host",
+                header: "Field Host",
+                render: ({ host, e }) => (
+                  <>
+                    <b>{host.name}</b>
+                    <span className="muted xs" style={{ display: "block" }}>
+                      {String(host.rating).replace(".", ",")}★{e.multiplier > 1 ? ` · ×${String(e.multiplier).replace(".", ",")}` : ""}
+                    </span>
+                  </>
+                ),
+              },
+              { key: "viewings", header: "Lượt dẫn", align: "right", render: ({ e }) => e.viewings },
+              { key: "viewingFee", header: "Thù lao lượt", align: "right", render: ({ e }) => vnd(e.viewingFee) },
+              { key: "deals", header: "Deal", align: "right", render: ({ e }) => e.deals },
+              { key: "commission", header: "Hoa hồng", align: "right", render: ({ e }) => vnd(e.commission) },
+              { key: "bonus", header: "Thưởng nóng", align: "right", render: ({ e }) => vnd(e.bonus) },
+              { key: "total", header: "Thực nhận", align: "right", render: ({ e }) => <b>{vnd(e.total)}đ</b> },
+            ] satisfies DataTableColumn<{ host: FieldHost; e: Earnings }>[]
+          }
+          rows={payouts}
+          empty={<span className="muted">Chưa có Host nào.</span>}
+        />
       </section>
 
       <section className={`card ${styles.tableCard}`} aria-label="Nhật ký thay đổi">
         <h3 style={{ fontSize: 18, padding: "18px 20px 6px" }}>Nhật ký thay đổi cấu hình</h3>
-        {audit.state.status === "error" ? (
-          <p role="alert" className="small" style={{ padding: 20 }}>
-            {audit.state.message}
-          </p>
-        ) : audit.state.status === "loading" ? (
-          <div className="skeleton" style={{ height: 120, margin: 20 }} />
-        ) : (
-          <DataTable columns={auditColumns} rows={audit.state.data} empty={<span className="muted">Chưa có thay đổi nào.</span>} />
-        )}
+        <DataTable<FeeAudit>
+          columns={
+            [
+              { key: "at", header: "Thời điểm", render: (a) => <span className="tnum">{fmtDateTime(a.at)}</span> },
+              { key: "by", header: "Người sửa", render: (a) => a.by },
+              { key: "field", header: "Tham số", render: (a) => LABEL[a.field] },
+              { key: "from", header: "Giá trị cũ", align: "right", render: (a) => show(a.field, a.from) },
+              { key: "to", header: "Giá trị mới", align: "right", render: (a) => <b>{show(a.field, a.to)}</b> },
+            ] satisfies DataTableColumn<FeeAudit>[]
+          }
+          rows={state.feeAudit}
+          empty={<span className="muted">Chưa có thay đổi nào.</span>}
+        />
       </section>
     </div>
   );

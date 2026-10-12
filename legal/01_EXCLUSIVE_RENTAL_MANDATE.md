@@ -45,7 +45,13 @@ Bên A đồng ý ủy quyền độc quyền cho Bên B thực hiện việc qu
 3. **Diện tích sử dụng (thông thủy):** [...] m² • Thiết kế: [Căn hộ Studio / 1 Phòng ngủ + 1 / 2 Phòng ngủ 1 Vệ sinh / 2 Phòng ngủ 2 Vệ sinh / 3 Phòng ngủ].
 4. **Hiện trạng trang thiết bị:** Đầy đủ nội thất cao cấp *(Chi tiết theo Biên bản thẩm định và kiểm kê 10 hạng mục nội thất đính kèm hợp đồng này)*.
 5. **Giá chào thuê cơ bản kỳ vọng:** [...] VNĐ/tháng *(Bằng chữ: [...])*. Giá này chưa bao gồm phí quản lý tòa nhà, phí gửi phương tiện và tiền sử dụng điện, nước sinh hoạt do khách thuê trực tiếp chi trả theo thực tế sử dụng.
-6. **Mức tiền đặt cọc giữ chỗ & cọc bảo đảm nội thất:** Xác định linh hoạt theo thông số dữ liệu đầu vào của căn hộ (căn cứ theo giá thuê và giá trị gói trang thiết bị nội thất thực tế được hai bên thống nhất trên hệ thống).
+6. **Cơ chế Biên độ Giá Sàn Ủy Quyền & Chiết khấu Chốt Nhanh (Fast-Close Floor Price Corridor):**
+   * Trường hợp Bên A kích hoạt tùy chọn Ủy quyền Chốt Nhanh trên hệ thống VinStay AI, Bên A xác lập một mức **Giá sàn tối thiểu (Floor Price)**: [...] VNĐ/tháng *(không thấp hơn 3.000.000 VNĐ/tháng và không cao hơn Giá chào thuê cơ bản)*.
+   * Bên A ủy quyền trước cho Bên B (VinStay AI) toàn quyền tự động kích hoạt chính sách ưu đãi chiết khấu nằm trong biên độ từ Giá sàn đến Giá chào thuê nhằm chốt cọc nhanh khi khách thuê đáp ứng các điều kiện sau:
+     * (i) Khách thuê cam kết thanh toán trước từ 06 đến 12 tháng tiền thuê căn hộ;
+     * (ii) Khách thuê thực hiện chuyển tiền đặt cọc giữ chỗ 2.000.000 VNĐ qua VietQR động trong vòng 24 giờ kể từ thời điểm kết thúc ca xem phòng thực địa.
+   * **Bảo đảm trần sàn tối thiểu & Bảo mật thông tin:** Bên B cam kết tuyệt đối không bao giờ chốt giá hợp đồng thuê thấp hơn mức Giá sàn do Bên A đã cài đặt. Đồng thời, thông số Giá sàn được hệ thống mã hóa bảo mật 100%, không hiển thị công khai trên giao diện niêm yết tìm kiếm nhằm bảo vệ tối đa giá trị tài sản cho Bên A.
+7. **Mức tiền đặt cọc giữ chỗ & cọc bảo đảm nội thất:** Xác định linh hoạt theo thông số dữ liệu đầu vào của căn hộ (căn cứ theo giá thuê và giá trị gói trang thiết bị nội thất thực tế được hai bên thống nhất trên hệ thống).
 
 ---
 
@@ -54,6 +60,13 @@ Bên A đồng ý ủy quyền độc quyền cho Bên B thực hiện việc qu
 2. Căn hộ hoàn toàn không thuộc diện đang có khiếu nại, tranh chấp về quyền sở hữu hoặc quyền sử dụng; không bị cơ quan Nhà nước có thẩm quyền kê biên, phong tỏa để thi hành án hoặc để chấp hành quyết định hành chính; đủ điều kiện đưa vào kinh doanh cho thuê theo quy định của Luật Nhà ở 2023 và Luật Kinh doanh Bất động sản 2023.
 3. Trường hợp Căn hộ đang được thế chấp tại Ngân hàng hoặc tổ chức tín dụng, Bên A cam đoan việc cho thuê Căn hộ không vi phạm nghĩa vụ thế chấp và không làm ảnh hưởng đến quyền cư trú ổn định của khách thuê.
 4. Bên A chịu trách nhiệm hoàn toàn về các nghĩa vụ tài chính và thuế thu nhập cá nhân phát sinh từ hoạt động cho thuê căn hộ theo quy định của pháp luật.
+5. **Cam đoan về tính trung thực của thông tin chào thuê & Chế tài chống hành vi phá hoại hệ thống / khai khống giá (4-Tier Anti-Abuse & Data Guardrail):**
+   * Bên A cam đoan cung cấp thông tin chào thuê trung thực, có nhu cầu cho thuê thực tế và mức giá chào thuê nằm trong biên độ phù hợp với mặt bằng thị trường tại Vinhomes Ocean Park.
+   * Bên A hiểu và chấp thuận tuân thủ Khung trần giá tối đa theo layout căn hộ được thiết lập trên hệ thống VinStay AI (Studio: tối đa 18.000.000 VNĐ/tháng; 1PN: tối đa 25.000.000 VNĐ/tháng; 2PN: tối đa 35.000.000 VNĐ/tháng; 3PN: tối đa 50.000.000 VNĐ/tháng; Trần giá tuyệt đối toàn hệ thống: 80.000.000 VNĐ/tháng).
+   * Mọi hành vi cố tình nhập khống giá trị thuê phi thực tế (ví dụ chào thuê hàng trăm triệu đồng/tháng cho các layout thông thường), tạo hồ sơ rác nhằm mục đích phá hoại thuật toán định giá AI, gây nhiễu loạn thị trường hoặc chiếm dụng tài nguyên điều phối thực địa sẽ bị xử lý:
+     * (i) Hệ thống tự động từ chối tiếp nhận niêm yết và chặn phê duyệt hồ sơ;
+     * (ii) Khóa vĩnh viễn Số điện thoại / Căn cước công dân của Bên A trên toàn hệ thống VinStay AI và danh sách đen (Blacklist) liên sàn đối tác;
+     * (iii) Bên B có toàn quyền lập biên bản điện tử và chuyển giao chứng cứ cho cơ quan chức năng có thẩm quyền truy cứu trách nhiệm theo quy định pháp luật về an ninh mạng nếu có dấu hiệu tấn công quấy rối hoặc phá hoại dịch vụ có tổ chức.
 
 ---
 
@@ -61,6 +74,9 @@ Bên A đồng ý ủy quyền độc quyền cho Bên B thực hiện việc qu
 1. **Quyền quản lý và điều phối độc quyền:**
    * Bên A ủy quyền độc quyền cho Bên B toàn quyền niêm yết thông tin, sử dụng hệ thống tự động đối khớp nhu cầu khách thuê và điều phối đội ngũ nhân sự tiếp đón thường trú nội khu dẫn khách xem căn hộ.
    * Bên A cam kết trong suốt thời gian hợp đồng có hiệu lực sẽ không gửi căn hộ qua các đơn vị môi giới tự do ngoài sàn, nhằm tránh việc bị phân tán nguồn tin, gây nhiễu loạn giá và tình trạng đăng tin ảo dìm giá trị căn hộ trên thị trường.
+   * **1.1. Quyền tự động kích hoạt ưu đãi chốt cọc nhanh theo Biên độ Giá Sàn (Fast-Close Authorization):**
+     * Trường hợp Bên A kích hoạt tùy chọn Ủy quyền Chốt Nhanh tại Điều 1 Khoản 6, Bên B (và đội ngũ Field Host được ủy quyền) được toàn quyền chủ động áp dụng các chính sách chiết khấu kích cầu nằm trong biên độ từ Giá sàn đến Giá chào thuê nhằm chốt cọc khách ngay tại buổi xem phòng hoặc khi khách cam kết trả trước dài hạn (06 – 12 tháng) mà không cần phải gọi điện thoại xin phê duyệt từng lần của Bên A.
+     * Bên B cam kết chịu trách nhiệm bồi thường toàn bộ phần chênh lệch nếu vi phạm cam kết, chốt giá hợp đồng cho thuê thấp hơn mức Giá sàn do Bên A đã ấn định.
 2. **Chi phí kiểm định hiện trạng và chụp ảnh thực tế miễn phí (0 VNĐ):**
    * Bên B có trách nhiệm cử nhân sự chuyên trách đến khảo sát, chụp ảnh thực tế góc rộng, lập hồ sơ kiểm định 10 hạng mục nội thất trọng yếu và gắn dấu bản quyền kỹ thuật số kèm dấu thời gian xác thực mà không thu bất kỳ khoản phí nào của Bên A.
 3. **Cơ chế quản lý phương thức mở cửa an toàn (Chủ nhà không phải di chuyển):**
