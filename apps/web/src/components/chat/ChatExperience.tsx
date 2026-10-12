@@ -15,6 +15,7 @@ import type { CriteriaState } from "@/lib/mock/types";
 import { UNITS, type Unit } from "@/lib/mock/units";
 import { useUnits } from "@/lib/property/useUnits";
 import { useRole, useSession } from "@/lib/auth/client";
+import { clientRandomIndex, useClientValue } from "@/lib/useClientValue";
 import { ButlerMascot, VINNY_GREETINGS, type MascotMood } from "@/components/mascot/ButlerMascot";
 import { Composer } from "./Composer";
 import { InlineChatUnits } from "./InlineChatUnits";
@@ -63,6 +64,13 @@ const POSITION_SPEECHES: Record<MascotPosition, { speech: string; badge: string 
 };
 
 /** Trang chủ khách thuê: ban đầu là hero + khung chat; khi bắt đầu tìm căn, chat thu về cột trái và mở màn kết quả. */
+/** URL yêu cầu mở thẳng danh mục căn (`?view=all`, `?catalog=1`, `?tab=results`). */
+function urlWantsResults(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("view") === "all" || params.get("catalog") === "1" || params.get("tab") === "results";
+}
+
 export function ChatExperience({ below }: { below: ReactNode }) {
   const state = useMock();
   const role = useRole();
@@ -70,6 +78,13 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   const [thinking, setThinking] = useState<{ steps: string[] } | null>(null);
   const [freshId, setFreshId] = useState<string | null>(null);
   const [tab, setTab] = useState<"chat" | "results">("chat");
+  // `/?view=all` (hoặc `catalog=1`, `tab=results`) mở thẳng tab kết quả — đọc URL ở trình duyệt, áp một lần khi render.
+  const wantsResults = useClientValue(urlWantsResults, false);
+  const [appliedUrlTab, setAppliedUrlTab] = useState(false);
+  if (wantsResults && !appliedUrlTab) {
+    setAppliedUrlTab(true);
+    setTab("results");
+  }
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [mascotPos, setMascotPos] = useState<MascotPosition>("pos_top_center");
@@ -107,20 +122,24 @@ export function ChatExperience({ below }: { below: ReactNode }) {
     return () => clearInterval(timer);
   }, [isTyping, thinking]);
 
+  const isSidePos = (p: MascotPosition) => p === "pos_side_left" || p === "pos_side_right";
+
   // Khi đang gõ phím, đưa robot về phía trên để không che khuất nội dung
-  useEffect(() => {
-    if (isTyping && (mascotPos === "pos_side_left" || mascotPos === "pos_side_right")) {
+  const handleTyping = (typing: boolean) => {
+    setIsTyping(typing);
+    if (typing && isSidePos(mascotPos)) {
       setIsCruising(true);
       setMascotPos("pos_top_center");
       setTimeout(() => setIsCruising(false), 1400);
     }
-  }, [isTyping, mascotPos]);
+  };
 
   // Chuyển góc tuần tra khi người dùng chạm vào robot hoặc huy hiệu
   const cycleMascotPosition = () => {
     setMascotPos((prev) => {
       const nextIdx = (MASCOT_POSITIONS.indexOf(prev) + 1) % MASCOT_POSITIONS.length;
-      const nextPos = MASCOT_POSITIONS[nextIdx];
+      // Đang gõ phím thì không đưa robot sang hai bên (che nội dung), giữ ở phía trên.
+      const nextPos = isTyping && isSidePos(MASCOT_POSITIONS[nextIdx]) ? "pos_top_center" : MASCOT_POSITIONS[nextIdx];
       setIsCruising(true);
       setTimeout(() => setIsCruising(false), 1400);
       setMascotCustomSpeech(POSITION_SPEECHES[nextPos].speech);
@@ -133,12 +152,10 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   const locked = role === null && (state.guestSent || 0) >= GUEST_QUOTA;
   const { user } = useSession();
   const first = role === "tenant" ? (user?.fullName?.split(" ").slice(-1)[0] ?? null) : null;
-  const [greetingIdx, setGreetingIdx] = useState(0);
-
-  useEffect(() => {
-    // Chọn ngẫu nhiên 1 trong 3 câu chào ấn tượng của Vinny khi vào trang
-    setGreetingIdx(Math.floor(Math.random() * VINNY_GREETINGS.length));
-  }, []);
+  // Chọn ngẫu nhiên 1 trong các câu chào của Vinny khi vào trang (chỉ ở trình duyệt); bấm vào robot để xoay vòng.
+  const greetingStart = useClientValue(() => clientRandomIndex(VINNY_GREETINGS.length), 0);
+  const [greetingOffset, setGreetingOffset] = useState(0);
+  const greetingIdx = (greetingStart + greetingOffset) % VINNY_GREETINGS.length;
 
   const activeGreeting = VINNY_GREETINGS[greetingIdx];
   const greeting = first ? `Chào ${first}! ${activeGreeting}` : activeGreeting;
@@ -260,12 +277,8 @@ export function ChatExperience({ below }: { below: ReactNode }) {
     };
     window.addEventListener("vinstay:view-all-units", handleEvent);
 
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("view") === "all" || params.get("catalog") === "1" || params.get("tab") === "results") {
-        chatSetSearch({ layouts: [], zones: [], buildings: [], items: [], household: { ...DEFAULT_HOUSEHOLD } });
-        setTab("results");
-      }
+    if (urlWantsResults()) {
+      chatSetSearch({ layouts: [], zones: [], buildings: [], items: [], household: { ...DEFAULT_HOUSEHOLD } });
     }
 
     return () => {
@@ -355,7 +368,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
                     criteria={chat.criteria}
                     onCriteria={onCriteria}
                     onSend={onSend}
-                    onTyping={setIsTyping}
+                    onTyping={handleTyping}
                     busy={!!thinking}
                     locked={locked}
                     guestNotice={false}
@@ -453,7 +466,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
                 className={styles.railActionBtn}
                 onClick={() => {
                   chatReset();
-                  setGreetingIdx((prev) => (prev + 1) % VINNY_GREETINGS.length);
+                  setGreetingOffset((prev) => prev + 1);
                 }}
                 title="Bắt đầu cuộc trò chuyện mới"
               >
@@ -482,7 +495,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
             />
           </div>
           <div className={styles.railFoot}>
-            <Composer variant="rail" criteria={chat.criteria} onCriteria={onCriteria} onSend={onSend} onTyping={setIsTyping} busy={!!thinking} locked={locked} guestNotice={false} />
+            <Composer variant="rail" criteria={chat.criteria} onCriteria={onCriteria} onSend={onSend} onTyping={handleTyping} busy={!!thinking} locked={locked} guestNotice={false} />
           </div>
         </aside>
       )}

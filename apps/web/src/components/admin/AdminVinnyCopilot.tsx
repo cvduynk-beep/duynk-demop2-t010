@@ -29,6 +29,11 @@ import {
 } from "@/lib/mock/reports";
 import styles from "./AdminVinnyCopilot.module.css";
 
+/** Id tin nhắn (gọi trong handler gửi tin, không phải lúc render). */
+function messageId(prefix: "u" | "b"): string {
+  return `${prefix}-${Date.now()}`;
+}
+
 interface MessageAction {
   label: string;
   actionType: "copy" | "link";
@@ -350,7 +355,7 @@ export function AdminVinnyCopilot() {
     if (!q || isThinking) return;
 
     const userMsg: MessageItem = {
-      id: `u-${Date.now()}`,
+      id: messageId("u"),
       sender: "user",
       text: q,
       timestamp: "Vừa xong",
@@ -373,7 +378,7 @@ export function AdminVinnyCopilot() {
         const data = await res.json();
         if (data?.ok && data?.text) {
           const botMsg: MessageItem = {
-            id: `b-${Date.now()}`,
+            id: messageId("b"),
             sender: "bot",
             text: data.text,
             timestamp: "Vừa xong",
@@ -390,7 +395,7 @@ export function AdminVinnyCopilot() {
     // 2. Fallback xuống Semantic Reasoner Engine
     const reply = generateBotReply(q);
     const botMsg: MessageItem = {
-      id: `b-${Date.now()}`,
+      id: messageId("b"),
       sender: "bot",
       text: reply.text,
       timestamp: "Vừa xong",

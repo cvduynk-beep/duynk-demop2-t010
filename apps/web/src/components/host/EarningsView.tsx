@@ -10,6 +10,7 @@ import { Section } from "@/components/ui/Section";
 import { hostApi } from "@/lib/apiClient";
 import { DEMO_USERS } from "@/lib/mock/actors";
 import { fmtDate, fmtDateTime, vnd } from "@/lib/mock/format";
+import { useNow } from "@/lib/useNow";
 import { hostBookings, hostEarnings } from "@/lib/mock/selectors";
 import { useMock } from "@/lib/mock/store";
 import type { Booking } from "@/lib/mock/types";
@@ -38,6 +39,7 @@ interface HostLiveEarnings {
 export function EarningsView() {
   const state = useMock();
   const [liveData, setLiveData] = useState<HostLiveEarnings | null>(null);
+  const now = useNow(60_000);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
 
   useEffect(() => {
@@ -69,7 +71,7 @@ export function EarningsView() {
           amount: 2500000,
           period: "Tuần 39 / 2026",
           status: "PAID",
-          createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
+          createdAt: new Date(now - 86400000 * 7).toISOString(),
         },
       ];
 

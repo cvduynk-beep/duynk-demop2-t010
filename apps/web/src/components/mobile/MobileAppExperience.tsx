@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { clientRandomIndex, useClientValue } from "@/lib/useClientValue";
 import Link from "next/link";
 import {
   Bell,
@@ -41,11 +42,8 @@ export function MobileAppExperience({ initialTab = "explore" }: { initialTab?: M
   const { user } = useSession();
   const [thinking, setThinking] = useState<{ steps: string[] } | null>(null);
   const [freshId, setFreshId] = useState<string | null>(null);
-  const [greetingIdx, setGreetingIdx] = useState(0);
-
-  useEffect(() => {
-    setGreetingIdx(Math.floor(Math.random() * VINNY_GREETINGS.length));
-  }, []);
+  // Câu chào ngẫu nhiên cho lần tải trang (chỉ ở trình duyệt, không lệch markup khi hydrate).
+  const greetingIdx = useClientValue(() => clientRandomIndex(VINNY_GREETINGS.length), 0);
 
   const statusOf = (u: (typeof UNITS)[number]) => unitStatus(state, u);
   const openCount = UNITS.filter((u) => unitStatus(state, u) === "available").length;

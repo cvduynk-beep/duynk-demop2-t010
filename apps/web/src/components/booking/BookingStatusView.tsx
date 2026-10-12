@@ -124,10 +124,7 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
 
   // Tự động tải từ backend DB nếu mã tham chiếu chưa có trong mock memory
   useEffect(() => {
-    if (existingBooking) {
-      setLoadingDb(false);
-      return;
-    }
+    if (existingBooking) return; // đã có trong bộ nhớ: `loadingDb` bị bỏ qua khi render
     let unmounted = false;
     async function fetchBooking() {
       try {
@@ -190,7 +187,7 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
     });
   }, [kycBooking, state]);
 
-  if (!state.ready || !now || loadingDb) {
+  if (!state.ready || !now || (loadingDb && !existingBooking)) {
     return (
       <div className={`wrap ${styles.page}`}>
         <div className="skeleton" style={{ height: 220 }} />

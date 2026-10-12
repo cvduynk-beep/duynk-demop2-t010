@@ -310,25 +310,25 @@ export function InspectionForm({ id }: { id: string }) {
     locationTag?: string;
   } | null>(null);
 
-  // Đồng bộ thông tin khi nạp được căn hộ từ Database
-  useEffect(() => {
-    if (c) {
-      setNetAreaM2((prev) => (prev ? prev : String(c.areaM2)));
-      setFurnishing((prev) => (c.furnished ? prev : "empty"));
-      if (c.report?.inventory && c.report.inventory.length >= 32) {
-        setInventory(c.report.inventory.slice(0, 32));
-      } else {
-        const { codes } = resolveInventoryCodesFromLandlord(c.items, c.furnished, c.note);
-        setInventory((prev) =>
-          prev.map((line) => ({
-            ...line,
-            present: codes.has(line.code),
-            qty: 1,
-          }))
-        );
-      }
+  // Đồng bộ thông tin khi nạp được căn hộ từ Database (điều chỉnh state ngay lúc render khi `c` đổi, không qua effect)
+  const [syncedFrom, setSyncedFrom] = useState<typeof c>(undefined);
+  if (c && c !== syncedFrom) {
+    setSyncedFrom(c);
+    setNetAreaM2((prev) => (prev ? prev : String(c.areaM2)));
+    setFurnishing((prev) => (c.furnished ? prev : "empty"));
+    if (c.report?.inventory && c.report.inventory.length >= 32) {
+      setInventory(c.report.inventory.slice(0, 32));
+    } else {
+      const { codes } = resolveInventoryCodesFromLandlord(c.items, c.furnished, c.note);
+      setInventory((prev) =>
+        prev.map((line) => ({
+          ...line,
+          present: codes.has(line.code),
+          qty: 1,
+        }))
+      );
     }
-  }, [c]);
+  }
 
   if (!state.ready || !now || loadingDb) {
     return <div className="skeleton" style={{ height: 420 }} />;

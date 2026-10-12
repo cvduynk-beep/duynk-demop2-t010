@@ -72,10 +72,7 @@ export function AdminInventoryDetail({ id }: { id: string }) {
   const consignment = existingConsignment || dbConsignment;
 
   useEffect(() => {
-    if (unit || existingConsignment) {
-      setLoadingDb(false);
-      return;
-    }
+    if (unit || existingConsignment) return; // đã có dữ liệu cục bộ: `loadingDb` bị bỏ qua khi render
     let unmounted = false;
     async function fetchConsignment() {
       try {
@@ -150,7 +147,7 @@ export function AdminInventoryDetail({ id }: { id: string }) {
     };
   }, [id, unit, existingConsignment]);
 
-  if (!state.ready || !now || loadingDb) return <div className="skeleton" style={{ height: 420 }} />;
+  if (!state.ready || !now || (loadingDb && !unit && !existingConsignment)) return <div className="skeleton" style={{ height: 420 }} />;
 
   if (!unit && !consignment) notFound();
 
