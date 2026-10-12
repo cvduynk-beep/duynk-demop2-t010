@@ -423,7 +423,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('header x-demo-role bị bỏ qua khi không bật chế độ demo', async () => {
+    it('header x-demo-role luôn bị bỏ qua', async () => {
       const res = await request(app.getHttpServer()).get('/api/v1/admin/field-hosts').set('x-demo-role', 'ops_admin');
       expect(res.status).toBe(401);
     });
@@ -727,22 +727,17 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
     });
   });
 
-  it('demo-login bị tắt mặc định → 404 demo_disabled', async () => {
-    const res = await request(app.getHttpServer()).post('/api/v1/auth/demo-login').send({ portal: 'tenant' });
-    expect(res.status).toBe(404);
-    expect(res.body.code).toBe('demo_disabled');
-  });
-
-  it('demo-login bật (AUTH_DEMO_MODE=true) → đăng nhập qua login với tài khoản demo đã seed, set cookie phiên', async () => {
+  it('đã gỡ POST /auth/demo-login và x-demo-role: kể cả AUTH_DEMO_MODE=true ⇒ 404 / 401, không set cookie', async () => {
     const demoEnv = { ...ENV, AUTH_DEMO_MODE: 'true', DEMO_PASSWORD: PASSWORD };
     const restoreDemo = applyEnv(demoEnv);
     const demo = await createApp(prisma, demoEnv);
     try {
       seedUser('khachthue.demo@vinstay.vn', 'tenant');
       const res = await request(demo.getHttpServer()).post('/api/v1/auth/demo-login').send({ portal: 'tenant' });
-      expect(res.status).toBe(200);
-      expect(res.body.data).toMatchObject({ needsRfidVerification: false, user: { portal: 'tenant', email: 'khachthue.demo@vinstay.vn' } });
-      expect(cookieValue(res, 'vs_access_tenant')).toMatch(/HttpOnly/i);
+      expect(res.status).toBe(404);
+      expect(cookiesOf(res)).toHaveLength(0);
+      const viaHeader = await request(demo.getHttpServer()).get('/api/v1/admin/field-hosts').set('x-demo-role', 'ops_admin');
+      expect(viaHeader.status).toBe(401);
     } finally {
       await demo.close();
       restoreDemo();

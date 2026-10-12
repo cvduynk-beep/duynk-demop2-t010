@@ -73,17 +73,6 @@ export class AuthController {
   }
 
   @Public()
-  @Post('demo-login')
-  @HttpCode(200)
-  @Throttle(perMinute(10))
-  @ApiOperation({ summary: 'Đăng nhập 1-chạm bằng tài khoản demo (chỉ khi AUTH_DEMO_MODE=true)' })
-  async demoLogin(@Body() dto: PortalQueryDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const outcome = await this.auth.demoLogin(dto.portal, requestContext(req));
-    this.cookies.set(res, outcome.tokens, dto.portal);
-    return this.loginBody(outcome);
-  }
-
-  @Public()
   @Get('google')
   @UseGuards(GoogleAuthGuard)
   @Throttle(perMinute(20))

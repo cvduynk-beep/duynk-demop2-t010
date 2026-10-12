@@ -42,7 +42,7 @@ const codeOf = async (promise: Promise<unknown> | (() => unknown)) => {
 describe('SupabaseAuthGuard', () => {
   const build = (env: Record<string, string>, metadata: Record<string, unknown>, authenticate = jest.fn()) => {
     const config = fakeConfig(env);
-    return { authenticate, make: (reflector: Reflector) => new SupabaseAuthGuard(reflector, { authenticate } as any, new SessionCookieService(config), config) };
+    return { authenticate, make: (reflector: Reflector) => new SupabaseAuthGuard(reflector, { authenticate } as any, new SessionCookieService(config)) };
   };
 
   it('route @Public không cần token', async () => {
@@ -123,25 +123,11 @@ describe('SupabaseAuthGuard', () => {
     expect(await codeOf(build({}, {}, jest.fn(async () => null)).make(reflector).canActivate(ctx))).toBe('unauthorized');
   });
 
-  describe('header x-demo-role', () => {
-    const request = () => ({ headers: { 'x-demo-role': 'ops_admin' }, cookies: {} }) as any;
-
-    it('tắt mặc định', async () => {
-      const { reflector, ctx } = context(request());
-      expect(await codeOf(build({}, {}).make(reflector).canActivate(ctx))).toBe('unauthorized');
-    });
-
-    it('bật bằng AUTH_DEMO_MODE=true', async () => {
-      const req = request();
-      const { reflector, ctx } = context(req);
-      expect(await build({ AUTH_DEMO_MODE: 'true' }, {}).make(reflector).canActivate(ctx)).toBe(true);
-      expect(req.user).toMatchObject({ role: 'ops_admin', portal: 'admin' });
-    });
-
-    it('bị vô hiệu ở production dù cờ bật', async () => {
-      const { reflector, ctx } = context(request());
-      expect(await codeOf(build({ AUTH_DEMO_MODE: 'true', NODE_ENV: 'production' }, {}).make(reflector).canActivate(ctx))).toBe('unauthorized');
-    });
+  it('header x-demo-role / x-demo-userid không còn tác dụng, kể cả khi AUTH_DEMO_MODE=true', async () => {
+    const req: any = { headers: { 'x-demo-role': 'ops_admin', 'x-demo-userid': 'u-admin' }, cookies: {} };
+    const { reflector, ctx } = context(req);
+    expect(await codeOf(build({ AUTH_DEMO_MODE: 'true' }, {}).make(reflector).canActivate(ctx))).toBe('unauthorized');
+    expect(req.user).toBeUndefined();
   });
 });
 

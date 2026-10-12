@@ -8,12 +8,6 @@ import { accessCookieName } from './modules/auth/auth.constants';
 
 async function bootstrap() {
   const logger = new Logger('VinStayBootstrap');
-  const isProduction = process.env.NODE_ENV === 'production';
-
-  // Chế độ demo bỏ qua/nới xác thực (header x-demo-role, đăng nhập 1-chạm) — không bao giờ chạy ở production.
-  if (isProduction && process.env.AUTH_DEMO_MODE === 'true') {
-    throw new Error('AUTH_DEMO_MODE=true không được phép khi NODE_ENV=production.');
-  }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
@@ -70,8 +64,7 @@ async function bootstrap() {
         bearerFormat: 'JWT',
         name: 'JWT Authorization',
         description:
-          'JWT phiên do backend ký (trình duyệt dùng cookie httpOnly do POST /auth/login set). ' +
-          'Khi AUTH_DEMO_MODE=true có thể gửi header [x-demo-role: ops_admin / field_host / landlord / tenant].',
+          'JWT phiên do backend ký (trình duyệt dùng cookie httpOnly `vs_access_<portal>` do POST /auth/login set).',
         in: 'header',
       },
       'bearer-token',

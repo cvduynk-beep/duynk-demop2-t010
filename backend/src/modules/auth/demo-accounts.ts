@@ -1,8 +1,8 @@
 import { Portal } from './auth.constants';
 
 /**
- * Tài khoản demo (1-click ở màn hình đăng nhập). Chỉ tồn tại khi chạy `npm run seed:auth` và chỉ
- * đăng nhập được khi AUTH_DEMO_MODE=true — bản chất vẫn là đăng nhập thật bằng email + mật khẩu.
+ * Tài khoản demo do `npm run seed:auth -- --demo` tạo trong DB. Không có đường đăng nhập riêng: dùng form đăng nhập
+ * bình thường bằng email + mật khẩu (`DEMO_PASSWORD`).
  */
 export const DEMO_ACCOUNTS: Record<Portal, { email: string; fullName: string }> = {
   tenant: { email: 'khachthue.demo@vinstay.vn', fullName: 'Khách thuê Demo' },

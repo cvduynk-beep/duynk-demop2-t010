@@ -32,8 +32,6 @@ interface LoginData {
 export function PortalAuth({ portal, label, initialError, initialNotice, next }: PortalAuthProps) {
   const canSignup = portal !== "admin";
   const canGoogle = portal !== "admin"; // Admin chỉ đăng nhập email + mật khẩu
-  // Nút "Trải nghiệm nhanh": chỉ khi bật NEXT_PUBLIC_DEMO_LOGIN (backend cũng phải bật AUTH_DEMO_MODE).
-  const demoEnabled = process.env.NEXT_PUBLIC_DEMO_LOGIN === "true";
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [fullName, setFullName] = useState("");
@@ -95,21 +93,6 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next }:
     }
   }
 
-  const handleQuickDemo = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await postJson<LoginData>("/auth/demo-login", { portal });
-      if (!res.ok) return setError(errorMessage(res.code));
-      if (res.data.needsRfidVerification && res.data.hostId) return setPendingRfid(res.data.hostId);
-      enter();
-    } catch (cause) {
-      networkError(cause);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (pendingRfid) {
     return <RfidVerifyStep hostId={pendingRfid} onDone={enter} />;
   }
@@ -119,85 +102,6 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next }:
       <h1 className={styles.cardHeading}>
         {mode === "login" ? `Đăng nhập ${label}` : `Đăng ký ${label}`}
       </h1>
-
-      {demoEnabled && (
-      <div
-        style={{
-          margin: "0 0 16px 0",
-          padding: "12px 14px",
-          background: "linear-gradient(135deg, rgba(214,154,70,0.12) 0%, rgba(20,48,58,0.06) 100%)",
-          border: "1px solid rgba(214,154,70,0.35)",
-          borderRadius: 12,
-          textAlign: "center",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-ink)", letterSpacing: "0.03em" }}>
-            ⚡ TRẢI NGHIỆM NHANH (1-CLICK DEMO)
-          </span>
-        </div>
-        <p style={{ fontSize: 12, color: "var(--slate)", marginBottom: 10, lineHeight: 1.4 }}>
-          Thử nghiệm ngay giao diện {label} mà không cần đăng ký tài khoản mới:
-        </p>
-        <button
-          type="button"
-          onClick={handleQuickDemo}
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: "9px 14px",
-            background: "var(--accent)",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: 8,
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: loading ? "default" : "pointer",
-            boxShadow: "0 2px 6px rgba(214,154,70,0.3)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-          }}
-        >
-          {loading
-            ? "Đang vào giao diện..."
-            : portal === "tenant"
-            ? "👉 Vào ngay vai Khách thuê (AI Matchmaker)"
-            : portal === "landlord"
-            ? "👉 Vào ngay Dashboard Chủ nhà (4 Tenets)"
-            : portal === "host"
-            ? "👉 Vào ngay Dashboard Field Host (SLA 3m)"
-            : "👉 Vào ngay Dashboard Quản trị (BI & SLA)"}
-        </button>
-
-        <div style={{ marginTop: 8, fontSize: 11, color: "var(--slate)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
-          <span>Tài khoản: <strong style={{ color: "var(--ink)" }}>{portal === "tenant" ? "khachthue.demo@vinstay.vn" : portal === "landlord" ? "chunha.oceanpark@vinstay.vn" : portal === "host" ? "host.oceanpark@vinstay.vn" : "admin@vinstay.vn"}</strong> / pass: <strong style={{ color: "var(--ink)" }}>vinstay-demo-pass</strong></span>
-          <button
-            type="button"
-            onClick={() => {
-              const demoEmail = portal === "tenant" ? "khachthue.demo@vinstay.vn" : portal === "landlord" ? "chunha.oceanpark@vinstay.vn" : portal === "host" ? "host.oceanpark@vinstay.vn" : "admin@vinstay.vn";
-              setEmail(demoEmail);
-              setPassword("vinstay-demo-pass");
-              setMode("login");
-              setError(null);
-            }}
-            style={{
-              background: "none",
-              border: "1px dashed var(--accent)",
-              borderRadius: 4,
-              padding: "1px 6px",
-              fontSize: 10,
-              color: "var(--accent-ink)",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            Điền vào form
-          </button>
-        </div>
-      </div>
-      )}
 
       {canGoogle && (
         <>

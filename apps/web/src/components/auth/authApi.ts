@@ -16,7 +16,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   rate_limited: "Bạn thao tác quá nhanh. Thử lại sau ít phút.",
   login_locked: "Bạn đã nhập sai mật khẩu quá nhiều lần. Tài khoản tạm khoá đăng nhập, thử lại sau ít phút.",
   auth_not_configured: "Đăng nhập Google chưa được cấu hình (backend thiếu GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).",
-  demo_disabled: "Chế độ demo đang tắt.",
   oauth_failed: "Đăng nhập không thành công. Thử lại.",
 };
 

@@ -239,7 +239,7 @@ npm run start:dev
 ```bash
 npm run create:admin -- you@example.com 'mat-khau-manh' "Ten"   # Admin (không có đăng ký trên UI)
 npm run seed:auth                # admin dev + 2 lời mời Field Host (host1/host2@vinstay.test, RFID-S1-0001/RFID-S2-0001)
-npm run seed:auth -- --demo      # thêm 4 tài khoản demo (bật AUTH_DEMO_MODE=true để dùng nút 1-click)
+npm run seed:auth -- --demo      # thêm 4 tài khoản demo (đăng nhập bằng form, mật khẩu DEMO_PASSWORD)
 npm test                         # unit + HTTP test (Prisma/Supabase giả)
 ```
 
@@ -265,7 +265,6 @@ Hai cổng đăng nhập trên UI: `/login` (Khách thuê / Chủ nhà) và `/ad
 |---|---|
 | `POST /auth/login` `{email,password,portal}` | portal = tenant / landlord / host / admin ⇒ chỉ set `vs_access_<portal>`. Sai email/mật khẩu (kể cả tài khoản chỉ có Google) ⇒ 401 `invalid_credentials` (cùng message, cùng độ trễ). Sai cổng ⇒ 403 `wrong_portal`; bị khoá ⇒ 403 `account_suspended` (đều không set cookie). 10 lần/phút/IP ⇒ 429 `rate_limited`; sai `LOGIN_MAX_FAILURES` (5) lần cùng email trong `LOGIN_LOCKOUT_SECONDS` (15 phút) ⇒ 429 `login_locked` `{errors:{retryAfterSeconds}}` |
 | `POST /auth/signup` | tenant / landlord (và Host đã được Admin mời email) — đăng ký xong đăng nhập luôn, không xác nhận email |
-| `POST /auth/demo-login` | đăng nhập 1-click tài khoản demo (chỉ khi `AUTH_DEMO_MODE=true`) |
 | `GET /auth/google?portal=` → `GET /auth/google/callback` | Google OAuth (Passport; `state` = `portal.nonce`, nonce nằm trong cookie httpOnly `vs_oauth`; luôn hiện màn chọn tài khoản; nhận `login_hint=<email>` để chọn sẵn tài khoản; thành công thì set cookie không-httpOnly `vs_google_hint` {name,email} để FE hiện "Tiếp tục bằng tên …") |
 | `GET /auth/session?portal=` | `{user}` của đúng cổng đó (`null` nếu không có / hết hạn / sai cổng — cookie hỏng bị xoá). Thiếu/sai `portal` ⇒ 400 |
 | `POST /auth/logout` `{portal}` | chỉ xoá `vs_access_<portal>`; cổng khác giữ nguyên. Thiếu/sai `portal` ⇒ 400 |

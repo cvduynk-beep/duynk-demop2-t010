@@ -2,7 +2,7 @@
  * Seed phần xác thực cho môi trường dev (thay `prisma:seed` cũ của apps/web):
  *  - Admin mặc định (SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD)
  *  - 2 lời mời Field Host (host tự đăng ký ở /admin/login bằng email này)
- *  - Với `--demo`: 4 tài khoản demo cho nút "Trải nghiệm nhanh" (khớp AUTH_DEMO_MODE=true)
+ *  - Với `--demo`: 4 tài khoản demo (đăng nhập bằng form như tài khoản thường, mật khẩu DEMO_PASSWORD)
  *
  *   npm run seed:auth            # admin + lời mời host
  *   npm run seed:auth -- --demo  # thêm tài khoản demo

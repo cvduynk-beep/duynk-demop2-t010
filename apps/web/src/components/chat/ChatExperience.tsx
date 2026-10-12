@@ -129,9 +129,8 @@ export function ChatExperience({ below }: { below: ReactNode }) {
     });
   };
 
-  const isDemo = process.env.NEXT_PUBLIC_DEMO_LOGIN === "true";
   const GUEST_QUOTA = 15;
-  const locked = !isDemo && role === null && (state.guestSent || 0) >= GUEST_QUOTA;
+  const locked = role === null && (state.guestSent || 0) >= GUEST_QUOTA;
   const { user } = useSession();
   const first = role === "tenant" ? (user?.fullName?.split(" ").slice(-1)[0] ?? null) : null;
   const [greetingIdx, setGreetingIdx] = useState(0);
