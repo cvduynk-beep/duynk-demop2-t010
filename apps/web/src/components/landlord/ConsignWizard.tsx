@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   AlertTriangle,
+  ArrowRight,
   Building2,
   CheckCircle2,
   ChevronDown,
+  CircleDashed,
   ChevronUp,
   Flame,
   ShieldCheck,
@@ -21,9 +23,18 @@ import { allInCost } from "@/lib/pricing/cost";
 import { vnd } from "@/lib/format";
 import { errorText, landlordApi } from "@/lib/landlord/api";
 import { LAYOUT_LABEL, LEASE_TERM_LABEL } from "@/lib/landlord/labels";
-import type { BuildingOption, Consignment, LayoutKind, LeaseTermPref, LockKind, MyProfile } from "@/lib/landlord/types";
+import type {
+  BankPayoutAccount,
+  BuildingOption,
+  Consignment,
+  LandlordVerification,
+  LayoutKind,
+  LeaseTermPref,
+  LockKind,
+  VerificationStep,
+} from "@/lib/landlord/types";
 import type { Consignment as MockConsignment } from "@/lib/mock/types";
-import { queries, type QueryDef } from "@/lib/landlord/queries";
+import { queries } from "@/lib/landlord/queries";
 import { invalidateLandlordData, useLandlordQuery } from "@/lib/landlord/useLandlordQuery";
 import { getMockState, setMockState } from "@/lib/mock/store";
 import { pickHostFor } from "@/lib/mock/selectors";
@@ -147,18 +158,7 @@ const PRE_INVENTORY_ITEMS = [
   { key: "curtains", label: "Rèm cửa & Giàn phơi", icon: "🪟" },
 ];
 
-const POPULAR_BANKS = [
-  "Techcombank",
-  "Vietcombank",
-  "MB Bank",
-  "VPBank",
-  "ACB",
-  "BIDV",
-  "VietinBank",
-  "TPBank",
-  "VIB",
-  "Sacombank",
-];
+
 
 interface Form {
   building: string;
@@ -176,10 +176,6 @@ interface Form {
   locks: LockKind[];
   smartLockOption: "provide_now" | "at_inspection";
   doorCode: string;
-  bankName: string;
-  bankAccount: string;
-  bankAccountHolder: string;
-  saveAsDefaultPayout: boolean;
   allowFastClose: boolean;
   floorRent: string;
 }
@@ -200,135 +196,99 @@ const blank: Form = {
   locks: ["smart"],
   smartLockOption: "provide_now",
   doorCode: "",
-  bankName: "Techcombank",
-  bankAccount: "",
-  bankAccountHolder: "",
-  saveAsDefaultPayout: true,
   allowFastClose: false,
   floorRent: "",
 };
 
-const NO_DRAFT: QueryDef<Consignment | null> = {
-  key: "consignment:none",
-  fetch: () => Promise.resolve({ ok: true, status: 200, data: null }),
-};
-
-function useWizardData(draftId?: string) {
+export function ConsignWizard() {
   const buildings = useLandlordQuery(queries.buildings);
   const profile = useLandlordQuery(queries.profile);
-  const draft = useLandlordQuery<Consignment | null>(draftId ? queries.consignment(draftId) : NO_DRAFT);
-  return { buildings, profile, draft };
+  const verification = useLandlordQuery(queries.verification);
+  return (
+    <QueryView query={verification} skeleton="form">
+      {(v) =>
+        !v.ready ? (
+          <VerifyGate v={v} />
+        ) : (
+          <QueryView query={buildings} skeleton="form">
+            {(bs) => (
+              <QueryView query={profile} skeleton="form">
+                {(p) => <Wizard buildings={bs} phoneVerified={p.isPhoneVerified} payout={v.payout.account} />}
+              </QueryView>
+            )}
+          </QueryView>
+        )
+      }
+    </QueryView>
+  );
 }
 
-export function ConsignWizard({ draftId }: { draftId?: string }) {
-  const { buildings, profile, draft } = useWizardData(draftId);
+const STEP_LABEL: Record<VerificationStep, string> = {
+  phone: "Xác thực số điện thoại (OTP)",
+  identity: "Xác thực CCCD (eKYC) — lấy họ tên, địa chỉ thường trú",
+  payout: "Xác thực tài khoản ngân hàng chính chủ",
+};
+
+/** Chưa xác thực đủ 3 bước ⇒ chưa cho vào form ký gửi; liệt kê bước còn thiếu và dẫn sang trang xác thực. */
+function VerifyGate({ v }: { v: LandlordVerification }) {
+  const all: VerificationStep[] = ["phone", "identity", "payout"];
   return (
-    <QueryView query={buildings} skeleton="form">
-      {(bs) => (
-        <QueryView query={profile} skeleton="form">
-          {(p) => (
-            <QueryView query={draft} skeleton="form">
-              {(d) => (
-                <>
-                  {d && d.status !== "draft" ? (
-                    <div className={`${styles.page} ${styles.wizard}`}>
-                      <PageHeader title="Ký gửi căn mới" />
-                      <section className={`card ${styles.success}`}>
-                        <h1>Hồ sơ này đã ký ủy quyền</h1>
-                        <Link href={`/landlord/consignments/${d.id}`} className="btn btn-primary">
-                          Xem tiến trình
-                        </Link>
-                      </section>
-                    </div>
-                  ) : (
-                    <Wizard key={d?.id ?? "new"} buildings={bs} phoneVerified={p.isPhoneVerified} draft={d ?? undefined} profile={p} />
-                  )}
-                </>
-              )}
-            </QueryView>
-          )}
-        </QueryView>
-      )}
-    </QueryView>
+    <div className={`${styles.page} ${styles.wizard}`}>
+      <PageHeader title="Ký gửi căn hộ mới" description="Xác thực tài khoản một lần trước khi ký gửi căn đầu tiên." />
+      <section className="card" style={{ padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
+        <h2 style={{ margin: 0, fontSize: 18, display: "flex", alignItems: "center", gap: 8 }}>
+          <ShieldCheck size={20} /> Hoàn tất xác thực để ký gửi
+        </h2>
+        <p className="muted small" style={{ margin: 0 }}>
+          Hợp đồng ký gửi độc quyền cần định danh chính chủ: số điện thoại để ký OTP, CCCD làm Bên ủy quyền, và tài khoản đứng tên bạn để
+          nhận tiền thuê.
+        </p>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          {all.map((k) => {
+            const done = !v.missing.includes(k);
+            return (
+              <li key={k} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {done ? <CheckCircle2 size={18} color="var(--kelp, #2f7d5b)" /> : <CircleDashed size={18} color="var(--ink-3, #9ca3af)" />}
+                <span style={done ? { color: "var(--ink-2)" } : { fontWeight: 600 }}>{STEP_LABEL[k]}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <div>
+          <Link href="/landlord/verify" className="btn btn-primary">
+            Xác thực ngay ({3 - v.missing.length}/3) <ArrowRight size={16} />
+          </Link>
+        </div>
+      </section>
+    </div>
   );
 }
 
 function Wizard({
   buildings,
   phoneVerified,
-  draft,
-  profile,
+  payout,
 }: {
   buildings: BuildingOption[];
   phoneVerified: boolean;
-  draft?: Consignment;
-  profile?: MyProfile;
+  /** Tài khoản thụ hưởng ĐÃ XÁC THỰC (dạng che) — căn ký gửi sẽ nhận tiền về đây. */
+  payout: BankPayoutAccount | null;
 }) {
-  const savedPayout =
-    profile?.payoutAccount ||
-    (typeof window !== "undefined"
-      ? (() => {
-          try {
-            return JSON.parse(localStorage.getItem("landlord_default_payout") || "null");
-          } catch {
-            return null;
-          }
-        })()
-      : null);
 
-  const [isEditingBank, setIsEditingBank] = useState<boolean>(!savedPayout?.bankAccount);
+  const initialProject = URBAN_PROJECTS.find((p) => p.id === "vhop1") || URBAN_PROJECTS[0];
 
-  const initialProjectId =
-    URBAN_PROJECTS.find((p) => p.zones.some((z) => z.buildings.includes(draft?.building || "")))?.id || "vhop1";
-  const initialProject = URBAN_PROJECTS.find((p) => p.id === initialProjectId) || URBAN_PROJECTS[0];
-  const initialZoneName =
-    initialProject.zones.find((z) => z.buildings.includes(draft?.building || ""))?.name || initialProject.zones[0].name;
-
-  const [projectId, setProjectId] = useState<string>(initialProjectId);
-  const [zoneNameSelected, setZoneNameSelected] = useState<string>(initialZoneName);
+  const [projectId, setProjectId] = useState<string>(initialProject.id);
+  const [zoneNameSelected, setZoneNameSelected] = useState<string>(initialProject.zones[0].name);
 
   const activeProject = URBAN_PROJECTS.find((p) => p.id === projectId);
   const activeZone = activeProject?.zones.find((z) => z.name === zoneNameSelected);
   const availableBuildings = activeZone?.buildings || [];
 
-  const [step, setStep] = useState(draft ? 2 : 0);
-  const [f, setF] = useState<Form>(
-    draft
-      ? {
-          building: draft.building,
-          floor: String(draft.floor),
-          door: draft.door ?? "",
-          layout: draft.layoutKind,
-          areaM2: String(draft.areaM2),
-          askRent: String(draft.askRent),
-          suggestedDeposit: String(draft.suggestedDeposit || draft.askRent),
-          leaseTerm: draft.leaseTerm ?? "long",
-          maxOccupants: 2,
-          petPolicy: "no",
-          furnished: draft.furnished ?? true,
-          preInventory: ["ac", "fridge", "washer", "kitchen", "heater", "bed", "wardrobe"],
-          locks: draft.locks.length ? draft.locks : ["smart"],
-          smartLockOption: "provide_now",
-          doorCode: "",
-          bankName: (draft as { bankName?: string }).bankName || savedPayout?.bankName || "Techcombank",
-          bankAccount: (draft as { bankAccount?: string }).bankAccount || savedPayout?.bankAccount || "",
-          bankAccountHolder:
-            (draft as { bankAccountHolder?: string }).bankAccountHolder ||
-            savedPayout?.bankAccountHolder ||
-            profile?.fullName?.toUpperCase() ||
-            "",
-          saveAsDefaultPayout: true,
-          allowFastClose: (draft as { allowFastClose?: boolean }).allowFastClose ?? false,
-          floorRent: (draft as { floorRent?: number }).floorRent ? String((draft as { floorRent?: number }).floorRent) : "",
-        }
-      : {
-          ...blank,
-          building: availableBuildings[0] ?? buildings[0]?.buildingCode ?? "S1.02",
-          bankName: savedPayout?.bankName || "Techcombank",
-          bankAccount: savedPayout?.bankAccount || "",
-          bankAccountHolder: savedPayout?.bankAccountHolder || profile?.fullName?.toUpperCase() || "",
-        },
-  );
+  const [step, setStep] = useState(0);
+  const [f, setF] = useState<Form>({
+    ...blank,
+    building: availableBuildings[0] ?? buildings[0]?.buildingCode ?? "S1.02",
+  });
 
   const handleProjectChange = (newProjId: string) => {
     setProjectId(newProjId);
@@ -356,11 +316,10 @@ function Wizard({
 
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
-  const [createdId, setCreatedId] = useState<string | null>(draft?.id ?? null);
-  const draftIdRef = useRef<string | null>(draft?.id ?? null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const [warranted, setWarranted] = useState(false);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
-  const [uploadedCount, setUploadedCount] = useState(draft?.photoCount ?? 0);
+  const [uploadedCount, setUploadedCount] = useState(0);
   const [showFastCloseDetails, setShowFastCloseDetails] = useState(false);
   const [showScenarioDetails, setShowScenarioDetails] = useState(false);
 
@@ -521,118 +480,77 @@ function Wizard({
     if (
       f.locks.includes("smart") &&
       f.smartLockOption === "provide_now" &&
-      f.doorCode.length < 4 &&
-      !draft
+      f.doorCode.length < 4
     ) {
       setErr("Vui lòng nhập mã mở khóa (tối thiểu 4 số) hoặc chọn 'Cài đặt mã số tạm / Cung cấp mã cho Field Host khi tới thẩm định'.");
       return;
-    }
-
-    const cleanAccount = f.bankAccount.replace(/\D/g, "");
-    if (!cleanAccount || cleanAccount.length < 6) {
-      setErr("Vui lòng nhập Số tài khoản ngân hàng thụ hưởng hợp lệ (tối thiểu 6 chữ số).");
-      return;
-    }
-    if (!f.bankAccountHolder || f.bankAccountHolder.trim().length < 3) {
-      setErr("Vui lòng nhập Tên chủ tài khoản thụ hưởng (trùng khớp với CCCD/Giấy tờ sở hữu).");
-      return;
-    }
-
-    if (f.saveAsDefaultPayout && typeof window !== "undefined") {
-      try {
-        localStorage.setItem(
-          "landlord_default_payout",
-          JSON.stringify({
-            bankName: f.bankName,
-            bankAccount: cleanAccount,
-            bankAccountHolder: f.bankAccountHolder.trim().toUpperCase(),
-            isVerified: true,
-          }),
-        );
-      } catch {
-        // ignore
-      }
     }
 
     setErr("");
     setStep(2);
   };
 
-  const ensureDraft = async (): Promise<string | null> => {
-    let id = draftIdRef.current;
-    if (!id) {
-      // Đóng gói ghi chú: quy chế, tài sản kê khai & tài khoản nhận tiền
-      const noteParts: string[] = [];
-      if (f.preInventory.length) {
-        noteParts.push(`Nội thất: ${f.preInventory.join(", ")}`);
-      }
-      noteParts.push(
-        `Quy chế: Tối đa ${f.maxOccupants} người · ${
-          f.petPolicy === "no"
-            ? "Không thú cưng"
-            : f.petPolicy === "small"
-            ? "Chó mèo nhỏ"
-            : "Nuôi thú cưng tự do"
-        }`,
-      );
-      if (f.bankAccount) {
-        noteParts.push(`TK nhận: ${f.bankAccount} (${f.bankName} - ${f.bankAccountHolder || "Chủ hộ"})`);
-      }
-      if (f.allowFastClose && floorRentNum > 0) {
-        noteParts.push(`Chốt nhanh: Sàn ${vnd(floorRentNum)}đ`);
-      }
-      const combinedNote = noteParts.join(" | ").slice(0, 300);
+  /**
+   * Tạo hồ sơ = ký ủy quyền (không có bản nháp): cam kết + OTP đi cùng form trong một request.
+   * Trả true khi hồ sơ đã được tạo và ký; lỗi thì set `err` (qua `onError`) và trả false.
+   */
+  const submitSigned = async (sig: { otp?: string; phone?: string }): Promise<boolean> => {
+    // Đóng gói ghi chú: quy chế, tài sản kê khai & tài khoản nhận tiền
+    const noteParts: string[] = [];
+    if (f.preInventory.length) {
+      noteParts.push(`Nội thất: ${f.preInventory.join(", ")}`);
+    }
+    noteParts.push(
+      `Quy chế: Tối đa ${f.maxOccupants} người · ${
+        f.petPolicy === "no"
+          ? "Không thú cưng"
+          : f.petPolicy === "small"
+          ? "Chó mèo nhỏ"
+          : "Nuôi thú cưng tự do"
+      }`,
+    );
+    if (f.allowFastClose && floorRentNum > 0) {
+      noteParts.push(`Chốt nhanh: Sàn ${vnd(floorRentNum)}đ`);
+    }
+    const combinedNote = noteParts.join(" | ").slice(0, 300);
 
-      const res = await landlordApi.createConsignment({
-        building: f.building,
-        floor: Number(f.floor),
-        door: f.door.padStart(2, "0"),
-        layout: f.layout,
-        areaM2: area,
-        askRent: rent,
-        suggestedDeposit: deposit || rent,
-        leaseTerm: f.leaseTerm,
-        furnished: f.furnished,
-        locks: f.locks,
-        allowFastClose: f.allowFastClose,
-        floorRent: f.allowFastClose && floorRentNum > 0 ? floorRentNum : undefined,
-        ...(f.locks.includes("smart") && f.smartLockOption === "provide_now" && f.doorCode
-          ? { doorCode: f.doorCode }
-          : {}),
-        items: f.preInventory,
-        note: combinedNote,
-      });
-      if (!res.ok) {
-        setErr(errorText(res, "Không tạo được hồ sơ ký gửi."));
-        return null;
-      }
-      id = res.data.id;
-      draftIdRef.current = id;
-      setCreatedId(id);
+
+    const res = await landlordApi.createConsignment({
+      building: f.building,
+      floor: Number(f.floor),
+      door: f.door.padStart(2, "0"),
+      layout: f.layout,
+      areaM2: area,
+      askRent: rent,
+      suggestedDeposit: deposit || rent,
+      leaseTerm: f.leaseTerm,
+      furnished: f.furnished,
+      locks: f.locks,
+      allowFastClose: f.allowFastClose,
+      floorRent: f.allowFastClose && floorRentNum > 0 ? floorRentNum : undefined,
+      ...(f.locks.includes("smart") && f.smartLockOption === "provide_now" && f.doorCode ? { doorCode: f.doorCode } : {}),
+      items: f.preInventory,
+      note: combinedNote,
+      ownershipWarranted: warranted,
+      ...(sig.otp ? { otp: sig.otp } : {}),
+      ...(sig.phone ? { phone: sig.phone } : {}),
+    });
+    if (!res.ok) {
+      setErr(errorText(res, "Không ký gửi được, thử lại sau."));
+      return false;
     }
+    // Ảnh tham khảo là tuỳ chọn: hồ sơ đã ký rồi nên lỗi tải ảnh không được chặn/ký lại.
     if (photoFiles.length) {
-      const up = await landlordApi.uploadPhotos(id, photoFiles);
-      if (!up.ok) {
-        const msg = errorText(up, "thử lại sau.");
-        // Nếu là sự cố kết nối máy chủ CSDL, không chặn đứng quy trình ký gửi OTP của chủ nhà
-        if (msg.includes("database") || msg.includes("Prisma") || msg.includes("connect") || msg.includes("pooler") || up.status >= 500) {
-          toast(
-            "Hồ sơ căn đã được ghi nhận thành công! Ảnh căn hộ sẽ được Field Host kiểm tra và thẩm định chi tiết tại thực địa.",
-            "info"
-          );
-          setUploadedCount(photoFiles.length);
-          setPhotoFiles([]);
-          return id;
-        }
-        setErr(
-          `Hồ sơ đã được lưu nhưng chưa tải được ảnh: ${msg} Bấm gửi lại để thử tiếp, hoặc bỏ ảnh lỗi ở bước trước.`,
-        );
-        return null;
+      const up = await landlordApi.uploadPhotos(res.data.id, photoFiles);
+      if (up.ok) {
+        setUploadedCount(up.data.length);
+        setPhotoFiles([]);
+      } else {
+        toast(`Hồ sơ đã ký nhưng chưa tải được ảnh tham khảo (${errorText(up, "thử lại sau")}). Field Host sẽ chụp ảnh khi thẩm định.`, "info");
       }
-      setUploadedCount(up.data.length);
-      setPhotoFiles([]);
     }
-    return id;
+    signed(res.data);
+    return true;
   };
 
   const signed = (c: Consignment) => {
@@ -749,7 +667,7 @@ function Wizard({
   return (
     <div className={`${styles.page} ${styles.wizard}`}>
       <PageHeader
-        title={draft ? "Ký ủy quyền cho căn đã đăng ký" : "Ký gửi căn hộ mới"}
+        title="Ký gửi căn hộ mới"
         description="Cho thuê thần tốc — Khách chuyển cọc VietQR 2.000.000đ giữ chỗ ngay — Chủ nhà ở nhà 100%, không đi lại 20–30km mở cửa."
       />
 
@@ -1524,19 +1442,15 @@ function Wizard({
               )}
             </div>
 
-            {/* Thông tin tài khoản nhận tiền thuê (Smart Onboarding Định danh) */}
+            {/* Tài khoản nhận tiền: lấy tài khoản ĐÃ XÁC THỰC ở trang Xác thực, không nhập lại ở đây. */}
             <div className={styles.payoutContainer}>
               <div className={styles.payoutContainerHeader}>
                 <b style={{ fontSize: 13.5, color: "var(--ink)" }}>Tài khoản nhận tiền thuê hàng tháng (VietQR Napas247)</b>
                 <span className={styles.payoutSecurityTag}>
-                  <ShieldCheck size={13} /> Định danh 1 lần · An toàn 100%
+                  <ShieldCheck size={13} /> Đã xác thực chính chủ
                 </span>
               </div>
-              <p className="xs muted" style={{ margin: "3px 0 10px" }}>
-                Khách thuê chuyển khoản tiền thuê hàng tháng, hệ thống tự động gạch nợ và giải ngân thẳng vào tài khoản của bạn trong 24h.
-              </p>
-
-              {!isEditingBank && f.bankAccount && f.bankAccountHolder ? (
+              {payout && (
                 <div className={styles.payoutVerifiedCard}>
                   <div className={styles.payoutCardHeader}>
                     <div className={styles.payoutCardLeft}>
@@ -1545,92 +1459,19 @@ function Wizard({
                       </div>
                       <div>
                         <div className={styles.payoutCardTitleRow}>
-                          <span className={styles.payoutBankName}>{f.bankName}</span>
-                          <span className={styles.payoutVerifiedBadge}>
-                            <ShieldCheck size={11} /> Đã định danh chính chủ
-                          </span>
+                          <span className={styles.payoutBankName}>{payout.bankName}</span>
                         </div>
                         <div className={styles.payoutAccountNo}>
-                          Số TK: <b>{f.bankAccount.length > 7 ? `${f.bankAccount.slice(0, 3)}****${f.bankAccount.slice(-4)}` : f.bankAccount}</b> · Chủ TK: <b>{f.bankAccountHolder}</b>
+                          Số TK: <b className="tnum">{payout.bankAccountMasked}</b> · Chủ TK: <b>{payout.bankAccountHolder}</b>
                         </div>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className={styles.changePayoutBtn}
-                      onClick={() => setIsEditingBank(true)}
-                    >
-                      Đổi tài khoản khác
-                    </button>
+                    <Link href="/landlord/verify" className={styles.changePayoutBtn}>
+                      Đổi tài khoản
+                    </Link>
                   </div>
                   <div className={styles.payoutCardFooter}>
-                    <span>💡 Tài khoản này được tự động áp dụng cho mọi căn hộ ký gửi của bạn.</span>
-                  </div>
-                </div>
-              ) : (
-                <div className={styles.payoutEditForm}>
-                  <div className={styles.payoutInputGrid}>
-                    <label className="field">
-                      <span className="label">Ngân hàng</span>
-                      <select
-                        className="select"
-                        value={f.bankName}
-                        onChange={(e) => set("bankName", e.target.value)}
-                      >
-                        {POPULAR_BANKS.map((b) => (
-                          <option key={b} value={b}>
-                            {b}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="field">
-                      <span className="label">Số tài khoản</span>
-                      <input
-                        className="input"
-                        inputMode="numeric"
-                        placeholder="Số tài khoản (6–20 số)"
-                        value={f.bankAccount}
-                        onChange={(e) => set("bankAccount", e.target.value.replace(/\D/g, ""))}
-                      />
-                    </label>
-
-                    <label className="field">
-                      <span className="label">Tên chủ tài khoản</span>
-                      <input
-                        className="input"
-                        placeholder="NGUYEN VAN A"
-                        value={f.bankAccountHolder}
-                        onChange={(e) => set("bankAccountHolder", e.target.value.toUpperCase())}
-                      />
-                    </label>
-                  </div>
-
-                  <div className={styles.payoutCheckboxRow}>
-                    <label className={styles.payoutCheckboxLabel}>
-                      <input
-                        type="checkbox"
-                        checked={f.saveAsDefaultPayout}
-                        onChange={(e) => set("saveAsDefaultPayout", e.target.checked)}
-                      />
-                      <span>Lưu làm Tài khoản thụ hưởng định danh cho toàn bộ căn hộ của tôi</span>
-                    </label>
-
-                    {savedPayout?.bankAccount && isEditingBank && (
-                      <button
-                        type="button"
-                        className={styles.cancelEditPayoutBtn}
-                        onClick={() => {
-                          set("bankName", savedPayout.bankName || "Techcombank");
-                          set("bankAccount", savedPayout.bankAccount || "");
-                          set("bankAccountHolder", savedPayout.bankAccountHolder || "");
-                          setIsEditingBank(false);
-                        }}
-                      >
-                        Dùng lại tài khoản đã lưu
-                      </button>
-                    )}
+                    <span>Tiền thuê của căn này sẽ chuyển về tài khoản trên. Đổi tài khoản sau chỉ áp dụng cho căn ký gửi mới.</span>
                   </div>
                 </div>
               )}
@@ -1837,8 +1678,7 @@ function Wizard({
               <ConsignOtpSign
                 warranted={warranted}
                 needPhone={!phoneVerified}
-                ensureDraft={ensureDraft}
-                onSigned={signed}
+                onSign={submitSigned}
                 onError={setErr}
               />
               <p className="muted xs" style={{ textAlign: "center", marginTop: 8 }}>
@@ -1852,13 +1692,11 @@ function Wizard({
                 {err}
               </p>
             )}
-            {!draft && (
-              <div className={styles.wizardNav}>
-                <button type="button" className="btn btn-quiet" onClick={() => setStep(1)}>
-                  Quay lại: Khoá cửa & Tài sản
-                </button>
-              </div>
-            )}
+            <div className={styles.wizardNav}>
+              <button type="button" className="btn btn-quiet" onClick={() => setStep(1)}>
+                Quay lại: Khoá cửa & Tài sản
+              </button>
+            </div>
           </>
         )}
       </section>

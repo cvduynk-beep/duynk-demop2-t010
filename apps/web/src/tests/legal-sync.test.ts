@@ -547,20 +547,6 @@ describe("Hồ sơ 11 — Legal Sync (TESTING §1)", () => {
 
   // G4: Hợp đồng uỷ quyền 10 điều
   describe("G4 — Hợp đồng uỷ quyền độc quyền 10 điều", () => {
-    it("(18) signConsignment(id, { ownershipWarranted: false }) => no_warranty, status vẫn draft; true => ownershipWarrantedAt === signedAt", () => {
-      // cs-1 là consignment draft trong seed
-      const resNo = actions.signConsignment("cs-1", { ownershipWarranted: false });
-      expect(resNo.ok).toBe(false);
-      if (!resNo.ok) expect(resNo.code).toBe("no_warranty");
-      expect(getMockState().consignments.find((c) => c.id === "cs-1")?.status).toBe("draft");
-
-      const resYes = actions.signConsignment("cs-1", { ownershipWarranted: true });
-      expect(resYes.ok).toBe(true);
-      const cs = getMockState().consignments.find((c) => c.id === "cs-1")!;
-      expect(cs.ownershipWarrantedAt).toBeTruthy();
-      expect(cs.ownershipWarrantedAt).toBe(cs.signedAt);
-    });
-
     it("(19) 4 ví dụ mandateRenewsAt SPEC-P03 §3", () => {
       const now = new Date("2026-09-29T12:00:00.000Z").getTime();
 

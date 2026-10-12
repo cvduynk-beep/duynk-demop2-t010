@@ -1,15 +1,11 @@
-import type { ConsignmentStatus } from "@/lib/mock/types";
+// Khoá theo trạng thái backend (bao trùm trạng thái mock) để mọi màn đều có nhãn.
+import type { ConsignmentStatus } from "@/lib/landlord/types";
 import type { StatusTone } from "@/components/ui/StatusBadge";
 
 export const CONSIGN_STATUS_META: Record<
   ConsignmentStatus,
   { label: string; tone: StatusTone; landlordHint: string }
 > = {
-  draft: {
-    label: "Chưa ký ủy quyền",
-    tone: "neutral",
-    landlordHint: "Bạn chưa hoàn tất ký ủy quyền độc quyền qua OTP.",
-  },
   awaiting_host: {
     label: "Chờ Field Host nhận",
     tone: "warn",
@@ -24,6 +20,11 @@ export const CONSIGN_STATUS_META: Record<
     label: "Chờ Admin duyệt",
     tone: "warn",
     landlordHint: "Báo cáo thẩm định đã gửi lên Admin để phê duyệt ký gửi chính thức.",
+  },
+  awaiting_landlord: {
+    label: "Chờ bạn duyệt giá",
+    tone: "warn",
+    landlordHint: "Chuyên viên thẩm định đề xuất điều chỉnh giá thuê / tiền cọc. Vui lòng xem và chấp nhận hoặc từ chối.",
   },
   approved: {
     label: "Đã ký gửi",

@@ -24,7 +24,7 @@ import type { InspectionDetail, InspectionResult, SubmitInspectionInput } from '
 
 /**
  * Nguồn chuyển trạng thái DUY NHẤT của hồ sơ thẩm định (B2):
- * `awaiting_host → inspecting → approved | rejected | awaiting_landlord` (đổi giá/cọc ⇒ chủ duyệt ở `LandlordPricingService`; cộng `draft → awaiting_host` ở `LandlordConsignmentService.sign`).
+ * `awaiting_host → inspecting → approved | rejected | awaiting_landlord` (đổi giá/cọc ⇒ chủ duyệt ở `LandlordPricingService`;  hồ sơ vào `awaiting_host` ngay khi chủ nhà ký ở `LandlordConsignmentService.create`).
  * Mọi thao tác chạy trong `ConsignmentMetaStore.mutate` (khóa dòng) và KIỂM LẠI stage + chủ ca TRONG khóa.
  */
 @Injectable()

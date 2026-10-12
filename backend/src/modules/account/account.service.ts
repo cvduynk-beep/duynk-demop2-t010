@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { toPayoutView } from '../../common/payout/payout-account';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/account.dto';
 import { PhoneService } from '../auth/phone/phone.service';
@@ -13,6 +14,10 @@ const PROFILE_SELECT = {
   email: true,
   isPhoneVerified: true,
   createdAt: true,
+  // Tài khoản thụ hưởng: chỉ dùng để dựng bản che `payoutAccount`, không trả số TK mã hoá ra ngoài.
+  payoutBankName: true,
+  payoutAccountEnc: true,
+  payoutAccountHolder: true,
   role: { select: { code: true, name: true } },
 } as const;
 
@@ -34,8 +39,14 @@ export class AccountService {
   }
 
   /** SĐT (dạng 0xxxxxxxxx) chỉ trả cho chính chủ để điền sẵn form đặt lịch; giải mã lỗi ⇒ null, không làm hỏng hồ sơ. */
-  private toOwnProfile<T extends { phoneEnc: string | null }>(profile: T) {
-    const { phoneEnc, ...rest } = profile;
+  private toOwnProfile<
+    T extends { phoneEnc: string | null; payoutBankName: string | null; payoutAccountEnc: string | null; payoutAccountHolder: string | null },
+  >(profile: T) {
+    const { phoneEnc, payoutBankName, payoutAccountEnc, payoutAccountHolder, ...rest } = profile;
+    const payoutAccount = toPayoutView(
+      { bankName: payoutBankName, accountEnc: payoutAccountEnc, holder: payoutAccountHolder },
+      (e) => this.phones.decrypt(e),
+    );
     let phone: string | null = null;
     if (phoneEnc) {
       try {
@@ -45,7 +56,7 @@ export class AccountService {
         phone = null;
       }
     }
-    return { ...rest, phone };
+    return { ...rest, phone, payoutAccount };
   }
 
   /**

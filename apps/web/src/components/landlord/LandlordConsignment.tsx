@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, FileSignature, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { KeyValue } from "@/components/ui/KeyValue";
@@ -83,23 +83,6 @@ function ConsignmentBody({ c }: { c: Consignment }) {
           </div>
           <Link href="/landlord/consign" className="btn btn-primary btn-sm">
             <RefreshCw size={14} /> Ký gửi lại
-          </Link>
-        </div>
-      )}
-
-      {c.status === "draft" && (
-        <div
-          className="card"
-          style={{ background: "var(--amber-050)", borderColor: "var(--amber)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--s-3)" }}
-        >
-          <div>
-            <b style={{ color: "var(--ink)" }}>Hồ sơ chưa hoàn tất ký ủy quyền</b>
-            <p style={{ margin: "var(--s-1) 0 0", color: "var(--ink-2)", fontSize: "var(--fs-13)" }}>
-              Vui lòng ký ủy quyền qua Zalo OTP để Field Host nhận ticket đi thẩm định thực tế.
-            </p>
-          </div>
-          <Link href={`/landlord/consign?draft=${c.id}`} className="btn btn-amber btn-sm">
-            <FileSignature size={14} /> Ký ủy quyền ngay <ArrowRight size={14} />
           </Link>
         </div>
       )}

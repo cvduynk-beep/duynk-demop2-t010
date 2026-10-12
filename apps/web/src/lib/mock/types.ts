@@ -185,7 +185,6 @@ export interface Mandate {
 }
 
 export type ConsignmentStatus =
-  | "draft"          // đã đăng ký, chưa ký OTP ủy quyền
   | "awaiting_host"  // đã ký, ticket đã gán Host phân khu, Host chưa nhận
   | "inspecting"     // Host đã nhận, đang kiểm tra thực tế
   | "reviewing"      // Host đã nộp báo cáo, chờ Admin chốt
@@ -308,7 +307,7 @@ export interface Consignment {
   report?: InspectionReport;
   decidedAt?: string;
   decidedBy?: string; // tên Admin
-  ownershipWarrantedAt?: string; // MỚI — tick cam đoan Điều 2 legal/01, set trong signConsignment
+  ownershipWarrantedAt?: string; // MỚI — tick cam đoan Điều 2 legal/01, set khi ký ủy quyền
   // Cơ chế Auto-Escalation & SLA 2h + Admin Override
   openPoolAt?: string; // mốc thời gian tự động mở vào Open Pool (>30p)
   slaBreached?: boolean; // mốc thời gian quá 2h chưa có host nhận (SLA Breach)

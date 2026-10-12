@@ -46,8 +46,8 @@ function validDraft(items: ItemKey[] = ["ac", "fridge"]) {
 }
 
 describe("Consign & Inspection - WP1", () => {
-  // Case 1: submit (không draft) ⇒ awaiting_host, hostId đúng phân khu, inspectDueAt − signedAt = 48h, 3 thông báo đủ 3 audience.
-  it("1. submitConsignment (không draft) chuyển awaiting_host, gán đúng Host phân khu, SLA 48h và thông báo đủ 3 bên", () => {
+  // Case 1: submit ⇒ awaiting_host, hostId đúng phân khu, inspectDueAt − signedAt = 48h, 3 thông báo đủ 3 audience.
+  it("1. submitConsignment chuyển awaiting_host, gán đúng Host phân khu, SLA 48h và thông báo đủ 3 bên", () => {
     const c = actions.submitConsignment(
       {
         landlordId: "L1",
@@ -63,7 +63,6 @@ describe("Consign & Inspection - WP1", () => {
         items: ["ac", "fridge"],
         note: "Căn góc thoáng",
       },
-      false,
     );
 
     const s = getMockState();
@@ -83,22 +82,6 @@ describe("Consign & Inspection - WP1", () => {
     expect(lNotices.some((n) => n.title.includes("thẩm định"))).toBe(true);
     expect(hNotices.some((n) => n.title.includes("Ticket thẩm định"))).toBe(true);
     expect(aNotices.some((n) => n.title.includes("ký gửi mới"))).toBe(true);
-  });
-
-  // Case 2: signConsignment draft ⇒ awaiting_host; ký lần 2 ⇒ bad_status.
-  it("2. signConsignment draft sang awaiting_host; ký lần 2 trả bad_status", () => {
-    // cs-1 trong seed ban đầu là draft
-    const res1 = actions.signConsignment("cs-1", { ownershipWarranted: true });
-    expect(res1.ok).toBe(true);
-
-    const c1 = getMockState().consignments.find((x) => x.id === "cs-1")!;
-    expect(c1.status).toBe("awaiting_host");
-
-    const res2 = actions.signConsignment("cs-1", { ownershipWarranted: true });
-    expect(res2.ok).toBe(false);
-    if (!res2.ok) {
-      expect(res2.code).toBe("bad_status");
-    }
   });
 
   // Case 3: hostAcceptInspection sai Host ⇒ wrong_host, state không đổi.
@@ -271,7 +254,6 @@ describe("Consign & Inspection - WP1", () => {
         auditByHost: false,
         items: ["ac"],
       },
-      false,
     );
 
     const s = getMockState();
@@ -350,7 +332,6 @@ describe("Consign & Inspection - WP1", () => {
         furnishing: "full",
         locks: ["smart"],
       },
-      false,
     );
 
     expect(c.askRent).toBe(8_000_000);
@@ -377,7 +358,6 @@ describe("Consign & Inspection - WP1", () => {
         bankAccountHolder: "NGUYỄN VĂN AN",
         saveAsDefaultPayout: true,
       },
-      false,
     );
 
     expect(c.bankAccount).toBe("190388889999");
@@ -417,7 +397,6 @@ describe("Consign & Inspection - WP1", () => {
         bankAccount: existing?.bankAccount,
         bankAccountHolder: existing?.bankAccountHolder,
       },
-      false,
     );
 
     expect(c2.bankName).toBe("Vietcombank");
@@ -425,7 +404,7 @@ describe("Consign & Inspection - WP1", () => {
     expect(c2.bankAccountHolder).toBe("TRẦN THỊ MAI");
   });
 
-  // Case 18: Validation chặn số tài khoản dưới 6 số hoặc thiếu tên chủ tài khoản khi không phải draft
+  // Case 18: Validation chặn số tài khoản dưới 6 số hoặc thiếu tên chủ tài khoản
   it("18. Smart Onboarding: Chặn số tài khoản không hợp lệ (< 6 chữ số) và tên chủ tài khoản rỗng", () => {
     expect(() =>
       actions.submitConsignment(
@@ -441,7 +420,6 @@ describe("Consign & Inspection - WP1", () => {
           bankAccount: "123", // Quá ngắn (< 6 số)
           bankAccountHolder: "LE VAN B",
         },
-        false,
       ),
     ).toThrow("Số tài khoản ngân hàng không hợp lệ (tối thiểu 6 chữ số).");
 
@@ -459,7 +437,6 @@ describe("Consign & Inspection - WP1", () => {
           bankAccount: "123456789",
           bankAccountHolder: "A", // Quá ngắn (< 3 ký tự)
         },
-        false,
       ),
     ).toThrow("Tên chủ tài khoản phải có ít nhất 3 ký tự.");
   });
@@ -488,7 +465,6 @@ describe("Consign & Inspection - WP1", () => {
         bankAccountHolder: "TÀI KHOẢN PHỤ",
         saveAsDefaultPayout: false,
       },
-      false,
     );
 
     expect(c.bankName).toBe("ACB");
@@ -518,7 +494,6 @@ describe("Consign & Inspection - WP1", () => {
         furnished: true,
         items: ["sofa", "kitchen", "fridge"],
       },
-      false,
     );
 
     expect(c.items).toContain("sofa");
@@ -558,7 +533,6 @@ describe("Consign & Inspection - WP1", () => {
         furnished: false,
         items: [],
       },
-      false,
     );
     const emptyResult = resolveInventoryCodesFromLandlord(emptyConsign.items, emptyConsign.furnished, emptyConsign.note);
     // Không có ô nào bị tự tick
