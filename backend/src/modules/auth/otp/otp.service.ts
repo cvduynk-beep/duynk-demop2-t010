@@ -31,13 +31,12 @@ export class OtpService {
   private readonly maxAttempts: number;
   private readonly lockoutSeconds: number;
   private readonly resendSeconds: number;
-  /** Chỉ bật được ngoài production: khi không có nhà cung cấp thật thì trả mã qua API để dev/demo. */
-  private readonly echoDevCode: boolean;
   /**
-   * MÔ PHỎNG Zalo (giữ có chủ đích): mã cố định thay cho mã ngẫu nhiên, chỉ khi khai `OTP_DEV_CODE` (đúng 4 chữ số) và
-   * không phải production. Mã vẫn đi qua bảng otp_codes (băm, TTL, giới hạn thử, khoá) như mã thật.
+   * MÔ PHỎNG kênh Zalo (giữ có chủ đích, chưa tích hợp ZNS thật): chỉ bật được ngoài production bằng
+   * `OTP_ECHO_DEV_CODE=true`; khi Zalo/SMS thật không gửi được, mã được ghi ra LOG backend (`ConsoleOtpSender`).
+   * Mã KHÔNG BAO GIỜ nằm trong response API, và không có mã cố định: mọi mã đều ngẫu nhiên (`crypto.randomInt`).
    */
-  private readonly fixedDevCode?: string;
+  private readonly devConsoleEnabled: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -53,19 +52,20 @@ export class OtpService {
     this.maxAttempts = Number(config.get('OTP_MAX_ATTEMPTS') ?? 3);
     this.lockoutSeconds = Number(config.get('OTP_LOCKOUT_SECONDS') ?? 600);
     this.resendSeconds = Number(config.get('OTP_RESEND_SECONDS') ?? 60);
-    this.echoDevCode = String(config.get('OTP_ECHO_DEV_CODE')) === 'true' && config.get('NODE_ENV') !== 'production';
-    const fixed = String(config.get('OTP_DEV_CODE') ?? '').trim();
-    this.fixedDevCode = config.get('NODE_ENV') !== 'production' && /^\d{4}$/.test(fixed) ? fixed : undefined;
+    this.devConsoleEnabled = String(config.get('OTP_ECHO_DEV_CODE')) === 'true' && config.get('NODE_ENV') !== 'production';
   }
 
   get expiresInSeconds(): number {
     return this.ttlSeconds;
   }
 
-  /** `phone` phải là E.164 đã chuẩn hóa. Chỉ trả `devCode` khi chế độ dev bật và không có nhà cung cấp thật. */
-  async send(
-    params: { phone: string; purpose: OtpPurpose } & OtpRequestContext,
-  ): Promise<{ devCode?: string }> {
+  /** Thời gian chờ tối thiểu trước khi được gửi lại mã (FE dùng để đếm ngược, khớp `otp_cooldown`). */
+  get resendInSeconds(): number {
+    return this.resendSeconds;
+  }
+
+  /** `phone` phải là E.164 đã chuẩn hóa. Không bao giờ trả mã cho caller. */
+  async send(params: { phone: string; purpose: OtpPurpose } & OtpRequestContext): Promise<void> {
     const { phone, purpose, ipAddress, userAgent } = params;
     const phoneHash = this.phones.hash(phone);
 
@@ -83,8 +83,8 @@ export class OtpService {
       }
     }
 
-    const code = this.fixedDevCode ?? generateOtpCode();
-    const { channel, echoed } = await this.deliver(phone, code);
+    const code = generateOtpCode();
+    const channel = await this.deliver(phone, code);
 
     await this.prisma.$transaction([
       // Chỉ mã mới nhất được dùng: vô hiệu các mã cũ chưa xác thực.
@@ -107,7 +107,6 @@ export class OtpService {
     ]);
     await this.audit.record('otp_sent', { phoneHash, ipAddress, userAgent, metadata: { purpose, channel } });
 
-    return echoed ? { devCode: code } : {};
   }
 
   /**
@@ -172,7 +171,7 @@ export class OtpService {
     return result.count === 1;
   }
 
-  private async deliver(phone: string, code: string): Promise<{ channel: OtpChannel; echoed: boolean }> {
+  private async deliver(phone: string, code: string): Promise<OtpChannel> {
     const candidates: Array<{ channel: OtpChannel; sender: OtpChannelSender }> = [
       { channel: OtpChannel.ZALO, sender: this.zalo },
       { channel: OtpChannel.SMS, sender: this.sms },
@@ -180,15 +179,15 @@ export class OtpService {
     for (const { channel, sender } of candidates) {
       try {
         await sender.send(phone, code);
-        return { channel, echoed: false };
+        return channel;
       } catch (err) {
         this.logger.debug(`Kênh ${channel} không gửi được: ${(err as Error).message}`);
       }
     }
 
-    if (this.echoDevCode) {
+    if (this.devConsoleEnabled) {
       await this.devConsole.send(phone, code);
-      return { channel: OtpChannel.ZALO, echoed: true };
+      return OtpChannel.ZALO;
     }
     throw authError('otp_send_failed');
   }

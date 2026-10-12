@@ -1,8 +1,8 @@
 /**
  * MÔ PHỎNG ZALO OA / ZNS (giữ có chủ đích — chưa tích hợp Zalo ZNS thật).
  *
- * Nội dung tin là mô phỏng, nhưng MỌI tin đều dựng từ dữ liệu thật của backend: mã OTP mà backend trả (`devCode`, chỉ
- * có ở dev) và các mốc thời gian thật của lịch hẹn (`TenantBooking`). Không có tin nào sinh ra từ dữ liệu giả.
+ * Nội dung tin là mô phỏng, nhưng MỌI tin đều dựng từ các mốc thời gian thật của lịch hẹn (`TenantBooking`). Không có
+ * tin nào sinh ra từ dữ liệu giả. Mã OTP KHÔNG đi qua đây (API không trả mã; ở dev mã chỉ nằm trong log backend).
  * Khi tích hợp ZNS thật: backend gửi tin, FE chỉ hiển thị lịch sử do API trả — xoá module này.
  */
 import { fmtTime, vnd } from "@/lib/format";
@@ -23,23 +23,6 @@ export interface Notice {
   body: string;
   tone?: "info" | "success" | "warning" | "alert";
   actions?: NoticeAction[];
-}
-
-const OTP_PURPOSE_LABEL = {
-  TENANT_VIEWING: "đặt lịch xem phòng",
-  TENANT_DEPOSIT_SIGN: "ký thỏa thuận đặt cọc",
-  PHONE_VERIFY: "xác thực số điện thoại",
-} as const;
-
-/** Tin Zalo chứa mã OTP mà backend vừa phát (chỉ dựng được khi backend trả `devCode` — tức môi trường dev). */
-export function otpNotice(code: string, purpose: keyof typeof OTP_PURPOSE_LABEL, at = new Date().toISOString()): Notice {
-  return {
-    id: `otp-${at}`,
-    at,
-    title: "Mã xác thực VinStay AI",
-    body: `${code} là mã xác thực ${OTP_PURPOSE_LABEL[purpose]} của bạn. Mã có hiệu lực 5 phút. Không chia sẻ mã này cho bất kỳ ai, kể cả nhân viên VinStay.`,
-    tone: "info",
-  };
 }
 
 const CLOSE_REASON: Record<string, string> = {

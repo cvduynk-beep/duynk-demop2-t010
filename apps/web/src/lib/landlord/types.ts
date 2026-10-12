@@ -195,8 +195,8 @@ export interface SignOtpInfo {
   otpRequired: boolean;
   maskedPhone: string | null;
   expiresInSeconds: number;
-  /** Chỉ có khi backend bật OTP_ECHO_DEV_CODE (môi trường dev). */
-  devCode?: string;
+  /** Thời gian chờ tối thiểu trước khi xin mã mới. Response không bao giờ chứa mã OTP. */
+  resendInSeconds?: number;
 }
 
 export interface ExitResult {

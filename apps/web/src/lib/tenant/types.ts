@@ -196,3 +196,27 @@ export interface TenantContract {
     sizeBytes?: number;
   };
 }
+
+/** Biên bản bàn giao số (`GET /handovers/contracts/:id`): ảnh có link ký 1 giờ (null nếu ký lỗi). */
+export interface TenantHandover {
+  id: string;
+  handoverType: "CHECK_IN" | "CHECK_OUT";
+  inspectedAt: string;
+  signedByTenantAt: string | null;
+  items: {
+    id: string;
+    itemCategory: string;
+    conditionNote: string | null;
+    isNormalWear: boolean;
+    /** Decimal ⇒ chuỗi số. */
+    deductionCost: string | number;
+    photos: { key: string; takenAt?: string; url: string | null }[];
+  }[];
+  utilityReadings: {
+    id: string;
+    utilityType: "ELECTRICITY" | "WATER" | string;
+    meterIndex: string | number;
+    recordedAt: string;
+    photoUrl: string | null;
+  }[];
+}

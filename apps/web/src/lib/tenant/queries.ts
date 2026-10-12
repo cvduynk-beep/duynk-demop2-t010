@@ -5,6 +5,7 @@ import type {
   DepositTermsDoc,
   TenantBooking,
   TenantContract,
+  TenantHandover,
   TenantUnit,
 } from "./types";
 
@@ -46,6 +47,12 @@ export const tenantQueries = {
     key: "tenant:contracts",
     fetch: tenantApi.myContracts,
     errorText: (res) => errorText(res, "Không tải được danh sách hợp đồng."),
+  }),
+
+  handovers: (contractId: string): ApiQueryDef<TenantHandover[]> => ({
+    key: `tenant:handovers:${contractId}`,
+    fetch: () => tenantApi.handovers(contractId),
+    errorText: (res) => errorText(res, "Không tải được hộ chiếu bàn giao."),
   }),
 
   /** `signedIn=false` ⇒ không gọi API (khách vãng lai không có danh sách yêu thích), trả rỗng. */

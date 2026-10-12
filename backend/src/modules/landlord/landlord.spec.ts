@@ -415,7 +415,7 @@ describe('LandlordConsignmentService.get — phiếu thẩm định cho chủ nh
 describe('LandlordConsignmentService.sendSignOtp', () => {
   const build = () => {
     const prisma = fakePrisma();
-    const otp = { send: jest.fn(async () => ({ devCode: '4829' })), expiresInSeconds: 300 };
+    const otp = { send: jest.fn(async () => undefined), expiresInSeconds: 300, resendInSeconds: 60 };
     const phones = {
       decrypt: jest.fn(() => '+84901234567'),
       normalize: jest.fn((v: string) => (/^0\d{9}$/.test(v) ? `+84${v.slice(1)}` : null)),
@@ -438,7 +438,7 @@ describe('LandlordConsignmentService.sendSignOtp', () => {
     const { otp, service } = build();
     const out = await service.sendSignOtp(ME);
     expect(otp.send).toHaveBeenCalledWith({ phone: '+84901234567', purpose: 'PHONE_VERIFY' });
-    expect(out).toMatchObject({ otpRequired: true, maskedPhone: '0901 *** 567', expiresInSeconds: 300, devCode: '4829' });
+    expect(out).toEqual({ otpRequired: true, maskedPhone: '0901 *** 567', expiresInSeconds: 300, resendInSeconds: 60 });
     expect(JSON.stringify(out)).not.toContain('901234567');
   });
 

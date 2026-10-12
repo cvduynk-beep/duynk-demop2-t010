@@ -7,7 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BookingService } from './booking.service';
+import { BookingService, generateBookingRefCode } from './booking.service';
 import { BookingAccessService } from '../tenant/booking-access.service';
 import { PhoneService } from '../auth/phone/phone.service';
 import { ActionTokenService } from '../auth/otp/action-token.service';
@@ -221,8 +221,8 @@ describe('Tenant Booking Backend (SPEC-P02 §6: 14 test cases)', () => {
       purpose: 'TENANT_VIEWING',
       jti: 'otp-1',
     });
-    // Giả lập đã có viewing cùng khung giờ
-    fixture.prisma.viewing.findFirst.mockResolvedValueOnce({ id: 'existing-viewing' });
+    // Giả lập đã có viewing cùng khung giờ của KHÁCH KHÁC (lời gọi tìm lịch của chính khách — có `tenantId` — trả null)
+    fixture.prisma.viewing.findFirst.mockImplementation(async ({ where }: any) => (where.tenantId ? null : { id: 'existing-viewing' }));
 
     const dto = {
       unitCode: 'VHOP-S1.02-1208',
@@ -350,6 +350,86 @@ describe('Tenant Booking Backend (SPEC-P02 §6: 14 test cases)', () => {
         },
       ),
     ).rejects.toMatchObject({ status: 409, response: expect.objectContaining({ code: 'slot_taken' }) });
+  });
+
+  describe('idempotency & mã lịch hẹn', () => {
+    const dto = () => ({
+      unitCode: 'VHOP-S1.02-1208',
+      slot: getValidFutureSlot(),
+      contactName: 'Khách A',
+      phone: '0912345678',
+      partySize: 2,
+      actionToken: 'valid-token',
+    });
+    const verifiedProfile = () =>
+      fixture.prisma.profile.findUnique.mockResolvedValue({
+        id: TENANT_ID,
+        fullName: 'Khách A',
+        isPhoneVerified: true,
+        phoneHash: phoneService.hash('+84912345678'),
+      });
+
+    it('gửi lại (bấm trùng): cùng khách + căn + giờ còn sống ⇒ trả LẠI lịch cũ, không đổi token, không tạo bản thứ hai', async () => {
+      (actionTokens.redeem as jest.Mock).mockResolvedValueOnce({ phone: '+84912345678', purpose: 'TENANT_VIEWING', jti: 'otp-1' });
+      verifiedProfile();
+      const first = await bookingService.createBooking({ id: TENANT_ID }, dto());
+      const saved = fixture.getSavedViewing();
+      // Lần 2: lịch của chính khách đã tồn tại cho (căn, giờ)
+      fixture.prisma.viewing.findFirst.mockImplementation(async ({ where }: any) =>
+        where.tenantId === TENANT_ID ? { bookingRefCode: saved.bookingRefCode } : null,
+      );
+      fixture.prisma.viewing.findUnique.mockImplementation(async () => ({ ...saved, tenantId: TENANT_ID }));
+      const second = await bookingService.createBooking({ id: TENANT_ID }, dto());
+      expect(second.ref).toBe(first.ref);
+      expect(fixture.prisma.viewing.create).toHaveBeenCalledTimes(1);
+      expect(actionTokens.redeem).toHaveBeenCalledTimes(1);
+    });
+
+    it('hai request song song của cùng khách: bên thua Serializable nhận chính lịch bên thắng (không 409)', async () => {
+      (actionTokens.redeem as jest.Mock).mockResolvedValue({ phone: '+84912345678', purpose: 'TENANT_VIEWING', jti: 'otp-1' });
+      verifiedProfile();
+      const winner = { bookingRefCode: 'VS-WIN22', tenantId: TENANT_ID, id: 'v-win', createdAt: new Date(), unit: fixture.mockUnit, tickets: [], deposit: null, status: ViewingStatus.PENDING_CONFIRMATION, viewingSlot: new Date(getValidFutureSlot()), contactName: 'Khách A', partySize: 2 };
+      let calls = 0;
+      fixture.prisma.viewing.findFirst.mockImplementation(async ({ where }: any) => {
+        if (!where.tenantId) return null;
+        calls += 1;
+        return calls === 1 ? null : { bookingRefCode: winner.bookingRefCode }; // trước: chưa có; sau xung đột: đã có
+      });
+      fixture.prisma.viewing.findUnique.mockImplementation(async ({ where }: any) => (where.bookingRefCode === 'VS-WIN22' ? winner : null));
+      fixture.prisma.$transaction.mockRejectedValueOnce({ code: 'P2034' });
+      const res = await bookingService.createBooking({ id: TENANT_ID }, dto());
+      expect(res.ref).toBe('VS-WIN22');
+    });
+
+    it('lịch trùng giờ của KHÁCH KHÁC vẫn là 409 slot_taken', async () => {
+      (actionTokens.redeem as jest.Mock).mockResolvedValueOnce({ phone: '+84912345678', purpose: 'TENANT_VIEWING', jti: 'otp-1' });
+      verifiedProfile();
+      fixture.prisma.$transaction.mockRejectedValueOnce({ code: 'P2034' });
+      await expect(bookingService.createBooking({ id: TENANT_ID }, dto())).rejects.toMatchObject({
+        status: 409,
+        response: expect.objectContaining({ code: 'slot_taken' }),
+      });
+    });
+
+    it('mã lịch hẹn sinh bằng crypto (không dùng Math.random) và đúng bảng ký tự', () => {
+      const spy = jest.spyOn(Math, 'random');
+      const codes = new Set(Array.from({ length: 200 }, () => generateBookingRefCode()));
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+      expect([...codes].every((c) => /^VS-[A-HJ-NP-Z2-9]{5}$/.test(c))).toBe(true);
+      expect(codes.size).toBeGreaterThan(190);
+    });
+
+    it('5 lần trùng mã ⇒ 503 ref_generation_failed (không rơi về mã theo đồng hồ)', async () => {
+      (actionTokens.redeem as jest.Mock).mockResolvedValueOnce({ phone: '+84912345678', purpose: 'TENANT_VIEWING', jti: 'otp-1' });
+      verifiedProfile();
+      fixture.prisma.viewing.findUnique.mockResolvedValue({ id: 'taken' });
+      await expect(bookingService.createBooking({ id: TENANT_ID }, dto())).rejects.toMatchObject({
+        status: 503,
+        response: expect.objectContaining({ code: 'ref_generation_failed' }),
+      });
+      expect(fixture.prisma.viewing.create).not.toHaveBeenCalled();
+    });
   });
 
   // 8. SLA ticket = 180s

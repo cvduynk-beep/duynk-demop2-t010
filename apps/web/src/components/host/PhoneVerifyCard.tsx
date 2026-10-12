@@ -27,7 +27,6 @@ export function PhoneVerifyCard({
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +36,6 @@ export function PhoneVerifyCard({
     const res = await hostApi.sendPhoneOtp(phone.trim());
     setBusy(false);
     if (!res.ok) return setError(errorText(res));
-    setDevCode(res.data.devCode ?? null);
     setSent(true);
   }
 
@@ -99,11 +97,11 @@ export function PhoneVerifyCard({
               <>
                 <p className="muted small">
                   Đã gửi mã 4 số tới Zalo <b className="tnum">{phone.trim()}</b>.{" "}
-                  <button type="button" className="btn btn-quiet btn-sm" disabled={busy} onClick={() => { setSent(false); setCode(""); setDevCode(null); }}>
+                  <button type="button" className="btn btn-quiet btn-sm" disabled={busy} onClick={() => { setSent(false); setCode(""); }}>
                     Đổi số / gửi lại
                   </button>
                 </p>
-                <DevOtpHint code={devCode} onFill={setCode} />
+                <DevOtpHint />
                 <label className="field">
                   Mã 4 số
                   <input

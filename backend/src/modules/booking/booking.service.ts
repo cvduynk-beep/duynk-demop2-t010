@@ -6,8 +6,10 @@ import {
   ForbiddenException,
   BadRequestException,
   Logger,
+  ServiceUnavailableException,
   Optional,
 } from '@nestjs/common';
+import { randomInt } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BookingAccessService } from '../tenant/booking-access.service';
 import { PhoneService } from '../auth/phone/phone.service';
@@ -26,14 +28,28 @@ import { TenantBooking } from '../tenant/tenant.types';
 import { isValidSlotTimeVN } from '../tenant/slots.helper';
 import { DepositService } from '../deposit/deposit.service';
 
-function generateBookingRefCode(): string {
+/**
+ * Mã lịch hẹn `VS-XXXXX` (32^5 ≈ 33,5 triệu tổ hợp), sinh bằng `crypto.randomInt` — không dùng Math.random/đồng hồ.
+ * Mã KHÔNG phải bí mật truy cập: xem lịch bắt buộc đăng nhập và là chủ lịch (người khác nhận 404 như mã không tồn tại).
+ */
+export function generateBookingRefCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = 'VS-';
   for (let i = 0; i < 5; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(randomInt(chars.length));
   }
   return code;
 }
+
+/** Trạng thái lịch "còn sống" — chiếm khung giờ của căn. */
+const LIVE_STATUSES = [
+  ViewingStatus.PENDING_CONFIRMATION,
+  ViewingStatus.CONFIRMED,
+  ViewingStatus.LOBBY,
+  ViewingStatus.RECEIVING,
+  ViewingStatus.VIEWING,
+  ViewingStatus.CLOSING,
+];
 
 function isSerializationConflict(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as any).code === 'P2034');
@@ -108,6 +124,12 @@ export class BookingService {
         code: 'unit_not_found',
       });
     }
+
+    // Idempotency (không đổi schema): cùng khách + cùng căn + cùng giờ + lịch còn sống ⇒ đây là lần GỬI LẠI (bấm trùng,
+    // mạng chập chờn) ⇒ trả lại đúng lịch đã tạo thay vì 409/tạo bản thứ hai. Kiểm TRƯỚC khi đổi action token (token
+    // dùng một lần nên lần gửi lại mang cùng token sẽ bị từ chối nếu kiểm sau).
+    const replay = await this.ownLiveBooking(user, unit.id, slotDate);
+    if (replay) return replay;
 
     if (unit.status === UnitStatus.HOLDING && this.deposits) {
       await this.deposits.expireIfDue(unit.id);
@@ -207,7 +229,8 @@ export class BookingService {
       }
     }
     if (!refCode) {
-      refCode = `VS-${Date.now().toString().slice(-5)}`;
+      // Không rơi về mã đoán được (đồng hồ): báo lỗi tạm thời để khách thử lại.
+      throw new ServiceUnavailableException({ message: 'Chưa cấp được mã lịch hẹn, vui lòng thử lại.', code: 'ref_generation_failed' });
     }
 
     const contactPhoneEnc = this.phones.encrypt(normPhone);
@@ -266,7 +289,10 @@ export class BookingService {
       return v;
       }, { isolationLevel: 'Serializable' });
     } catch (error) {
-      if (isSerializationConflict(error)) {
+      if (isSerializationConflict(error) || (error instanceof ConflictException && (error.getResponse() as any)?.code === 'slot_taken')) {
+        // Hai request song song của CÙNG khách: một bên đã tạo xong ⇒ bên còn lại trả về chính lịch đó.
+        const winner = await this.ownLiveBooking(user, unit.id, slotDate);
+        if (winner) return winner;
         throw new ConflictException({
           message: 'Khung giờ này vừa có người đặt xem phòng.',
           code: 'slot_taken',
@@ -277,6 +303,23 @@ export class BookingService {
 
     const fullViewing = await this.bookingAccess.loadOwned(createdViewing.bookingRefCode, user);
     return toTenantBooking(fullViewing, { rawPhone: normPhone });
+  }
+
+  /** Lịch còn sống của chính khách cho (căn, giờ) — dùng cho idempotency của `createBooking`. */
+  private async ownLiveBooking(user: { id: string }, unitId: string, slot: Date): Promise<TenantBooking | null> {
+    const existing = await this.prisma.viewing.findFirst({
+      where: { tenantId: user.id, unitId, viewingSlot: slot, status: { in: LIVE_STATUSES } },
+      select: { bookingRefCode: true },
+    });
+    if (!existing) return null;
+    const full = await this.bookingAccess.loadOwned(existing.bookingRefCode, user);
+    let rawPhone: string | undefined;
+    try {
+      rawPhone = full.contactPhoneEnc ? this.phones.decrypt(full.contactPhoneEnc) : undefined;
+    } catch {
+      rawPhone = undefined; // SĐT giải mã lỗi ⇒ trả số đã che (toTenantBooking tự xử lý), không chặn việc trả lịch
+    }
+    return toTenantBooking(full, { rawPhone });
   }
 
   /**

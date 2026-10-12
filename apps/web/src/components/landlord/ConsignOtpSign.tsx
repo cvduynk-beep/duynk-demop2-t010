@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MessageCircleMore } from "lucide-react";
 import { OtpInput } from "@/components/ui/OtpInput";
+import { DevOtpHint } from "@/components/ui/DevOtpHint";
 import { fmtPhone, isValidVnPhone, normalizePhone } from "@/lib/format";
 import { errorText, landlordApi } from "@/lib/landlord/api";
 import type { SignOtpInfo } from "@/lib/landlord/types";
@@ -106,11 +107,7 @@ export function ConsignOtpSign({ warranted, needPhone, onSign, onError }: Consig
       <button type="button" className="btn btn-quiet btn-sm" style={{ alignSelf: "flex-start" }} disabled={cooldown > 0 || busy} onClick={send}>
         {cooldown > 0 ? `Gửi lại mã sau ${cooldown}s` : "Gửi lại mã"}
       </button>
-      {info.devCode && (
-        <p className="xs muted" style={{ padding: 10, border: "1px dashed #b7cdee", borderRadius: 12, background: "#eef4fc" }}>
-          Môi trường thử nghiệm: mã OTP là <b className="tnum">{info.devCode}</b>
-        </p>
-      )}
+      <DevOtpHint />
     </div>
   );
 }
