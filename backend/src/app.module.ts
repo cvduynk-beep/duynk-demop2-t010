@@ -28,6 +28,7 @@ import { HostViewingsModule } from './modules/host-viewings/host-viewings.module
 import { DoorModule } from './modules/door/door.module';
 import { InspectionModule } from './modules/inspection/inspection.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
+import { ChatModule } from './modules/chat/chat.module';
 
 // Common Filters, Guards & Interceptors
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
@@ -69,6 +70,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
     DoorModule,
     InspectionModule,
     AssistantModule,
+    ChatModule,
   ],
   providers: [
     {

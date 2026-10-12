@@ -17,6 +17,12 @@ def response_generator_node(state: AgentState) -> dict[str, Any]:
     criteria = state.get("criteria", {})
     budget_ceiling = criteria.get("budget_ceiling")
 
+    # Core API lỗi ⇒ chỉ trả lời bằng chữ, không có danh sách căn nào (cấm dựng danh sách thay thế).
+    if (state.get("metadata") or {}).get("recommend_error"):
+        return {
+            "response": "Mình chưa tải được danh sách căn lúc này nên chưa thể gợi ý căn cụ thể. Bạn thử lại sau ít phút nhé.",
+        }
+
     # Thử sinh câu trả lời bằng Gemini Flash nếu có
     if matched_units:
         gemini_reply = generate_response_with_gemini(matched_units, criteria, policy_answer, query)
@@ -29,7 +35,8 @@ def response_generator_node(state: AgentState) -> dict[str, Any]:
     # Trường hợp 1: Hỏi về quy chế BQL / Chính sách cọc
     if intent == "policy_faq" or (policy_answer and not matched_units):
         return {
-            "response": policy_answer or "Dạ VinStay AI sẵn sàng giải đáp mọi thắc mắc về nội quy Vinhomes Ocean Park và biểu phí All-in trọn gói!",
+            "response": policy_answer
+            or "Dạ VinStay AI sẵn sàng giải đáp mọi thắc mắc về nội quy Vinhomes Ocean Park và biểu phí All-in trọn gói!",
         }
 
     # Trường hợp 2: Kết quả tìm kiếm căn hộ
@@ -40,25 +47,29 @@ def response_generator_node(state: AgentState) -> dict[str, Any]:
 
         header = "✨ **VinStay AI đã tìm thấy các căn hộ phù hợp nhất tại Vinhomes Ocean Park:**"
         if budget_ceiling:
-            header += f"\n*(Cam kết All-in Cost trọn gói không vượt quá ngân sách trần **{budget_ceiling:,.0f} đ/tháng**)*\n"
+            header += (
+                f"\n*(Cam kết All-in Cost trọn gói không vượt quá ngân sách trần **{budget_ceiling:,.0f} đ/tháng**)*\n"
+            )
         parts.append(header)
 
         for idx, u in enumerate(matched_units, start=1):
             badge = f" {u['badge_text']}" if u.get("badge_text") else ""
+            floor = f" — Tầng {u['floor_number']}" if u.get("floor_number") is not None else ""
+            highlights = f"- **Đặc điểm nổi bật:** {', '.join(u['highlights'])}\n" if u.get("highlights") else ""
             card = (
-                f"### {idx}. {u['unit_code']} ({u['zone_name']}) — Tầng {u['floor_number']}{badge}\n"
+                f"### {idx}. {u['unit_code']} ({u['zone_name']}){floor}{badge}\n"
                 f"- **Loại căn:** {u['layout_type']} · **Diện tích thông thủy:** {u['carpet_area_m2']} m²\n"
                 f"- **Giá thuê gốc:** `{u['base_rent_price']:,.0f} đ/tháng`\n"
                 f"- 📊 **TỔNG CHI PHÍ ALL-IN TRỌN GÓI: `{u['all_in_total']:,.0f} đ/tháng`**\n"
                 f"  *(Đã gồm: Thuê gốc + Phí QL BQL {u['management_fee']:,.0f}đ + Gửi xe {u['parking_fee']:,.0f}đ + Điện nước ước tính {u['utility_cost']:,.0f}đ)*\n"
-                f"- **Đặc điểm nổi bật:** {', '.join(u.get('highlights', []))}\n"
+                f"{highlights}"
                 f"- 🛡️ **Chứng nhận:** `{u.get('verified_label', 'VERIFIED 100% THỰC TẾ')}`\n"
             )
             parts.append(card)
 
         footer = (
-            "\n💡 **Bước tiếp theo:** Bạn có thể bấm **'Đặt lịch xem phòng'** (Field Host đón tại sảnh bằng thẻ cư dân trong 60 giây) "
-            "hoặc quét **VietQR giữ chỗ 2.000.000đ** để khóa căn độc quyền 48h (nguyên tắc *First-to-Pay Wins*)!"
+            "\n💡 **Bước tiếp theo:** Bấm **'Đặt lịch xem phòng'** — Field Host đón tại sảnh bằng thẻ cư dân. "
+            "Xem xong, nếu ưng ý, bạn quét **VietQR cọc giữ chỗ 2.000.000đ** để khóa căn (nguyên tắc *First-to-Pay Wins*)."
         )
         parts.append(footer)
         return {"response": "\n".join(parts)}

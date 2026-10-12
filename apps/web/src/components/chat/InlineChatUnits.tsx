@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { ArrowRight, ChevronRight, Sparkles, Zap } from "lucide-react";
 import { VerifiedPhoto } from "@/components/unit/VerifiedPhoto";
 import { isBargain, savingsPct } from "@/lib/pricing/cost";
 import { vnd } from "@/lib/format";
-import { unitAddress, unitById, zoneById, type Unit } from "@/lib/mock/units";
-import type { CriteriaState } from "@/lib/mock/types";
+import type { CriteriaState } from "@/lib/chat/types";
+import { useCatalog } from "@/lib/tenant/catalog";
+import { unitAddress, zoneById } from "@/lib/units";
 import styles from "./InlineChatUnits.module.css";
 
 interface InlineChatUnitsProps {
+  /** Mã căn theo đúng thứ hạng backend trả; FE chỉ tra thông tin hiển thị từ catalog, không sắp lại. */
   unitIds: string[];
   criteria?: CriteriaState;
   onShowResults?: (count: number) => void;
@@ -17,9 +20,11 @@ interface InlineChatUnitsProps {
 }
 
 export function InlineChatUnits({ unitIds, onShowResults, title }: InlineChatUnitsProps) {
-  const units = unitIds
-    .map((id) => unitById(id))
-    .filter((u): u is Unit => Boolean(u));
+  const { units: catalog } = useCatalog();
+  const units = useMemo(() => {
+    const byCode = new Map(catalog.map((u) => [u.code, u]));
+    return unitIds.map((id) => byCode.get(id)).filter((u): u is NonNullable<typeof u> => Boolean(u));
+  }, [catalog, unitIds]);
 
   if (units.length === 0) return null;
 

@@ -1,8 +1,29 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PropertyService } from '../property/property.service';
+import { PropertyFilterDto } from '../property/dto/property-query.dto';
+import { ZONE_BUILDINGS } from '../tenant/tenant.mappers';
+import { TenantUnit } from '../tenant/tenant.types';
 import { MatchmakerRequestDto } from './dto/matchmaker-request.dto';
 import { UnitStatus } from '@prisma/client';
+
+const floorBand = (floor: number): 'low' | 'mid' | 'high' => (floor <= 10 ? 'low' : floor <= 20 ? 'mid' : 'high');
+
+/** Bộ lọc cứng ngoài ngân sách (layout, phân khu/toà, tầng, nội thất, đồ dùng, thú cưng). Thiếu tiêu chí ⇒ không lọc. */
+function passesFilters(unit: TenantUnit, dto: MatchmakerRequestDto): boolean {
+  if (dto.layouts?.length && !dto.layouts.includes(unit.layout)) return false;
+  if (dto.buildings?.length) {
+    if (!dto.buildings.includes(unit.building)) return false;
+  } else if (dto.zones?.length) {
+    const allowed = dto.zones.flatMap((z) => ZONE_BUILDINGS[z] ?? []);
+    if (!allowed.includes(unit.building)) return false;
+  }
+  if (dto.floor && floorBand(unit.floor) !== dto.floor) return false;
+  if (dto.furnishing && unit.furnishing !== dto.furnishing) return false;
+  if (dto.items?.length && !dto.items.every((i) => (unit.items ?? []).includes(i))) return false;
+  if (dto.pets && !unit.petFriendly) return false;
+  return true;
+}
 
 @Injectable()
 export class MatchmakerService {
@@ -17,17 +38,14 @@ export class MatchmakerService {
     const startTime = Date.now();
     const { maxAllInBudget, preferredLayout, motorbikes = 1, cars = 0, occupants = 2, limit = 3 } = dto;
 
-    // 1. Quét toàn bộ rổ hàng AVAILABLE thông qua PropertyService
-    const availableUnits = await this.propertyService.getUnits({
-      layoutType: preferredLayout,
-      status: UnitStatus.AVAILABLE,
-      motorbikes,
-      cars,
-      occupants,
-    });
+    // 1. Quét toàn bộ rổ hàng AVAILABLE thông qua PropertyService (một layout ⇒ lọc ngay ở DB).
+    const filter: PropertyFilterDto = { status: UnitStatus.AVAILABLE, motorbikes, cars, occupants };
+    if (preferredLayout) filter.layoutType = preferredLayout;
+    else if (dto.layouts?.length === 1) filter.layout = dto.layouts[0];
+    const scannedUnits = await this.propertyService.getUnits(filter);
 
-    const totalScanned = availableUnits.length;
-    const enrichedUnits = availableUnits.map((item) => {
+    const totalScanned = scannedUnits.length;
+    const enrichedUnits = scannedUnits.filter((u) => passesFilters(u, dto)).map((item) => {
       const baseRent = Number(item.rent);
       const managementFee = Number(item.managementFee);
       const parkingFee = motorbikes * 150000 + cars * 1250000;
@@ -48,8 +66,9 @@ export class MatchmakerService {
       };
     });
 
-    // 2. Lọc cứng theo trần ngân sách All-in (Hard Constraints)
-    const eligibleUnits = enrichedUnits.filter((item) => item.allInCost.allInTotal <= maxAllInBudget);
+    // 2. Lọc cứng theo trần ngân sách All-in (Hard Constraints); không có ngân sách ⇒ không loại căn nào.
+    const eligibleUnits =
+      maxAllInBudget != null ? enrichedUnits.filter((item) => item.allInCost.allInTotal <= maxAllInBudget) : enrichedUnits;
 
     const eliminatedCount = totalScanned - eligibleUnits.length;
 
@@ -66,12 +85,17 @@ export class MatchmakerService {
       const savingMonthly = item.costComparison.savingAmount;
       return {
         rank: index + 1,
+        /** Khoá xếp hạng chính (= % tiết kiệm All-in so với giá tham chiếu); bằng nhau thì All-in thấp hơn đứng trước. */
+        score: item.costComparison.savingPercentage,
         unitId: item.id,
         unitCode: item.code,
         buildingCode: item.building,
         zoneName: item.zoneName,
         layoutType: item.layout,
         carpetAreaM2: item.areaM2,
+        floor: item.floor,
+        furnishing: item.furnishing,
+        petFriendly: item.petFriendly,
         allInCost: item.allInCost,
         comparison: item.costComparison,
         aiExplanation: `Căn ${item.code} giúp bạn tiết kiệm ${savingMonthly.toLocaleString('vi-VN')} đ/tháng (${item.costComparison.savingPercentage}%) so với giá thuê tham chiếu cùng phân khu ${item.zoneName}, bao gồm toàn bộ phí BQL và định mức sinh hoạt.`,
