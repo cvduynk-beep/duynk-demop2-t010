@@ -12,6 +12,7 @@ import { AdminDepositService } from './admin-deposit.service';
 import { AdminKeyService, ADMIN_KEY_CRYPTO } from './admin-key.service';
 import { AdminContractRegistryService } from './admin-contract-registry.service';
 import { AdminDashboardService } from './admin-dashboard.service';
+import { AdminBookingsService } from './admin-bookings.service';
 
 const services = [
   AdminContractRegistryService,
@@ -24,6 +25,7 @@ const services = [
   AdminDepositService,
   AdminKeyService,
   AdminDashboardService,
+  AdminBookingsService,
 ];
 
 @Module({

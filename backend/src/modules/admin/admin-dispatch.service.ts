@@ -2,12 +2,11 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import type { AdminActor } from './admin-fee.service';
-import { EscalateTicketDto, ReassignBookingDto } from './dto/admin.dto';
+import { EscalateTicketDto } from './dto/admin.dto';
 
 // SLA theo tầng (SAD_v2 §6.2): T1 300s, T2 180s; T3 (broadcast Area Lead) dùng 180s — đã chốt.
 const TIER_SLA_SECONDS: Record<number, number> = { 1: 300, 2: 180, 3: 180 };
 const MAX_TIER = 3;
-const REASSIGNABLE = ['OFFERED', 'EXPIRED', 'ESCALATED'];
 const ESCALATABLE = ['OFFERED', 'EXPIRED'];
 const OPEN_VIEWING = ['PENDING_CONFIRMATION', 'CONFIRMED'];
 
@@ -122,51 +121,6 @@ export class AdminDispatchService {
       ? Math.round(byHost.reduce((s, h) => s + h.avgAcceptSeconds * h.accepted, 0) / totalAccepted)
       : null;
     return { byTier, breachedCount, actionable, byHost, avgAcceptSeconds };
-  }
-
-  async reassign(viewingId: string, dto: ReassignBookingDto, actor: AdminActor, now: Date = new Date()) {
-    const reason = requireReason(dto.reason);
-    const ticket: any = await this.prisma.dispatchTicket.findFirst({
-      where: { viewingId },
-      orderBy: { offeredAt: 'desc' },
-      include: { viewing: true },
-    });
-    if (!ticket) throw new NotFoundException('Không tìm thấy ticket điều phối cho lịch xem này.');
-    if (!REASSIGNABLE.includes(ticket.status)) {
-      throw new ConflictException(`Ticket đang ở trạng thái ${ticket.status}, không thể giao lại.`);
-    }
-    if (!OPEN_VIEWING.includes(ticket.viewing?.status)) {
-      throw new ConflictException('Lịch xem đã kết thúc hoặc bị hủy, không thể giao lại.');
-    }
-    if (ticket.hostId === dto.hostId) throw new BadRequestException('Host mới trùng Host hiện tại.');
-    const host: any = await this.prisma.fieldHost.findUnique({ where: { id: dto.hostId } });
-    if (!host) throw new NotFoundException('Không tìm thấy Field Host.');
-    if (host.dutyStatus !== 'ONLINE_AVAILABLE') throw new ConflictException('Field Host không ở trạng thái sẵn sàng.');
-
-    const old = { hostId: ticket.hostId, status: ticket.status, tier: ticket.tier };
-    await this.prisma.$transaction(async (tx: any) => {
-      await tx.dispatchTicket.update({
-        where: { id: ticket.id },
-        data: { hostId: dto.hostId, status: 'OFFERED', offeredAt: now, acceptedAt: null },
-      });
-    });
-    await this.audit.log({
-      actorId: actor.id,
-      actorRole: actor.role,
-      actionType: 'DISPATCH_REASSIGNED',
-      entityName: 'DispatchTicket',
-      entityId: ticket.id,
-      oldValue: old,
-      newValue: { hostId: dto.hostId, status: 'OFFERED', reason },
-    } as any);
-    return {
-      success: true,
-      bookingId: viewingId,
-      ticketId: ticket.id,
-      newHostId: dto.hostId,
-      reassignedAt: now.toISOString(),
-      message: 'Đã điều phối lịch xem sang Field Host mới.',
-    };
   }
 
   async escalate(ticketId: string, dto: EscalateTicketDto, actor: AdminActor, now: Date = new Date()) {
