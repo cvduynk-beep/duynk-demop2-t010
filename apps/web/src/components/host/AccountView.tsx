@@ -1,20 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, KeyRound, Lock, MapPin, ShieldCheck } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CheckCircle2, KeyRound, MapPin, ShieldCheck } from "lucide-react";
 import { KeyValue } from "@/components/ui/KeyValue";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { loginPathFor } from "@/lib/auth/portals";
-import { DEMO_USERS } from "@/lib/mock/actors";
 import { signOut } from "@/lib/auth/client";
-import { hostRoles, hostZones, isHostSuspended } from "@/lib/mock/selectors";
-import { useMock } from "@/lib/mock/store";
-import { hostById, zoneById } from "@/lib/mock/units";
+import { useHostMe } from "@/lib/host/api";
+import { useApiQuery } from "@/lib/query/useApiQuery";
+import { tenantQueries } from "@/lib/tenant/queries";
+import { zoneOfName } from "@/lib/units";
 import styles from "./Host.module.css";
-
-const HOST = DEMO_USERS.host;
+import { requestPhoneVerify } from "./PhoneVerifyGate";
 
 const SHIFTS = [
   { id: "morning", label: "Ca sáng", time: "08:30–11:30" },
@@ -27,92 +26,92 @@ const RULES = [
   "Có sự cố tại căn: chỉ giới thiệu danh bạ thợ ngoài, khách và thợ tự thoả thuận.",
 ];
 
-/** Hồ sơ Field Host: thông tin cá nhân, phân quyền khu vực kèm thẩm định & dẫn khách, thẻ RFID, ca trực và quy tắc cốt lõi. */
-export function AccountView() {
-  const state = useMock();
-  const host = hostById(HOST.refId!)!;
-  const currentZones = hostZones(state, host.id);
-  const currentRoles = hostRoles(state, host.id);
-  const isSuspended = isHostSuspended(state, host.id);
-  const [onShift, setOnShift] = useState<Record<string, boolean>>({ morning: true, afternoon: true });
+/** Thẻ cư dân RFID: chưa có bảng lưu số thẻ ⇒ hiển thị mẫu cố định (chỉ minh hoạ, không phải dữ liệu thật). */
+const RFID_DEMO = { number: "VS-0412" };
 
-  const hasSale = currentRoles.includes("sale");
-  const hasInspector = currentRoles.includes("inspector");
+/** Rút gọn danh sách tòa: 5 tòa đầu + "+N tòa". */
+function buildingsText(buildings: string[]): string {
+  const head = buildings.slice(0, 5).join(", ");
+  return buildings.length > 5 ? `${head} +${buildings.length - 5} tòa` : head;
+}
+
+/**
+ * Hồ sơ Field Host: dữ liệu thật từ `GET /host/me`; tòa của phân khu lấy từ danh mục căn đang niêm yết. Ca trực, thẻ
+ * RFID và quy tắc cốt lõi chưa có dữ liệu backend (ca trực: hồ sơ 15).
+ */
+export function AccountView() {
+  const me = useHostMe();
+  const catalog = useApiQuery(tenantQueries.units());
+  const [onShift, setOnShift] = useState<Record<string, boolean>>({ morning: true, afternoon: true });
+  const assignedZone = me.state.status === "ready" ? me.state.data.assignedZone : "";
+  const buildings = useMemo(() => {
+    if (catalog.state.status !== "ready" || !assignedZone) return [];
+    const zone = zoneOfName(assignedZone);
+    const names = catalog.state.data.units
+      .filter((u) => (zone ? zoneOfName(u.zoneName)?.id === zone.id : u.zoneName === assignedZone))
+      .map((u) => u.building);
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b, "vi", { numeric: true }));
+  }, [catalog.state, assignedZone]);
+
+  if (me.state.status === "loading") return <div className="skeleton" style={{ height: 360 }} />;
+  if (me.state.status === "error") {
+    return (
+      <div className={styles.page}>
+        <PageHeader title="Tài khoản" />
+        <p role="alert">{me.state.message}</p>
+        <button type="button" className="btn btn-quiet" onClick={me.reload}>
+          Thử lại
+        </button>
+      </div>
+    );
+  }
+  const host = me.state.data;
+  const hasSale = host.roles.includes("sale");
+  const hasInspector = host.roles.includes("inspector");
+  const phoneVerified = host.isPhoneVerified && Boolean(host.phone);
+  const zoneName = zoneOfName(host.assignedZone)?.name ?? host.assignedZone;
 
   return (
     <div className={styles.page}>
       <PageHeader title="Tài khoản" />
-
-      {isSuspended && (
-        <div
-          style={{
-            padding: "14px 18px",
-            borderRadius: "var(--r-sm)",
-            background: "var(--danger-050)",
-            border: "1px solid #fca5a5",
-            color: "#991b1b",
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            fontSize: "var(--fs-14)",
-          }}
-        >
-          <Lock size={20} style={{ flexShrink: 0, color: "var(--danger)" }} />
-          <div>
-            <strong>Tài khoản đang bị tạm đóng:</strong> Quản trị viên đã tạm khóa tài khoản của bạn. Toàn bộ quyền hạn và việc nhận điều phối căn đã bị tạm ngưng.
-          </div>
-        </div>
-      )}
 
       <div className={styles.two}>
         <div className={styles.stack}>
           <Section title="Thông tin cá nhân">
             <KeyValue
               items={[
-                { label: "Họ tên", value: host.name },
-                { label: "Số điện thoại", value: host.phone },
+                { label: "Họ tên", value: host.fullName ?? "—" },
+                { label: "Email", value: host.email ?? "—" },
                 {
-                  label: "Khu phụ trách",
-                  value:
-                    currentZones.length > 0
-                      ? currentZones.map((z) => zoneById(z).short).join(" & ")
-                      : "Chưa phân khu",
+                  label: "Số điện thoại",
+                  value: (
+                    <div className={styles.perms}>
+                      <span className="tnum">{phoneVerified ? host.phone : "Chưa có"}</span>
+                      <StatusBadge tone={phoneVerified ? "ok" : "warn"}>{phoneVerified ? "Đã xác thực" : "Chưa xác thực"}</StatusBadge>
+                      <button
+                        type="button"
+                        className="btn btn-quiet btn-sm"
+                        onClick={() =>
+                          requestPhoneVerify(me.reload, "Dùng để nhận ca dẫn khách, ca thẩm định và mã OTP Zalo. Cần xác thực để nhận ca.")
+                        }
+                      >
+                        {phoneVerified ? "Đổi số" : "Xác thực"}
+                      </button>
+                    </div>
+                  ),
                 },
+                { label: "Khu phụ trách", value: host.assignedZone },
                 {
                   label: "Quyền hạn khu vực",
                   value: (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                    <div className={styles.perms}>
                       {hasSale && (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                            padding: "2px 8px",
-                            borderRadius: "var(--r-sm)",
-                            background: "var(--lagoon-050)",
-                            color: "var(--lagoon)",
-                            fontSize: "var(--fs-12)",
-                            fontWeight: 600,
-                          }}
-                        >
+                        <span className={`${styles.perm} ${styles.permSale}`}>
                           <KeyRound size={12} /> Dẫn khách
                         </span>
                       )}
                       {hasInspector && (
-                        <span
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                            padding: "2px 8px",
-                            borderRadius: "var(--r-sm)",
-                            background: "var(--ok-050)",
-                            color: "var(--ok)",
-                            fontSize: "var(--fs-12)",
-                            fontWeight: 600,
-                          }}
-                        >
+                        <span className={`${styles.perm} ${styles.permInspector}`}>
                           <ShieldCheck size={12} /> Thẩm định 48h
                         </span>
                       )}
@@ -129,50 +128,38 @@ export function AccountView() {
             title="Phân quyền theo khu vực phụ trách"
             description="Quy chế VinStay AI: Khi được phân quyền theo khu vực nào thì Host được cấp trọn gói cả quyền Thẩm định và quyền Dẫn khách cho toàn bộ phân khu đó."
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {currentZones.map((zid) => {
-                const z = zoneById(zid);
-                return (
-                  <div
-                    key={zid}
-                    style={{
-                      padding: "12px 14px",
-                      borderRadius: "var(--r-sm)",
-                      border: "1px solid var(--line)",
-                      background: "var(--surface)",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <strong style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--ink)" }}>
-                        <MapPin size={15} style={{ color: "var(--lagoon)" }} />
-                        {z.name}
-                      </strong>
-                      <span className="muted xs">{z.buildings.slice(0, 5).join(", ")}{z.buildings.length > 5 ? ` +${z.buildings.length - 5} tòa` : ""}</span>
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--fs-13)" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: hasSale ? "var(--ink)" : "var(--ink-3)" }}>
-                        <CheckCircle2 size={13} style={{ color: hasSale ? "var(--ok)" : "var(--line-strong)" }} />
-                        <span><strong>Quyền dẫn khách (Sale):</strong> Đón sảnh, thẻ thang máy RFID, mở mã cửa</span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, color: hasInspector ? "var(--ink)" : "var(--ink-3)" }}>
-                        <CheckCircle2 size={13} style={{ color: hasInspector ? "var(--ok)" : "var(--line-strong)" }} />
-                        <span><strong>Quyền thẩm định (Inspector):</strong> Nhận ký gửi, kiểm tra 32 mục trong 48h</span>
-                      </div>
-                    </div>
+            {host.assignedZone ? (
+              <div className={styles.zoneCard}>
+                <div className={styles.zoneHead}>
+                  <strong>
+                    <MapPin size={15} /> {zoneName}
+                  </strong>
+                  {buildings.length > 0 && <span className="muted xs">{buildingsText(buildings)}</span>}
+                </div>
+                <div className={styles.zonePerms}>
+                  <div className={hasSale ? "" : styles.zonePermOff}>
+                    <CheckCircle2 size={13} className={hasSale ? styles.zoneCheckOn : styles.zoneCheckOff} />
+                    <span>
+                      <strong>Quyền dẫn khách (Sale):</strong> Đón sảnh, thẻ thang máy RFID, mở mã cửa
+                    </span>
                   </div>
-                );
-              })}
-            </div>
+                  <div className={hasInspector ? "" : styles.zonePermOff}>
+                    <CheckCircle2 size={13} className={hasInspector ? styles.zoneCheckOn : styles.zoneCheckOff} />
+                    <span>
+                      <strong>Quyền thẩm định (Inspector):</strong> Nhận ký gửi, kiểm tra 32 mục trong 48h
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="muted small">Chưa được phân khu. Liên hệ Admin để được gán khu vực.</p>
+            )}
           </Section>
 
           <Section title="Thẻ cư dân RFID">
             <KeyValue
               items={[
-                { label: "Số thẻ", value: "VS-0412" },
+                { label: "Số thẻ", value: RFID_DEMO.number },
                 { label: "Trạng thái", value: <StatusBadge tone="ok">Đã xác minh</StatusBadge> },
               ]}
             />

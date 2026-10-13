@@ -115,6 +115,16 @@ export class InspectionController {
     return this.photos.add(await this.actors.resolve(user.id), id, file, body);
   }
 
+  @Post(':id/photos/import-landlord')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Đưa ảnh tham khảo chủ nhà gửi vào ảnh niêm yết (một lần mỗi ca)',
+    description: 'Sao chép ảnh chủ nhà thành ảnh niêm yết phòng "Khác" (file riêng — xoá không ảnh hưởng ảnh gốc). Trả các ảnh vừa thêm; đã đưa rồi ⇒ `[]`. Chỉ chủ ca, stage `inspecting`.',
+  })
+  async importLandlordPhotos(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.photos.importLandlordPhotos(await this.actors.resolve(user.id), id);
+  }
+
   @Delete(':id/photos/:photoId')
   @ApiOperation({ summary: 'E7 — Xóa một ảnh thẩm định (chỉ khi ca còn `inspecting`)' })
   async removePhoto(

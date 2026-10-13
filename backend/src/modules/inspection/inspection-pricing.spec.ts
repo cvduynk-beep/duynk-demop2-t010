@@ -182,12 +182,19 @@ describe('Inspection — giá/cọc đổi ⇒ chủ nhà duyệt (hồ sơ 18)'
     expect(w.unitRow(second.c.unit)).toMatchObject({ carpetAreaM2: 50, managementFee: 500_000, direction: null });
   });
 
-  it('reject kèm pricing ⇒ bỏ qua pricing, rejected như cũ; không cần facts/listing', async () => {
-    const { c, photos } = setup();
-    const out = await submit(c, photos, { recommendation: 'reject', note: 'Khác hình', pricing: { rent: 9_000_000, securityDeposit: 1 }, facts: undefined, listing: undefined });
-    expect(out.stage).toBe('rejected');
-    expect(w.metaOf(c.mandate).report?.pricing).toBeUndefined();
-    expect(w.metaOf(c.mandate).pricingProposal).toBeUndefined();
+  it('reject không cần facts/pricing/listing ⇒ reviewing; reject kèm pricing sai ⇒ report_invalid; hợp lệ ⇒ lưu cho Admin', async () => {
+    const bare = setup();
+    const out = await submit(bare.c, bare.photos, { recommendation: 'reject', note: 'Khác hình', pricing: undefined, facts: undefined, listing: undefined });
+    expect(out.stage).toBe('reviewing');
+    expect(w.metaOf(bare.c.mandate).report?.pricing).toBeUndefined();
+    const wrong = setup();
+    expect(await bodyOf(submit(wrong.c, wrong.photos, { recommendation: 'reject', note: 'Khác hình', pricing: { rent: 9_000_000, securityDeposit: 1 } }))).toMatchObject({
+      code: 'report_invalid', field: 'pricing',
+    });
+    const kept = setup();
+    await submit(kept.c, kept.photos, { recommendation: 'reject', note: 'Giá thuê quá cao', pricing: { rent: 6_000_000, securityDeposit: 6_000_000, reason: 'Giá thị trường' } });
+    expect(w.metaOf(kept.c.mandate).report?.pricing).toEqual({ rent: 6_000_000, securityDeposit: 6_000_000, reason: 'Giá thị trường' });
+    expect(w.metaOf(kept.c.mandate).pricingProposal).toBeUndefined();
   });
 
   it('GET chi tiết ký gửi trả pricingProposal khi awaiting_landlord, null sau khi chủ quyết định', async () => {
@@ -210,5 +217,62 @@ describe('Inspection — giá/cọc đổi ⇒ chủ nhà duyệt (hồ sơ 18)'
     expect(view.pricingProposal).toMatchObject({ rent: 7_000_000, securityDeposit: 6_500_000, reason: 'x', original: { rent: 6_500_000, securityDeposit: 6_500_000 } });
     await pricing.decide(LANDLORD, c.mandate.id, 'decline');
     expect(((await svc.get(LANDLORD, c.mandate.id)) as any).pricingProposal).toBeNull();
+  });
+});
+
+describe('Inspection — biểu phí sinh hoạt thực tế tại tòa (All-in theo căn)', () => {
+  let w: World;
+  let a: ReturnType<World['addInspector']>;
+  beforeEach(() => {
+    w = buildWorld();
+    a = w.addInspector('a');
+  });
+  const setup = () => {
+    const photos = fullPhotos(a.id);
+    return { c: w.addCase({ stage: 'inspecting', hostId: a.id, photos }), photos };
+  };
+  const submit = (c: { mandate: { id: string } }, photos: ReturnType<typeof fullPhotos>, over: Record<string, unknown> = {}) =>
+    w.flow.submit(w.actor(a), c.mandate.id, validInput(photos, over as any));
+  const fees = { mgmtFeePerM2: 10_000, motorbikeFee: 90_000, carFee: 1_500_000, note: '  Nước 15.000đ/m³, gym miễn phí ' };
+
+  it('niêm yết ghi biểu phí vào căn: phí quản lý = diện tích thực tế × đơn giá Host, phí xe theo căn, ghi chú', async () => {
+    const { c, photos } = setup();
+    await submit(c, photos, { livingFees: fees });
+    const area = w.metaOf(c.mandate).report!.facts!.areaM2;
+    expect(w.unitRow(c.unit)).toMatchObject({
+      status: 'AVAILABLE', managementFee: Math.round(area * 10_000), motorbikeFee: 90_000, carFee: 1_500_000, parkingFeeEstimate: 90_000,
+      feeNote: 'Nước 15.000đ/m³, gym miễn phí',
+    });
+    expect(w.metaOf(c.mandate).report?.livingFees).toEqual({ ...fees, note: 'Nước 15.000đ/m³, gym miễn phí' });
+  });
+
+  it('không gửi biểu phí (phiếu cũ) ⇒ giữ cách tính cũ, không ghi phí xe theo căn', async () => {
+    const { c, photos } = setup();
+    await submit(c, photos);
+    expect(w.unitRow(c.unit).motorbikeFee).toBeUndefined();
+    expect(w.unitRow(c.unit).feeNote).toBeUndefined();
+  });
+
+  it('phí âm / quá trần / số lẻ ⇒ report_invalid đúng ô; ghi chú có SĐT ⇒ LISTING_TEXT_FORBIDDEN', async () => {
+    const cases: [Record<string, unknown>, string][] = [
+      [{ mgmtFeePerM2: -1 }, 'livingFees.mgmtFeePerM2'],
+      [{ motorbikeFee: 20_000_000 }, 'livingFees.motorbikeFee'],
+      [{ carFee: 1.5 }, 'livingFees.carFee'],
+      [{ note: 'x'.repeat(151) }, 'livingFees.note'],
+    ];
+    for (const [over, field] of cases) {
+      const { c, photos } = setup();
+      expect(await bodyOf(submit(c, photos, { livingFees: { ...fees, ...over } }))).toMatchObject({ code: 'report_invalid', field });
+    }
+    const { c, photos } = setup();
+    expect(await bodyOf(submit(c, photos, { livingFees: { ...fees, note: 'Gọi 0912345678 để hỏi phí' } }))).toMatchObject({
+      code: 'LISTING_TEXT_FORBIDDEN', field: 'livingFees.note',
+    });
+  });
+
+  it('chi tiết phiếu trả đơn giá chung để điền sẵn mục biểu phí', async () => {
+    const { c } = setup();
+    const d = await w.query.detail(w.actor(a), c.mandate.id, new Date());
+    expect(d.feeDefaults).toEqual({ mgmtFeePerM2: expect.any(Number), motorbikeFee: expect.any(Number), carFee: expect.any(Number) });
   });
 });

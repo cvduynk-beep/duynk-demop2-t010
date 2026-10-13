@@ -32,15 +32,24 @@ export interface CostBreakdown {
   total: number;
 }
 
+/**
+ * All-in Cost theo CĂN: phí quản lý + phí gửi xe là biểu phí thực tế tại tòa do Field Host xác minh lúc thẩm định
+ * (`managementFee`, `motorbikeFee`, `carFee`); căn chưa có ⇒ đơn giá chung `RATES`.
+ */
 export function allInCost(
-  unit: { rent: number; areaM2: number; managementFee?: number },
+  unit: { rent: number; areaM2: number; managementFee?: number; motorbikeFee?: number | null; carFee?: number | null },
   household: Household = DEFAULT_HOUSEHOLD,
 ): CostBreakdown {
   const rent = unit.rent;
   const mgmt = unit.managementFee ?? Math.round(unit.areaM2 * RATES.mgmtPerM2);
-  const parking = household.motorbikes * RATES.motorbike + household.cars * RATES.car;
+  const parking = household.motorbikes * unitRates(unit).motorbike + household.cars * unitRates(unit).car;
   const utility = household.persons * RATES.utilityPerPerson;
   return { rent, mgmt, parking, utility, total: rent + mgmt + parking + utility };
+}
+
+/** Đơn giá gửi xe áp cho căn: biểu phí thực tế tại tòa nếu có, không thì đơn giá chung. */
+export function unitRates(unit: { motorbikeFee?: number | null; carFee?: number | null }): { motorbike: number; car: number } {
+  return { motorbike: unit.motorbikeFee ?? RATES.motorbike, car: unit.carFee ?? RATES.car };
 }
 
 export function savingsRatio(unit: { rent: number; marketAvg: number }): number {

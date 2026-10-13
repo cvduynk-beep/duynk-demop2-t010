@@ -1,5 +1,6 @@
 "use client";
 
+import { LANDLORD_ITEMS, landlordItemsToCodes } from "@/lib/inspection/landlordItems";
 import Link from "next/link";
 import { useState } from "react";
 import {
@@ -145,18 +146,8 @@ function getBenchmark(zoneName: string, layout: LayoutKind) {
   return table[layout] || MARKET_BENCHMARK.default[layout];
 }
 
-const PRE_INVENTORY_ITEMS = [
-  { key: "ac", label: "Điều hòa Inverter", icon: "❄️" },
-  { key: "fridge", label: "Tủ lạnh", icon: "🧊" },
-  { key: "washer", label: "Máy giặt", icon: "🧺" },
-  { key: "kitchen", label: "Bếp từ & Hút mùi", icon: "🍳" },
-  { key: "heater", label: "Bình nóng lạnh", icon: "🚿" },
-  { key: "bed", label: "Giường & Đệm", icon: "🛏️" },
-  { key: "wardrobe", label: "Tủ quần áo", icon: "🚪" },
-  { key: "sofa", label: "Sofa phòng khách", icon: "🛋️" },
-  { key: "dining", label: "Bàn ăn & Ghế", icon: "🍽️" },
-  { key: "curtains", label: "Rèm cửa & Giàn phơi", icon: "🪟" },
-];
+/** Món tick nhanh ở "Tình trạng nội thất bàn giao" — map sang mã bảng kê thẩm định (gửi `inventoryCodes`). */
+const PRE_INVENTORY_ITEMS = LANDLORD_ITEMS;
 
 
 
@@ -497,9 +488,6 @@ function Wizard({
   const submitSigned = async (sig: { otp?: string; phone?: string }): Promise<boolean> => {
     // Đóng gói ghi chú: quy chế, tài sản kê khai & tài khoản nhận tiền
     const noteParts: string[] = [];
-    if (f.preInventory.length) {
-      noteParts.push(`Nội thất: ${f.preInventory.join(", ")}`);
-    }
     noteParts.push(
       `Quy chế: Tối đa ${f.maxOccupants} người · ${
         f.petPolicy === "no"
@@ -529,7 +517,8 @@ function Wizard({
       allowFastClose: f.allowFastClose,
       floorRent: f.allowFastClose && floorRentNum > 0 ? floorRentNum : undefined,
       ...(f.locks.includes("smart") && f.smartLockOption === "provide_now" && f.doorCode ? { doorCode: f.doorCode } : {}),
-      items: f.preInventory,
+      // Món nội thất đi riêng qua `inventoryCodes` (mã bảng kê) ⇒ màn thẩm định tick sẵn đúng các món chủ nhà khai.
+      ...(f.furnished ? { inventoryCodes: landlordItemsToCodes(f.preInventory) } : {}),
       note: combinedNote,
       ownershipWarranted: warranted,
       ...(sig.otp ? { otp: sig.otp } : {}),

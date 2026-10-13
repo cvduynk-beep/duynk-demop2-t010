@@ -169,3 +169,14 @@
 .tone-info {
   border-left: 3px solid #0284c7;
 }
+
+.duty:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.empty {
+  padding: 16px 4px;
+  text-align: center;
+}

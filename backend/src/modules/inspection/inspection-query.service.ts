@@ -5,6 +5,8 @@ import type { HostActor } from '../host-viewings/host-viewings.types';
 import { DoorCodeService } from '../door/door-code.service';
 import { LandlordPhotoStorage } from '../landlord/landlord-photo-storage.service';
 import { ConsignmentMeta, ConsignmentStage, consignmentStage, readConsignmentMeta, toLockKind } from '../landlord/landlord.mappers';
+import { mgmtFeePerM2 } from '../landlord/mgmt-fee';
+import { FeeRatesService } from '../property/fee-rates.service';
 import { INSPECTION_CATALOG } from './inspection.catalog';
 import {
   BOARD_DONE_LIMIT,
@@ -19,7 +21,8 @@ import { MandateWithLandlord, awaitingTier, stageOf, toCard, toPhotoView } from 
 import type { InspectionBoard, InspectionDetail } from './inspection.types';
 
 const INCLUDE = { unit: { include: { building: true, landlord: { select: { fullName: true } } } } } as const;
-const OWNER_STAGES: ConsignmentStage[] = ['inspecting', 'awaiting_landlord', 'approved', 'rejected'];
+const DONE_STAGES: ConsignmentStage[] = ['reviewing', 'awaiting_landlord', 'approved', 'rejected'];
+const OWNER_STAGES: ConsignmentStage[] = ['inspecting', 'reviewing', 'awaiting_landlord', 'approved', 'rejected'];
 
 /** Đọc ca thẩm định cho Inspector: bảng (E1) và chi tiết (E2). Chỉ đọc, không ghi. */
 @Injectable()
@@ -28,7 +31,12 @@ export class InspectionQueryService {
     private readonly prisma: PrismaService,
     private readonly storage: LandlordPhotoStorage,
     private readonly doors: DoorCodeService,
-  ) {}
+  ) {
+    this.feeRates = new FeeRatesService(prisma);
+  }
+
+  /** Đơn giá chung (fee_configs) — điền sẵn mục "Biểu phí sinh hoạt" của phiếu. */
+  private readonly feeRates: FeeRatesService;
 
   /**
    * E1. MỘT truy vấn, lọc meta trong bộ nhớ (số hồ sơ ký gửi < vài trăm).
@@ -58,8 +66,9 @@ export class InspectionQueryService {
         else if (tier === 'open') open.push({ due, m, meta });
       } else if (stage === 'inspecting' && meta.hostId === actor.hostId) {
         mine.push({ due, m, meta });
-      } else if ((stage === 'approved' || stage === 'rejected' || stage === 'awaiting_landlord') && meta.decidedBy === actor.hostId) {
-        done.push({ at: new Date(meta.decidedAt ?? 0).getTime(), m, meta });
+      } else if (DONE_STAGES.includes(stage) && (meta.decidedBy === actor.hostId || meta.hostId === actor.hostId)) {
+        // Admin quyết hồ sơ `reviewing` ⇒ decidedBy là Admin, ca vẫn thuộc Inspector đã thẩm định (meta.hostId).
+        done.push({ at: new Date(meta.decidedAt ?? meta.report?.submittedAt ?? 0).getTime(), m, meta });
       }
     }
 
@@ -104,9 +113,11 @@ export class InspectionQueryService {
     const owner = meta.hostId === actor.hostId;
     const landlordPhotos = meta.photos ?? [];
     const inspectionPhotos = meta.inspection?.photos ?? [];
-    const [urls, door] = await Promise.all([
+    const [urls, door, rates, mgmtRate] = await Promise.all([
       owner ? this.storage.signedUrls([...landlordPhotos.map((p) => p.path), ...inspectionPhotos.map((p) => p.path)]) : Promise.resolve(new Map<string, string | null>()),
       owner ? this.doors.readPin(m.unitId) : Promise.resolve(null),
+      this.feeRates.get(),
+      mgmtFeePerM2(this.prisma),
     ]);
 
     const form = meta.form;
@@ -125,6 +136,8 @@ export class InspectionQueryService {
       photos: inspectionPhotos.map((p) => toPhotoView(p, urls)),
       doorKind: toLockKind(m.unit.doorLockType),
       doorCodeOnFile: door !== null,
+      landlordPhotosImported: Boolean(meta.inspection?.landlordPhotosImportedAt),
+      feeDefaults: { mgmtFeePerM2: mgmtRate, motorbikeFee: rates.motorbike, carFee: rates.car },
       catalog: INSPECTION_CATALOG.map((c) => ({ ...c })),
       limits: {
         minSidePx: PHOTO_MIN_SIDE_PX,

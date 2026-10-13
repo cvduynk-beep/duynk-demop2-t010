@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Bath, BedDouble, Bot, Building2, CalendarPlus, Check, Compass, Layers, LockKeyhole, Minus, Plus, Ruler, Share2, ShieldCheck, Sofa, Star } from "lucide-react";
 import { BookingSheet } from "@/components/booking/BookingSheet";
 import { toast } from "@/components/ui/Toast";
-import { allInCost, DEFAULT_HOUSEHOLD, isBargain, RATES, savingsPct, type Household } from "@/lib/pricing/cost";
+import { allInCost, DEFAULT_HOUSEHOLD, isBargain, RATES, savingsPct, type Household, unitRates } from "@/lib/pricing/cost";
 import { vnd, vndShort } from "@/lib/format";
 import { HOUSE_RULES } from "@/lib/legal/house-rules";
 import { useChat } from "@/lib/chat/store";
@@ -55,6 +55,7 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
   const bookable = status === "available";
   const holdHours = unit.holdHours;
   const mgmtPerM2 = unit.managementFee && unit.areaM2 > 0 ? Math.round(unit.managementFee / unit.areaM2) : RATES.mgmtPerM2;
+  const rates = unitRates(unit);
   const similar = similarUnits(catalog.units, unit, 3);
 
   const share = async () => {
@@ -152,8 +153,10 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
                 <Stepper label="Xe máy" value={hh.motorbikes} min={0} max={4} onChange={(n) => setHh({ ...hh, motorbikes: n })} />
                 <Stepper label="Ô tô" value={hh.cars} min={0} max={2} onChange={(n) => setHh({ ...hh, cars: n })} />
                 <p className="muted xs">
-                  Biểu phí căn {unit.code}: Phí quản lý {vnd(mgmtPerM2)}đ/m² · xe máy {vndShort(RATES.motorbike)}/xe · ô tô {vndShort(RATES.car)}/xe · điện nước EVN tính theo công tơ thực tế.
+                  Biểu phí căn {unit.code}: Phí quản lý {vnd(mgmtPerM2)}đ/m² · xe máy {vndShort(rates.motorbike)}/xe · ô tô {vndShort(rates.car)}/xe · điện nước EVN tính theo công tơ thực tế.
+                  {unit.motorbikeFee != null && " Biểu phí đã được Field Host xác minh tại tòa."}
                 </p>
+                {unit.feeNote && <p className="muted xs">Phí khác / tiện ích: {unit.feeNote}</p>}
               </div>
             </div>
           </section>

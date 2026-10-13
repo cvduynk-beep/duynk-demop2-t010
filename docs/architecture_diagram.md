@@ -46,7 +46,7 @@ graph TB
 | Backend API | NestJS 10, Prisma 5, class-validator, Passport, pdfkit | **Thật** |
 | Cơ sở dữ liệu | PostgreSQL trên Supabase; nguồn chân lý `backend/prisma/schema.prisma` | **Thật** |
 | Lưu ảnh | Supabase Storage (bucket private, link ký 1 giờ) | **Thật** |
-| OTP SĐT | `ZaloZnsSender`, `SmsFallbackSender` luôn ném lỗi; `OTP_ECHO_DEV_CODE=true` thì trả `devCode` | **Mô phỏng** (chỉ dev) |
+| OTP SĐT | `OTP_PROVIDER=zalo` (mặc định): `ZaloOtpSender` → SMS, chưa tích hợp ⇒ 502; `OTP_PROVIDER=mock`: `MockZaloOtpSender` trả `devOtp` (production + mock ⇒ backend không khởi động) | **Mô phỏng** (chỉ dev/staging) |
 | Cọc VietQR | `VietQrSimulator` + `POST /vietqr/webhook` có header secret | **Mô phỏng** |
 | eKYC CCCD | `EkycSimulator` | **Mô phỏng** |
 | Redis | Có trong `.env` và `backend/docker-compose.yml` | Khai báo, **code không dùng** |
@@ -96,7 +96,7 @@ sequenceDiagram
     K->>W: chọn căn + khung giờ
     W->>A: GET /properties/units/:code/busy-slots
     W->>A: POST /auth/otp/send {phone, TENANT_VIEWING}
-    A-->>W: expiresInSeconds (+ devCode khi dev)
+    A-->>W: expiresInSeconds (+ devOtp khi OTP_PROVIDER=mock)
     W->>A: POST /auth/otp/verify {phone, code}
     A-->>W: actionToken (dùng 1 lần, 15 phút)
     W->>A: POST /bookings {unitCode, slot, contactName, phone, actionToken}

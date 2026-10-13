@@ -415,7 +415,7 @@ describe('LandlordConsignmentService.get — phiếu thẩm định cho chủ nh
 describe('LandlordConsignmentService.sendSignOtp', () => {
   const build = () => {
     const prisma = fakePrisma();
-    const otp = { send: jest.fn(async () => undefined), expiresInSeconds: 300, resendInSeconds: 60 };
+    const otp = { send: jest.fn(async () => ({})), expiresInSeconds: 300, resendInSeconds: 60 };
     const phones = {
       decrypt: jest.fn(() => '+84901234567'),
       normalize: jest.fn((v: string) => (/^0\d{9}$/.test(v) ? `+84${v.slice(1)}` : null)),

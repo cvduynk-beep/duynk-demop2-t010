@@ -181,7 +181,8 @@ export interface CreateConsignmentInput {
   bankAccount?: string;
   bankAccountHolder?: string;
   saveAsDefaultPayout?: boolean;
-  items?: string[];
+  /** Mã bảng kê (1..32) chủ nhà khai có sẵn — xem `lib/inspection/landlordItems.ts`. */
+  inventoryCodes?: string[];
   note?: string;
   /** Cam kết quyền sở hữu (Điều 2) — bắt buộc true; tạo hồ sơ = ký ủy quyền. */
   ownershipWarranted: boolean;

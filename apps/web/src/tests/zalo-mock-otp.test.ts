@@ -28,7 +28,7 @@ describe("màn OTP — không bypass phía client", () => {
   const FILES = [
     "components/ui/ZaloMockOtp.tsx",
     "components/booking/BookingSheet.tsx",
-    "components/host/PhoneVerifyCard.tsx",
+    "components/host/PhoneVerifyForm.tsx",
     "components/landlord/LandlordVerify.tsx",
     "components/landlord/ConsignOtpSign.tsx",
   ];

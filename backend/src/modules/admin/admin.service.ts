@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, NotImplementedException, Optional, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { PhoneService } from '../auth/phone/phone.service';
 import { AdminInventoryService } from './admin-inventory.service';
+import { ConsignmentReviewService } from '../inspection/consignment-review.service';
 import {
   ApproveConsignmentDto,
   RejectConsignmentDto,
@@ -17,18 +18,20 @@ export class AdminService {
     private auditService: AuditService,
     @Optional() private readonly phones?: PhoneService,
     @Optional() private readonly inventory?: AdminInventoryService,
+    @Optional() private readonly review?: ConsignmentReviewService,
   ) {}
 
-  async approveConsignment(id: string, dto: ApproveConsignmentDto) {
-    void id;
-    void dto;
-    throw new NotImplementedException('Duyệt ký gửi thủ công đã được thay bằng quy trình thẩm định và niêm yết tự động.');
+  /** Duyệt hồ sơ Inspector đề xuất không duyệt (stage `reviewing`); căn bình thường đã tự niêm yết, không qua đây. */
+  async approveConsignment(id: string, dto: ApproveConsignmentDto, adminId: string) {
+    if (!this.review) throw new ServiceUnavailableException('Chưa cấu hình luồng duyệt ký gửi.');
+    return this.review.approve({ profileId: adminId }, id, dto.note);
   }
 
-  async rejectConsignment(id: string, dto: RejectConsignmentDto) {
-    void id;
-    void dto;
-    throw new NotImplementedException('Từ chối ký gửi thủ công đã được thay bằng quy trình thẩm định hiện hành.');
+  async rejectConsignment(id: string, dto: RejectConsignmentDto, adminId: string) {
+    if (!this.review) throw new ServiceUnavailableException('Chưa cấu hình luồng duyệt ký gửi.');
+    const note = dto.note?.trim() ?? '';
+    if (note.length < 5) throw new BadRequestException('Lý do từ chối phải có ít nhất 5 ký tự.');
+    return this.review.reject({ profileId: adminId }, id, note);
   }
 
   // ==========================================

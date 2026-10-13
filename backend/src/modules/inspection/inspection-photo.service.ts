@@ -129,6 +129,82 @@ export class InspectionPhotoService {
     return toPhotoView(photo, urls);
   }
 
+  /**
+   * Đưa ảnh tham khảo chủ nhà gửi vào ảnh NIÊM YẾT của phiếu (phòng "Khác"), MỘT lần cho mỗi ca: Host giữ ảnh nào dùng được,
+   * bỏ ảnh nào không đạt (xoá như ảnh thường). Mỗi ảnh được SAO CHÉP sang `inspections/<mandateId>/…` nên xoá không đụng ảnh
+   * gốc của chủ nhà. Ảnh hỏng / quá nhỏ (< cạnh tối thiểu) bị bỏ qua; vượt hạn mức niêm yết ⇒ chỉ lấy phần còn chỗ.
+   * Gọi lại sau khi đã đưa ⇒ trả `[]` (idempotent).
+   */
+  async importLandlordPhotos(actor: HostActor, id: string): Promise<InspectionPhotoView[]> {
+    const mandate = await this.prisma.exclusiveMandate.findUnique({ where: { id } });
+    const meta0 = mandate ? readConsignmentMeta(mandate.doorAccessConfig) : null;
+    if (!mandate || !meta0) throw inspectionNotFound();
+    assertCaseOwner(mandate, meta0, actor.hostId);
+    if (meta0.inspection?.landlordPhotosImportedAt) return [];
+
+    // Sao chép NGOÀI khóa (tải xuống/lên chậm); ảnh lỗi bỏ qua, không chặn cả lượt.
+    const copies: InspectionPhoto[] = [];
+    for (const src of meta0.photos ?? []) {
+      try {
+        const buf = await this.storage.download(src.path);
+        const type = buf ? sniffImage(buf) : null;
+        const size = buf && type ? readImageSize(buf, type) : null;
+        if (!buf || !type || !size || Math.min(size.width, size.height) < PHOTO_MIN_SIDE_PX) continue;
+        const photoId = randomUUID();
+        const path = `${INSPECTION_STORAGE_DIR}/${id}/${photoId}.${type.ext}`;
+        await this.storage.uploadAt(path, buf, type);
+        copies.push({
+          id: photoId,
+          path,
+          slot: 'listing',
+          room: 'other',
+          mime: type.mime,
+          size: buf.length,
+          width: size.width,
+          height: size.height,
+          sharpness: null,
+          brightness: null,
+          takenAt: null,
+          uploadedAt: new Date().toISOString(),
+          hostId: actor.hostId,
+          sourceLandlordPhotoId: src.id,
+        });
+      } catch (err) {
+        this.logger.warn(`Bỏ qua ảnh chủ nhà ${src.id} khi đưa vào niêm yết: ${(err as Error).message}`);
+      }
+    }
+
+    let kept: InspectionPhoto[] = [];
+    try {
+      kept = await mutateInspection(this.store, id, async (locked, meta) => {
+        assertCaseOwner(locked, meta, actor.hostId);
+        const existing = meta.inspection?.photos ?? [];
+        // Lượt song song đã đưa trước ⇒ lượt này không thêm gì (file đã sao chép sẽ bị dọn bên dưới).
+        if (meta.inspection?.landlordPhotosImportedAt) return { meta, result: [] as InspectionPhoto[] };
+        const room = Math.max(
+          0,
+          Math.min(LISTING_PHOTOS_MAX - existing.filter((p) => p.slot === 'listing').length, INSPECTION_PHOTOS_MAX - existing.length),
+        );
+        const take = copies.slice(0, room);
+        return {
+          meta: {
+            ...meta,
+            inspection: { ...meta.inspection, photos: [...existing, ...take], landlordPhotosImportedAt: new Date().toISOString() },
+          },
+          result: take,
+        };
+      });
+    } finally {
+      const keptIds = new Set(kept.map((p) => p.id));
+      const orphans = copies.filter((p) => !keptIds.has(p.id)).map((p) => p.path);
+      if (orphans.length) await this.removeFiles(orphans);
+    }
+
+    if (!kept.length) return [];
+    const urls = await this.storage.signedUrls(kept.map((p) => p.path));
+    return kept.map((p) => toPhotoView(p, urls));
+  }
+
   /** E7 — xóa ảnh khi còn `inspecting`. Bỏ khỏi meta trong khóa, SAU commit mới xóa file (lỗi xóa file chỉ log). */
   async remove(actor: HostActor, id: string, photoId: string): Promise<{ removed: true }> {
     const found = await mutateInspection(this.store, id, async (locked, meta) => {

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DoorLockType, MandateStatus, Prisma } from '@prisma/client';
+import { DoorLockType, Prisma } from '@prisma/client';
 import { DoorCodeService } from '../door/door-code.service';
 import { toDoorView } from '../host-viewings/host-viewings.mappers';
 import type { DoorAccessView, HostActor, ReqCtx } from '../host-viewings/host-viewings.types';
@@ -24,7 +24,8 @@ import type { InspectionDetail, InspectionResult, SubmitInspectionInput } from '
 
 /**
  * Nguồn chuyển trạng thái DUY NHẤT của hồ sơ thẩm định (B2):
- * `awaiting_host → inspecting → approved | rejected | awaiting_landlord` (đổi giá/cọc ⇒ chủ duyệt ở `LandlordPricingService`;  hồ sơ vào `awaiting_host` ngay khi chủ nhà ký ở `LandlordConsignmentService.create`).
+ * `awaiting_host → inspecting → approved | awaiting_landlord | reviewing` (đổi giá/cọc ⇒ chủ duyệt ở `LandlordPricingService`;
+ * không duyệt ⇒ `reviewing`, Admin quyết ở `ConsignmentReviewService`;  hồ sơ vào `awaiting_host` ngay khi chủ nhà ký ở `LandlordConsignmentService.create`).
  * Mọi thao tác chạy trong `ConsignmentMetaStore.mutate` (khóa dòng) và KIỂM LẠI stage + chủ ca TRONG khóa.
  */
 @Injectable()
@@ -113,7 +114,8 @@ export class InspectionFlowService {
   }
 
   /**
-   * E8 — nộp phiếu. Đạt ⇒ MỘT giao dịch tự niêm yết (B4); không đạt ⇒ chấm dứt ủy quyền, ảnh GIỮ làm bằng chứng.
+   * E8 — nộp phiếu. Đạt ⇒ MỘT giao dịch tự niêm yết (B4). Không đạt (căn bất thường: giá quá cao, nội thất sai hiện
+   * trạng…) ⇒ `reviewing`, ủy quyền GIỮ `PENDING_INSPECTION` chờ Admin duyệt / từ chối; ảnh giữ làm bằng chứng.
    */
   async submit(actor: HostActor, id: string, input: SubmitInspectionInput, ctx: ReqCtx = {}): Promise<InspectionResult> {
     const now = new Date();
@@ -123,8 +125,9 @@ export class InspectionFlowService {
 
       const approve = input.recommendation === 'approve';
       // V11: căn khóa điện tử chưa có PIN `aes:` hợp lệ ⇒ Inspector nhập PIN thật (không bao giờ PIN giả).
+      // Không duyệt: PIN không bắt buộc nhưng có nhập thì vẫn lưu (Admin có thể duyệt niêm yết sau).
       let doorPin: string | undefined;
-      if (approve && locked.unit.doorLockType === DoorLockType.ELECTRONIC_PIN) {
+      if (locked.unit.doorLockType === DoorLockType.ELECTRONIC_PIN && (approve || input.doorPin)) {
         const read = await this.doors.readPin(locked.unitId, tx);
         if (read?.type !== 'ELECTRONIC_PIN') {
           if (input.doorPin === undefined || input.doorPin === '') throw doorCodeRequired();
@@ -140,9 +143,9 @@ export class InspectionFlowService {
       let extra: Prisma.ExclusiveMandateUncheckedUpdateInput;
       let listedAt: string | null = null;
       let next: ConsignmentMeta;
+      // PIN thật lưu ngay (kể cả khi chờ chủ duyệt giá / chờ Admin): CẤM để PIN trong meta.
+      if (doorPin) await this.publisher.storeDoorPin(tx, locked.unitId, doorPin, now);
       if (approve) {
-        // PIN thật lưu ngay (kể cả khi chờ chủ duyệt giá): CẤM để PIN trong meta.
-        if (doorPin) await this.publisher.storeDoorPin(tx, locked.unitId, doorPin, now);
         const pricing = report.pricing as NonNullable<typeof report.pricing>; // validateSubmission đã bảo đảm có khi approve
         if (pricingChanged(pricing, meta)) {
           // Đổi giá/cọc ⇒ chủ nhà duyệt (B4): KHÔNG niêm yết, căn giữ UNLISTED, ủy quyền giữ PENDING_INSPECTION.
@@ -165,8 +168,9 @@ export class InspectionFlowService {
           next = { ...meta, stage: 'approved', report, ...decided };
         }
       } else {
-        extra = { status: MandateStatus.TERMINATED };
-        next = { ...meta, stage: 'rejected', report, decisionNote: report.note, ...decided };
+        // Chưa chấm dứt ủy quyền: Admin là người quyết cuối cùng (duyệt niêm yết hoặc từ chối).
+        extra = {};
+        next = { ...meta, stage: 'reviewing', report };
       }
       // Chìa cơ: trả về quầy phân khu khi Inspector đã xong việc (đạt hay không).
       await this.doors.markKeyAtDesk(tx, locked.unitId);

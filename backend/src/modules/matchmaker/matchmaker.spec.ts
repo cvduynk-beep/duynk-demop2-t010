@@ -149,3 +149,15 @@ describe('MatchmakerService đọc biểu phí từ fee_configs', () => {
     expect(findMany).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('MatchmakerService — All-in theo biểu phí thực tế của căn', () => {
+  it('căn có phí gửi xe Host xác minh ⇒ dùng phí của căn; căn chưa có ⇒ đơn giá chung', async () => {
+    const units = [mkUnit(1, { motorbikeFee: 90_000, carFee: 1_500_000 }), mkUnit(2, { motorbikeFee: null, carFee: null })];
+    const svc = new MatchmakerService({} as any, { getUnits: jest.fn().mockResolvedValue(units) } as any);
+    const res = await svc.findTopRecommendations(body({ motorbikes: 2, cars: 1 }));
+    const byId = new Map(res.topRecommendations.map((r: any) => [r.unitId, r.allInCost.parkingFee]));
+    expect(byId.get(units[0].id)).toBe(2 * 90_000 + 1_500_000);
+    // fee_configs không đọc được ({} prisma) ⇒ đơn giá dự phòng 150.000 / 1.250.000.
+    expect(byId.get(units[1].id)).toBe(2 * 150_000 + 1_250_000);
+  });
+});

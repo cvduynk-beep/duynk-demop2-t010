@@ -6,7 +6,8 @@ import type { DoorAccessView } from "@/lib/host/types";
 
 export type { DoorAccessView };
 
-export type ConsignmentStage = "draft" | "awaiting_host" | "inspecting" | "awaiting_landlord" | "approved" | "rejected";
+/** `reviewing` = Inspector đề xuất không duyệt (căn bất thường) ⇒ chờ Admin quyết. */
+export type ConsignmentStage = "draft" | "awaiting_host" | "inspecting" | "reviewing" | "awaiting_landlord" | "approved" | "rejected";
 export type InventoryGroup = "I" | "II" | "III" | "IV" | "V" | "VI" | "VII" | "VIII";
 export type Liability = "misuse" | "wear_or_misuse";
 export type PhotoSlot = string; // 'listing' | '1'..'32' | 'X1'..'X10'
@@ -49,6 +50,14 @@ export interface InspectionListing {
   highlights: string[];
 }
 
+/** Biểu phí sinh hoạt thực tế tại tòa (đồng/tháng) — khớp backend `InspectionLivingFees`. */
+export interface InspectionLivingFees {
+  mgmtFeePerM2: number;
+  motorbikeFee: number;
+  carFee: number;
+  note?: string;
+}
+
 export interface InspectionReport {
   hostId: string;
   submittedAt: string;
@@ -63,6 +72,7 @@ export interface InspectionReport {
   facts?: InspectionFacts;
   pricing?: InspectionPricing;
   listing?: InspectionListing;
+  livingFees?: InspectionLivingFees;
   avgCondition: number;
 }
 
@@ -115,6 +125,8 @@ export interface InspectionPhotoView {
   uploadedAt: string;
   /** Link ký 1 giờ (null nếu ký lỗi). */
   url: string | null;
+  /** true = ảnh niêm yết lấy từ ảnh tham khảo chủ nhà gửi (Host bỏ được như ảnh thường). */
+  fromLandlord?: boolean;
 }
 
 export interface InspectionLimits {
@@ -147,13 +159,17 @@ export interface InspectionDetail extends InspectionCard {
   doorKind: LockKind;
   /** Đã có PIN hợp lệ trong hệ thống. KHÔNG bao giờ trả PIN ở chi tiết. */
   doorCodeOnFile: boolean;
+  /** Đã đưa ảnh chủ nhà gửi vào ảnh niêm yết (một lần mỗi ca). */
+  landlordPhotosImported?: boolean;
+  /** Đơn giá chung (fee_configs) để điền sẵn mục biểu phí sinh hoạt. */
+  feeDefaults?: { mgmtFeePerM2: number; motorbikeFee: number; carFee: number };
   catalog: CatalogItem[];
   limits: InspectionLimits;
   report: InspectionReport | null;
 }
 
 export interface InspectionResult {
-  stage: "approved" | "rejected" | "awaiting_landlord";
+  stage: "approved" | "rejected" | "awaiting_landlord" | "reviewing";
   unitCode: string;
   listedAt: string | null;
 }
@@ -211,6 +227,8 @@ export interface InspectionDraft {
   facts: FactsDraft;
   pricing: PricingDraft;
   listing: ListingDraft;
+  /** Biểu phí sinh hoạt thực tế tại tòa — chuỗi gõ tay (VNĐ nguyên). */
+  livingFees: { mgmtFeePerM2: string; motorbikeFee: string; carFee: string; note: string };
 }
 
 export interface FactsDraft {
@@ -249,6 +267,7 @@ export interface SubmitInspectionDto {
   facts?: InspectionFacts;
   pricing?: InspectionPricing;
   listing?: InspectionListing;
+  livingFees?: InspectionLivingFees;
 }
 
 export interface DraftError {
