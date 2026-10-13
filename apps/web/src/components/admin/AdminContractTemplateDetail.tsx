@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { ContractsSubnav } from "@/components/contracts/ContractsSubnav";
-import { CONTRACT_KIND_META, CONTRACT_STATUS_META } from "@/components/contracts/status";
+import { CONTRACT_KIND_META } from "@/components/contracts/status";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { KeyValue } from "@/components/ui/KeyValue";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -18,9 +18,7 @@ import {
   stepsForTemplate,
   templateById,
 } from "@/lib/mock/contract-templates";
-import { contractRows, type ContractRow } from "@/lib/mock/contracts";
-import { useMock } from "@/lib/mock/store";
-import { useNow } from "@/lib/useNow";
+import { useContractRegistry, type RegistryRow } from "@/lib/admin/api";
 import styles from "./Contracts.module.css";
 
 interface Props {
@@ -29,9 +27,9 @@ interface Props {
 
 export function AdminContractTemplateDetail({ templateId }: Props) {
   const template = templateById(templateId);
-  const state = useMock();
-  const now = useNow(60_000);
-  const allRows = useMemo(() => (now ? contractRows(state, now) : []), [state, now]);
+  // Danh mục mẫu là dữ liệu tĩnh (thư mục legal/); chỉ số "HĐ đang dùng" lấy từ sổ hợp đồng thật.
+  const registry = useContractRegistry();
+  const allRows = useMemo<RegistryRow[]>(() => (registry.state.status === "ready" ? registry.state.data : []), [registry.state]);
 
   const usedSteps = useMemo(() => stepsForTemplate(templateId), [templateId]);
   const activeContracts = useMemo(
@@ -50,13 +48,13 @@ export function AdminContractTemplateDetail({ templateId }: Props) {
     );
   }
 
-  const contractColumns: DataTableColumn<ContractRow>[] = [
+  const contractColumns: DataTableColumn<RegistryRow>[] = [
     {
       key: "docId",
       header: "Số HĐ",
       render: (r) => (
         <span className={styles.docIdText}>
-          {r.docId}
+          {r.docNumber}
         </span>
       ),
     },
@@ -72,7 +70,7 @@ export function AdminContractTemplateDetail({ templateId }: Props) {
     {
       key: "unitLabel",
       header: "Căn / Phạm vi",
-      render: (r) => r.unitLabel,
+      render: (r) => r.scope,
     },
     {
       key: "parties",
@@ -86,10 +84,7 @@ export function AdminContractTemplateDetail({ templateId }: Props) {
     {
       key: "status",
       header: "Trạng thái",
-      render: (r) => {
-        const meta = CONTRACT_STATUS_META[r.status];
-        return <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>;
-      },
+      render: (r) => <StatusBadge tone={r.tone}>{r.statusLabel}</StatusBadge>,
     },
   ];
 

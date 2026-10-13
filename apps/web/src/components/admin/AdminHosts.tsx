@@ -24,68 +24,89 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
-import { setHostSuspended } from "@/lib/mock/actions";
-import { fmtPhone, initials, isValidVnPhone, vnd } from "@/lib/format";
-import { hostEarnings, hostRoles, hostStatus, hostZones, isHostSuspended } from "@/lib/mock/selectors";
-import { useMock } from "@/lib/mock/store";
+import { apiErrorText } from "@/lib/apiClient";
+import { fmtPhone, initials, vnd } from "@/lib/format";
 import {
-  HOSTS,
-  ZONES,
-  zoneById,
-  type FieldHost,
-  type HostRole,
-  type HostStatus,
-} from "@/lib/mock/units";
+  ACCEPT_SLA_SECONDS,
+  adminHostsApi,
+  HOST_STATUS_META,
+  hostDisplayStatus,
+  hostErrorText,
+  invalidateHosts,
+  mmss,
+  ROLE_CHOICE_LABEL,
+  rolesOfChoice,
+  setHostActive,
+  useHostList,
+  useHostZones,
+  type HostAdminView,
+  type HostDisplayStatus,
+  type HostRoleChoice,
+} from "@/lib/admin/hosts";
+import { AdminQuery } from "./AdminQuery";
 import styles from "./Admin.module.css";
 
-const STATUS: Record<HostStatus, { label: string; badge: string }> = {
-  active: { label: "Đang trực", badge: "badge-kelp" },
-  busy: { label: "Đang bận", badge: "badge-amber-soft" },
-  off_duty: { label: "Nghỉ ca", badge: "badge-plain" },
-  suspended: { label: "Tạm đóng", badge: "badge-plain" },
-};
-
-const mm = (s: number) => `${Math.floor(s / 60)}′${String(s % 60).padStart(2, "0")}″`;
-
-type RoleFilter = "all" | "sale" | "inspector" | "both";
+/** `sale` = chỉ Sale; `both` = Sale + Thẩm định (backend chỉ có 2 tập vai này). */
+type RoleFilter = "all" | "sale" | "both";
 
 export function AdminHosts() {
-  const state = useMock();
+  // Tải trọn danh sách một lần: KPI cần tổng, số Host nhỏ nên lọc tại client.
+  const query = useHostList({});
+  const [invite, setInvite] = useState(false);
+  return (
+    <>
+      <AdminQuery query={query} title="Không tải được danh sách Field Host">
+        {(hosts) => <HostsBody hosts={hosts} onInvite={() => setInvite(true)} />}
+      </AdminQuery>
+      <InviteModal open={invite} onClose={() => setInvite(false)} />
+    </>
+  );
+}
+
+function HostsBody({ hosts, onInvite }: { hosts: HostAdminView[]; onInvite: () => void }) {
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<HostStatus | "all">("all");
+  const [status, setStatus] = useState<HostDisplayStatus | "all">("all");
   const [zone, setZone] = useState("all");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
-  const [invite, setInvite] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
 
-  if (!state.ready) return <div className="skeleton" style={{ height: 360 }} />;
+  const zones = Array.from(new Set(hosts.map((h) => h.assignedZone))).sort();
+  const isBoth = (h: HostAdminView) => h.roles.includes("inspector");
+  const needle = q.trim().toLowerCase();
+  const digits = needle.replace(/\D/g, "");
+  const list = hosts.filter(
+    (h) =>
+      (status === "all" || hostDisplayStatus(h) === status) &&
+      (zone === "all" || h.assignedZone === zone) &&
+      (roleFilter === "all" || (roleFilter === "both" ? isBoth(h) : !isBoth(h))) &&
+      (needle === "" ||
+        h.fullName?.toLowerCase().includes(needle) ||
+        h.email?.toLowerCase().includes(needle) ||
+        (digits.length >= 3 && h.phone?.replace(/\D/g, "").includes(digits))),
+  );
 
-  const list = HOSTS.filter((h) => {
-    const roles = hostRoles(state, h.id);
-    const zones = hostZones(state, h.id);
-    const hStatus = hostStatus(state, h.id);
-    const roleMatch =
-      roleFilter === "all" ||
-      (roleFilter === "both" && roles.includes("sale") && roles.includes("inspector")) ||
-      (roleFilter === "sale" && roles.includes("sale") && !roles.includes("inspector")) ||
-      (roleFilter === "inspector" && roles.includes("inspector") && !roles.includes("sale"));
+  const count = (s: HostDisplayStatus) => hosts.filter((h) => hostDisplayStatus(h) === s).length;
+  const totalCount = hosts.length;
+  const activeCount = count("active");
+  const busyCount = count("busy");
+  const offDutyCount = count("off_duty");
+  const suspendedCount = count("suspended");
+  const saleCount = hosts.filter((h) => h.roles.includes("sale")).length;
+  const inspectorCount = hosts.filter(isBoth).length;
 
-    return (
-      (status === "all" || hStatus === status) &&
-      (zone === "all" || zones.includes(zone as never)) &&
-      roleMatch &&
-      (q === "" ||
-        h.name.toLowerCase().includes(q.toLowerCase()) ||
-        h.phone.replace(/\s/g, "").includes(q.replace(/\s/g, "")))
+  const toggle = async (h: HostAdminView) => {
+    setToggling(h.id);
+    const res = await setHostActive(h.id, !h.isActive);
+    setToggling(null);
+    if (!res.ok) return toast(hostErrorText(res));
+    toast(
+      h.isActive
+        ? `Đã tạm đóng tài khoản ${h.fullName ?? h.email}. Host không đăng nhập được và ngừng nhận ca.`
+        : `Đã mở lại tài khoản ${h.fullName ?? h.email}.`,
+      h.isActive ? "info" : "success",
     );
-  });
-
-  const totalCount = HOSTS.length;
-  const activeCount = HOSTS.filter((h) => hostStatus(state, h.id) === "active").length;
-  const busyCount = HOSTS.filter((h) => hostStatus(state, h.id) === "busy").length;
-  const offDutyCount = HOSTS.filter((h) => hostStatus(state, h.id) === "off_duty").length;
-  const suspendedCount = HOSTS.filter((h) => hostStatus(state, h.id) === "suspended").length;
-  const saleCount = HOSTS.filter((h) => hostRoles(state, h.id).includes("sale")).length;
-  const inspectorCount = HOSTS.filter((h) => hostRoles(state, h.id).includes("inspector")).length;
+    invalidateHosts();
+  };
 
   const isFiltered = q !== "" || status !== "all" || zone !== "all" || roleFilter !== "all";
 
@@ -102,8 +123,8 @@ export function AdminHosts() {
         title="Danh sách Field Host"
         description="Mạng lưới Host đón tại sảnh & thẩm định căn hộ nội khu · Thù lao biến phí theo hiệu quả, 0đ lương cứng"
         actions={
-          <button type="button" className="btn btn-primary" onClick={() => setInvite(true)}>
-            <UserPlus size={17} /> Mời Field Host
+          <button type="button" className="btn btn-primary" onClick={onInvite}>
+            <UserPlus size={17} /> Thêm Field Host
           </button>
         }
       />
@@ -172,10 +193,10 @@ export function AdminHosts() {
             <Search size={17} className={styles.searchIcon} />
             <input
               type="text"
-              placeholder="Tìm theo tên hoặc số điện thoại..."
+              placeholder="Tìm theo tên, email hoặc số điện thoại..."
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              aria-label="Tìm theo tên hoặc số điện thoại"
+              aria-label="Tìm theo tên, email hoặc số điện thoại"
             />
             {q && (
               <button
@@ -200,9 +221,9 @@ export function AdminHosts() {
                 aria-label="Lọc theo phân khu"
               >
                 <option value="all">Tất cả phân khu</option>
-                {ZONES.map((z) => (
-                  <option key={z.id} value={z.id}>
-                    {z.name}
+                {zones.map((z) => (
+                  <option key={z} value={z}>
+                    {z}
                   </option>
                 ))}
               </select>
@@ -218,9 +239,8 @@ export function AdminHosts() {
                 aria-label="Lọc theo vai trò"
               >
                 <option value="all">Tất cả vai trò</option>
-                <option value="sale">Vai trò Sale (Dẫn khách)</option>
-                <option value="inspector">Vai trò Thẩm định (Ký gửi)</option>
-                <option value="both">Đảm nhiệm cả hai vai</option>
+                <option value="sale">Chỉ Sale (Dẫn khách)</option>
+                <option value="both">Sale + Thẩm định</option>
               </select>
               <ChevronDown size={15} className={styles.selectChevron} />
             </div>
@@ -230,7 +250,7 @@ export function AdminHosts() {
               <Activity size={15} className={styles.selectIcon} />
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as HostStatus | "all")}
+                onChange={(e) => setStatus(e.target.value as HostDisplayStatus | "all")}
                 aria-label="Lọc theo trạng thái"
               >
                 <option value="all">Tất cả trạng thái</option>
@@ -309,7 +329,7 @@ export function AdminHosts() {
         </div>
       </div>
 
-      <DataTable<FieldHost>
+      <DataTable<HostAdminView>
         columns={
           [
             {
@@ -317,39 +337,30 @@ export function AdminHosts() {
               header: "Field Host",
               render: (h) => (
                 <span className={styles.person}>
-                  <span className={styles.avatar}>{initials(h.name)}</span>
+                  <span className={styles.avatar}>{initials(h.fullName ?? h.email ?? "?")}</span>
                   <span>
-                    <b>{h.name}</b>
-                    <span className="muted xs">{fmtPhone(h.phone)}</span>
+                    <b>{h.fullName ?? "—"}</b>
+                    <span className="muted xs">{h.phone ? fmtPhone(h.phone) : h.email}</span>
                   </span>
                 </span>
               ),
             },
-            {
-              key: "zone",
-              header: "Phân khu",
-              render: (h) => hostZones(state, h.id).map((z) => zoneById(z).short).join(", "),
-            },
+            { key: "zone", header: "Phân khu", render: (h) => h.assignedZone },
             {
               key: "roles",
               header: "Vai",
-              render: (h) => {
-                const roles = hostRoles(state, h.id);
-                return (
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {roles.includes("sale") && <span className="badge badge-kelp">Sale</span>}
-                    {roles.includes("inspector") && (
-                      <span className="badge badge-plain">Thẩm định</span>
-                    )}
-                  </div>
-                );
-              },
+              render: (h) => (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  <span className="badge badge-kelp">Sale</span>
+                  {isBoth(h) && <span className="badge badge-plain">Thẩm định</span>}
+                </div>
+              ),
             },
             {
               key: "status",
               header: "Trạng thái",
               render: (h) => {
-                const st = hostStatus(state, h.id);
+                const st = hostDisplayStatus(h);
                 if (st === "suspended") {
                   return (
                     <span
@@ -368,34 +379,22 @@ export function AdminHosts() {
                     </span>
                   );
                 }
-                return <span className={`badge ${STATUS[st].badge}`}>{STATUS[st].label}</span>;
+                return <span className={`badge ${HOST_STATUS_META[st].badge}`}>{HOST_STATUS_META[st].label}</span>;
               },
             },
-            {
-              key: "tickets",
-              header: "Ticket",
-              align: "right",
-              render: (h) => hostEarnings(state, h, state.fees).viewings,
-            },
-            {
-              key: "deals",
-              header: "Deal",
-              align: "right",
-              render: (h) => hostEarnings(state, h, state.fees).deals,
-            },
+            { key: "tickets", header: "Ca đã dẫn", align: "right", render: (h) => h.stats.completedViewings },
+            { key: "deals", header: "Deal", align: "right", render: (h) => h.stats.deals },
             {
               key: "accept",
               header: "Nhận ca TB",
               render: (h) => {
-                const slow = h.avgAcceptSec > 180;
+                const sec = h.stats.avgAcceptSeconds;
+                if (sec === null) return <span className="muted">—</span>;
+                const slow = sec > ACCEPT_SLA_SECONDS;
                 return (
                   <span className={`${slow ? styles.warnText : styles.okText} tnum`}>
-                    {slow ? (
-                      <AlertTriangle size={14} aria-label="Vượt SLA" />
-                    ) : (
-                      <CheckCircle2 size={14} aria-label="Đạt SLA" />
-                    )}
-                    {mm(h.avgAcceptSec)}
+                    {slow ? <AlertTriangle size={14} aria-label="Vượt SLA" /> : <CheckCircle2 size={14} aria-label="Đạt SLA" />}
+                    {mmss(sec)}
                   </span>
                 );
               },
@@ -404,25 +403,15 @@ export function AdminHosts() {
               key: "noshow",
               header: "Bỏ hẹn",
               align: "right",
-              render: (h) => `${Math.round(h.noShowRate * 100)}%`,
+              render: (h) => (h.stats.noShowRate === null ? "—" : `${String(h.stats.noShowRate).replace(".", ",")}%`),
             },
-            {
-              key: "rating",
-              header: "Đánh giá",
-              align: "right",
-              render: (h) => `${String(h.rating).replace(".", ",")}★`,
-            },
-            {
-              key: "earn",
-              header: "Thu nhập tuần",
-              align: "right",
-              render: (h) => <b>{vnd(hostEarnings(state, h, state.fees).total)}đ</b>,
-            },
+            { key: "rating", header: "Đánh giá", align: "right", render: (h) => `${String(h.rating).replace(".", ",")}★` },
+            { key: "earn", header: "Thu nhập tuần", align: "right", render: (h) => <b>{vnd(h.stats.weekEarnings)}đ</b> },
             {
               key: "actions",
               header: "Thao tác",
               render: (h) => {
-                const suspended = isHostSuspended(state, h.id);
+                const suspended = !h.isActive;
                 return (
                   <button
                     type="button"
@@ -432,19 +421,18 @@ export function AdminHosts() {
                         ? { padding: "3px 8px", fontSize: 12 }
                         : { padding: "3px 8px", fontSize: 12, color: "var(--danger)", border: "1px solid #fecaca" }
                     }
-                    title={suspended ? "Mở lại tài khoản Field Host" : "Tạm đóng tài khoản Field Host"}
+                    disabled={toggling === h.id || (!suspended && h.stats.openTickets > 0)}
+                    title={
+                      !suspended && h.stats.openTickets > 0
+                        ? `Host đang có ${h.stats.openTickets} ca chạy — điều phối lại trước khi khoá`
+                        : suspended
+                          ? "Mở lại tài khoản Field Host"
+                          : "Tạm đóng tài khoản Field Host"
+                    }
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      const res = setHostSuspended(h.id, !suspended, "Admin");
-                      if (res.ok) {
-                        toast(
-                          !suspended
-                            ? `Đã tạm đóng tài khoản ${h.name}. Toàn bộ quyền đã thu hồi và ngừng đổ căn.`
-                            : `Đã mở lại tài khoản ${h.name}. Quyền hạn và điều phối đã khôi phục.`,
-                          !suspended ? "info" : "success"
-                        );
-                      }
+                      toggle(h);
                     }}
                   >
                     {suspended ? (
@@ -460,27 +448,57 @@ export function AdminHosts() {
                 );
               },
             },
-          ] satisfies DataTableColumn<FieldHost>[]
+          ] satisfies DataTableColumn<HostAdminView>[]
         }
         rows={list}
         rowHref={(h) => `/admin/hosts/${h.id}`}
         empty={<span className="muted">Không có Host nào khớp bộ lọc.</span>}
       />
-
-      <InviteModal open={invite} onClose={() => setInvite(false)} />
     </div>
   );
 }
 
+/** Admin tạo tài khoản Field Host (email đăng nhập Google hoặc mật khẩu ban đầu); Host tự xác thực SĐT trong hồ sơ. */
 function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const zonesQuery = useHostZones();
+  const zones = zonesQuery.state.status === "ready" ? zonesQuery.state.data : [];
+  const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [zone, setZone] = useState<string>(ZONES[0].id);
-  const [roles, setRoles] = useState<HostRole[]>(["sale"]);
+  const [zone, setZone] = useState("");
+  const [choice, setChoice] = useState<HostRoleChoice>("sale");
+  const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const toggleRole = (r: HostRole) => {
-    setRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
+  const reset = () => {
+    setEmail("");
+    setName("");
+    setZone("");
+    setChoice("sale");
+    setPassword("");
+    setErr("");
+  };
+
+  const submit = async () => {
+    const assignedZone = zone || zones[0] || "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("Nhập email hợp lệ.");
+    if (name.trim().length < 2) return setErr("Nhập họ tên Field Host.");
+    if (!assignedZone) return setErr("Chọn phân khu phụ trách.");
+    if (password && password.length < 8) return setErr("Mật khẩu ban đầu tối thiểu 8 ký tự (hoặc bỏ trống để chỉ đăng nhập Google).");
+    setBusy(true);
+    const res = await adminHostsApi.create({
+      email: email.trim(),
+      fullName: name.trim(),
+      assignedZone,
+      roles: rolesOfChoice(choice),
+      ...(password ? { password } : {}),
+    });
+    setBusy(false);
+    if (!res.ok) return setErr(res.code ? hostErrorText(res) : apiErrorText(res, "Chưa tạo được Field Host."));
+    toast(`Đã thêm Field Host ${name.trim()} (${ROLE_CHOICE_LABEL[choice]}).`, "success");
+    invalidateHosts();
+    reset();
+    onClose();
   };
 
   return (
@@ -488,56 +506,29 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
       open={open}
       onClose={onClose}
       variant="sheet"
-      title="Mời Field Host mới"
-      description="Host nhận lời mời qua Zalo, đăng nhập và kích hoạt tài khoản theo vai được gán."
+      title="Thêm Field Host"
+      description="Host đăng nhập bằng email này (Google hoặc mật khẩu ban đầu) và tự xác thực SĐT trong hồ sơ."
       footer={
-        <button
-          type="button"
-          className="btn btn-primary btn-block"
-          onClick={() => {
-            if (name.trim().length < 2 || !isValidVnPhone(phone)) {
-              setErr("Nhập họ tên và số điện thoại hợp lệ.");
-              return;
-            }
-            if (roles.length === 0) {
-              setErr("Chọn ít nhất một vai cho Field Host.");
-              return;
-            }
-            toast(
-              `Đã gửi lời mời vai ${roles.map((r) => (r === "sale" ? "Sale" : "Thẩm định")).join(" + ")} qua Zalo tới ${name.trim()}`,
-              "success",
-            );
-            setName("");
-            setPhone("");
-            setRoles(["sale"]);
-            setErr("");
-            onClose();
-          }}
-        >
-          Gửi lời mời
+        <button type="button" className="btn btn-primary btn-block" onClick={submit} disabled={busy}>
+          {busy ? "Đang tạo…" : "Tạo tài khoản"}
         </button>
       }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <label className="field">
+          <span className="label">Email đăng nhập</span>
+          <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
+        </label>
+        <label className="field">
           <span className="label">Họ và tên</span>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
-          <span className="label">Số điện thoại Zalo</span>
-          <input
-            className="input"
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </label>
-        <label className="field">
           <span className="label">Phân khu phụ trách</span>
-          <select className="select" value={zone} onChange={(e) => setZone(e.target.value)}>
-            {ZONES.map((z) => (
-              <option key={z.id} value={z.id}>
-                {z.name}
+          <select className="select" value={zone || zones[0] || ""} onChange={(e) => setZone(e.target.value)}>
+            {zones.map((z) => (
+              <option key={z} value={z}>
+                {z}
               </option>
             ))}
           </select>
@@ -545,25 +536,20 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
 
         <div className="field">
           <span className="label">Vai đảm nhiệm</span>
-          <div style={{ display: "flex", gap: 16, marginTop: 4 }}>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={roles.includes("sale")}
-                onChange={() => toggleRole("sale")}
-              />
-              <span>Sale (Dẫn khách xem phòng)</span>
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={roles.includes("inspector")}
-                onChange={() => toggleRole("inspector")}
-              />
-              <span>Thẩm định (Kiểm tra 32 hạng mục)</span>
-            </label>
+          <div style={{ display: "flex", gap: 16, marginTop: 4, flexWrap: "wrap" }}>
+            {(Object.keys(ROLE_CHOICE_LABEL) as HostRoleChoice[]).map((c) => (
+              <label key={c} className="check">
+                <input type="radio" name="host-role" checked={choice === c} onChange={() => setChoice(c)} />
+                <span>{ROLE_CHOICE_LABEL[c]}</span>
+              </label>
+            ))}
           </div>
         </div>
+
+        <label className="field">
+          <span className="label">Mật khẩu ban đầu (tuỳ chọn, ≥ 8 ký tự)</span>
+          <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+        </label>
 
         {err && <p className="field-error">{err}</p>}
       </div>

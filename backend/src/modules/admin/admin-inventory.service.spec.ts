@@ -234,3 +234,146 @@ describe('AdminInventoryService — thời gian khoá căn (từng căn)', () =>
     }
   });
 });
+
+describe('AdminInventoryService — chi tiết căn: All-in, nội thất, Host phụ trách', () => {
+  const unit = {
+    id: 'u1', unitCode: 'VHOP-P1-0302', status: 'AVAILABLE', holdHoursOverride: null, floorNumber: 3, doorNumber: null,
+    layoutType: 'STUDIO', carpetAreaM2: 30, baseRentPrice: 5_000_000, managementFee: 285_000, parkingFeeEstimate: 150_000,
+    utilityCostEstimate: 600_000, marketAvgPrice: 5_500_000, furnishing: 'FULL', isVerified: true, doorLockType: 'PHYSICAL_KEY',
+    building: { buildingCode: 'P1', zoneName: 'The Pavilion' }, landlord: null, mandates: [], media: [],
+  };
+
+  it('All-in theo công thức Matchmaker, hộ tham chiếu 1 xe máy · 2 người; Host khớp phân khu, chỉ Host còn hoạt động', async () => {
+    const { svc, prisma } = build();
+    prisma.unit.findFirst = jest.fn(async () => unit);
+    prisma.fieldHost = { findFirst: jest.fn(async () => ({ id: 'h1', profile: { fullName: 'Đỗ Văn Tùng' } })) };
+    const d: any = await svc.getExclusiveInventoryDetail('u1');
+    expect(d.allInCost).toEqual({
+      rent: 5_000_000, managementFee: 285_000, parkingFee: 150_000, utilityCost: 600_000, total: 6_035_000,
+      household: { motorbikes: 1, cars: 0, occupants: 2 }, feeVerified: false,
+    });
+    expect(d.furnishing).toBe('FULL');
+    expect(d.host).toEqual({ id: 'h1', name: 'Đỗ Văn Tùng' });
+    expect(prisma.fieldHost.findFirst.mock.calls[0][0].where).toEqual({ assignedZone: { contains: 'The Pavilion' }, profile: { isActive: true } });
+  });
+
+  it('biểu phí Admin cài (fee_configs) và phí gửi xe Host xác minh tại tòa được áp ngay', async () => {
+    const prisma: any = { unit: { findFirst: jest.fn(async () => ({ ...unit, motorbikeFee: 200_000 })) }, fieldHost: { findFirst: jest.fn(async () => null) } };
+    const rates = { get: jest.fn(async () => ({ motorbike: 150_000, car: 1_250_000, utilityPerPerson: 400_000 })) };
+    const svc = new AdminInventoryService(prisma, { log: jest.fn() } as any, rates as any);
+    const d: any = await svc.getExclusiveInventoryDetail('u1');
+    expect(d.allInCost).toMatchObject({ parkingFee: 200_000, utilityCost: 800_000, total: 6_285_000, feeVerified: true });
+  });
+
+  it('phân khu chưa có Host ⇒ host null', async () => {
+    const { svc, prisma } = build();
+    prisma.unit.findFirst = jest.fn(async () => unit);
+    prisma.fieldHost = { findFirst: jest.fn(async () => null) };
+    expect(((await svc.getExclusiveInventoryDetail('u1')) as any).host).toBeNull();
+  });
+});
+
+describe('AdminInventoryService — hồ sơ ký gửi cho Admin', () => {
+  const MID = '22222222-2222-4222-8222-222222222222';
+  const signed = {
+    id: MID,
+    contractNumber: 'MD-001',
+    status: 'PENDING_INSPECTION',
+    signedAt: new Date('2026-10-01T02:00:00Z'),
+    createdAt: new Date('2026-10-01T01:00:00Z'),
+    doorAccessConfig: {
+      consignment: {
+        form: { building: 'S1.02', floor: 7, door: '01', areaM2: 55, askRent: 9_000_000, suggestedDeposit: 9_000_000, leaseTerm: 'long', furnished: true, locks: ['smart'], note: null, allowFastClose: true, floorRent: 8_000_000 },
+        payout: { bankName: 'VCB', accountEnc: 'enc', holder: 'A' },
+        stage: 'reviewing',
+        hostId: 'h1',
+        report: { hostId: 'h2', submittedAt: '2026-10-02T00:00:00Z' },
+      },
+    },
+    unit: {
+      id: 'u1', unitCode: 'VHOP-S1.02-0701', floorNumber: 7, doorNumber: null, layoutType: 'TWO_BED_ONE_BATH',
+      carpetAreaM2: 55, baseRentPrice: 9_000_000, securityDeposit: null, furnishing: 'FULL', doorLockType: 'ELECTRONIC_PIN',
+      building: { buildingCode: 'S1.02', zoneName: 'Sapphire 1' }, landlord: { id: 'l1', fullName: 'Chủ A' },
+    },
+  };
+
+  function buildC(rows: any[]) {
+    const prisma: any = {
+      exclusiveMandate: {
+        findMany: jest.fn(async () => rows),
+        findFirst: jest.fn(async ({ where }: any) => rows.find((r) => r.id === where.id) ?? null),
+      },
+      fieldHost: {
+        findMany: jest.fn(async ({ where }: any) =>
+          where.id.in.map((id: string) => ({ id, profile: { fullName: `Host ${id}` } })),
+        ),
+      },
+    };
+    return { svc: new AdminInventoryService(prisma, { log: jest.fn() } as any), prisma };
+  }
+
+  it('list: chỉ lấy ủy quyền đã ký, gắn tên cả Host được giao lẫn Host nộp phiếu', async () => {
+    const { svc, prisma } = buildC([signed]);
+    const [row] = await svc.listConsignments();
+    expect(prisma.exclusiveMandate.findMany.mock.calls[0][0].where).toEqual({ signedAt: { not: null } });
+    expect(row).toMatchObject({ id: MID, status: 'reviewing', door: '01', layoutKind: '2PN', hostName: 'Host h1', reportHostName: 'Host h2' });
+  });
+
+  it('list: KHÔNG lộ tài khoản nhận tiền và Giá sàn bảo mật của chủ nhà', async () => {
+    const { svc } = buildC([signed]);
+    const [row] = await svc.listConsignments();
+    expect(row).not.toHaveProperty('payout');
+    expect(row).not.toHaveProperty('floorRent');
+    expect(JSON.stringify(row)).not.toContain('8000000');
+  });
+
+  it('get: id không phải uuid hoặc chưa ký ⇒ 404', async () => {
+    const { svc } = buildC([signed]);
+    await expect(svc.getConsignment('abc')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc.getConsignment('33333333-3333-4333-8333-333333333333')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc.getConsignment(MID)).resolves.toMatchObject({ id: MID, contractNumber: 'MD-001' });
+  });
+});
+
+describe('AdminInventoryService — cài đặt thời hạn giữ chỗ toàn sàn', () => {
+  function buildS(cfg: any = null, audits: any[] = []) {
+    const prisma: any = {
+      feeConfig: {
+        findUnique: jest.fn(async () => cfg),
+        upsert: jest.fn(async () => ({})),
+      },
+      auditLog: { findMany: jest.fn(async () => audits) },
+      unit: { findMany: jest.fn(async () => [{ id: 'u1', unitCode: 'VHOP-P1-0302' }]) },
+    };
+    const audit = { log: jest.fn(async () => ({})) };
+    return { svc: new AdminInventoryService(prisma, audit as any), prisma, audit };
+  }
+
+  it('đặt mặc định: upsert hold_hours_default + audit giá trị cũ/mới kèm lý do', async () => {
+    const { svc, prisma, audit } = buildS({ paramValue: 36 });
+    await expect(svc.updateDefaultHoldHours(24, ' Cao điểm ', ACTOR)).resolves.toEqual({ success: true, defaultHours: 24 });
+    expect(prisma.feeConfig.upsert.mock.calls[0][0].where).toEqual({ configKey: 'hold_hours_default' });
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({ actionType: 'HOLD_HOURS_DEFAULT_UPDATED', oldValue: { holdHours: 36 }, newValue: { holdHours: 24, reason: 'Cao điểm' } }),
+    );
+  });
+
+  it.each([11, 73, 24.5])('400 khi hours = %s; 400 khi thiếu lý do — không ghi gì', async (hours) => {
+    const { svc, prisma } = buildS();
+    await expect(svc.updateDefaultHoldHours(hours, 'x', ACTOR)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.updateDefaultHoldHours(24, '  ', ACTOR)).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.feeConfig.upsert).not.toHaveBeenCalled();
+  });
+
+  it('đọc chính sách: nguồn default khi chưa cấu hình; nhật ký gộp mặc định + riêng căn (kèm mã căn)', async () => {
+    const at = new Date('2026-10-13T03:00:00Z');
+    const { svc } = buildS(null, [
+      { id: 'a1', createdAt: at, actionType: 'UNIT_HOLD_HOURS_UPDATED', entityId: 'u1', actor: { fullName: 'Ops' }, oldValue: { holdHours: 48 }, newValue: { holdHours: 24, reset: false, reason: 'hot' } },
+      { id: 'a2', createdAt: at, actionType: 'HOLD_HOURS_DEFAULT_UPDATED', entityId: 'hold_hours_default', actor: null, actorRole: 'ops_admin', oldValue: { holdHours: 48 }, newValue: { holdHours: 36 } },
+    ]);
+    const p = await svc.getHoldPolicy();
+    expect(p).toMatchObject({ defaultHours: 48, min: 12, max: 72, source: 'default' });
+    expect(p.history[0]).toMatchObject({ scope: 'unit', unitCode: 'VHOP-P1-0302', from: 48, to: 24, by: 'Ops', reason: 'hot' });
+    expect(p.history[1]).toMatchObject({ scope: 'default', unitCode: null, to: 36, by: 'ops_admin', reason: null });
+  });
+});

@@ -181,7 +181,13 @@ export class AdminService {
     const profile = await this.prisma.profile.findFirst({
       where: {
         id,
-        OR: [{ tenantContracts: { some: {} } }, { landlordContracts: { some: {} } }],
+        // Bên ký của MỌI loại văn bản trong sổ: HĐ thuê, ủy quyền ký gửi (chủ có căn), cọc giữ chỗ (khách có cọc).
+        OR: [
+          { tenantContracts: { some: {} } },
+          { landlordContracts: { some: {} } },
+          { ownedUnits: { some: { mandates: { some: {} } } } },
+          { viewings: { some: { deposit: { isNot: null } } } },
+        ],
       },
       select: {
         id: true,
@@ -191,6 +197,7 @@ export class AdminService {
         // Lấy ĐỦ hợp đồng (không `take`) — danh sách "Theo bên ký" đếm theo toàn bộ, chi tiết phải khớp.
         tenantContracts: { select: { id: true, status: true } },
         landlordContracts: { select: { id: true, status: true } },
+        role: { select: { code: true } },
       },
     });
     if (!profile) throw new NotFoundException('Không tìm thấy bên ký kết.');
@@ -208,7 +215,7 @@ export class AdminService {
       name: profile.fullName,
       email: profile.email,
       phone,
-      role: profile.tenantContracts.length ? 'tenant' : 'landlord',
+      role: profile.tenantContracts.length || (profile as any).role?.code === 'tenant' ? 'tenant' : 'landlord',
       contracts: all.map((contract) => contract.id),
       activeContracts: all.filter((c) => c.status === 'ACTIVE').length,
       needsSignature: all.filter((c) => c.status === 'AWAITING_TENANT_SIGN' || c.status === 'AWAITING_LANDLORD_SIGN').length,

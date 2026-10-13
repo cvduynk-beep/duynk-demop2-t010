@@ -230,3 +230,16 @@ export class UpdateDepositPolicyDto {
   reason?: string;
 }
 
+
+export class UpdateDefaultHoldHoursDto {
+  @ApiProperty({ example: 48, description: 'Thời hạn giữ chỗ mặc định toàn sàn (giờ nguyên, 12–72)' })
+  @IsInt()
+  @Min(12)
+  @Max(72)
+  hours: number;
+
+  @ApiProperty({ example: 'Mùa cao điểm: rút ngắn để quay vòng căn nhanh', description: 'Lý do thay đổi (lưu Audit)' })
+  @IsNotEmpty()
+  @IsString()
+  reason: string;
+}

@@ -22,6 +22,7 @@ import {
   EscalateTicketDto,
   VoidHoldDto,
   UpdateUnitHoldHoursDto,
+  UpdateDefaultHoldHoursDto,
   // UpdateLandlordFeeDto, // tạm tắt cùng endpoint phí dịch vụ chủ nhà
   PayoutQueryDto,
   ResolveUncDto,
@@ -117,6 +118,18 @@ export class AdminController {
   })
   async terminateMandate(@Param('id') id: string, @Body() dto: TerminateMandateDto, @CurrentUser() user: any) {
     return this.inventoryService.terminateMandate(id, dto.reason, user);
+  }
+
+  @Get('consignments')
+  @ApiOperation({ summary: 'Danh sách hồ sơ ký gửi đã ký (mọi stage), kèm tên Host thẩm định' })
+  async listConsignments() {
+    return this.inventoryService.listConsignments();
+  }
+
+  @Get('consignments/:id')
+  @ApiOperation({ summary: 'Chi tiết một hồ sơ ký gửi (id ủy quyền) kèm phiếu thẩm định' })
+  async getConsignment(@Param('id') id: string) {
+    return this.inventoryService.getConsignment(id);
   }
 
   @Post('consignments/:id/approve')
@@ -319,6 +332,24 @@ export class AdminController {
   // updateLandlordFee(@Body() dto: UpdateLandlordFeeDto, @CurrentUser() user: any) {
   //   return this.feeService.updateLandlordFee(dto, { id: user.id, role: user.role });
   // }
+
+  @Get('settings/hold-hours')
+  @ApiOperation({ summary: 'Thời hạn giữ chỗ mặc định toàn sàn (12–72 giờ) kèm nhật ký thay đổi' })
+  getHoldPolicy() {
+    return this.inventoryService.getHoldPolicy();
+  }
+
+  @Post('settings/hold-hours')
+  @ApiOperation({ summary: 'Đặt thời hạn giữ chỗ mặc định toàn sàn, có Audit Log (chỉ áp cho cọc mới)' })
+  updateDefaultHoldHours(@Body() dto: UpdateDefaultHoldHoursDto, @CurrentUser() user: any) {
+    return this.inventoryService.updateDefaultHoldHours(dto.hours, dto.reason, { id: user.id, role: user.role });
+  }
+
+  @Get('settings/fee-rates')
+  @ApiOperation({ summary: 'Biểu phí đang dùng tính All-in (phí QL/m², gửi xe, điện nước/người) — chỉ đọc' })
+  getFeeRates() {
+    return this.inventoryService.getFeeRates();
+  }
 
   @Get('settings/deposit-policy')
   @ApiOperation({ summary: 'Xem quy định tiền cọc (tối thiểu 50%, tối đa 4 lần giá thuê tháng)' })

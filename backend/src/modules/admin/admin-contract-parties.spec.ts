@@ -32,6 +32,15 @@ describe('AdminService.getContractPartyById', () => {
     expect(select.landlordContracts.take).toBeUndefined();
   });
 
+  it('nhận cả chủ nhà chỉ có ủy quyền ký gửi và khách chỉ có cọc giữ chỗ (chưa có HĐ thuê)', async () => {
+    const { svc, prisma } = build(profile({ tenantContracts: [], role: { code: 'tenant' } }));
+    const r: any = await svc.getContractPartyById('p1');
+    expect(r.role).toBe('tenant');
+    expect(r.contracts).toEqual([]);
+    const or = prisma.profile.findFirst.mock.calls[0][0].where.OR;
+    expect(or).toEqual(expect.arrayContaining([{ ownedUnits: { some: { mandates: { some: {} } } } }, { viewings: { some: { deposit: { isNot: null } } } }]));
+  });
+
   it('id không có hợp đồng ⇒ 404', async () => {
     const { svc } = build(null);
     await expect(svc.getContractPartyById('x')).rejects.toMatchObject({ status: 404 });
