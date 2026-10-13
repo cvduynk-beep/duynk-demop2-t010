@@ -330,28 +330,6 @@ export const accountApi = {
 };
 
 export const adminApi = {
-  getBiFunnel: () =>
-    api.get<{
-      funnel: {
-        stages: { stage: string; count: number; dropRate: string }[];
-        noShowRate: string;
-        avgDecisionTimeMinutes: number;
-      };
-      occupancyHeatmap: {
-        buildingCode: string;
-        zone: string;
-        total: number;
-        rented: number;
-        occupancyRate: string;
-        alert: string;
-      }[];
-      portfolioStatus: {
-        totalUnits: number;
-        rentedUnits: number;
-        holdingUnits: number;
-        availableUnits: number;
-      };
-    }>("/admin/bi-funnel"),
   getInventory: () =>
     api.get<unknown[]>("/admin/exclusive-inventory"),
   getDispatchSla: () =>

@@ -120,6 +120,39 @@ describe('AdminDispatchService — bảng SLA', () => {
   });
 });
 
+describe('AdminDispatchService — việc cần xử lý (actionable) & lọc khoảng', () => {
+  const closed = (status: string) => ({ ...ticket().viewing, status });
+
+  it('manualDispatch = ESCALATED + OFFERED tầng 3 quá hạn; overSla = OFFERED tầng 1–2 quá hạn; chỉ lịch còn mở', async () => {
+    const { svc } = build([
+      ticket({ id: 'esc', status: 'ESCALATED', tier: 2, slaSeconds: 180 }),
+      ticket({ id: 't3-late', tier: 3, slaSeconds: 180, offeredAt: ago(200) }),
+      ticket({ id: 't3-ok', tier: 3, slaSeconds: 180, offeredAt: ago(60) }),
+      ticket({ id: 't1-late', tier: 1, slaSeconds: 300, offeredAt: ago(301) }),
+      ticket({ id: 't2-late', tier: 2, slaSeconds: 180, offeredAt: ago(181) }),
+      ticket({ id: 't1-ok', tier: 1, slaSeconds: 300, offeredAt: ago(299) }),
+      ticket({ id: 'accepted-late', status: 'ACCEPTED', offeredAt: ago(900) }),
+      ticket({ id: 'cancelled-viewing', offeredAt: ago(900), viewing: closed('CANCELLED') }),
+      ticket({ id: 'done-escalated', status: 'ESCALATED', viewing: closed('COMPLETED') }),
+    ]);
+    const s = await svc.getSlaSummary(NOW);
+    expect(s.actionable).toEqual({ manualDispatch: 2, overSla: 2 });
+  });
+
+  it('range chỉ lọc thời gian nhận ca theo offeredAt; không truyền ⇒ toàn bộ như trước', async () => {
+    const accepted = (id: string, offeredAgo: number, tookSec: number) =>
+      ticket({ id, hostId: 'h1', status: 'ACCEPTED', offeredAt: ago(offeredAgo), acceptedAt: ago(offeredAgo - tookSec) });
+    const { svc } = build([accepted('recent', 3_600, 60), accepted('old', 10 * 86_400, 300)]);
+    expect((await svc.getSlaSummary(NOW)).avgAcceptSeconds).toBe(180);
+    const lastDay = { start: new Date(NOW.getTime() - 86_400_000), end: NOW };
+    const s = await svc.getSlaSummary(NOW, lastDay);
+    expect(s.avgAcceptSeconds).toBe(60);
+    expect(s.byHost).toEqual([expect.objectContaining({ hostId: 'h1', accepted: 1, avgAcceptSeconds: 60 })]);
+    const empty = await svc.getSlaSummary(NOW, { start: new Date(0), end: new Date(1) });
+    expect([empty.avgAcceptSeconds, empty.byHost]).toEqual([null, []]);
+  });
+});
+
 describe('AdminDispatchService — reassign (:id = Viewing id)', () => {
   const hosts = {
     'h-new': { id: 'h-new', dutyStatus: 'ONLINE_AVAILABLE' },

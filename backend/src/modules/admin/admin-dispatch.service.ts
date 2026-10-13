@@ -60,14 +60,29 @@ export class AdminDispatchService {
     }));
   }
 
-  async getSlaSummary(now: Date = new Date()) {
+  /**
+   * `range` (tuỳ chọn) chỉ lọc phần THỜI GIAN NHẬN CA (`byHost`, `avgAcceptSeconds`) theo `offeredAt`; không truyền ⇒ toàn bộ
+   * như trước. `byTier`/`breachedCount`/`actionable` luôn là ảnh chụp hiện tại.
+   */
+  async getSlaSummary(now: Date = new Date(), range?: { start: Date; end: Date }) {
     const tickets: any[] = await this.loadTickets();
     const byTier: Record<string, Record<string, number>> = {};
     let breachedCount = 0;
+    // Việc Admin phải xử lý — chỉ ticket của lịch xem CÒN MỞ (lịch đã huỷ/xong thì ticket cũ không còn ý nghĩa):
+    // - manualDispatch: đã ESCALATED, hoặc OFFERED ở tầng 3 (Area Lead) mà quá hạn (đã chốt: cộng cả hai).
+    // - overSla: OFFERED ở tầng 1–2 đã quá hạn (tầng 3 quá hạn đã nằm trong manualDispatch, không đếm trùng).
+    const actionable = { manualDispatch: 0, overSla: 0 };
+    for (const t of tickets) {
+      if (!OPEN_VIEWING.includes(t.viewing?.status)) continue;
+      const breached = this.breach(t, now).isBreached;
+      if (t.status === 'ESCALATED' || (t.status === 'OFFERED' && t.tier >= MAX_TIER && breached)) actionable.manualDispatch += 1;
+      else if (t.status === 'OFFERED' && breached) actionable.overSla += 1;
+    }
     // Thời gian nhận ca = acceptedAt − offeredAt của các ticket Host đã nhận (AGENTS.md vận hành #5: SLA 3 phút).
     const accept = new Map<string, { hostName: string; totalSec: number; accepted: number; overSla: number }>();
+    const inRange = (t: any) => !range || (new Date(t.offeredAt) >= range.start && new Date(t.offeredAt) < range.end);
     for (const t of tickets) {
-      if (t.hostId && t.acceptedAt) {
+      if (t.hostId && t.acceptedAt && inRange(t)) {
         const sec = Math.max(0, Math.round((new Date(t.acceptedAt).getTime() - new Date(t.offeredAt).getTime()) / 1000));
         const row = accept.get(t.hostId) ?? {
           hostName: t.host?.profile?.fullName || 'Host chưa đặt tên',
@@ -106,7 +121,7 @@ export class AdminDispatchService {
     const avgAcceptSeconds = totalAccepted
       ? Math.round(byHost.reduce((s, h) => s + h.avgAcceptSeconds * h.accepted, 0) / totalAccepted)
       : null;
-    return { byTier, breachedCount, byHost, avgAcceptSeconds };
+    return { byTier, breachedCount, actionable, byHost, avgAcceptSeconds };
   }
 
   async reassign(viewingId: string, dto: ReassignBookingDto, actor: AdminActor, now: Date = new Date()) {

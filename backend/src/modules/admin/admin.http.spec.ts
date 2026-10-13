@@ -25,6 +25,7 @@ import { AdminBiService } from './admin-bi.service';
 import { AdminInventoryService } from './admin-inventory.service';
 import { AdminDepositService } from './admin-deposit.service';
 import { AdminKeyService } from './admin-key.service';
+import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminService } from './admin.service';
 
 const ENV = {
@@ -68,6 +69,9 @@ const ADMIN_ROUTES: Route[] = [
   { method: 'get', path: 'door-keys' },
   { method: 'post', path: 'door-keys/x/rotate' },
   { method: 'post', path: 'door-keys/x/revoke' },
+  // Dashboard admin
+  { method: 'get', path: 'dashboard/work-items' },
+  { method: 'get', path: 'activity' },
 ];
 
 describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
@@ -123,6 +127,8 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
       .overrideProvider(AdminDepositService)
       .useValue(fakeService)
       .overrideProvider(AdminKeyService)
+      .useValue(fakeService)
+      .overrideProvider(AdminDashboardService)
       .useValue(fakeService)
       .compile();
     app = moduleRef.createNestApplication();
@@ -184,6 +190,22 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
     for (const r of ADMIN_ROUTES) {
       const res = await call(request(app.getHttpServer()) as any, r, token);
       expect([r.method, r.path, res.status]).toEqual([r.method, r.path, 401]);
+    }
+  });
+
+  it('ops_admin: khoảng thời gian / limit sai ⇒ 400 có lỗi theo field (kiểm ở server, không chỉ ở UI)', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent.post('/api/v1/auth/login').send({ email: 'ops@example.com', password: 'Matkhau-123', portal: 'admin' }).expect(200);
+    const cases: Array<[string, string, string]> = [
+      ['bi-funnel?from=2026-13-01', 'invalid_range', 'from'],
+      ['bi-funnel?from=2026-10-13&to=2026-10-01', 'invalid_range', 'from'],
+      ['bi-funnel?from=2026-01-01&to=2026-12-31', 'invalid_range', 'to'],
+      ['dispatch-sla/summary?from=abc', 'invalid_range', 'from'],
+      ['activity?limit=500', 'invalid_request', 'limit'],
+    ];
+    for (const [path, code, field] of cases) {
+      const res = await agent.get(`/api/v1/admin/${path}`).set('x-portal', 'admin');
+      expect([path, res.status, res.body.code, Object.keys(res.body.errors ?? {})]).toEqual([path, 400, code, [field]]);
     }
   });
 
