@@ -107,7 +107,8 @@ Màn: bảng điều phối, buổi xem phòng, thẩm định căn ký gửi, t
 | `GET /host/inspections` · `GET /host/inspections/:id` | field_host (inspector) | **Thẩm định ký gửi** (hồ sơ 16): ca giao cho tôi + Open Pool (sau 4h chưa nhận) + đã nộp; chi tiết kèm catalog 32 hạng mục, ảnh tham khảo chủ nhà, ảnh đã chụp | ✅ |
 | `POST /host/inspections/:id/accept` · `/claim` · `/door-code` | field_host (inspector) | nhận ca được giao · nhận ca Open Pool (nguyên tử) · lấy mã cửa (hiển thị 10′, ghi `DOOR_KEY_REVEAL`; thiếu mã ⇒ 409 `door_code_missing`) | ✅ |
 | `POST /host/inspections/:id/photos` (multipart `file`, `slot`, `room?`) · `DELETE .../photos/:photoId` | field_host (inspector) | ảnh hạng mục (1–4/dòng) + ảnh niêm yết (4–12); kiểm theo nội dung, cạnh ngắn ≥200px, ≤3MB; bucket private, đường dẫn `inspections/<mandateId>/…` | ✅ |
-| `POST /host/inspections/:id/submit` | field_host (inspector) | nộp phiếu 32 hạng mục. **Đạt ⇒ một giao dịch tự niêm yết** (ủy quyền ACTIVE, căn AVAILABLE + Verified, ảnh niêm yết vào `UnitMedia`) — KHÔNG qua Admin; không đạt ⇒ ủy quyền TERMINATED. Lỗi phiếu ⇒ 400 `report_invalid` kèm `field` | ✅ |
+| `POST /host/inspections/:id/photos/import-landlord` | field_host (inspector) | đưa ảnh tham khảo chủ nhà gửi vào ảnh niêm yết (phòng "Khác", `fromLandlord: true`) MỘT lần mỗi ca — SAO CHÉP file nên Host xoá không đụng ảnh gốc; ảnh hỏng/quá nhỏ bỏ qua, chỉ lấy phần còn chỗ trong hạn mức 12 ảnh; gọi lại ⇒ `[]`. Web tự gọi khi mở phiếu | ✅ |
+| `POST /host/inspections/:id/submit` | field_host (inspector) | nộp phiếu 32 hạng mục. **Đạt (căn bình thường) ⇒ một giao dịch tự niêm yết** (ủy quyền ACTIVE, căn AVAILABLE + Verified, ảnh niêm yết vào `UnitMedia`) — KHÔNG qua Admin; đổi giá/cọc ⇒ `awaiting_landlord`. **Không đạt (căn bất thường) ⇒ `reviewing`, chờ Admin** (`/admin/consignments/:id/approve|reject`). `livingFees` `{mgmtFeePerM2, motorbikeFee, carFee, note?}` (biểu phí thực tế tại tòa, số nguyên; ghi chú ≤150 ký tự, cấm SĐT/link) ⇒ khi niêm yết ghi vào căn (`management_fee`, `motorbike_fee`, `car_fee`, `fee_note`) và All-in Cost (matchmaker, `GET /units`) tính theo căn; căn chưa có ⇒ đơn giá chung `fee_configs`. Lỗi phiếu ⇒ 400 `report_invalid` kèm `field` | ✅ |
 | `GET /media/listing/:mandateId/:file` | public | ảnh niêm yết của căn đã đạt (ảnh hạng mục/hồ sơ chưa đạt ⇒ 404), cache 1 ngày | ✅ |
 | `GET /host/inspections` | field_host (inspector) | danh sách căn ký gửi cần thẩm định | ⬜ |
 | `POST /host/inspections/:consignmentId/accept` | field_host | nhận việc thẩm định | ⬜ |
@@ -123,7 +124,7 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 |---|---|---|---|
 | `GET /admin/bi-funnel` | ops_admin | tổng quan: phễu chuyển đổi, tỉ lệ no-show, heatmap lấp đầy | ✅ |
 | `GET /admin/exclusive-inventory` | ops_admin | rổ hàng ký gửi | ✅ |
-| `POST /admin/consignments/:id/approve` · `/reject` `{note}` | ops_admin | duyệt / từ chối hồ sơ ký gửi sau thẩm định | ⬜ |
+| `POST /admin/consignments/:id/approve` `{note?}` · `/reject` `{note ≥5 ký tự}` | ops_admin | quyết hồ sơ **`reviewing`** (Inspector đề xuất không duyệt — căn bất thường: giá thuê quá cao, nội thất sai hiện trạng…). Duyệt ⇒ niêm yết theo phiếu (giá/cọc trên phiếu khác chủ khai ⇒ `awaiting_landlord`); từ chối ⇒ ủy quyền `TERMINATED`. 409 `inspection_bad_stage` (không ở reviewing) / `review_incomplete` (phiếu thiếu ảnh niêm yết hoặc PIN cửa). Căn bình thường Inspector tự niêm yết, không qua đây | ✅ |
 | `GET /admin/dispatch-sla` | ops_admin | lịch hẹn & cảnh báo quá SLA | ✅ |
 | `POST /admin/bookings/:id/reassign` `{hostId}` | ops_admin | điều phối tay sang Host khác | ⬜ |
 | `GET /admin/contracts` · `GET /admin/contracts/:id` | ops_admin | sổ hợp đồng: uỷ quyền, giữ chỗ, thuê, hợp tác Host | ⬜ |

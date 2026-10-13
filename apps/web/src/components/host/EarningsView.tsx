@@ -1,247 +1,116 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CreditCard, Database, Wallet } from "lucide-react";
-import { STATUS_META } from "@/components/booking/status";
+import { useState } from "react";
+import { Wallet } from "lucide-react";
 import { StatTile } from "@/components/charts/StatTile";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
-import { hostApi } from "@/lib/apiClient";
-import { DEMO_USERS } from "@/lib/mock/actors";
+import { useHostEarnings, type HostEarnings } from "@/lib/admin/api";
 import { fmtDate, vnd } from "@/lib/format";
-import { useNow } from "@/lib/useNow";
-import { hostBookings, hostEarnings } from "@/lib/mock/selectors";
-import { useMock } from "@/lib/mock/store";
-import type { Booking } from "@/lib/mock/types";
-import { hostById, unitAddress, unitById } from "@/lib/mock/units";
+import { DEAL_STATUS, formulaLines, periodLabel } from "@/lib/host/earnings";
 import styles from "./Host.module.css";
 
-const host = hostById(DEMO_USERS.host.refId!)!;
+type Deal = HostEarnings["deals"][number];
+type Scope = "week" | "all";
 
-interface HostPayout {
-  id: string;
-  amount: number;
-  period: string;
-  status: string;
-  createdAt: string;
-}
-
-interface HostLiveEarnings {
-  hostId: string;
-  fullName: string;
-  rating: number;
-  walletBalance: number;
-  currentPeriod: string;
-  payouts: HostPayout[];
-}
+const nowrap = { whiteSpace: "nowrap" } as const;
 
 export function EarningsView() {
-  const state = useMock();
-  const [liveData, setLiveData] = useState<HostLiveEarnings | null>(null);
-  const now = useNow(60_000);
-  const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const query = useHostEarnings();
+  const [scope, setScope] = useState<Scope>("week");
+  if (query.state.status === "loading") return <div className="skeleton" style={{ height: 320 }} />;
+  if (query.state.status === "error") return <div role="alert"><p>{query.state.message}</p><button className="btn btn-secondary btn-sm" onClick={query.reload}>Thử lại</button></div>;
 
-  useEffect(() => {
-    let active = true;
-    hostApi.getEarnings(host.id).then((res) => {
-      if (!active) return;
-      if (res.ok && res.data) {
-        setLiveData(res.data);
-        setIsLiveConnected(true);
-      }
-    }).catch(() => {
-      // Fallback seamlessly to local mock state
-    });
-    return () => { active = false; };
-  }, []);
+  const { stats, week, fees, ratingAvg, ratingCount, walletBalance, deals, roles } = query.state.data;
+  const isInspector = roles.includes("inspector");
+  const shown = scope === "week" ? week : stats;
+  const lines = formulaLines(shown, fees, isInspector);
+  const ratingHit = ratingAvg != null && ratingAvg >= fees.ratingMinAvg && fees.ratingMultiplier != null;
 
-  if (!state.ready) return <div className="skeleton" style={{ height: 280 }} />;
-  const { fees } = state;
-  const e = hostEarnings(state, host, fees);
-  const deals = hostBookings(state, host.id).filter((b) => ["holding", "leased"].includes(b.status));
-  const perDeal = Math.round(fees.dealCommission * e.multiplier);
-
-  // Danh sách payouts từ backend hoặc fallback
-  const payoutsList: HostPayout[] = (liveData?.payouts && liveData.payouts.length > 0)
-    ? liveData.payouts
-    : [
-        {
-          id: "pay-prev",
-          amount: 2500000,
-          period: "Tuần 39 / 2026",
-          status: "PAID",
-          createdAt: new Date(now - 86400000 * 7).toISOString(),
-        },
-      ];
-
-  const payoutColumns: DataTableColumn<HostPayout>[] = [
-    {
-      key: "period",
-      header: "Kỳ đối soát",
-      render: (p) => <b style={{ whiteSpace: "nowrap" }}>{p.period}</b>,
-    },
-    {
-      key: "amount",
-      header: "Số tiền",
-      align: "right",
-      render: (p) => <b className="num" style={{ whiteSpace: "nowrap" }}>{vnd(p.amount)}đ</b>,
-    },
-    {
-      key: "createdAt",
-      header: "Ngày chuyển khoản",
-      render: (p) => <span className="small muted" style={{ whiteSpace: "nowrap" }}>{fmtDate(p.createdAt)}</span>,
-    },
+  const columns: DataTableColumn<Deal>[] = [
+    { key: "unit", header: "Căn hộ", render: (d) => <b style={nowrap}>{d.unit ?? d.depositCode ?? "—"}</b> },
+    { key: "tenant", header: "Khách", render: (d) => <span style={nowrap}>{d.tenantName ?? "—"}</span> },
+    { key: "paidAt", header: "Ngày cọc", render: (d) => <span className="small muted" style={nowrap}>{fmtDate(d.paidAt)}</span> },
     {
       key: "status",
       header: "Trạng thái",
-      render: (p) => (
-        <span
-          className={`badge ${p.status === "PAID" ? "badge-kelp" : "badge-amber-soft"}`}
-          style={{ whiteSpace: "nowrap" }}
-        >
-          {p.status === "PAID" ? "Đã chuyển VietQR" : "Chờ đối soát"}
-        </span>
-      ),
-    },
-  ];
-
-  const dealColumns: DataTableColumn<Booking>[] = [
-    {
-      key: "unit",
-      header: "Căn hộ",
-      render: (b) => {
-        const u = unitById(b.unitId);
-        return <b style={{ whiteSpace: "nowrap" }}>{u ? unitAddress(u) : b.unitId}</b>;
+      render: (d) => {
+        const s = (d.status && DEAL_STATUS[d.status]) || { label: "—", badge: "badge-plain" };
+        return <span className={`badge ${s.badge}`} style={nowrap}>{s.label}</span>;
       },
     },
-    {
-      key: "tenant",
-      header: "Khách",
-      render: (b) => <span style={{ whiteSpace: "nowrap" }}>{b.tenant.name}</span>,
-    },
-    {
-      key: "date",
-      header: "Ngày cọc",
-      render: (b) => <span className="small muted" style={{ whiteSpace: "nowrap" }}>{b.deposit?.paidAt ? fmtDate(b.deposit.paidAt) : "—"}</span>,
-    },
-    {
-      key: "status",
-      header: "Trạng thái",
-      render: (b) => <span className={`badge ${STATUS_META[b.status].badge}`} style={{ whiteSpace: "nowrap" }}>{STATUS_META[b.status].label}</span>,
-    },
-    {
-      key: "commission",
-      header: "Hoa hồng",
-      align: "right",
-      render: () => <b className="num" style={{ whiteSpace: "nowrap" }}>+{vnd(perDeal)}đ</b>,
-    },
+    { key: "commission", header: "Hoa hồng", align: "right", render: (d) => <b className="num" style={nowrap}>+{vnd(d.commission)}đ</b> },
   ];
 
   return (
     <div className={styles.page}>
       <PageHeader
         title="Thu nhập Field Host"
-        description={`Kỳ hiện tại: ${liveData?.currentPeriod || "Tuần 40 / 2026"} · Đối soát và chuyển khoản tự động vào 23:59 Chủ nhật hàng tuần`}
-        actions={
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              className={`badge ${isLiveConnected ? "badge-kelp" : "badge-plain"}`}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 12 }}
-              title={isLiveConnected ? "Đồng bộ số dư ví & đối soát từ Backend DB (/api/v1/host/earnings)" : "Chế độ dự phòng client-side"}
-            >
-              <Database size={13} />
-              {isLiveConnected ? "Live Wallet Synced" : "Client Fallback"}
-            </span>
-          </div>
-        }
+        description={`Kỳ hiện tại: ${periodLabel(week.period)} · Đối soát và chuyển khoản vào 23:59 Chủ nhật hằng tuần`}
       />
-
       <div className={styles.kpis}>
+        <StatTile hero label="Ví thu nhập" value={vnd(walletBalance)} unit="đ" delta={{ text: "Chuyển khoản sau kỳ đối soát Chủ nhật", tone: "good" }} />
+        <StatTile label="Tạm tính tuần này" value={vnd(week.totalEarnings)} unit="đ" delta={{ text: periodLabel(week.period), tone: "flat" }} />
         <StatTile
-          hero
-          label="Ví thu nhập khả dụng"
-          value={vnd(liveData?.walletBalance ?? (e.total + 2500000))}
-          unit="đ"
-          delta={{ text: "Sẵn sàng rút / Chuyển khoản CN", tone: "good" }}
+          label="Lượt dẫn tuần này"
+          value={String(week.totalViewings)}
+          delta={{ text: fees.baseViewingFee != null ? `${vnd(fees.baseViewingFee)}đ / lượt` : "Chưa cấu hình phí", tone: "flat" }}
         />
-        <StatTile label="Tạm tính tuần này" value={vnd(e.total)} unit="đ" delta={{ text: liveData?.currentPeriod || "Tuần 40 / 2026", tone: "good" }} />
-        <StatTile label="Lượt dẫn phòng" value={String(e.viewings)} delta={{ text: `${vnd(fees.baseViewingFee)}đ / lượt`, tone: "flat" }} />
-        <StatTile label="Deal chốt cọc" value={String(e.deals)} delta={{ text: `${vnd(fees.dealCommission)}đ / deal`, tone: "flat" }} />
         <StatTile
-          label="Đánh giá"
-          value={`${String(host.rating).replace(".", ",")}★`}
+          label="Deal chốt cọc tuần này"
+          value={String(week.totalDeals)}
+          delta={{ text: fees.dealCommission != null ? `${vnd(fees.dealCommission)}đ / deal` : "Chưa cấu hình phí", tone: "flat" }}
+        />
+        {isInspector && <StatTile label="Phiếu thẩm định tuần này" value={String(week.totalInspections)} delta={{ text: fees.inspectionFee != null ? `${vnd(fees.inspectionFee)}đ / hồ sơ` : "Chưa cấu hình phí", tone: "flat" }} />}
+        <StatTile
+          label="Đánh giá trung bình"
+          value={ratingAvg != null ? `${String(Math.round(ratingAvg * 10) / 10).replace(".", ",")}★` : "—"}
           delta={
-            host.rating >= 4.8
-              ? { text: `hệ số ×${String(fees.ratingMultiplier).replace(".", ",")}`, tone: "good", dir: "up" }
-              : { text: "Chuẩn dịch vụ", tone: "good" }
+            ratingAvg == null
+              ? { text: "Chưa có lượt chấm", tone: "flat" }
+              : ratingHit
+                ? { text: `${ratingCount} lượt · hệ số ×${String(fees.ratingMultiplier).replace(".", ",")}`, tone: "good", dir: "up" }
+                : { text: `${ratingCount} lượt · cần ≥ ${String(fees.ratingMinAvg).replace(".", ",")}★ để nhận thưởng`, tone: "flat" }
           }
         />
       </div>
-
       <div className={styles.earningsLayout}>
-        <Section title="Cách tính thù lao">
+        <Section
+          title="Cách tính thù lao"
+          actions={
+            <div className={styles.tabs} role="tablist" aria-label="Phạm vi số liệu">
+              <button role="tab" aria-selected={scope === "week"} onClick={() => setScope("week")}>Tuần này</button>
+              <button role="tab" aria-selected={scope === "all"} onClick={() => setScope("all")}>Tất cả</button>
+            </div>
+          }
+        >
           <dl className={styles.lines}>
+            {lines.map((line) => (
+              <div key={line.key}>
+                <dt>
+                  {line.label}
+                  <span className="muted xs">{line.formula}</span>
+                </dt>
+                <dd className="num">{vnd(line.amount)}đ</dd>
+              </div>
+            ))}
             <div>
-              <dt>
-                Thù lao dẫn khách
-                <span className="muted xs">
-                  {e.viewings} lượt × {vnd(fees.baseViewingFee)}đ
-                </span>
-              </dt>
-              <dd className="num">{vnd(e.viewingFee)}đ</dd>
-            </div>
-            <div>
-              <dt>
-                Hoa hồng chốt cọc
-                <span className="muted xs">
-                  {e.deals} deal × {vnd(fees.dealCommission)}đ
-                  {e.multiplier > 1 ? ` × ${String(e.multiplier).replace(".", ",")}` : ""}
-                </span>
-              </dt>
-              <dd className="num">{vnd(e.commission)}đ</dd>
-            </div>
-            <div>
-              <dt>
-                Thưởng nóng chiến dịch
-                <span className="muted xs">{vnd(fees.campaignBonus)}đ / deal (tối đa 3 deal)</span>
-              </dt>
-              <dd className="num">{vnd(e.bonus)}đ</dd>
+              <dt>Tổng {scope === "week" ? "tuần này" : "đã ghi nhận"}</dt>
+              <dd className="num">{vnd(shown.totalEarnings)}đ</dd>
             </div>
           </dl>
           <p className="muted xs">
-            Mức thù lao do Admin cấu hình và có hiệu lực ngay với ticket mới. Chuyển khoản VietQR 24/7 trực tiếp vào tài khoản ngân hàng của Host.
+            Mức thù lao do Admin cấu hình, áp dụng cho ca/cọc mới. Mỗi khoản chỉ được ghi khi ca xem hoàn tất, khách đã chuyển cọc
+            {isInspector ? " hoặc phiếu thẩm định đã nộp" : ""}.
           </p>
         </Section>
-
         <Section title="Deal gần đây" flush>
-          <DataTable<Booking>
-            columns={dealColumns}
+          <DataTable<Deal>
+            columns={columns}
             rows={deals}
-            rowHref={(b) => `/host/viewing/${b.id}`}
-            empty={
-              <div className={styles.empty}>
-                <Wallet size={26} />
-                <b>Chưa có deal trong phiên này</b>
-                <p className="muted small">Chốt một căn từ tab Lịch để thấy hoa hồng cộng vào đây.</p>
-              </div>
-            }
-          />
-        </Section>
-      </div>
-
-      <div style={{ marginTop: 24 }}>
-        <Section title="Lịch sử đối soát & Thanh toán chuyển khoản" flush>
-          <DataTable<HostPayout>
-            columns={payoutColumns}
-            rows={payoutsList}
-            empty={
-              <div className={styles.empty}>
-                <CreditCard size={26} />
-                <b>Chưa có kỳ đối soát nào</b>
-                <p className="muted small">Lịch sử thanh toán VietQR sẽ hiển thị sau kỳ đối soát Chủ nhật đầu tiên.</p>
-              </div>
-            }
+            rowHref={(d) => d.href ?? ""}
+            empty={<div className={styles.empty}><Wallet size={26} /><b>Chưa có deal</b><p className="muted small">Khi khách bạn dẫn chuyển cọc giữ chỗ, hoa hồng sẽ cộng vào đây.</p></div>}
           />
         </Section>
       </div>

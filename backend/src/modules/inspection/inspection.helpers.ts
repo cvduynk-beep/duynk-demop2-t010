@@ -95,7 +95,8 @@ export function toCard(
     overdue: (stage === 'awaiting_host' || stage === 'inspecting') && now.getTime() > new Date(due).getTime(),
     tier,
     hostAcceptedAt: meta.hostAcceptedAt ?? null,
-    decidedAt: meta.decidedAt ?? null,
+    // Ca `reviewing` chưa có quyết định (chờ Admin) ⇒ lấy giờ Inspector nộp phiếu.
+    decidedAt: meta.decidedAt ?? meta.report?.submittedAt ?? null,
   };
 }
 
@@ -109,6 +110,7 @@ export function toPhotoView(p: InspectionPhoto, urls: Map<string, string | null>
     size: p.size,
     uploadedAt: p.uploadedAt,
     url: urls.get(p.path) ?? null,
+    fromLandlord: Boolean(p.sourceLandlordPhotoId),
   };
 }
 

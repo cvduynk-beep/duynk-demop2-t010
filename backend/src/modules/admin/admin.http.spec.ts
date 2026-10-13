@@ -25,6 +25,8 @@ import { AdminBiService } from './admin-bi.service';
 import { AdminInventoryService } from './admin-inventory.service';
 import { AdminDepositService } from './admin-deposit.service';
 import { AdminKeyService } from './admin-key.service';
+import { ConsignmentReviewService } from '../inspection/consignment-review.service';
+import { LandlordPhotoStorage } from '../landlord/landlord-photo-storage.service';
 import { AdminService } from './admin.service';
 
 const ENV = {
@@ -123,6 +125,10 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
       .overrideProvider(AdminDepositService)
       .useValue(fakeService)
       .overrideProvider(AdminKeyService)
+      .useValue(fakeService)
+      .overrideProvider(LandlordPhotoStorage)
+      .useValue(fakeService)
+      .overrideProvider(ConsignmentReviewService)
       .useValue(fakeService)
       .compile();
     app = moduleRef.createNestApplication();

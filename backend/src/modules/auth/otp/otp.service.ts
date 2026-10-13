@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OtpChannel, OtpCode, OtpPurpose, OtpStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -8,9 +8,6 @@ import { PhoneService } from '../phone/phone.service';
 import { deriveKey, resolveMasterSecret } from '../secrets';
 import { generateOtpCode, hashOtpCode, otpHashesEqual } from './otp-crypto';
 import { ConsoleOtpSender } from './senders/console-otp.sender';
-import { OtpChannelSender } from './senders/otp-channel';
-import { SmsFallbackSender } from './senders/sms-fallback.sender';
-import { ZaloZnsSender } from './senders/zalo-zns.sender';
 
 export interface OtpRequestContext {
   ipAddress?: string;
@@ -20,31 +17,23 @@ export interface OtpRequestContext {
 const secondsUntil = (date: Date) => Math.max(1, Math.ceil((date.getTime() - Date.now()) / 1000));
 
 /**
- * Vòng đời OTP: gửi qua nhà cung cấp thật; xác thực có giới hạn thử và khóa.
+ * Vòng đời OTP: Zalo đang MÔ PHỎNG (một luồng duy nhất, mọi môi trường) — mã ngẫu nhiên được ghi log và trả về caller
+ * dạng `devCode` để màn hình hiện mã; xác thực có giới hạn thử và khóa.
  * TTL / số lần thử / thời gian khóa nằm ở đây (không phải cấu hình Supabase) để khớp SAD ở mọi gói.
  */
 @Injectable()
 export class OtpService {
-  private readonly logger = new Logger(OtpService.name);
   private readonly pepper: Buffer;
   private readonly ttlSeconds: number;
   private readonly maxAttempts: number;
   private readonly lockoutSeconds: number;
   private readonly resendSeconds: number;
-  /**
-   * MÔ PHỎNG kênh Zalo (giữ có chủ đích, chưa tích hợp ZNS thật): chỉ bật được ngoài production bằng
-   * `OTP_ECHO_DEV_CODE=true`; khi Zalo/SMS thật không gửi được, mã được ghi ra LOG backend (`ConsoleOtpSender`).
-   * Mã KHÔNG BAO GIỜ nằm trong response API, và không có mã cố định: mọi mã đều ngẫu nhiên (`crypto.randomInt`).
-   */
-  private readonly devConsoleEnabled: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly phones: PhoneService,
     private readonly audit: AuthAuditService,
-    private readonly zalo: ZaloZnsSender,
-    private readonly sms: SmsFallbackSender,
-    private readonly devConsole: ConsoleOtpSender,
+    private readonly sender: ConsoleOtpSender,
     config: ConfigService,
   ) {
     this.pepper = deriveKey(resolveMasterSecret(config, config.get('NODE_ENV')), 'otp:pepper');
@@ -52,7 +41,6 @@ export class OtpService {
     this.maxAttempts = Number(config.get('OTP_MAX_ATTEMPTS') ?? 3);
     this.lockoutSeconds = Number(config.get('OTP_LOCKOUT_SECONDS') ?? 600);
     this.resendSeconds = Number(config.get('OTP_RESEND_SECONDS') ?? 60);
-    this.devConsoleEnabled = String(config.get('OTP_ECHO_DEV_CODE')) === 'true' && config.get('NODE_ENV') !== 'production';
   }
 
   get expiresInSeconds(): number {
@@ -64,8 +52,10 @@ export class OtpService {
     return this.resendSeconds;
   }
 
-  /** `phone` phải là E.164 đã chuẩn hóa. Không bao giờ trả mã cho caller. */
-  async send(params: { phone: string; purpose: OtpPurpose } & OtpRequestContext): Promise<void> {
+  /**
+   * `phone` phải là E.164 đã chuẩn hóa. Luôn trả `devCode` (Zalo mô phỏng). Mã ngẫu nhiên (`crypto.randomInt`), không có mã cố định.
+   */
+  async send(params: { phone: string; purpose: OtpPurpose } & OtpRequestContext): Promise<{ devCode: string }> {
     const { phone, purpose, ipAddress, userAgent } = params;
     const phoneHash = this.phones.hash(phone);
 
@@ -84,7 +74,8 @@ export class OtpService {
     }
 
     const code = generateOtpCode();
-    const channel = await this.deliver(phone, code);
+    const channel = OtpChannel.ZALO;
+    await this.sender.send(phone, code);
 
     await this.prisma.$transaction([
       // Chỉ mã mới nhất được dùng: vô hiệu các mã cũ chưa xác thực.
@@ -106,7 +97,7 @@ export class OtpService {
       }),
     ]);
     await this.audit.record('otp_sent', { phoneHash, ipAddress, userAgent, metadata: { purpose, channel } });
-
+    return { devCode: code };
   }
 
   /**
@@ -171,24 +162,4 @@ export class OtpService {
     return result.count === 1;
   }
 
-  private async deliver(phone: string, code: string): Promise<OtpChannel> {
-    const candidates: Array<{ channel: OtpChannel; sender: OtpChannelSender }> = [
-      { channel: OtpChannel.ZALO, sender: this.zalo },
-      { channel: OtpChannel.SMS, sender: this.sms },
-    ];
-    for (const { channel, sender } of candidates) {
-      try {
-        await sender.send(phone, code);
-        return channel;
-      } catch (err) {
-        this.logger.debug(`Kênh ${channel} không gửi được: ${(err as Error).message}`);
-      }
-    }
-
-    if (this.devConsoleEnabled) {
-      await this.devConsole.send(phone, code);
-      return OtpChannel.ZALO;
-    }
-    throw authError('otp_send_failed');
-  }
 }

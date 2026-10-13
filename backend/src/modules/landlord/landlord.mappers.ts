@@ -65,7 +65,8 @@ export function toUiMandateStatus(status: MandateStatus): UiMandateStatus {
 // ─── Hồ sơ ký gửi (lưu trong ExclusiveMandate.doorAccessConfig.consignment) ────────────────────
 
 /** Chuỗi hợp lệ: awaiting_host → inspecting → approved | rejected | awaiting_landlord (đổi giá/cọc ⇒ chủ duyệt: accept ⇒ approved, decline ⇒ rejected — hồ sơ 18). */
-export type ConsignmentStage = 'awaiting_host' | 'inspecting' | 'awaiting_landlord' | 'approved' | 'rejected';
+/** `reviewing` = Inspector đề xuất KHÔNG duyệt (căn bất thường) ⇒ chờ Admin quyết (duyệt niêm yết / từ chối). */
+export type ConsignmentStage = 'awaiting_host' | 'inspecting' | 'reviewing' | 'awaiting_landlord' | 'approved' | 'rejected';
 
 export interface ConsignmentForm {
   building: string;
@@ -143,11 +144,15 @@ export interface InspectionPhoto {
   takenAt: string | null;
   uploadedAt: string;
   hostId: string;
+  /** Có khi ảnh niêm yết được SAO CHÉP từ ảnh tham khảo chủ nhà gửi (`ConsignmentPhoto.id`); file riêng, xoá không ảnh hưởng ảnh gốc. */
+  sourceLandlordPhotoId?: string;
 }
 
 export interface InspectionMeta {
   photos: InspectionPhoto[];
   doorRevealedAt?: string[];
+  /** Đã đưa ảnh tham khảo của chủ nhà vào ảnh niêm yết (một lần duy nhất — ảnh Host đã bỏ không quay lại). */
+  landlordPhotosImportedAt?: string;
 }
 
 /** Trách nhiệm hạng mục theo catalog Điều 5: lỗi do dùng, hoặc hao mòn/lỗi dùng. (01-CONTRACTS ghi `wear|misuse` nhưng catalog thật dùng `wear_or_misuse` — theo catalog, xem report R02.) */
@@ -200,6 +205,18 @@ export interface PricingProposal {
   original: { rent: number; securityDeposit: number };
 }
 
+/** Biểu phí sinh hoạt thực tế tại tòa — Field Host xác minh với chủ nhà / lễ tân sảnh lúc thẩm định (đồng/tháng). */
+export interface InspectionLivingFees {
+  /** Phí quản lý BQL (đ/m²/tháng). */
+  mgmtFeePerM2: number;
+  /** Phí gửi xe máy (đ/xe/tháng). */
+  motorbikeFee: number;
+  /** Phí gửi ô tô (đ/xe/tháng). */
+  carFee: number;
+  /** Ghi chú phí khác / tiện ích nội khu (≤150 ký tự). */
+  note?: string;
+}
+
 export interface InspectionReport {
   hostId: string;
   submittedAt: string;
@@ -216,6 +233,8 @@ export interface InspectionReport {
   facts?: InspectionFacts;
   pricing?: InspectionPricing;
   listing?: InspectionListing;
+  /** Có khi phiếu nộp sau khi có mục biểu phí; khi niêm yết ghi vào căn (All-in Cost theo căn). */
+  livingFees?: InspectionLivingFees;
   /** Server tính, không nhận từ client. */
   avgCondition: number;
 }

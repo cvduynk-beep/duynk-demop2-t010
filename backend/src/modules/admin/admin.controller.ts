@@ -88,15 +88,18 @@ export class AdminController {
   }
 
   @Post('consignments/:id/approve')
-  @ApiOperation({ summary: 'Admin duyệt hồ sơ ký gửi căn hộ sau khi có báo cáo thẩm định của Host' })
-  async approveConsignment(@Param('id') id: string, @Body() dto: ApproveConsignmentDto) {
-    return this.adminService.approveConsignment(id, dto);
+  @ApiOperation({
+    summary: 'Admin duyệt hồ sơ ký gửi Inspector đề xuất không duyệt (stage reviewing)',
+    description: 'Niêm yết theo phiếu thẩm định; giá/cọc trên phiếu khác chủ khai ⇒ awaiting_landlord. 409 inspection_bad_stage nếu không ở reviewing, 409 review_incomplete nếu phiếu thiếu ảnh niêm yết / PIN cửa.',
+  })
+  async approveConsignment(@Param('id') id: string, @Body() dto: ApproveConsignmentDto, @CurrentUser() user: any) {
+    return this.adminService.approveConsignment(id, dto, user.id);
   }
 
   @Post('consignments/:id/reject')
-  @ApiOperation({ summary: 'Admin từ chối hồ sơ ký gửi kèm lý do' })
-  async rejectConsignment(@Param('id') id: string, @Body() dto: RejectConsignmentDto) {
-    return this.adminService.rejectConsignment(id, dto);
+  @ApiOperation({ summary: 'Admin từ chối hồ sơ ký gửi (stage reviewing) kèm lý do ≥ 5 ký tự — chấm dứt ủy quyền' })
+  async rejectConsignment(@Param('id') id: string, @Body() dto: RejectConsignmentDto, @CurrentUser() user: any) {
+    return this.adminService.rejectConsignment(id, dto, user.id);
   }
 
   @Get('dispatch-sla')

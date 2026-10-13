@@ -50,8 +50,8 @@ export class MatchmakerService {
     const enrichedUnits = scannedUnits.filter((u) => passesFilters(u, dto)).map((item) => {
       const baseRent = Number(item.rent);
       const managementFee = Number(item.managementFee);
-      // Đơn giá lấy từ fee_configs (Admin cài) — cùng nguồn với FAQ của khung chat.
-      const parkingFee = motorbikes * rates.motorbike + cars * rates.car;
+      // Biểu phí thực tế tại tòa (Host xác minh lúc thẩm định) thắng; căn chưa có ⇒ đơn giá chung fee_configs (Admin cài).
+      const parkingFee = motorbikes * (item.motorbikeFee ?? rates.motorbike) + cars * (item.carFee ?? rates.car);
       const utilityCost = occupants * rates.utilityPerPerson;
       const allInTotal = baseRent + managementFee + parkingFee + utilityCost;
       const marketAllInEstimate = Number(item.marketAvg) + managementFee + parkingFee + utilityCost;

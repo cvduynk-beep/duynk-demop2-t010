@@ -25,7 +25,6 @@ const ENV = {
   WEB_APP_URL: 'http://localhost:3000',
   API_PREFIX: 'api/v1',
   AES_SECRET_KEY: 'a-test-master-secret-of-32-chars!!',
-  OTP_ECHO_DEV_CODE: 'true',
   OTP_RESEND_SECONDS: '0',
   JWT_SECRET: 'a-test-jwt-secret-of-at-least-32-chars',
   GOOGLE_CLIENT_ID: 'test-client-id.apps.googleusercontent.com',
@@ -796,8 +795,8 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
     it('send → verify (Khách thuê) trả action token; sai mã báo số lần còn lại', async () => {
       const send = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
       expect(send.status).toBe(200);
-      expect(send.body.data).toEqual({ expiresInSeconds: expect.any(Number), resendInSeconds: expect.any(Number) });
-      expect(containsValue(send.body, lastOtp())).toBe(false);
+      // Zalo mô phỏng ⇒ luôn trả `devCode` để màn hình hiện mã.
+      expect(send.body.data).toEqual({ expiresInSeconds: expect.any(Number), resendInSeconds: expect.any(Number), devCode: lastOtp() });
       const code: string = lastOtp();
       expect(code).toMatch(/^\d{4}$/);
 
@@ -847,9 +846,10 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       app = await createApp(prisma, prodEnv);
       const before = deliveredCodes.length;
       const prod = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0987654321', purpose: 'TENANT_VIEWING' });
-      expect(prod.status).toBe(502);
-      expect(prod.body.code).toBe('otp_send_failed');
-      expect(deliveredCodes).toHaveLength(before); // không ghi mã ra log ở production
+      // Production chạy đúng một luồng mô phỏng như local.
+      expect(prod.status).toBe(200);
+      expect(deliveredCodes).toHaveLength(before + 1);
+      expect(prod.body.data.devCode).toBe(lastOtp());
     });
 
     it('SĐT sai định dạng → 400 invalid_phone; PHONE_VERIFY không verify được ở endpoint tenant', async () => {

@@ -1,13 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OtpChannelSender } from './otp-channel';
 
-/**
- * Kênh OTP giả cho dev/demo: chỉ ghi mã ra log backend, không gửi tin nhắn thật.
- * OtpService chỉ dùng kênh này khi OTP_ECHO_DEV_CODE=true và NODE_ENV khác production,
- * sau khi Zalo và SMS thật đều không gửi được.
- */
+/** Zalo mô phỏng: chỉ ghi mã ra log backend, không gửi tin nhắn thật. Kênh gửi OTP duy nhất của hệ thống. */
 @Injectable()
-export class ConsoleOtpSender implements OtpChannelSender {
+export class ConsoleOtpSender {
   private readonly logger = new Logger(ConsoleOtpSender.name);
 
   async send(phone: string, code: string): Promise<void> {

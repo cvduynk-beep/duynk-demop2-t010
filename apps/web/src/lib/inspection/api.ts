@@ -23,6 +23,8 @@ export const inspectionApi = {
     if (typeof meta.brightness === "number" && Number.isFinite(meta.brightness)) form.append("brightness", String(Math.round(meta.brightness * 10) / 10));
     return api.postForm<InspectionPhotoView>(`/host/inspections/${enc(id)}/photos`, form);
   },
+  /** Đưa ảnh tham khảo chủ nhà gửi vào ảnh niêm yết (một lần mỗi ca); trả các ảnh vừa thêm. */
+  importLandlordPhotos: (id: string) => api.post<InspectionPhotoView[]>(`/host/inspections/${enc(id)}/photos/import-landlord`),
   removePhoto: (id: string, photoId: string) => api.delete<{ removed: true }>(`/host/inspections/${enc(id)}/photos/${enc(photoId)}`),
   submit: (id: string, dto: SubmitInspectionDto) => api.post<InspectionResult>(`/host/inspections/${enc(id)}/submit`, dto),
 };

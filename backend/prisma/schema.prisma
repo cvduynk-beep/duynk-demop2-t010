@@ -216,6 +216,11 @@ model Unit {
   baseRentPrice       Decimal      @map("base_rent_price") @db.Decimal(12, 2)
   managementFee       Decimal      @map("management_fee") @db.Decimal(12, 2)
   parkingFeeEstimate  Decimal      @default(150000) @map("parking_fee_estimate") @db.Decimal(12, 2)
+  /// Biểu phí thực tế tại tòa do Field Host xác minh lúc thẩm định (đ/xe/tháng). NULL ⇒ dùng đơn giá chung `fee_configs`.
+  motorbikeFee        Decimal?     @map("motorbike_fee") @db.Decimal(12, 2)
+  carFee              Decimal?     @map("car_fee") @db.Decimal(12, 2)
+  /// Ghi chú phí khác / tiện ích nội khu (≤150 ký tự), hiện cho khách thuê.
+  feeNote             String?      @map("fee_note") @db.VarChar(150)
   utilityCostEstimate Decimal      @default(600000) @map("utility_cost_estimate") @db.Decimal(12, 2)
   marketAvgPrice      Decimal      @map("market_avg_price") @db.Decimal(12, 2)
   doorLockType        DoorLockType @default(ELECTRONIC_PIN) @map("door_lock_type")

@@ -62,6 +62,13 @@ export class ListingDto {
   @IsArray() @ArrayMaxSize(10) @IsString({ each: true }) highlights: string[];
 }
 
+export class LivingFeesDto {
+  @IsNumber() mgmtFeePerM2: number;
+  @IsNumber() motorbikeFee: number;
+  @IsNumber() carFee: number;
+  @IsOptional() @IsString() note?: string;
+}
+
 export class SubmitInspectionDto implements SubmitInspectionInput {
   @ApiProperty({ description: 'Đúng 5 mục đối chiếu kê khai: identity, layout, areaM2, furnishing, lock' })
   @IsArray()
@@ -99,6 +106,12 @@ export class SubmitInspectionDto implements SubmitInspectionInput {
   @ValidateNested()
   @Type(() => ListingDto)
   listing: ListingDto;
+
+  @ApiPropertyOptional({ description: 'Biểu phí sinh hoạt thực tế tại tòa (đ/m², đ/xe/tháng); có thì niêm yết ghi vào căn — All-in Cost theo căn' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LivingFeesDto)
+  livingFees?: LivingFeesDto;
 
   @IsNumber() netAreaM2: number;
   @IsIn(['full', 'basic', 'empty']) furnishing: 'full' | 'basic' | 'empty';

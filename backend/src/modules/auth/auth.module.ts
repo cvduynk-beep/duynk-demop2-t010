@@ -13,8 +13,6 @@ import { OtpController } from './otp/otp.controller';
 import { OtpService } from './otp/otp.service';
 import { PhoneVerificationService } from './otp/phone-verification.service';
 import { ConsoleOtpSender } from './otp/senders/console-otp.sender';
-import { SmsFallbackSender } from './otp/senders/sms-fallback.sender';
-import { ZaloZnsSender } from './otp/senders/zalo-zns.sender';
 import { PhoneService } from './phone/phone.service';
 import { resolveJwtSecret } from './secrets';
 import { AuthSessionService } from './session/auth-session.service';
@@ -52,8 +50,6 @@ import { SESSION_TOKEN_ISSUER, SessionTokenService } from './session/session-tok
     OtpService,
     ActionTokenService,
     PhoneVerificationService,
-    ZaloZnsSender,
-    SmsFallbackSender,
     ConsoleOtpSender,
   ],
   // Guard toàn cục (AppModule) cần AuthSessionService + SessionCookieService; các module nghiệp vụ

@@ -1,0 +1,226 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+/* Stepper 2 bước */
+.steps {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-13);
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.steps > li:not(.stepLine) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  white-space: nowrap;
+}
+.stepDot {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  background: var(--surface);
+  font-size: var(--fs-12);
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.stepOn {
+  color: var(--ink);
+}
+.stepOn .stepDot {
+  border-color: var(--lagoon);
+  background: var(--lagoon);
+  color: #fff;
+  box-shadow: var(--ring);
+}
+.stepDone {
+  color: var(--ok);
+}
+.stepDone .stepDot {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: #fff;
+}
+.stepLine {
+  flex: 1;
+  height: 2px;
+  min-width: 24px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.label {
+  font-size: var(--fs-13);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Ô số điện thoại có tiền tố */
+.phoneField {
+  display: flex;
+  align-items: stretch;
+  height: 48px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.phoneField:focus-within {
+  border-color: var(--lagoon);
+  box-shadow: var(--ring);
+}
+.phoneFieldError {
+  border-color: var(--danger);
+}
+.prefix {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-right: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--fs-13);
+  font-weight: 600;
+}
+.phoneInput {
+  flex: 1;
+  min-width: 0;
+  padding: 0 14px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--fs-17);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.phoneInput::placeholder {
+  color: var(--ink-3);
+  letter-spacing: 0;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--fs-12);
+  color: var(--ink-3);
+}
+
+.sentTo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  font-size: var(--fs-13);
+  color: var(--ink-2);
+}
+.sentTo b {
+  color: var(--ink);
+}
+
+.otp {
+  display: flex;
+  justify-content: center;
+  padding: var(--s-2) 0;
+}
+
+.linkBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--lagoon);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.linkBtn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.linkBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.resend {
+  margin: 0;
+  text-align: center;
+  font-size: var(--fs-13);
+  color: var(--ink-3);
+}
+
+.privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-panel);
+  background: var(--lagoon-050);
+  color: var(--lagoon-700);
+  font-size: var(--fs-12);
+  line-height: 1.45;
+}
+.privacy svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Mã OTP mô phỏng (chỉ dev) — hiện ngay trên UI như cổng Chủ nhà */
+.devCode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border: 1px dashed #b7cdee;
+  border-radius: var(--r-panel);
+  background: #eef4fc;
+  font-size: var(--fs-13);
+  color: var(--ink-2);
+}
+.devCode b {
+  color: var(--ink);
+  font-size: var(--fs-15);
+  letter-spacing: 0.15em;
+}
+.devTag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--amber-050);
+  color: var(--accent-ink);
+  font-size: var(--fs-12);
+  font-weight: 700;
+}

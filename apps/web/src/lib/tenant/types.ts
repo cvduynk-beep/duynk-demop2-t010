@@ -44,6 +44,11 @@ export interface TenantUnit {
   marketAvg: number;
   managementFee: number;
   parkingFeeEstimate: number;
+  /** Biểu phí gửi xe thực tế tại tòa (Field Host xác minh); null ⇒ dùng đơn giá chung. */
+  motorbikeFee?: number | null;
+  carFee?: number | null;
+  /** Ghi chú phí khác / tiện ích nội khu. */
+  feeNote?: string | null;
   utilityCostEstimate: number;
   status: 'available' | 'holding' | 'rented';
   lock: 'smart' | 'physical';

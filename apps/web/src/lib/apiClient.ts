@@ -390,35 +390,3 @@ export const adminApi = {
     api.post<unknown>(`/admin/consignments/${encodeURIComponent(id)}/reject`, { note }),
 };
 
-export const hostApi = {
-  getEarnings: (hostId?: string) =>
-    api.get<{
-      hostId: string;
-      fullName: string;
-      rating: number;
-      walletBalance: number;
-      stats: {
-        totalViewings: number;
-        totalDeals: number;
-        dealCommissionTotal: number;
-        viewingFeeTotal: number;
-        ratingBonus: number;
-        totalEarnings: number;
-      };
-      currentPeriod: string;
-      payouts: {
-        id: string;
-        amount: number;
-        period: string;
-        status: string;
-        createdAt: string;
-      }[];
-    }>(hostId ? `/host/earnings?hostId=${encodeURIComponent(hostId)}` : "/host/earnings"),
-  getInspections: (hostId?: string) =>
-    api.get<unknown[]>(hostId ? `/host/inspections?hostId=${encodeURIComponent(hostId)}` : "/host/inspections"),
-  acceptInspection: (consignmentId: string, hostId?: string) =>
-    api.post<unknown>(`/host/inspections/${encodeURIComponent(consignmentId)}/accept`, { hostId }),
-  submitInspectionReport: (consignmentId: string, dto: unknown) =>
-    api.post<unknown>(`/host/inspections/${encodeURIComponent(consignmentId)}/report`, dto),
-};
-

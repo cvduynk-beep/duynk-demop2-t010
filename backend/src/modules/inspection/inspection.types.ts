@@ -62,6 +62,8 @@ export interface InspectionPhotoView {
   uploadedAt: string;
   /** Link ký 1h. */
   url: string | null;
+  /** true = ảnh niêm yết lấy từ ảnh tham khảo chủ nhà gửi. */
+  fromLandlord: boolean;
 }
 
 export interface DeclaredListingInfo {
@@ -83,6 +85,10 @@ export interface InspectionDetail extends InspectionCard {
   /** KHÔNG trả PIN ở đây. */
   doorKind: 'smart' | 'physical';
   doorCodeOnFile: boolean;
+  /** Đã đưa ảnh chủ nhà gửi vào ảnh niêm yết chưa (web gọi `photos/import-landlord` một lần khi mở phiếu). */
+  landlordPhotosImported: boolean;
+  /** Đơn giá chung (fee_configs) để điền sẵn mục biểu phí sinh hoạt. */
+  feeDefaults: { mgmtFeePerM2: number; motorbikeFee: number; carFee: number };
   /** 32 dòng — NGUỒN DUY NHẤT (backend). */
   catalog: CatalogItem[];
   limits: { minSidePx: number; perLineMax: number; listingMin: number; listingMax: number; totalMax: number };
@@ -90,7 +96,7 @@ export interface InspectionDetail extends InspectionCard {
 }
 
 export interface InspectionResult {
-  stage: 'approved' | 'rejected' | 'awaiting_landlord';
+  stage: 'approved' | 'rejected' | 'awaiting_landlord' | 'reviewing';
   unitCode: string;
   listedAt: string | null;
 }
