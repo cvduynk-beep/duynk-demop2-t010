@@ -29,6 +29,7 @@ import { ConsignmentReviewService } from '../inspection/consignment-review.servi
 import { LandlordPhotoStorage } from '../landlord/landlord-photo-storage.service';
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminBookingsService } from './admin-bookings.service';
+import { AdminSettingsService } from './admin-settings.service';
 import { AdminService } from './admin.service';
 
 const ENV = {
@@ -78,6 +79,9 @@ const ADMIN_ROUTES: Route[] = [
   // Điều phối lịch xem
   { method: 'get', path: 'bookings' },
   { method: 'get', path: 'bookings/x/reassign-candidates' },
+  // Cài đặt: chính sách giữ chỗ
+  { method: 'get', path: 'settings/hold-policy' },
+  { method: 'put', path: 'settings/hold-policy' },
 ];
 
 describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
@@ -141,6 +145,8 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
       .overrideProvider(AdminDashboardService)
       .useValue(fakeService)
       .overrideProvider(AdminBookingsService)
+      .useValue(fakeService)
+      .overrideProvider(AdminSettingsService)
       .useValue(fakeService)
       .compile();
     app = moduleRef.createNestApplication();

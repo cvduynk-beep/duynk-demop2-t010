@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/account.dto';
 import { PhoneService } from '../auth/phone/phone.service';
 import { toTenantBooking, toTenantContract, toTenantUnit } from '../tenant/tenant.mappers';
+import { clampHoldHours, readDefaultHoldHours } from '../deposit/hold-policy';
 import { TenantContract, TenantUnit } from '../tenant/tenant.types';
 
 /** Hồ sơ trả về cho chính chủ: KHÔNG kèm `phoneEnc`/`phoneHash`/ví/vị trí Host. */
@@ -113,7 +114,8 @@ export class AccountService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return viewings.map((v) => toTenantBooking(v));
+    const defaultHoldHours = await readDefaultHoldHours(this.prisma);
+    return viewings.map((v) => toTenantBooking(v, { defaultHoldHours }));
   }
 
   async getContracts(userId: string): Promise<TenantContract[]> {
@@ -136,10 +138,9 @@ export class AccountService {
       orderBy: { createdAt: 'desc' },
       include: { unit: { include: { building: true, media: { orderBy: { order: 'asc' } } } } },
     });
-    return rows.map((r) => {
-      const hours = Math.min(72, Math.max(12, r.unit.holdHoursOverride ?? 48));
-      return toTenantUnit(r.unit, null, hours, 0);
-    });
+    // Cùng luật với catalog: giờ riêng của căn → mặc định Admin cài (trước đây bỏ qua mặc định, luôn 48).
+    const defaultHold = await readDefaultHoldHours(this.prisma);
+    return rows.map((r) => toTenantUnit(r.unit, null, clampHoldHours(r.unit.holdHoursOverride ?? defaultHold), 0));
   }
 
   /** `codeOrId` là mã căn (VHOP-…) hoặc UUID; lưu lặp lại là idempotent. */

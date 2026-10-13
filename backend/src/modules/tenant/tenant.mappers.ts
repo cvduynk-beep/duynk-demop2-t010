@@ -3,6 +3,7 @@ import { ViewingStatus, LayoutType } from '@prisma/client';
 import { INSPECTION_GROUPS } from '../inspection/inspection.catalog';
 import { BookingStatusWeb, UnitInventoryLine, TenantBooking, TenantContract, TenantUnit } from './tenant.types';
 import { getVietQrPaymentDetails } from '../deposit/vietqr';
+import { clampHoldHours, HOLD_HOURS_DEFAULT } from '../deposit/hold-policy';
 
 export const ZONE_BUILDINGS: Record<string, string[]> = {
   sapphire1: ['S1.01', 'S1.02', 'S1.03', 'S1.05', 'S1.08', 'S1.09', 'S1.10', 'S1.12'],
@@ -120,7 +121,7 @@ export function toTenantUnit(
       petFriendly: false,
       minMonths: 6,
       verifiedAt: new Date().toISOString(),
-      holdHours: 48,
+      holdHours: HOLD_HOURS_DEFAULT,
       activeViewingAt: null,
       securityDeposit: 0,
       holdingDeposit: holdingDepositAmount(),
@@ -177,7 +178,8 @@ export function toTenantUnit(
       : unit.updatedAt
         ? new Date(unit.updatedAt).toISOString()
         : '',
-    holdHours: holdHours ?? unit.holdHoursOverride ?? 48,
+    // Caller truyền giờ đã tính theo deposit/hold-policy; thiếu thì giờ riêng của căn → 48 (không đọc được mặc định Admin ở hàm thuần).
+    holdHours: clampHoldHours(holdHours ?? unit.holdHoursOverride ?? HOLD_HOURS_DEFAULT),
     activeViewingAt: activeViewingAt ?? null,
     securityDeposit: unit.securityDeposit != null ? Number(unit.securityDeposit) : Number(unit.baseRentPrice),
     holdingDeposit: holdingDepositAmount(unit),
@@ -215,6 +217,8 @@ export function toTenantBooking(
   options: {
     activeViewingAt?: string | null;
     holdHours?: number;
+    /** Mặc định toàn sàn (`readDefaultHoldHours`) — dùng khi lịch chưa có cọc và căn không có giờ riêng. */
+    defaultHoldHours?: number;
     interest24h?: number;
     rawPhone?: string;
   } = {},
@@ -295,7 +299,8 @@ export function toTenantBooking(
     unit: toTenantUnit(
       viewing.unit,
       options.activeViewingAt,
-      options.holdHours,
+      // Cùng thứ tự với deposit/hold-policy: giờ đã chốt trong cọc → giờ riêng của căn → mặc định Admin cài.
+      options.holdHours ?? viewing.deposit?.holdHours ?? viewing.unit?.holdHoursOverride ?? options.defaultHoldHours,
       options.interest24h,
     ),
     slot: slotDate.toISOString(),

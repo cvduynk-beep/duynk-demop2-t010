@@ -144,7 +144,8 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 | `PATCH /admin/field-hosts/:id` `{fullName?, assignedZone?, roles?, password?, isActive?}` | ops_admin | sửa tên/phân khu, đổi vai (AuditLog `HOST_ROLES_UPDATE`), đặt lại mật khẩu, khoá/mở. Email không sửa được. Phiên của Host đọc lại ngay | ✅ |
 | `DELETE /admin/field-hosts/:id` | ops_admin | khoá mềm (giữ lịch sử ticket/cọc/chi trả); Host đang có ticket OFFERED/ACCEPTED/CHECKED ⇒ 409 `host_has_active_tickets` | ✅ |
 | `GET /admin/commission-engine` · `POST /admin/commission-engine/config` | ops_admin | cấu hình biến phí + nhật ký thay đổi | ✅ |
-| `GET /admin/settings/hold-policy` · `PUT /admin/settings/hold-policy` `{unitId?, hours}` | ops_admin | thời hạn giữ chỗ toàn sàn / riêng từng căn + nhật ký | ⬜ |
+| `GET /admin/settings/hold-policy` · `PUT /admin/settings/hold-policy` `{defaultHours, reason, version}` | ops_admin | màn Cài đặt: thời gian giữ chỗ mặc định toàn sàn + người/thời điểm cập nhật cuối + 10 thay đổi gần nhất (gộp giờ riêng từng căn) — quy tắc ở §1.5.3 | ✅ |
+| `POST /admin/exclusive-inventory/:id/hold-hours` `{hours \| null, reason}` | ops_admin | giờ giữ chỗ riêng một căn (chỉ khi căn `AVAILABLE`), AuditLog `UNIT_HOLD_HOURS_UPDATED` | ✅ |
 | `GET /contracts/:id/evidence-package` | ops_admin | gói chứng cứ hợp đồng | ✅ |
 
 #### 1.5.1. Cách tính số liệu dashboard admin
@@ -169,6 +170,22 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 - **Sau khi giao**: ticket ⇒ `OFFERED`, Host mới, `offered_at = now`, `accepted_at = null`, giữ tầng & `sla_seconds` (Host mới phải bấm nhận, SLA tính lại).
 - **Đồng thời**: `version` = mã hoá (`ticketId`, `hostId`, `status`, `offered_at`) của ticket lúc client tải (không cần cột version). Lệch, hoặc ghi có điều kiện `updateMany where {id, hostId, status, offered_at}` đổi 0 dòng ⇒ **409 `reassign_conflict`**, `errors.latest` = dòng mới nhất; không ghi đè.
 - **Một transaction**: ghi ticket + `audit_logs` `DISPATCH_REASSIGNED` (actor, vai, `oldValue {hostId, status, tier, offeredAt}`, `newValue {hostId, status, tier, offeredAt, reason, viewingId}`). Ghi audit lỗi ⇒ rollback cả thay đổi. Trả dòng booking đã cập nhật.
+
+#### 1.5.3. Chính sách giữ chỗ (hold-policy)
+
+- **Nguồn duy nhất** `src/modules/deposit/hold-policy.ts` (`HOLD_HOURS_MIN 12`, `HOLD_HOURS_MAX 72`, `HOLD_HOURS_DEFAULT 48`,
+  `readDefaultHoldHours`, `resolveHoldHours`). Mọi luồng dùng chung: biên bản cọc (A14), tạo cọc, báo có (webhook VietQR),
+  duyệt UNC, catalog + chi tiết căn, căn đã lưu, lịch hẹn, chatbot, PDF hợp đồng.
+- **Thứ tự**: giờ đã chốt trong cọc (`holding_deposits.hold_hours`, ghi lúc khách tick điều khoản) → giờ riêng của căn
+  (`units.hold_hours_override`) → mặc định toàn sàn (`fee_configs.hold_hours_default`) → 48; làm tròn, kẹp [12, 72].
+- **Tác động khi đổi mặc định**: chỉ cọc tạo **sau** khi lưu. Cọc chờ thanh toán giữ số giờ đã chốt; cọc đang giữ giữ `expires_at`.
+- **GET** chưa ai lưu ⇒ `isDefault: true`, `defaultHours: 48`, `version: "default"`, `updatedBy: null`. Không có mock.
+- **PUT** `defaultHours` số nguyên 12–72, `reason` 5–300 ký tự (gom khoảng trắng), `version` từ GET. Sai ⇒ **400 `invalid_request`**
+  + `errors.<field>`. Cùng giá trị ⇒ 200 `changed:false`, không ghi gì.
+- **Đồng thời**: `version` = `fee_configs.updated_at`; ghi có điều kiện (CAS theo khoảng 1 ms vì Postgres giữ micro giây); lần
+  đầu (chưa có dòng) hai admin cùng tạo ⇒ unique `config_key` chặn người sau. Lệch ⇒ **409 `hold_policy_conflict`** + `errors.latest`.
+- **Một transaction**: ghi `fee_configs` + `audit_logs` `HOLD_POLICY_UPDATED` (actor, vai, `oldValue {defaultHours, isDefault}`,
+  `newValue {defaultHours, reason}`); audit lỗi ⇒ rollback, chính sách không đổi.
 
 ### 1.6. ⏱ Tác vụ nền (không có màn hình)
 

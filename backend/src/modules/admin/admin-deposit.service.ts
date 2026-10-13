@@ -1,11 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { resolveHoldHours } from '../deposit/hold-policy';
 import type { AdminActor } from './admin-fee.service';
 
 const HOUR_MS = 3_600_000;
-const HOLD_HOURS_KEY = 'hold_hours_default';
-const HOLD_HOURS_DEFAULT = 48;
 
 function isSerializationConflict(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as any).code === 'P2034');
@@ -126,9 +125,7 @@ export class AdminDepositService {
         }
       }
 
-      const configuredHours = await tx.feeConfig.findUnique({ where: { configKey: HOLD_HOURS_KEY } });
-      const requestedHours = Number(dep.holdHours ?? dep.unit.holdHoursOverride ?? configuredHours?.paramValue ?? HOLD_HOURS_DEFAULT);
-      const holdHours = Math.min(72, Math.max(12, Math.round(requestedHours)));
+      const holdHours = await resolveHoldHours(tx, { snapshot: dep.holdHours, override: dep.unit.holdHoursOverride });
       await tx.holdingDeposit.update({
         where: { id },
         data: { paymentStatus: 'PAID_HOLDING', paidAt: now, holdHours, expiresAt: new Date(now.getTime() + holdHours * HOUR_MS) },
