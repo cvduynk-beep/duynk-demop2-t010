@@ -49,6 +49,8 @@ const ADMIN_ROUTES: Route[] = [
   { method: 'get', path: 'bi-funnel' },
   { method: 'get', path: 'exclusive-inventory' },
   { method: 'post', path: 'mandates/x/terminate' },
+  { method: 'get', path: 'consignments' },
+  { method: 'get', path: 'consignments/x' },
   { method: 'post', path: 'consignments/x/approve' },
   { method: 'post', path: 'consignments/x/reject' },
   { method: 'get', path: 'dispatch-sla' },
@@ -70,6 +72,7 @@ const ADMIN_ROUTES: Route[] = [
   // Tạm tắt cùng endpoint phí dịch vụ chủ nhà:
   // { method: 'get', path: 'settings/landlord-fee' },
   // { method: 'post', path: 'settings/landlord-fee' },
+  { method: 'get', path: 'settings/fee-rates' },
   { method: 'get', path: 'deposits' },
   { method: 'post', path: 'deposits/x/resolve-unc' },
   { method: 'get', path: 'door-keys' },
