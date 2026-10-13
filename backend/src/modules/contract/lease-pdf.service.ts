@@ -25,6 +25,7 @@ import {
   LeaseTemplateData,
 } from './lease-template';
 import { DocType } from '@prisma/client';
+import { HOLD_HOURS_DEFAULT } from '../deposit/hold-policy';
 
 @Injectable()
 export class LeasePdfService implements OnModuleInit {
@@ -243,7 +244,7 @@ export class LeasePdfService implements OnModuleInit {
           paidAt: contract.holdingDeposit.paidAt
             ? new Date(contract.holdingDeposit.paidAt).toLocaleDateString('vi-VN')
             : 'Đã thanh toán',
-          holdHours: contract.holdingDeposit.holdHours || 48,
+          holdHours: contract.holdingDeposit.holdHours ?? HOLD_HOURS_DEFAULT,
           expiresAt: contract.holdingDeposit.expiresAt
             ? new Date(contract.holdingDeposit.expiresAt).toLocaleDateString('vi-VN')
             : '',

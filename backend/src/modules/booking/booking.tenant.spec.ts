@@ -52,6 +52,8 @@ function fakePrisma() {
   let savedViewing: any = null;
 
   const prisma: Record<string, any> = {
+    // Chưa có mặc định Admin cài ⇒ deposit/hold-policy dùng 48 giờ.
+    feeConfig: { findUnique: jest.fn(async () => null) },
     unit: {
       findFirst: jest.fn(async () => ({ ...mockUnit })),
       update: jest.fn(async ({ data }) => ({ ...mockUnit, ...data })),

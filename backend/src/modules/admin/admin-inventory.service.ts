@@ -1,13 +1,11 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { HOLD_HOURS_MAX, HOLD_HOURS_MIN, readDefaultHoldHours } from '../deposit/hold-policy';
 import type { AdminActor } from './admin-fee.service';
 
 const DAY_MS = 86_400_000;
 /** Thời gian khoá căn mặc định sau khi khách chuyển cọc; chỉnh riêng từng căn trong khoảng [min, max] (AGENTS.md). */
-export const HOLD_HOURS_DEFAULT = 48;
-export const HOLD_HOURS_MIN = 12;
-export const HOLD_HOURS_MAX = 72;
 // Hợp đồng còn hiệu lực/đang xử lý chặn việc chấm dứt mandate (SAD_v2 §10.4).
 const BLOCKING_CONTRACT_STATUSES = ['ACTIVE', 'AWAITING_TENANT_SIGN', 'AWAITING_LANDLORD_SIGN', 'DISPUTED'];
 
@@ -130,10 +128,8 @@ export class AdminInventoryService {
   }
 
   /** Mặc định khi căn không có mức riêng: `FeeConfig.hold_hours_default` nếu có (dữ liệu cũ), không thì 48 giờ. Cùng nguồn với deposit.service. */
-  private async defaultHoldHours(): Promise<number> {
-    const cfg = await (this.prisma as any).feeConfig?.findUnique?.({ where: { configKey: 'hold_hours_default' } });
-    const hours = cfg ? Math.round(Number(cfg.paramValue)) : HOLD_HOURS_DEFAULT;
-    return Math.min(HOLD_HOURS_MAX, Math.max(HOLD_HOURS_MIN, hours));
+  private defaultHoldHours(): Promise<number> {
+    return readDefaultHoldHours(this.prisma);
   }
 
   /**

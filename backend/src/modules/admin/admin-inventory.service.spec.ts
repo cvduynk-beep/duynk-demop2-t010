@@ -34,6 +34,8 @@ function build(opts: { mandate?: any; unit?: any; contracts?: any[]; units?: any
     contract: {
       count: jest.fn(async ({ where }: any) => contracts.filter((c) => where.status.in.includes(c.status)).length),
     },
+    // Chưa có mặc định Admin cài ⇒ deposit/hold-policy dùng 48 giờ.
+    feeConfig: { findUnique: jest.fn(async () => null) },
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const audit = { log: jest.fn(async () => ({})) };

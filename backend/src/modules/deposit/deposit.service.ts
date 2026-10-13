@@ -13,6 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import { PhoneService } from '../auth/phone/phone.service';
 import { BookingAccessService } from '../tenant/booking-access.service';
 import { buildDepositTerms, DEPOSIT_TERMS_VERSION } from './deposit-terms';
+import { resolveHoldHours } from './hold-policy';
 import { getVietQrConfig, isDemoToolsEnabled, isVietQrWebhookConfigured } from './vietqr';
 import { CreateDepositDto, UploadHostReceiptDto } from './dto/deposit.dto';
 import { toTenantBooking, statusToWeb } from '../tenant/tenant.mappers';
@@ -49,19 +50,6 @@ export class DepositService {
     return admin.id;
   }
 
-  /**
-   * Giờ giữ chỗ theo luật B4: `unit.holdHoursOverride` → `FeeConfig.hold_hours_default` (Admin cài) → 48, kẹp [12, 72].
-   * Mọi nơi tính giờ giữ chỗ (biên bản, tạo cọc, báo có) PHẢI dùng hàm này để không lệch nhau và lệch catalog.
-   */
-  private async resolveHoldHours(override?: number | null, client: any = this.prisma): Promise<number> {
-    let hours: number | null = override ?? null;
-    if (hours == null) {
-      const cfg = await client.feeConfig?.findUnique({ where: { configKey: 'hold_hours_default' } });
-      hours = cfg ? Number(cfg.paramValue) : 48;
-    }
-    return Math.min(72, Math.max(12, Math.round(hours)));
-  }
-
   /** A14 (công khai): biên bản điều khoản cọc khách đọc trước khi tick. Có `unitCode` thì dùng giờ giữ chỗ của căn đó. */
   async getPublicDepositTerms(unitCode?: string): Promise<DepositTermsDoc> {
     let override: number | null = null;
@@ -73,7 +61,7 @@ export class DepositService {
       if (!unit) throw new NotFoundException({ message: 'Không tìm thấy căn hộ.', code: 'unit_not_found' });
       override = unit.holdHoursOverride;
     }
-    return buildDepositTerms(await this.resolveHoldHours(override));
+    return buildDepositTerms(await resolveHoldHours(this.prisma, { override }));
   }
 
   async getDepositTerms(ref: string, user: { id: string }): Promise<DepositTermsDoc> {
@@ -82,7 +70,7 @@ export class DepositService {
       where: { id: viewing.unitId },
     });
 
-    return buildDepositTerms(await this.resolveHoldHours(unit?.holdHoursOverride));
+    return buildDepositTerms(await resolveHoldHours(this.prisma, { override: unit?.holdHoursOverride }));
   }
 
   async createDeposit(
@@ -138,7 +126,8 @@ export class DepositService {
             rawPhone = this.phones.decrypt(viewing.contactPhoneEnc);
           } catch {}
         }
-        return toTenantBooking(reloaded, { rawPhone, holdHours: existingDeposit.holdHours ?? 48 });
+        const holdHours = await resolveHoldHours(this.prisma, { snapshot: existingDeposit.holdHours, override: reloaded.unit?.holdHoursOverride });
+        return toTenantBooking(reloaded, { rawPhone, holdHours });
       }
       throw new ConflictException({
         message: 'Giao dịch cọc đã được xử lý hoặc không ở trạng thái chờ thanh toán.',
@@ -179,7 +168,8 @@ export class DepositService {
       const vietqrRef = `VQ-${randNum}-${randHex}`;
       const transferContent = `COC ${unit.unitCode} ${ref}`;
       const now = new Date();
-      const holdHours = await this.resolveHoldHours(unit.holdHoursOverride, tx);
+      // Chốt số giờ vào cọc ngay lúc khách tick điều khoản: Admin đổi mặc định sau đó không làm đổi cọc này.
+      const holdHours = await resolveHoldHours(tx, { override: unit.holdHoursOverride });
 
       const deposit = await tx.holdingDeposit.create({
         data: {
@@ -383,7 +373,8 @@ export class DepositService {
 
       // 6. Won race (paid)
       const paidAt = input.paidAt || new Date();
-      const holdHours = await this.resolveHoldHours(deposit.unit?.holdHoursOverride ?? deposit.holdHours, tx);
+      // Giờ đã chốt trong cọc (điều khoản khách đã tick) trước, rồi mới tới giờ riêng của căn / mặc định — cùng thứ tự với duyệt UNC.
+      const holdHours = await resolveHoldHours(tx, { snapshot: deposit.holdHours, override: deposit.unit?.holdHoursOverride });
       const expiresAt = new Date(paidAt.getTime() + holdHours * 3600 * 1000);
 
       await tx.holdingDeposit.update({

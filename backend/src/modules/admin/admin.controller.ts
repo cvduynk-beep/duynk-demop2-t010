@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, Res, HttpCode } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, Res, HttpCode } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
@@ -13,6 +13,7 @@ import { AdminInventoryService } from './admin-inventory.service';
 import { AdminDepositService } from './admin-deposit.service';
 import { AdminKeyService } from './admin-key.service';
 import { AdminContractRegistryService } from './admin-contract-registry.service';
+import { AdminSettingsService } from './admin-settings.service';
 import {
   TerminateMandateDto,
   UpdateCommissionParamDto,
@@ -28,6 +29,7 @@ import {
   KeyReasonDto,
   DepositQueryDto,
   UpdateDepositPolicyDto,
+  UpdateHoldPolicyDto,
 } from './dto/admin.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -48,6 +50,7 @@ export class AdminController {
     private readonly registryService: AdminContractRegistryService,
     private readonly dashboardService: AdminDashboardService,
     private readonly bookingsService: AdminBookingsService,
+    private readonly settingsService: AdminSettingsService,
   ) {}
 
   @Get('bi-funnel')
@@ -319,6 +322,28 @@ export class AdminController {
   // updateLandlordFee(@Body() dto: UpdateLandlordFeeDto, @CurrentUser() user: any) {
   //   return this.feeService.updateLandlordFee(dto, { id: user.id, role: user.role });
   // }
+
+  @Get('settings/hold-policy')
+  @ApiOperation({
+    summary: 'Chính sách giữ chỗ: thời gian khoá căn mặc định toàn sàn (12–72 giờ)',
+    description:
+      'Chưa ai lưu ⇒ `isDefault: true`, `defaultHours: 48`, `version: "default"`. Kèm người/thời điểm cập nhật cuối và 10 thay đổi ' +
+      'gần nhất (mặc định toàn sàn + giờ riêng từng căn).',
+  })
+  getHoldPolicy() {
+    return this.settingsService.getHoldPolicy();
+  }
+
+  @Put('settings/hold-policy')
+  @ApiOperation({
+    summary: 'Lưu thời gian giữ chỗ mặc định toàn sàn, có Audit Log',
+    description:
+      'Body `{defaultHours, reason, version}`. Sai ⇒ 400 `invalid_request` + `errors.<field>`; `version` lệch (admin khác vừa lưu) ⇒ ' +
+      '409 `hold_policy_conflict` + `errors.latest`. Chỉ áp dụng cho cọc tạo SAU khi lưu; cọc đã tạo/đang giữ giữ nguyên số giờ đã chốt.',
+  })
+  updateHoldPolicy(@Body() dto: UpdateHoldPolicyDto, @CurrentUser() user: any) {
+    return this.settingsService.updateHoldPolicy(dto, { id: user.id, role: user.role });
+  }
 
   @Get('settings/deposit-policy')
   @ApiOperation({ summary: 'Xem quy định tiền cọc (tối thiểu 50%, tối đa 4 lần giá thuê tháng)' })

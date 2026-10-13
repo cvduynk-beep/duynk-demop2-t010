@@ -350,10 +350,6 @@ export const adminApi = {
     api.get<{ configs: { id?: string; configKey: string; paramValue: number; paramUnit: string; updatedAt?: string }[] }>("/admin/commission-engine"),
   updateCommissionParam: (dto: { configKey: string; paramValue: number; reason: string }) =>
     api.post<unknown>("/admin/commission-engine/config", dto),
-  getHoldPolicy: () =>
-    api.get<{ defaultHours: number; byUnit: Record<string, number> }>("/admin/settings/hold-policy"),
-  updateHoldPolicy: (dto: { hours: number; unitId?: string }) =>
-    api.post<unknown>("/admin/settings/hold-policy", dto),
   approveConsignment: (id: string, note?: string) =>
     api.post<unknown>(`/admin/consignments/${encodeURIComponent(id)}/approve`, { note }),
   rejectConsignment: (id: string, note: string) =>
