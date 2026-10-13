@@ -30,6 +30,8 @@ import { LandlordPhotoStorage } from '../landlord/landlord-photo-storage.service
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminBookingsService } from './admin-bookings.service';
 import { AdminSettingsService } from './admin-settings.service';
+import { AdminReportsController } from './reports/admin-reports.controller';
+import { AdminReportsService } from './reports/admin-reports.service';
 import { AdminService } from './admin.service';
 
 const ENV = {
@@ -82,6 +84,10 @@ const ADMIN_ROUTES: Route[] = [
   // Cài đặt: chính sách giữ chỗ
   { method: 'get', path: 'settings/hold-policy' },
   { method: 'put', path: 'settings/hold-policy' },
+  // Báo cáo (AdminReportsController)
+  { method: 'get', path: 'reports' },
+  { method: 'get', path: 'reports/host-performance' },
+  { method: 'get', path: 'reports/deals/export' },
 ];
 
 describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
@@ -148,6 +154,8 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
       .useValue(fakeService)
       .overrideProvider(AdminSettingsService)
       .useValue(fakeService)
+      .overrideProvider(AdminReportsService)
+      .useValue(fakeService)
       .compile();
     app = moduleRef.createNestApplication();
     app.useLogger(false);
@@ -181,6 +189,18 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
     }
     expect(reflector.get(IS_PUBLIC_KEY, AdminController)).toBeUndefined();
     expect(reflector.get(ROLES_KEY, AdminController)).toEqual(['ops_admin']);
+    expect(reflector.get(IS_PUBLIC_KEY, AdminReportsController)).toBeUndefined();
+    expect(reflector.get(ROLES_KEY, AdminReportsController)).toEqual(['ops_admin']);
+  });
+
+  it('xuất báo cáo bị giới hạn 5 lần/phút ⇒ lần thứ 6 nhận 429', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent.post('/api/v1/auth/login').send({ email: 'ops@example.com', password: 'Matkhau-123', portal: 'admin' }).expect(200);
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) statuses.push((await agent.get('/api/v1/admin/reports/deals/export').set('x-portal', 'admin')).status);
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+    // Xem báo cáo (không phải xuất) không bị giới hạn chung này.
+    expect((await agent.get('/api/v1/admin/reports/deals').set('x-portal', 'admin')).status).toBe(200);
   });
 
   it.each(ADMIN_ROUTES)('không token ⇒ 401: $method $path', async (r) => {

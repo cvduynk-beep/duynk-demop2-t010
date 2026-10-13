@@ -15,6 +15,8 @@ import { AdminContractRegistryService } from './admin-contract-registry.service'
 import { AdminDashboardService } from './admin-dashboard.service';
 import { AdminBookingsService } from './admin-bookings.service';
 import { AdminSettingsService } from './admin-settings.service';
+import { AdminReportsController } from './reports/admin-reports.controller';
+import { AdminReportsService } from './reports/admin-reports.service';
 
 const services = [
   AdminContractRegistryService,
@@ -29,11 +31,12 @@ const services = [
   AdminDashboardService,
   AdminBookingsService,
   AdminSettingsService,
+  AdminReportsService,
 ];
 
 @Module({
   imports: [AuthModule, ConsignmentCoreModule],
-  controllers: [AdminController],
+  controllers: [AdminController, AdminReportsController],
   providers: [...services, { provide: ADMIN_KEY_CRYPTO, useExisting: PhoneService }],
   exports: services,
 })

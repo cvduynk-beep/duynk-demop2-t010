@@ -60,6 +60,18 @@ function redirectToLogin() {
   window.location.assign(`${base}${base.includes("?") ? "&" : "?"}next=${encodeURIComponent(here)}`);
 }
 
+/** Gộp signal của caller với trần thời gian chờ (AbortSignal.any chưa có trên Safari < 17.4 ⇒ tự gộp). */
+function withTimeout(signal: AbortSignal, timeoutMs: number): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  if (typeof AbortSignal.any === "function") return AbortSignal.any([signal, timeout]);
+  const ctrl = new AbortController();
+  const abort = () => ctrl.abort();
+  if (signal.aborted || timeout.aborted) ctrl.abort();
+  signal.addEventListener("abort", abort, { once: true });
+  timeout.addEventListener("abort", abort, { once: true });
+  return ctrl.signal;
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}, timeoutMs = API_TIMEOUT_MS): Promise<ApiResponse<T>> {
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const url = path.startsWith("/api/") ? path : `${API_BASE}${path}`;
@@ -79,9 +91,11 @@ async function request<T>(endpoint: string, options: RequestInit = {}, timeoutMs
       // Cùng origin (rewrite /api/v1 → backend); `include` để cookie phiên luôn đi kèm kể cả khi FE/BE tách domain.
       credentials: "include",
       headers,
-      signal: options.signal ?? AbortSignal.timeout(timeoutMs),
+      // Caller tự huỷ (đổi bộ lọc nhanh) vẫn giữ trần thời gian chờ.
+      signal: options.signal ? withTimeout(options.signal, timeoutMs) : AbortSignal.timeout(timeoutMs),
     });
   } catch (err: unknown) {
+    if (options.signal?.aborted) return { ok: false, status: 0, data: {} as T, code: "aborted", message: "Đã huỷ yêu cầu." };
     const timedOut = err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError");
     return {
       ok: false,
@@ -134,7 +148,7 @@ export function apiErrorText(res: Pick<ApiResponse<unknown>, "status" | "code" |
 }
 
 export const api = {
-  get: <T>(endpoint: string) => request<T>(endpoint, { method: "GET" }),
+  get: <T>(endpoint: string, init: { signal?: AbortSignal } = {}) => request<T>(endpoint, { method: "GET", signal: init.signal }),
   post: <T>(endpoint: string, body?: unknown) =>
     request<T>(endpoint, { method: "POST", body: JSON.stringify(body ?? {}) }),
   patch: <T>(endpoint: string, body?: unknown) =>
@@ -356,3 +370,46 @@ export const adminApi = {
     api.post<unknown>(`/admin/consignments/${encodeURIComponent(id)}/reject`, { note }),
 };
 
+
+/**
+ * Tải file (CSV…) qua cùng lớp client: cookie phiên, `x-portal`, timeout, lỗi JSON của backend ⇒ `ApiResponse` như mọi
+ * request khác (401 tự chuyển trang đăng nhập). Thành công ⇒ `{blob, filename}` từ Content-Disposition.
+ */
+export async function downloadFile(endpoint: string, timeoutMs = 60_000): Promise<ApiResponse<{ blob: Blob; filename: string | null }>> {
+  const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const url = path.startsWith("/api/") ? path : `${API_BASE}${path}`;
+  const portal = getClientPortal();
+  let res: Response;
+  try {
+    res = await fetch(url, { method: "GET", credentials: "include", headers: portal ? { "x-portal": portal } : {}, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err: unknown) {
+    const timedOut = err instanceof DOMException && (err.name === "TimeoutError" || err.name === "AbortError");
+    return {
+      ok: false,
+      status: 0,
+      data: { blob: new Blob(), filename: null },
+      code: timedOut ? "timeout" : "network",
+      message: timedOut ? "Máy chủ phản hồi quá lâu, vui lòng thử lại." : "Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.",
+    };
+  }
+  if (res.ok) {
+    const filename = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? null;
+    return { ok: true, status: res.status, data: { blob: await res.blob(), filename } };
+  }
+  let body: Record<string, unknown> = {};
+  try {
+    body = JSON.parse(await res.text());
+  } catch {
+    body = {};
+  }
+  const code = typeof body.code === "string" ? body.code : undefined;
+  if (isSessionExpired(path, res.status, code)) redirectToLogin();
+  return {
+    ok: false,
+    status: res.status,
+    data: { blob: new Blob(), filename: null },
+    code,
+    message: typeof body.message === "string" ? body.message : undefined,
+    errors: body.errors && typeof body.errors === "object" && !Array.isArray(body.errors) ? (body.errors as Record<string, unknown>) : undefined,
+  };
+}

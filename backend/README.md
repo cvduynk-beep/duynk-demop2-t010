@@ -146,6 +146,9 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 | `GET /admin/commission-engine` · `POST /admin/commission-engine/config` | ops_admin | cấu hình biến phí + nhật ký thay đổi | ✅ |
 | `GET /admin/settings/hold-policy` · `PUT /admin/settings/hold-policy` `{defaultHours, reason, version}` | ops_admin | màn Cài đặt: thời gian giữ chỗ mặc định toàn sàn + người/thời điểm cập nhật cuối + 10 thay đổi gần nhất (gộp giờ riêng từng căn) — quy tắc ở §1.5.3 | ✅ |
 | `POST /admin/exclusive-inventory/:id/hold-hours` `{hours \| null, reason}` | ops_admin | giờ giữ chỗ riêng một căn (chỉ khi căn `AVAILABLE`), AuditLog `UNIT_HOLD_HOURS_UPDATED` | ✅ |
+| `GET /admin/reports` | ops_admin | màn Báo cáo: danh mục báo cáo (id, bộ lọc, sort, cột), phân khu, giới hạn — §1.5.4 | ✅ |
+| `GET /admin/reports/:reportId` `?from&to&zone&hostId&status&sort&dir&page&pageSize≤100` | ops_admin | `host-performance` · `deals` · `host-earnings`: `{rows, summary, page, pageSize, total, meta}` — §1.5.4 | ✅ |
+| `GET /admin/reports/:reportId/export?format=csv` (cùng bộ lọc) | ops_admin | CSV UTF-8 BOM, chống CSV injection, ≤ 10.000 dòng (quá ⇒ 422), 5 lần/phút (⇒ 429), AuditLog `REPORT_EXPORTED` | ✅ |
 | `GET /contracts/:id/evidence-package` | ops_admin | gói chứng cứ hợp đồng | ✅ |
 
 #### 1.5.1. Cách tính số liệu dashboard admin
@@ -186,6 +189,38 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
   đầu (chưa có dòng) hai admin cùng tạo ⇒ unique `config_key` chặn người sau. Lệch ⇒ **409 `hold_policy_conflict`** + `errors.latest`.
 - **Một transaction**: ghi `fee_configs` + `audit_logs` `HOLD_POLICY_UPDATED` (actor, vai, `oldValue {defaultHours, isDefault}`,
   `newValue {defaultHours, reason}`); audit lỗi ⇒ rollback, chính sách không đổi.
+
+#### 1.5.4. Báo cáo admin (`modules/admin/reports`)
+
+Mỗi báo cáo là một `ReportDefinition` riêng (`*.report.ts`, đăng ký ở `REPORTS`). Tổng hợp ở Postgres (`$queryRaw` +
+`Prisma.sql`, mọi giá trị là tham số; `sort` chỉ qua whitelist), chạy trong **một transaction READ ONLY** (một kết nối — pool
+Supabase session giới hạn 15) với `statement_timeout = 10s`. Khoảng ngày theo **giờ VN** `[from 00:00, to+1 00:00)`, mặc định
+30 ngày, tối đa 366. Tiền trả **chuỗi decimal VND** (`SUM` numeric ở DB); tỷ lệ/trung vị làm tròn ở DB. `summary` tính trên toàn
+bộ tập đã lọc (không phải trang hiện tại). Lọc phân khu/Host = Field Host được gán. Không cache (số liệu tài chính: độ trễ 0).
+
+| Báo cáo | Chỉ số = công thức | Bảng nguồn |
+|---|---|---|
+| `host-performance` | **Lượt dẫn** = lịch xem giờ hẹn trong khoảng, Host đã nhận ticket (ACCEPTED/CHECKED/COMPLETED) và `viewing_started_at` có giá trị · **Căn chốt** = cọc `attributed_host_id`, `paid_at` trong khoảng, `PAID_HOLDING`/`CONVERTED_TO_CONTRACT`/`FORFEITED` (không REFUNDED) · **GRV** = Σ giá thuê căn chốt: có HĐ ⇒ `contracts.monthly_rent_price`, chưa ⇒ `units.base_rent_price` hiện tại · **Tỷ lệ chốt** = căn chốt/lượt dẫn ×100 · **Nhận ticket** = trung vị & TB `accepted_at − offered_at` (lọc `offered_at`) · **Vi phạm SLA** = nhận muộn > `sla_seconds` + ticket EXPIRED · **Đánh giá** = TB `viewings.tenant_rating` | `field_hosts`, `profiles`, `dispatch_tickets`, `viewings`, `holding_deposits`, `contracts`, `units` |
+| `deals` | Từng cọc có tiền về trong khoảng (`paid_at`, REFUNDED ⇒ INBOUND đầu tiên) · **Tiền vào/hoàn** = Σ escrow `INBOUND_DEPOSIT`/`REFUND` · **Đang/đã giữ** = vào − hoàn · **Căn chốt, GRV** = cùng định nghĩa trên · **Chu kỳ chốt** = tiền về − `viewings.created_at` (ngày). Tên khách giữ họ + chữ cái đầu, SĐT `09•• ••• 678` (cả file xuất) | `holding_deposits`, `escrow_transactions`, `viewings`, `units`, `buildings`, `contracts`, `field_hosts`, `profiles` |
+| `host-earnings` | Σ `host_payouts.amount` theo `created_at`, tách theo `trans_ref`: `viewing:` thù lao dẫn · `deposit:<id>` hoa hồng cọc · `:rating` / `:campaign` thưởng · `inspection:` thẩm định · Đã trả = `PAID` | `host_payouts`, `field_hosts`, `profiles` |
+
+Lỗi: 400 `invalid_range` / `invalid_report_query` + `errors.<field>` · 404 `report_not_found` · 422 `export_too_large` · 429 xuất quá
+nhanh · 401/403 theo phiên/vai. Đã bỏ (không có dữ liệu nguồn): AI Lead Scoring, ROI chiến dịch, hoa hồng sàn, chỉ tiêu KPI, loại khách, kênh.
+
+**Hiệu năng** (Supabase ap-south-1, 30.000 lịch xem + 30.000 ticket + 10.072 cọc + 12.636 escrow + 34.553 khoản thu nhập, cache nóng):
+thời gian thực thi ở Postgres (EXPLAIN ANALYZE, 2 câu/ báo cáo) — 30 ngày: 20–70 ms; 366 ngày: `host-performance` ~300 ms,
+`deals` ~225 ms, `host-earnings` ~175 ms. Tổng mỗi request ~1–2 s, phần lớn là độ trễ mạng tới DB. Index đề xuất **chưa áp**
+(đo không thấy khác biệt ở quy mô này; áp khi dữ liệu tăng hoặc khi EXPLAIN thấy Seq Scan chậm):
+
+```sql
+CREATE INDEX CONCURRENTLY holding_deposits_paid_at_idx ON holding_deposits (paid_at);
+CREATE INDEX CONCURRENTLY holding_deposits_attributed_host_id_paid_at_idx ON holding_deposits (attributed_host_id, paid_at);
+CREATE INDEX CONCURRENTLY dispatch_tickets_offered_at_idx ON dispatch_tickets (offered_at);
+CREATE INDEX CONCURRENTLY host_payouts_host_id_created_at_idx ON host_payouts (host_id, created_at);
+-- rollback
+DROP INDEX CONCURRENTLY IF EXISTS holding_deposits_paid_at_idx, holding_deposits_attributed_host_id_paid_at_idx,
+  dispatch_tickets_offered_at_idx, host_payouts_host_id_created_at_idx;
+```
 
 ### 1.6. ⏱ Tác vụ nền (không có màn hình)
 
