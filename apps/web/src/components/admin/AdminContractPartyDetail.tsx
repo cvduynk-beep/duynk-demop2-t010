@@ -2,10 +2,9 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { ContractsSubnav } from "@/components/contracts/ContractsSubnav";
-import { CONTRACT_KIND_META, CONTRACT_STATUS_META } from "@/components/contracts/status";
+import { CONTRACT_KIND_META } from "@/components/contracts/status";
 import { StatTile } from "@/components/charts/StatTile";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -16,16 +15,18 @@ import {
   templatesForParty,
   type ContractTemplate,
 } from "@/lib/mock/contract-templates";
+import { useContractRegistry, type RegistryRow } from "@/lib/admin/api";
 import {
   contractsOfParty,
-  partyByKey,
-  type ContractRow,
+  isLive,
+  parsePartyKey,
+  partiesFromRegistry,
+  usePartyContact,
   type PartyRelation,
   type PartyRole,
-} from "@/lib/mock/contracts";
-import { fmtDate } from "@/lib/format";
-import { useMock } from "@/lib/mock/store";
-import { useNow } from "@/lib/useNow";
+} from "@/lib/admin/contracts";
+import { fmtDate, fmtPhone } from "@/lib/format";
+import { AdminQuery } from "./AdminQuery";
 import styles from "./Contracts.module.css";
 
 interface Props {
@@ -39,20 +40,24 @@ const ROLE_LABELS: Record<PartyRole, string> = {
 };
 
 export function AdminContractPartyDetail({ partyKey }: Props) {
-  const state = useMock();
-  const now = useNow(60_000);
-
-  const party = useMemo(() => (now ? partyByKey(state, partyKey, now) : undefined), [state, partyKey, now]);
-  const relatedContracts = useMemo(
-    () => (now ? contractsOfParty(state, partyKey, now) : []),
-    [state, partyKey, now]
+  const query = useContractRegistry();
+  return (
+    <div className={styles.page}>
+      <AdminQuery query={query} title="Không tải được sổ hợp đồng" height={420}>
+        {(rows) => <PartyBody rows={rows} partyKey={partyKey} />}
+      </AdminQuery>
+    </div>
   );
-  const partyTemplates = useMemo(
-    () => (party ? templatesForParty(party.role) : []),
-    [party]
-  );
+}
 
-  // Group party templates by type
+function PartyBody({ rows, partyKey }: { rows: RegistryRow[]; partyKey: string }) {
+  const parsed = parsePartyKey(partyKey);
+  const party = useMemo(() => partiesFromRegistry(rows).find((p) => p.key === partyKey), [rows, partyKey]);
+  const relatedContracts = useMemo(() => (parsed ? contractsOfParty(rows, parsed.role, parsed.id) : []), [rows, parsed]);
+  // Liên hệ chỉ cho chủ nhà / khách thuê; Field Host xem ở hồ sơ Host.
+  const contact = usePartyContact(parsed?.id ?? "-", !!parsed && parsed.role !== "host");
+  const partyTemplates = useMemo(() => (party ? templatesForParty(party.role) : []), [party]);
+
   const groupedTemplates = useMemo(() => {
     const map = new Map<string, ContractTemplate[]>();
     for (const t of partyTemplates) {
@@ -63,25 +68,26 @@ export function AdminContractPartyDetail({ partyKey }: Props) {
     return map;
   }, [partyTemplates]);
 
-  if (state.ready && !party) {
-    notFound();
-  }
-
   if (!party) {
     return (
-      <div className={styles.page}>
-        <PageHeader title="Đang tải..." description="Đang tải dữ liệu hồ sơ bên ký kết..." />
-      </div>
+      <>
+        <PageHeader title="Không tìm thấy bên ký" description={`Không có văn bản nào trong sổ gắn với ${partyKey}.`} back={{ href: "/admin/contracts/parties", label: "Danh sách theo bên ký" }} />
+        <ContractsSubnav />
+      </>
     );
   }
 
-  const contractColumns: DataTableColumn<{ row: ContractRow; relation: PartyRelation }>[] = [
+  const c = contact.state.status === "ready" ? contact.state.data : null;
+  const contactText = party.role === "host" ? "Field Host" : [c?.phone ? fmtPhone(c.phone) : null, c?.email].filter(Boolean).join(" · ") || "Chưa có liên hệ";
+  const liveCount = relatedContracts.filter((x) => isLive(x.row)).length;
+
+  const contractColumns: DataTableColumn<{ row: RegistryRow; relation: PartyRelation }>[] = [
     {
       key: "docId",
       header: "Số HĐ",
       render: (item) => (
         <span className={styles.docIdText}>
-          {item.row.docId}
+          {item.row.docNumber}
         </span>
       ),
     },
@@ -97,7 +103,7 @@ export function AdminContractPartyDetail({ partyKey }: Props) {
     {
       key: "unitLabel",
       header: "Căn / Phạm vi",
-      render: (item) => item.row.unitLabel,
+      render: (item) => item.row.scope,
     },
     {
       key: "relation",
@@ -124,20 +130,23 @@ export function AdminContractPartyDetail({ partyKey }: Props) {
     {
       key: "status",
       header: "Trạng thái",
-      render: (item) => {
-        const meta = CONTRACT_STATUS_META[item.row.status];
-        return <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>;
-      },
+      render: (item) => <StatusBadge tone={item.row.tone}>{item.row.statusLabel}</StatusBadge>,
     },
   ];
 
   return (
-    <div className={styles.page}>
+    <>
       <PageHeader
         title={party.name}
-        description={`${ROLE_LABELS[party.role]} · ${party.phoneMasked ?? "Không có SĐT"}`}
+        description={`${ROLE_LABELS[party.role]} · ${contactText}`}
         back={{ href: `/admin/contracts/parties?role=${party.role}`, label: "Danh sách theo bên ký" }}
-        actions={<StatusBadge tone="neutral">Mã định danh: {party.id}</StatusBadge>}
+        actions={
+          party.role === "host" ? (
+            <Link href={`/admin/hosts/${party.id}`} className="btn btn-secondary btn-sm">
+              Hồ sơ Field Host <ExternalLink size={13} />
+            </Link>
+          ) : undefined
+        }
       />
 
       <ContractsSubnav />
@@ -151,8 +160,8 @@ export function AdminContractPartyDetail({ partyKey }: Props) {
         />
         <StatTile
           label="Đang hiệu lực"
-          value={String(party.live)}
-          delta={{ text: `${party.live} HĐ`, tone: "good" }}
+          value={String(liveCount)}
+          delta={{ text: `${liveCount} HĐ`, tone: "good" }}
         />
         <StatTile
           label="Cần xử lý"
@@ -226,6 +235,6 @@ export function AdminContractPartyDetail({ partyKey }: Props) {
           ))}
         </div>
       </Section>
-    </div>
+    </>
   );
 }

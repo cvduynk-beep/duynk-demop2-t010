@@ -124,3 +124,21 @@ export const choiceOfRoles = (roles: readonly HostRoleCode[]): HostRoleChoice =>
 
 /** Nhãn hiển thị vai của một Host (một nhãn duy nhất, không tách badge). */
 export const hostRoleLabel = (roles: readonly HostRoleCode[]): string => ROLE_CHOICE_LABEL[choiceOfRoles(roles)];
+
+// ─── Trạng thái hiển thị (gộp khoá tài khoản + ca trực) ──────────────────────────────────────
+
+export type HostDisplayStatus = "active" | "busy" | "off_duty" | "suspended";
+
+export const hostDisplayStatus = (h: Pick<HostAdminView, "isActive" | "dutyStatus">): HostDisplayStatus =>
+  !h.isActive ? "suspended" : h.dutyStatus === "ONLINE_AVAILABLE" ? "active" : h.dutyStatus === "BUSY_VIEWING" ? "busy" : "off_duty";
+
+export const HOST_STATUS_META: Record<HostDisplayStatus, { label: string; badge: string; tone: "ok" | "warn" | "neutral" | "danger" }> = {
+  active: { label: "Đang trực", badge: "badge-kelp", tone: "ok" },
+  busy: { label: "Đang bận", badge: "badge-amber-soft", tone: "warn" },
+  off_duty: { label: "Nghỉ ca", badge: "badge-plain", tone: "neutral" },
+  suspended: { label: "Tạm đóng", badge: "badge-plain", tone: "danger" },
+};
+
+/** Khoá / mở khoá tài khoản Host (khoá bị chặn 409 khi Host còn ca đang chạy). */
+export const setHostActive = (id: string, active: boolean) =>
+  active ? adminHostsApi.update(id, { isActive: true }) : adminHostsApi.deactivate(id);

@@ -22,9 +22,7 @@ import {
   type TemplateGroup,
   type TemplateStep,
 } from "@/lib/mock/contract-templates";
-import { contractRows } from "@/lib/mock/contracts";
-import { useMock } from "@/lib/mock/store";
-import { useNow } from "@/lib/useNow";
+import { useContractRegistry, type RegistryRow } from "@/lib/admin/api";
 import styles from "./Contracts.module.css";
 
 const ACTOR_LABELS: Record<StepActor, string> = {
@@ -36,9 +34,9 @@ const ACTOR_LABELS: Record<StepActor, string> = {
 };
 
 export function AdminContractTemplates() {
-  const state = useMock();
-  const now = useNow(60_000);
-  const allRows = useMemo(() => (now ? contractRows(state, now) : []), [state, now]);
+  // Danh mục mẫu là dữ liệu tĩnh (thư mục legal/); chỉ số "HĐ đang dùng" lấy từ sổ hợp đồng thật.
+  const registry = useContractRegistry();
+  const allRows = useMemo<RegistryRow[]>(() => (registry.state.status === "ready" ? registry.state.data : []), [registry.state]);
 
   const [actorFilter, setActorFilter] = useState<StepActor | "all">("all");
   const [groupFilter, setGroupFilter] = useState<TemplateGroup | "all">("all");

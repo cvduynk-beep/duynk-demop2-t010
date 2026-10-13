@@ -10,6 +10,8 @@ import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { toast } from "@/components/ui/Toast";
+import { apiErrorText } from "@/lib/apiClient";
+import { adminApi, useAdminDepositPolicy } from "@/lib/admin/api";
 import { useSession } from "@/lib/auth/client";
 import { fmtDateTime, vnd } from "@/lib/format";
 import {
@@ -21,11 +23,15 @@ import {
   saveOutcome,
   scopeLabel,
   useHoldPolicy,
+  invalidateDepositPolicy,
+  useFeeRates,
+  validateDepositPolicy,
   validateHoldPolicy,
   type HoldPolicy,
   type HoldPolicyChange,
   type HoldPolicyField,
 } from "@/lib/admin/settings";
+import { AdminQuery } from "./AdminQuery";
 import styles from "./Admin.module.css";
 
 const ROLE_LABEL: Record<string, string> = { ops_admin: "Quản trị vận hành" };
@@ -282,6 +288,10 @@ export function AdminSettings() {
         )}
       </Section>
 
+      <DepositPolicySection />
+
+      <FeeRatesSection />
+
       <Section title="Tham số khác">
         <p className="small muted" style={{ margin: 0 }}>
           Thù lao và hoa hồng Field Host chỉnh được tại{" "}
@@ -292,5 +302,105 @@ export function AdminSettings() {
         </p>
       </Section>
     </div>
+  );
+}
+
+/** Quy định Tiền cọc bảo đảm (tính theo số tháng tiền thuê) — chủ nhà đề xuất cọc trong khoảng này khi ký gửi. */
+function DepositPolicySection() {
+  const query = useAdminDepositPolicy();
+  return (
+    <Section
+      title="Quy định Tiền cọc bảo đảm"
+      description="Tỷ lệ theo giá thuê tháng (1,0 = 1 tháng). Chủ nhà chỉ đề xuất được mức cọc trong khoảng tối thiểu – tối đa khi ký gửi."
+    >
+      <AdminQuery query={query} title="Không tải được quy định tiền cọc" height={120}>
+        {(p) => <DepositPolicyForm key={`${p.minRatio}-${p.maxRatio}-${p.defaultRatio}`} initial={p} />}
+      </AdminQuery>
+    </Section>
+  );
+}
+
+function DepositPolicyForm({ initial }: { initial: { minRatio: number; maxRatio: number; defaultRatio: number } }) {
+  const [vals, setVals] = useState({ minRatio: String(initial.minRatio), maxRatio: String(initial.maxRatio), defaultRatio: String(initial.defaultRatio) });
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const input = { minRatio: Number(vals.minRatio), maxRatio: Number(vals.maxRatio), defaultRatio: Number(vals.defaultRatio) };
+    const invalid = validateDepositPolicy(input);
+    if (invalid) return setError(invalid);
+    if (!reason.trim()) return setError("Bắt buộc nhập lý do thay đổi.");
+    setBusy(true);
+    const res = await adminApi.updateDepositPolicy({ ...input, reason: reason.trim() });
+    setBusy(false);
+    if (!res.ok) return setError(apiErrorText(res, "Chưa lưu được quy định tiền cọc."));
+    toast("Đã cập nhật quy định tiền cọc bảo đảm.", "success");
+    setReason("");
+    setError("");
+    invalidateDepositPolicy();
+  };
+
+  const field = (key: keyof typeof vals, label: string) => (
+    <label className="field" style={{ flex: 1, minWidth: 140 }}>
+      <span className="label">{label}</span>
+      <input
+        type="number"
+        step={0.1}
+        min={0.1}
+        max={10}
+        className="input"
+        value={vals[key]}
+        onChange={(e) => {
+          setVals((v) => ({ ...v, [key]: e.target.value }));
+          setError("");
+        }}
+      />
+    </label>
+  );
+
+  return (
+    <form onSubmit={submit} style={{ maxWidth: 560, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {field("minRatio", "Tối thiểu (× tiền thuê)")}
+        {field("defaultRatio", "Khuyến nghị")}
+        {field("maxRatio", "Tối đa")}
+      </div>
+      <input className="input" placeholder="Lý do thay đổi (lưu Audit)" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <div>
+        <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
+          {busy ? "Đang lưu…" : "Lưu quy định cọc"}
+        </button>
+      </div>
+      {error && <p className="xs" style={{ color: "var(--danger)", margin: 0 }}>{error}</p>}
+    </form>
+  );
+}
+
+function FeeRatesSection() {
+  const query = useFeeRates();
+  return (
+    <Section
+      title="Biểu phí tính All-in"
+      description="Đơn giá chung dùng khi căn chưa có biểu phí tòa do Field Host xác minh lúc thẩm định. Cùng nguồn với AI Matchmaker."
+    >
+      <AdminQuery query={query} title="Không tải được biểu phí" height={120}>
+        {(r) => (
+          <KeyValue
+            items={[
+              { label: "Phí quản lý BQL", value: `${vnd(r.mgmtFeePerM2)}đ/m²/tháng` },
+              { label: "Gửi xe máy", value: `${vnd(r.motorbike)}đ/xe/tháng` },
+              { label: "Gửi ô tô", value: `${vnd(r.car)}đ/xe/tháng` },
+              { label: "Điện nước", value: `${vnd(r.utilityPerPerson)}đ/người/tháng` },
+              {
+                label: "Hộ tham chiếu (màn Admin)",
+                value: `${r.referenceHousehold.motorbikes} xe máy · ${r.referenceHousehold.cars} ô tô · ${r.referenceHousehold.occupants} người`,
+              },
+            ]}
+          />
+        )}
+      </AdminQuery>
+    </Section>
   );
 }

@@ -7,9 +7,9 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { contractParties, type PartyRole, type PartySummary } from "@/lib/mock/contracts";
-import { useMock } from "@/lib/mock/store";
-import { useNow } from "@/lib/useNow";
+import { useContractRegistry, type RegistryRow } from "@/lib/admin/api";
+import { partiesFromRegistry, type PartyRole, type PartySummary } from "@/lib/admin/contracts";
+import { AdminQuery } from "./AdminQuery";
 import styles from "./Contracts.module.css";
 
 interface Props {
@@ -17,9 +17,19 @@ interface Props {
 }
 
 export function AdminContractParties({ initialRole }: Props) {
-  const state = useMock();
-  const now = useNow(60_000);
+  const query = useContractRegistry();
+  return (
+    <div className={styles.page}>
+      <PageHeader title="Theo bên ký" description="Xem mọi hợp đồng của từng chủ nhà, khách thuê và Field Host." />
+      <ContractsSubnav />
+      <AdminQuery query={query} title="Không tải được sổ hợp đồng">
+        {(rows) => <PartiesBody rows={rows} initialRole={initialRole} />}
+      </AdminQuery>
+    </div>
+  );
+}
 
+function PartiesBody({ rows, initialRole }: { rows: RegistryRow[]; initialRole?: string }) {
   const [roleTab, setRoleTab] = useState<PartyRole>(() => {
     if (initialRole === "tenant" || initialRole === "host" || initialRole === "landlord") {
       return initialRole;
@@ -28,7 +38,7 @@ export function AdminContractParties({ initialRole }: Props) {
   });
   const [search, setSearch] = useState("");
 
-  const allParties = useMemo(() => (now ? contractParties(state, now) : []), [state, now]);
+  const allParties = useMemo(() => partiesFromRegistry(rows), [rows]);
 
   const counts = useMemo(() => {
     const c = { landlord: 0, tenant: 0, host: 0 };
@@ -54,15 +64,6 @@ export function AdminContractParties({ initialRole }: Props) {
       render: (p) => (
         <span className={styles.docIdText}>
           {p.name}
-        </span>
-      ),
-    },
-    {
-      key: "phone",
-      header: "Số điện thoại",
-      render: (p) => (
-        <span className="muted fontMono small">
-          {p.phoneMasked ?? "—"}
         </span>
       ),
     },
@@ -100,15 +101,7 @@ export function AdminContractParties({ initialRole }: Props) {
   ];
 
   return (
-    <div className={styles.page}>
-      <PageHeader
-        title="Theo bên ký"
-        description="Xem mọi hợp đồng của từng chủ nhà, khách thuê và Field Host."
-      />
-
-      <ContractsSubnav />
-
-      <Section>
+    <Section>
         {/* Tabs theo 3 vai */}
         <div className={styles.tabs} style={{ marginBottom: 14 }}>
           <button
@@ -174,7 +167,6 @@ export function AdminContractParties({ initialRole }: Props) {
           rowHref={(p) => `/admin/contracts/parties/${p.key}`}
           empty="Không tìm thấy bên ký kết nào phù hợp."
         />
-      </Section>
-    </div>
+    </Section>
   );
 }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ConsignmentCoreModule } from '../inspection/consignment-core.module';
+import { PropertyModule } from '../property/property.module';
 import { PhoneService } from '../auth/phone/phone.service';
 import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
@@ -32,7 +33,7 @@ const services = [
 ];
 
 @Module({
-  imports: [AuthModule, ConsignmentCoreModule],
+  imports: [AuthModule, ConsignmentCoreModule, PropertyModule],
   controllers: [AdminController],
   providers: [...services, { provide: ADMIN_KEY_CRYPTO, useExisting: PhoneService }],
   exports: services,

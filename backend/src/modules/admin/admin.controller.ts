@@ -122,6 +122,18 @@ export class AdminController {
     return this.inventoryService.terminateMandate(id, dto.reason, user);
   }
 
+  @Get('consignments')
+  @ApiOperation({ summary: 'Danh sách hồ sơ ký gửi đã ký (mọi stage), kèm tên Host thẩm định' })
+  async listConsignments() {
+    return this.inventoryService.listConsignments();
+  }
+
+  @Get('consignments/:id')
+  @ApiOperation({ summary: 'Chi tiết một hồ sơ ký gửi (id ủy quyền) kèm phiếu thẩm định' })
+  async getConsignment(@Param('id') id: string) {
+    return this.inventoryService.getConsignment(id);
+  }
+
   @Post('consignments/:id/approve')
   @ApiOperation({
     summary: 'Admin duyệt hồ sơ ký gửi Inspector đề xuất không duyệt (stage reviewing)',
@@ -343,6 +355,12 @@ export class AdminController {
   })
   updateHoldPolicy(@Body() dto: UpdateHoldPolicyDto, @CurrentUser() user: any) {
     return this.settingsService.updateHoldPolicy(dto, { id: user.id, role: user.role });
+  }
+
+  @Get('settings/fee-rates')
+  @ApiOperation({ summary: 'Biểu phí đang dùng tính All-in (phí QL/m², gửi xe, điện nước/người) — chỉ đọc' })
+  getFeeRates() {
+    return this.inventoryService.getFeeRates();
   }
 
   @Get('settings/deposit-policy')

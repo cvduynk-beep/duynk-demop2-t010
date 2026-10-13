@@ -82,3 +82,39 @@ export const isDirty = (hoursInput: string, reason: string, saved: number) => ho
 
 export const changeLabel = (c: HoldPolicyChange) => `${c.from ?? "—"}h → ${c.to ?? "—"}h`;
 export const scopeLabel = (c: HoldPolicyChange) => (c.scope === "default" ? "Mặc định toàn sàn" : `Riêng căn ${c.unitCode ?? "(đã xoá)"}`);
+
+// ─── Biểu phí All-in (chỉ đọc): GET /admin/settings/fee-rates ─────────────────────────────────────────────────
+
+export interface FeeRatesView {
+  mgmtFeePerM2: number;
+  motorbike: number;
+  car: number;
+  utilityPerPerson: number;
+  referenceHousehold: { motorbikes: number; cars: number; occupants: number };
+}
+
+export const useFeeRates = (): Query<FeeRatesView> =>
+  useApiQuery({
+    key: "admin-settings:fee-rates",
+    fetch: () => api.get<FeeRatesView>("/admin/settings/fee-rates"),
+    errorText: (res: ApiResponse<FeeRatesView>) => apiErrorText(res, "Không tải được biểu phí."),
+  });
+
+// ─── Quy định Tiền cọc bảo đảm: GET / POST /admin/settings/deposit-policy (hook ở ./api) ───────────────────────
+
+export interface DepositPolicyInput {
+  minRatio: number;
+  maxRatio: number;
+  defaultRatio: number;
+}
+
+export const invalidateDepositPolicy = () => invalidateApiPattern("admin-deposit-policy");
+
+/** Cùng luật backend `updateDepositPolicy` + DTO: 0.1 ≤ min ≤ 2; max ≥ min, 1 ≤ max ≤ 10; min ≤ default ≤ max. */
+export function validateDepositPolicy(p: DepositPolicyInput): string | null {
+  if (![p.minRatio, p.maxRatio, p.defaultRatio].every(Number.isFinite)) return "Nhập đủ ba tỷ lệ.";
+  if (p.minRatio < 0.1 || p.minRatio > 2) return "Tỷ lệ cọc tối thiểu phải từ 0,1 (10%) đến 2,0 (200%).";
+  if (p.maxRatio < p.minRatio || p.maxRatio < 1 || p.maxRatio > 10) return "Tỷ lệ cọc tối đa phải từ 1,0 trở lên, không nhỏ hơn tối thiểu và không vượt quá 10,0 (1000%).";
+  if (p.defaultRatio < p.minRatio || p.defaultRatio > p.maxRatio) return "Tỷ lệ cọc mặc định phải nằm trong khoảng tối thiểu – tối đa.";
+  return null;
+}

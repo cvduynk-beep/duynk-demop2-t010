@@ -4,25 +4,38 @@ import { useMemo, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { ContractsSubnav } from "@/components/contracts/ContractsSubnav";
 import { StatTile } from "@/components/charts/StatTile";
-import { CONTRACT_KIND_META, CONTRACT_STATUS_META } from "@/components/contracts/status";
+import { CONTRACT_KIND_META } from "@/components/contracts/status";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useContractRegistry, type RegistryKind, type RegistryRow } from "@/lib/admin/api";
+import { registryKpis } from "@/lib/admin/contracts";
 import { fmtDate, vnd, vndShort } from "@/lib/format";
-import { contractKpis, contractRows, type ContractKind, type ContractRow, type ContractStatus } from "@/lib/mock/contracts";
-import { useMock } from "@/lib/mock/store";
 import { useNow } from "@/lib/useNow";
+import { AdminQuery } from "./AdminQuery";
 import styles from "./Contracts.module.css";
 
-type TabKind = "all" | ContractKind;
+type TabKind = "all" | RegistryKind;
 
 interface AdminContractsProps {
   initialKind?: string;
 }
 
 export function AdminContracts({ initialKind }: AdminContractsProps) {
-  const state = useMock();
-  const now = useNow(1000);
+  const query = useContractRegistry();
+  return (
+    <div className={styles.page}>
+      <PageHeader title="Hợp đồng" description="Sổ hợp đồng uỷ quyền, cọc giữ chỗ, thuê căn hộ và đối tác Field Host trên nền tảng." />
+      <ContractsSubnav />
+      <AdminQuery query={query} title="Không tải được sổ hợp đồng" height={480}>
+        {(rows) => <RegistryBody rows={rows} initialKind={initialKind} />}
+      </AdminQuery>
+    </div>
+  );
+}
+
+function RegistryBody({ rows: allRows, initialKind }: { rows: RegistryRow[]; initialKind?: string }) {
+  const now = useNow(60_000);
 
   const defaultTab: TabKind =
     initialKind === "mandate" || initialKind === "holding" || initialKind === "lease" || initialKind === "partnership"
@@ -33,12 +46,7 @@ export function AdminContracts({ initialKind }: AdminContractsProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [onlyNeedsAction, setOnlyNeedsAction] = useState(false);
 
-  const allRows = useMemo(() => {
-    if (!state.ready || !now) return [];
-    return contractRows(state, now);
-  }, [state, now]);
-
-  const kpis = useMemo(() => contractKpis(allRows), [allRows]);
+  const kpis = useMemo(() => registryKpis(allRows, now), [allRows, now]);
 
   // Tab counts
   const tabCounts = useMemo(() => {
@@ -59,11 +67,9 @@ export function AdminContracts({ initialKind }: AdminContractsProps) {
 
   // Statuses available in current tab
   const availableStatuses = useMemo(() => {
-    const set = new Set<ContractStatus>();
-    for (const r of tabRows) {
-      set.add(r.status);
-    }
-    return Array.from(set);
+    const map = new Map<string, string>();
+    for (const r of tabRows) map.set(r.status, r.statusLabel);
+    return Array.from(map.entries());
   }, [tabRows]);
 
   // Filtered rows
@@ -81,8 +87,8 @@ export function AdminContracts({ initialKind }: AdminContractsProps) {
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       rows = rows.filter((r) => {
-        const docMatch = r.docId.toLowerCase().includes(q);
-        const unitMatch = r.unitLabel.toLowerCase().includes(q);
+        const docMatch = r.docNumber.toLowerCase().includes(q);
+        const unitMatch = r.scope.toLowerCase().includes(q) || (r.unitCode ?? "").toLowerCase().includes(q);
         const partyMatch = r.parties.some((p) => p.name.toLowerCase().includes(q));
         return docMatch || unitMatch || partyMatch;
       });
@@ -91,18 +97,14 @@ export function AdminContracts({ initialKind }: AdminContractsProps) {
     return rows;
   }, [tabRows, onlyNeedsAction, statusFilter, search]);
 
-  if (!state.ready || !now) {
-    return <div className="skeleton" style={{ height: 480 }} />;
-  }
-
-  const columns: DataTableColumn<ContractRow>[] = [
+  const columns: DataTableColumn<RegistryRow>[] = [
     {
       key: "docId",
       header: "Số hợp đồng",
       render: (r) => (
         <span className={styles.nowrap}>
-          {r.needsAction && <span className={styles.warningDot} title="Cần xử lý" />}
-          <span className={styles.docIdText}>{r.docId}</span>
+          {r.needsAction && <span className={styles.warningDot} title={r.needsAction} />}
+          <span className={styles.docIdText}>{r.docNumber}</span>
         </span>
       ),
     },
@@ -114,7 +116,7 @@ export function AdminContracts({ initialKind }: AdminContractsProps) {
     {
       key: "unitLabel",
       header: "Căn / Phạm vi",
-      render: (r) => r.unitLabel,
+      render: (r) => r.scope,
     },
     {
       key: "parties",
@@ -127,8 +129,7 @@ export function AdminContracts({ initialKind }: AdminContractsProps) {
       key: "validity",
       header: "Hiệu lực",
       render: (r) => {
-        const start = r.startAt ?? r.signedAt;
-        const startStr = start ? fmtDate(start) : "";
+        const startStr = r.startAt ? fmtDate(r.startAt) : "";
         const endStr = r.endAt ? fmtDate(r.endAt) : "";
         if (!startStr && !endStr) return <span className="muted">—</span>;
         return (
@@ -150,23 +151,12 @@ export function AdminContracts({ initialKind }: AdminContractsProps) {
     {
       key: "status",
       header: "Trạng thái",
-      render: (r) => {
-        const meta = CONTRACT_STATUS_META[r.status];
-        const label = r.kind === "holding" && r.status === "void" ? "Đã huỷ cọc" : meta.label;
-        return <StatusBadge tone={meta.tone}>{label}</StatusBadge>;
-      },
+      render: (r) => <StatusBadge tone={r.tone}>{r.statusLabel}</StatusBadge>,
     },
   ];
 
   return (
-    <div className={styles.page}>
-      <PageHeader
-        title="Hợp đồng"
-        description="Sổ hợp đồng uỷ quyền, cọc giữ chỗ và thuê căn hộ trên nền tảng."
-      />
-
-      <ContractsSubnav />
-
+    <>
       <div className={styles.kpis}>
         <StatTile
           label="HĐ thuê hiệu lực"
@@ -268,9 +258,9 @@ export function AdminContracts({ initialKind }: AdminContractsProps) {
           aria-label="Lọc trạng thái"
         >
           <option value="all">Mọi trạng thái ({tabRows.length})</option>
-          {availableStatuses.map((st) => (
+          {availableStatuses.map(([st, label]) => (
             <option key={st} value={st}>
-              {CONTRACT_STATUS_META[st].label} ({tabRows.filter((r) => r.status === st).length})
+              {label} ({tabRows.filter((r) => r.status === st).length})
             </option>
           ))}
         </select>
@@ -292,6 +282,6 @@ export function AdminContracts({ initialKind }: AdminContractsProps) {
         rowHref={(r) => `/admin/contracts/${r.key}`}
         empty="Không có hợp đồng khớp bộ lọc."
       />
-    </div>
+    </>
   );
 }

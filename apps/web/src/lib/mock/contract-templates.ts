@@ -623,7 +623,8 @@ export function templatesForParty(role: TemplateParty): ContractTemplate[] {
   return CONTRACT_TEMPLATES.filter((t) => t.parties.includes(role) && t.type !== "sop");
 }
 
-export function contractsUsingTemplate(rows: ContractRow[], id: string): ContractRow[] {
+/** Văn bản (mock hoặc sổ thật) thuộc loại HĐ mà mẫu này ràng buộc hoặc được sinh ra ở bước dùng mẫu. */
+export function contractsUsingTemplate<T extends Pick<ContractRow, "kind">>(rows: T[], id: string): T[] {
   const t = templateById(id);
   const kinds = new Set<string>();
   if (t?.binds) {
