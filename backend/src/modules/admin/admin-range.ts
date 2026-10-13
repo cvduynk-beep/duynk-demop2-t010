@@ -39,21 +39,28 @@ function parseDay(field: 'from' | 'to', value: string): string {
 }
 
 /**
- * Đọc `from`/`to` (đều tuỳ chọn). Thiếu cả hai ⇒ 7 ngày gần nhất tính tới hôm nay; thiếu một ⇒ suy ra theo 7 ngày.
- * Sai định dạng, `from` > `to` hoặc dài quá 90 ngày ⇒ 400 `invalid_range` kèm lỗi theo field.
+ * Đọc `from`/`to` (đều tuỳ chọn). Thiếu cả hai ⇒ `defaultDays` (mặc định 7) ngày gần nhất tính tới hôm nay; thiếu một ⇒ suy
+ * ra theo `defaultDays`. Sai định dạng, `from` > `to` hoặc dài quá `maxDays` (mặc định 90) ⇒ 400 `invalid_range` theo field.
  */
-export function parseReportRange(fromRaw: string | undefined, toRaw: string | undefined, now: Date = new Date()): ReportRange {
+export function parseReportRange(
+  fromRaw: string | undefined,
+  toRaw: string | undefined,
+  now: Date = new Date(),
+  opts: { defaultDays?: number; maxDays?: number } = {},
+): ReportRange {
+  const defaultDays = opts.defaultDays ?? DEFAULT_RANGE_DAYS;
+  const maxDays = opts.maxDays ?? MAX_RANGE_DAYS;
   const fromIn = fromRaw?.trim() || undefined;
   const toIn = toRaw?.trim() || undefined;
   let to = toIn ? parseDay('to', toIn) : undefined;
   let from = fromIn ? parseDay('from', fromIn) : undefined;
-  if (!to) to = from ? addDays(from, DEFAULT_RANGE_DAYS - 1) : ictDay(now);
-  if (!from) from = addDays(to, -(DEFAULT_RANGE_DAYS - 1));
+  if (!to) to = from ? addDays(from, defaultDays - 1) : ictDay(now);
+  if (!from) from = addDays(to, -(defaultDays - 1));
   const start = ictStart(from);
   const end = ictStart(addDays(to, 1));
   if (start > ictStart(to)) invalid('from', 'Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.');
   const days = Math.round((end.getTime() - start.getTime()) / DAY_MS);
-  if (days > MAX_RANGE_DAYS) invalid('to', `Khoảng thời gian tối đa ${MAX_RANGE_DAYS} ngày.`);
+  if (days > maxDays) invalid('to', `Khoảng thời gian tối đa ${maxDays} ngày.`);
   return { from, to, timezone: REPORT_TIMEZONE, days, start, end };
 }
 
