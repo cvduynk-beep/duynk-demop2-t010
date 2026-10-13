@@ -1,0 +1,27 @@
+.box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--amber-600);
+  border-radius: 12px;
+  background: var(--amber-050);
+  color: var(--ink-2);
+  font-size: var(--fs-12);
+}
+.tag {
+  flex-basis: 100%;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--amber-600);
+}
+.code {
+  font-size: 18px;
+  letter-spacing: 0.2em;
+  color: var(--ink);
+}
+.fill {
+  margin-left: auto;
+}

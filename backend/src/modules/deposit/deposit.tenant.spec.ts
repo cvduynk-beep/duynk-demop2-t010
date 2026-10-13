@@ -523,4 +523,26 @@ describe('Deposit & VietQR Backend Tests (SPEC-P03 §8: Cases 1–11)', () => {
     await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION });
     expect(fixture.savedDeposits[0].holdHours).toBe(36);
   });
+
+  // 15. Admin đổi mặc định / giờ riêng của căn SAU khi khách tick điều khoản: báo có vẫn khoá đúng số giờ đã chốt trong cọc
+  it('15. báo có dùng giờ đã chốt trong cọc, không bị mặc định mới hay giờ riêng căn đổi sau đè lên', async () => {
+    const dep = await fixture.prisma.holdingDeposit.create({
+      data: {
+        depositCode: 'DEP-SNAPSHOT',
+        viewingId: 'viewing-1',
+        unitId: UNIT_ID,
+        amount: 2000000,
+        vietqrRef: 'VQ-3333',
+        transferContent: 'COC VHOP-S1.02-1208 SNAP',
+        paymentStatus: DepositStatus.PENDING_PAYMENT,
+        holdHours: 36,
+        unit: { holdHoursOverride: 24 }, // giờ riêng căn đổi sau khi tạo cọc
+      },
+    });
+    fixture.feeHoldHours.value = 60; // Admin vừa đổi mặc định toàn sàn
+    const paidAt = new Date('2026-10-13T08:00:00Z');
+    expect(await depositService.markPaid({ depositCode: dep.depositCode, amount: 2000000, bankRefNumber: 'FT-SNAP', actor: 'bank', paidAt })).toBe('paid');
+    expect(dep.holdHours).toBe(36);
+    expect(new Date(dep.expiresAt).getTime() - paidAt.getTime()).toBe(36 * 3600 * 1000);
+  });
 });

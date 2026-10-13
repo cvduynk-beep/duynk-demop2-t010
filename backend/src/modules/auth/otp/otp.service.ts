@@ -1,28 +1,33 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { OtpChannel, OtpCode, OtpPurpose, OtpStatus } from '@prisma/client';
+import { OtpCode, OtpPurpose, OtpStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AuthAuditService } from '../auth-audit.service';
 import { authError } from '../auth.errors';
 import { PhoneService } from '../phone/phone.service';
 import { deriveKey, resolveMasterSecret } from '../secrets';
 import { generateOtpCode, hashOtpCode, otpHashesEqual } from './otp-crypto';
-import { ConsoleOtpSender } from './senders/console-otp.sender';
+import { OTP_SENDER, OtpDelivery, OtpMessage, OtpSender } from './senders/otp-sender';
 
 export interface OtpRequestContext {
   ipAddress?: string;
   userAgent?: string;
 }
 
+/** `devOtp` chỉ có khi `OTP_PROVIDER=mock` (dev/staging nội bộ); kênh thật ⇒ object rỗng. */
+export interface OtpSendResult {
+  devOtp?: string;
+}
+
 const secondsUntil = (date: Date) => Math.max(1, Math.ceil((date.getTime() - Date.now()) / 1000));
 
 /**
- * Vòng đời OTP: Zalo đang MÔ PHỎNG (một luồng duy nhất, mọi môi trường) — mã ngẫu nhiên được ghi log và trả về caller
- * dạng `devCode` để màn hình hiện mã; xác thực có giới hạn thử và khóa.
- * TTL / số lần thử / thời gian khóa nằm ở đây (không phải cấu hình Supabase) để khớp SAD ở mọi gói.
+ * Vòng đời OTP: sinh mã ngẫu nhiên, lưu hash, gửi qua `OtpSender` (chọn bằng `OTP_PROVIDER`); xác thực có giới hạn thử
+ * và khóa. TTL / số lần thử / thời gian khóa nằm ở đây nên đổi provider `mock` ↔ `zalo` không đổi các quy tắc này.
  */
 @Injectable()
 export class OtpService {
+  private readonly logger = new Logger(OtpService.name);
   private readonly pepper: Buffer;
   private readonly ttlSeconds: number;
   private readonly maxAttempts: number;
@@ -33,7 +38,7 @@ export class OtpService {
     private readonly prisma: PrismaService,
     private readonly phones: PhoneService,
     private readonly audit: AuthAuditService,
-    private readonly sender: ConsoleOtpSender,
+    @Inject(OTP_SENDER) private readonly sender: OtpSender,
     config: ConfigService,
   ) {
     this.pepper = deriveKey(resolveMasterSecret(config, config.get('NODE_ENV')), 'otp:pepper');
@@ -52,10 +57,8 @@ export class OtpService {
     return this.resendSeconds;
   }
 
-  /**
-   * `phone` phải là E.164 đã chuẩn hóa. Luôn trả `devCode` (Zalo mô phỏng). Mã ngẫu nhiên (`crypto.randomInt`), không có mã cố định.
-   */
-  async send(params: { phone: string; purpose: OtpPurpose } & OtpRequestContext): Promise<{ devCode: string }> {
+  /** `phone` phải là E.164 đã chuẩn hóa. Chỉ trả mã (`devOtp`) khi provider là mock. */
+  async send(params: { phone: string; purpose: OtpPurpose } & OtpRequestContext): Promise<OtpSendResult> {
     const { phone, purpose, ipAddress, userAgent } = params;
     const phoneHash = this.phones.hash(phone);
 
@@ -74,8 +77,8 @@ export class OtpService {
     }
 
     const code = generateOtpCode();
-    const channel = OtpChannel.ZALO;
-    await this.sender.send(phone, code);
+    const expiresAt = new Date(Date.now() + this.ttlSeconds * 1000);
+    const { channel, devOtp } = await this.deliver({ phone, code, purpose, expiresAt });
 
     await this.prisma.$transaction([
       // Chỉ mã mới nhất được dùng: vô hiệu các mã cũ chưa xác thực.
@@ -90,14 +93,15 @@ export class OtpService {
           codeHash: hashOtpCode(code, this.pepper),
           channel,
           status: OtpStatus.PENDING,
-          expiresAt: new Date(Date.now() + this.ttlSeconds * 1000),
+          expiresAt,
           ipAddress: ipAddress?.slice(0, 45),
           userAgent,
         },
       }),
     ]);
-    await this.audit.record('otp_sent', { phoneHash, ipAddress, userAgent, metadata: { purpose, channel } });
-    return { devCode: code };
+    await this.audit.record('otp_sent', { phoneHash, ipAddress, userAgent, metadata: { purpose, channel, provider: this.sender.provider } });
+    // Chốt chặn thứ hai: dù sender nào trả `devOtp`, chỉ provider mock mới được đưa mã ra ngoài.
+    return this.sender.provider === 'mock' && devOtp ? { devOtp } : {};
   }
 
   /**
@@ -162,4 +166,12 @@ export class OtpService {
     return result.count === 1;
   }
 
+  private async deliver(message: OtpMessage): Promise<OtpDelivery> {
+    try {
+      return await this.sender.send(message);
+    } catch (err) {
+      this.logger.warn(`Không gửi được OTP qua provider ${this.sender.provider}: ${(err as Error).message}`);
+      throw authError('otp_send_failed');
+    }
+  }
 }

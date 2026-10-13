@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { HOLD_HOURS_MAX, HOLD_HOURS_MIN, readDefaultHoldHours } from '../deposit/hold-policy';
 import type { AdminActor } from './admin-fee.service';
 import { DEFAULT_FEE_RATES, FeeRatesService } from '../property/fee-rates.service';
 import { mgmtFeePerM2 } from '../landlord/mgmt-fee';
@@ -14,17 +15,11 @@ import {
 
 const DAY_MS = 86_400_000;
 /** Thời gian khoá căn mặc định sau khi khách chuyển cọc; chỉnh riêng từng căn trong khoảng [min, max] (AGENTS.md). */
-export const HOLD_HOURS_DEFAULT = 48;
-export const HOLD_HOURS_MIN = 12;
-export const HOLD_HOURS_MAX = 72;
 // Hợp đồng còn hiệu lực/đang xử lý chặn việc chấm dứt mandate (SAD_v2 §10.4).
 const BLOCKING_CONTRACT_STATUSES = ['ACTIVE', 'AWAITING_TENANT_SIGN', 'AWAITING_LANDLORD_SIGN', 'DISPUTED'];
 
 /** Hộ tham chiếu khi xem căn không gắn với khách cụ thể — trùng mặc định của AI Matchmaker (matchmaker.service). */
 export const REFERENCE_HOUSEHOLD = { motorbikes: 1, cars: 0, occupants: 2 } as const;
-
-const HOLD_HOURS_KEY = 'hold_hours_default';
-const HOLD_AUDIT_ACTIONS = ['UNIT_HOLD_HOURS_UPDATED', 'HOLD_HOURS_DEFAULT_UPDATED'];
 
 const CONSIGNMENT_INCLUDE = {
   unit: { include: { building: true, landlord: { select: { id: true, fullName: true } } } },
@@ -257,73 +252,7 @@ export class AdminInventoryService {
     };
   }
 
-  // ------------------------------------------------------------------ Cài đặt toàn sàn
-
-  /** Thời hạn giữ chỗ mặc định toàn sàn + nhật ký thay đổi (mặc định lẫn riêng từng căn), mới nhất trước. */
-  async getHoldPolicy(limit = 10) {
-    const [defaultHours, cfg, rows] = await Promise.all([
-      this.defaultHoldHours(),
-      (this.prisma as any).feeConfig?.findUnique?.({ where: { configKey: HOLD_HOURS_KEY } }),
-      this.prisma.auditLog.findMany({
-        where: { actionType: { in: HOLD_AUDIT_ACTIONS } },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        include: { actor: { select: { fullName: true, email: true } } },
-      }) as Promise<any[]>,
-    ]);
-    const unitIds = [...new Set(rows.filter((r) => r.actionType === 'UNIT_HOLD_HOURS_UPDATED').map((r) => r.entityId))];
-    const units: any[] = unitIds.length
-      ? await this.prisma.unit.findMany({ where: { id: { in: unitIds } }, select: { id: true, unitCode: true } })
-      : [];
-    const codes = new Map(units.map((u) => [u.id, u.unitCode]));
-    return {
-      defaultHours,
-      min: HOLD_HOURS_MIN,
-      max: HOLD_HOURS_MAX,
-      /** `config` = Admin đã đặt; `default` = chưa cấu hình, dùng 48 giờ. */
-      source: cfg ? 'config' : 'default',
-      history: rows.map((r) => ({
-        id: r.id,
-        at: new Date(r.createdAt).toISOString(),
-        by: r.actor?.fullName || r.actor?.email || r.actorRole,
-        scope: r.actionType === 'HOLD_HOURS_DEFAULT_UPDATED' ? 'default' : 'unit',
-        unitId: r.actionType === 'UNIT_HOLD_HOURS_UPDATED' ? r.entityId : null,
-        unitCode: r.actionType === 'UNIT_HOLD_HOURS_UPDATED' ? (codes.get(r.entityId) ?? null) : null,
-        from: typeof r.oldValue?.holdHours === 'number' ? r.oldValue.holdHours : null,
-        to: typeof r.newValue?.holdHours === 'number' ? r.newValue.holdHours : null,
-        reset: r.newValue?.reset === true,
-        reason: typeof r.newValue?.reason === 'string' ? r.newValue.reason : null,
-      })),
-    };
-  }
-
-  /**
-   * Đặt thời hạn giữ chỗ mặc định toàn sàn (`fee_configs.hold_hours_default`). Chỉ áp cho cọc MỚI: cọc đã thu giữ hạn
-   * theo mức lúc khách chấp thuận. Căn có mức riêng (`holdHoursOverride`) không bị ảnh hưởng.
-   */
-  async updateDefaultHoldHours(hours: number, reason: string, actor: AdminActor) {
-    const why = (reason ?? '').trim();
-    if (!why) throw new BadRequestException('Bắt buộc nhập lý do thay đổi.');
-    if (!Number.isInteger(hours) || hours < HOLD_HOURS_MIN || hours > HOLD_HOURS_MAX) {
-      throw new BadRequestException(`Thời gian khoá căn phải là số giờ nguyên từ ${HOLD_HOURS_MIN} đến ${HOLD_HOURS_MAX}.`);
-    }
-    const before = await this.defaultHoldHours();
-    await (this.prisma as any).feeConfig.upsert({
-      where: { configKey: HOLD_HOURS_KEY },
-      update: { paramValue: hours, updatedBy: actor.id },
-      create: { configKey: HOLD_HOURS_KEY, paramValue: hours, paramUnit: 'giờ', updatedBy: actor.id },
-    });
-    await this.audit.log({
-      actorId: actor.id,
-      actorRole: actor.role,
-      actionType: 'HOLD_HOURS_DEFAULT_UPDATED',
-      entityName: 'fee_configs',
-      entityId: HOLD_HOURS_KEY,
-      oldValue: { holdHours: before },
-      newValue: { holdHours: hours, reason: why },
-    } as any);
-    return { success: true, defaultHours: hours };
-  }
+  // ------------------------------------------------------------------ Cài đặt (chỉ đọc)
 
   /** Biểu phí dùng tính All-in (đơn giá chung khi căn chưa có biểu phí tòa Host xác minh). Chỉ đọc. */
   async getFeeRates() {
@@ -335,10 +264,8 @@ export class AdminInventoryService {
   }
 
   /** Mặc định khi căn không có mức riêng: `FeeConfig.hold_hours_default` nếu có (dữ liệu cũ), không thì 48 giờ. Cùng nguồn với deposit.service. */
-  private async defaultHoldHours(): Promise<number> {
-    const cfg = await (this.prisma as any).feeConfig?.findUnique?.({ where: { configKey: 'hold_hours_default' } });
-    const hours = cfg ? Math.round(Number(cfg.paramValue)) : HOLD_HOURS_DEFAULT;
-    return Math.min(HOLD_HOURS_MAX, Math.max(HOLD_HOURS_MIN, hours));
+  private defaultHoldHours(): Promise<number> {
+    return readDefaultHoldHours(this.prisma);
   }
 
   /**

@@ -5,10 +5,12 @@ import { useEffect, useState } from "react";
 import { Building2, CheckCircle2, CircleDashed, MessageCircleMore, ScanText, ShieldCheck } from "lucide-react";
 import { EkycCapture } from "@/components/kyc/EkycCapture";
 import { OtpInput } from "@/components/ui/OtpInput";
+import { ZaloMockOtp } from "@/components/ui/ZaloMockOtp";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
 import { fmtDate, isValidVnPhone, normalizePhone } from "@/lib/format";
 import { errorText, landlordApi } from "@/lib/landlord/api";
+import { retryAfterSeconds, type OtpSent } from "@/lib/tenant/api";
 import { POPULAR_BANKS } from "@/lib/landlord/banks";
 import { queries } from "@/lib/landlord/queries";
 import type { LandlordVerification, VerificationStep } from "@/lib/landlord/types";
@@ -135,11 +137,9 @@ function DoneSummary({ step, v }: { step: VerificationStep; v: LandlordVerificat
   ) : null;
 }
 
-const RESEND_SECONDS = 60;
-
 function PhoneStep({ onDone }: { onDone: () => void }) {
   const [phone, setPhone] = useState("");
-  const [sent, setSent] = useState<{ devCode?: string } | null>(null);
+  const [sent, setSent] = useState<OtpSent | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -156,10 +156,15 @@ function PhoneStep({ onDone }: { onDone: () => void }) {
     setBusy(true);
     const res = await landlordApi.sendPhoneOtp(normalizePhone(phone));
     setBusy(false);
-    if (!res.ok) return setErr(errorText(res, "Không gửi được mã OTP."));
+    if (!res.ok) {
+      const wait = retryAfterSeconds(res);
+      if (res.code === "otp_cooldown" && wait) setCooldown(wait);
+      return setErr(errorText(res, "Không gửi được mã OTP."));
+    }
+    // Gửi lại ⇒ mã mới (và `devOtp` nếu Zalo giả lập) thay mã cũ. Thời gian chờ lấy từ server.
     setSent(res.data);
     setCode("");
-    setCooldown(RESEND_SECONDS);
+    setCooldown(res.data.resendInSeconds);
   };
 
   const verify = async (otp: string) => {
@@ -185,11 +190,7 @@ function PhoneStep({ onDone }: { onDone: () => void }) {
         <>
           <p className="muted small" style={{ margin: 0 }}>Nhập mã 4 số vừa gửi qua Zalo.</p>
           <OtpInput value={code} autoFocus disabled={busy} error={!!err} onChange={(c) => { setCode(c); setErr(""); if (c.length === 4) void verify(c); }} />
-          {sent.devCode && (
-            <p className="xs muted" style={{ padding: 10, border: "1px dashed #b7cdee", borderRadius: 12, background: "#eef4fc", margin: 0 }}>
-              Môi trường thử nghiệm: mã OTP là <b className="tnum">{sent.devCode}</b>
-            </p>
-          )}
+          <ZaloMockOtp code={sent.devOtp} disabled={busy} onFill={(c) => { setCode(c); setErr(""); void verify(c); }} />
         </>
       )}
       {err && <p className="field-error" role="alert" style={{ margin: 0 }}>{err}</p>}

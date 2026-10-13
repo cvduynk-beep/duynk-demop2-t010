@@ -25,11 +25,10 @@ import {
 import { ChatCriteria, ChatDegradedReason, ChatRecommendation, ChatResponseData } from './chat.types';
 import { ChatContextDto, ChatRequestDto } from './dto/chat.dto';
 import { GeminiClient, GeminiError } from './gemini.client';
+import { clampHoldHours, HOLD_HOURS_DEFAULT, HOLD_HOURS_KEY, HOLD_HOURS_MAX, HOLD_HOURS_MIN } from '../deposit/hold-policy';
 
 export const CHAT_TOP_N = 3;
 const FEE_CACHE_MS = 60_000;
-const HOLD_HOURS_MIN = 12;
-const HOLD_HOURS_MAX = 72;
 
 /** Đọc số nguyên từ env; sai định dạng/ngoài khoảng ⇒ dừng khởi động (lỗi cấu hình phải lộ ra sớm, không chạy ngầm sai). */
 export function intEnv(raw: string | undefined, name: string, def: number, min: number, max: number): number {
@@ -280,7 +279,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
     if (this.fees && Date.now() - this.fees.at < FEE_CACHE_MS) return this.fees.values;
     try {
       const rows = await this.prisma.feeConfig.findMany({
-        where: { configKey: { in: ['mgmt_fee_per_m2', 'parking_fee_motorbike', 'parking_fee_car', 'utility_per_person', 'hold_hours_default'] } },
+        where: { configKey: { in: ['mgmt_fee_per_m2', 'parking_fee_motorbike', 'parking_fee_car', 'utility_per_person', HOLD_HOURS_KEY] } },
         select: { configKey: true, paramValue: true },
       });
       const values = new Map(rows.map((r) => [r.configKey, Number(r.paramValue)]));
@@ -296,11 +295,11 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
     const doc = this.knowledge.get(topic);
     if (!doc) return null;
     const fees = await this.feeValues();
-    const holdHours = fees?.get('hold_hours_default');
+    const holdHours = fees?.get(HOLD_HOURS_KEY);
     const values: FaqValues = {
       holding_deposit: `${vnd(holdingDepositAmount())}đ`,
-      // Cùng luật với DepositService.resolveHoldHours: fee_configs.hold_hours_default → 48, kẹp [12, 72].
-      hold_hours: fees ? String(Math.min(HOLD_HOURS_MAX, Math.max(HOLD_HOURS_MIN, Math.round(holdHours ?? 48)))) : undefined,
+      // Cùng nguồn với deposit/hold-policy: fee_configs.hold_hours_default → 48, kẹp [12, 72].
+      hold_hours: fees ? String(clampHoldHours(holdHours ?? HOLD_HOURS_DEFAULT)) : undefined,
       hold_hours_min: String(HOLD_HOURS_MIN),
       hold_hours_max: String(HOLD_HOURS_MAX),
     };

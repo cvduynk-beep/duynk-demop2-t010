@@ -1,5 +1,6 @@
 import { holdingDepositAmount } from './deposit-amount';
 import { DepositTermsDoc } from '../tenant/tenant.types';
+import { clampHoldHours, HOLD_HOURS_DEFAULT } from './hold-policy';
 
 export const DEPOSIT_TERMS_VERSION = 'HOLD-2026.10-v1';
 
@@ -42,8 +43,8 @@ export const HOUSE_RULES = [
   },
 ] as const;
 
-export function buildDepositTerms(holdHours: number = 48): DepositTermsDoc {
-  const clampedHoldHours = Math.min(72, Math.max(12, holdHours));
+export function buildDepositTerms(holdHours: number = HOLD_HOURS_DEFAULT): DepositTermsDoc {
+  const clampedHoldHours = clampHoldHours(holdHours);
 
   return {
     version: DEPOSIT_TERMS_VERSION,

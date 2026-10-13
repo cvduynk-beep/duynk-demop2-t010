@@ -29,6 +29,7 @@ import { LandlordPhotoService, UploadedImage } from './landlord-photo.service';
 import { MAX_PHOTOS, MAX_PHOTO_BYTES, inventoryCatalogView } from './landlord.mappers';
 import { LandlordUnitsService } from './landlord-units.service';
 import { LandlordService } from './landlord.service';
+import { OTP_SEND_DESCRIPTION } from '../auth/otp/otp.controller';
 import {
   CancelExitMandateDto,
   CreateConsignmentDto,
@@ -165,7 +166,10 @@ export class LandlordController {
   @Post('consignments/send-otp')
   @RequireVerification('phone')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Gửi OTP Zalo để ký ủy quyền (tới SĐT đã lưu; chưa có SĐT thì gửi tới số truyền lên)' })
+  @ApiOperation({
+    summary: 'Gửi OTP Zalo để ký ủy quyền (tới SĐT đã lưu; chưa có SĐT thì gửi tới số truyền lên)',
+    description: 'Số đã xác thực của tài khoản ⇒ `otpRequired:false`, không gửi mã. Còn lại: ' + OTP_SEND_DESCRIPTION,
+  })
   sendSignOtp(@CurrentUser('id') landlordId: string, @Body() dto: SendConsignmentOtpDto) {
     return this.consignments.sendSignOtp(landlordId, dto.phone);
   }

@@ -12,7 +12,10 @@ import { ActionTokenService } from './otp/action-token.service';
 import { OtpController } from './otp/otp.controller';
 import { OtpService } from './otp/otp.service';
 import { PhoneVerificationService } from './otp/phone-verification.service';
-import { ConsoleOtpSender } from './otp/senders/console-otp.sender';
+import { MockZaloOtpSender } from './otp/senders/mock-zalo-otp.sender';
+import { otpSenderProvider } from './otp/senders/otp-sender.factory';
+import { SmsFallbackSender } from './otp/senders/sms-fallback.sender';
+import { ZaloOtpSender } from './otp/senders/zalo-otp.sender';
 import { PhoneService } from './phone/phone.service';
 import { resolveJwtSecret } from './secrets';
 import { AuthSessionService } from './session/auth-session.service';
@@ -50,7 +53,11 @@ import { SESSION_TOKEN_ISSUER, SessionTokenService } from './session/session-tok
     OtpService,
     ActionTokenService,
     PhoneVerificationService,
-    ConsoleOtpSender,
+    // OTP_PROVIDER=zalo|mock chọn kênh gửi; mock + NODE_ENV=production ⇒ factory throw, backend không khởi động.
+    ZaloOtpSender,
+    SmsFallbackSender,
+    MockZaloOtpSender,
+    otpSenderProvider,
   ],
   // Guard toàn cục (AppModule) cần AuthSessionService + SessionCookieService; các module nghiệp vụ
   // (booking, deposit...) dùng PhoneService / OtpService / ActionTokenService khi chuyển sang OTP thật.

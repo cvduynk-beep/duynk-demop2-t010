@@ -6,6 +6,7 @@ import type { HostRoleCode } from "@/lib/auth/portals";
 import { knownErrorMessage } from "@/components/auth/authApi";
 import { hostErrorText } from "./logic";
 import type { DoorAccessView, HostBoard, HostDuty, HostViewingDetail } from "./types";
+import type { OtpSent } from "@/lib/tenant/api";
 
 /** Bảng kèm giờ máy Sale lúc nhận — để tính độ lệch với `serverTime` (đồng hồ SLA theo giờ máy chủ). */
 export type HostBoardView = HostBoard & { receivedAt: number };
@@ -29,7 +30,7 @@ const enc = encodeURIComponent;
 export const hostApi = {
   me: () => api.get<HostMe>("/host/me"),
   sendPhoneOtp: (phone: string) =>
-    api.post<{ expiresInSeconds: number; resendInSeconds: number; devCode?: string }>("/auth/phone/send-otp", { phone }),
+    api.post<OtpSent>("/auth/phone/send-otp", { phone }),
   verifyPhone: (phone: string, code: string) => api.post<{ verified: boolean }>("/auth/phone/verify", { phone, code }),
 
   // ── Lịch & yêu cầu (hồ sơ 15) ──

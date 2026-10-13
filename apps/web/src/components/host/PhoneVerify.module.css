@@ -194,33 +194,3 @@
     transform: rotate(360deg);
   }
 }
-
-/* Mã OTP mô phỏng (chỉ dev) — hiện ngay trên UI như cổng Chủ nhà */
-.devCode {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px 12px;
-  padding: 10px 12px;
-  border: 1px dashed #b7cdee;
-  border-radius: var(--r-panel);
-  background: #eef4fc;
-  font-size: var(--fs-13);
-  color: var(--ink-2);
-}
-.devCode b {
-  color: var(--ink);
-  font-size: var(--fs-15);
-  letter-spacing: 0.15em;
-}
-.devTag {
-  display: inline-block;
-  margin-right: 4px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--amber-050);
-  color: var(--accent-ink);
-  font-size: var(--fs-12);
-  font-weight: 700;
-}

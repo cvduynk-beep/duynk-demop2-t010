@@ -24,6 +24,7 @@ import {
 import { ViewingStatus, UnitStatus, TicketStatus } from '@prisma/client';
 import { DispatchAssignerService } from '../dispatch/dispatch-assigner.service';
 import { toTenantBooking, statusToWeb } from '../tenant/tenant.mappers';
+import { readDefaultHoldHours } from '../deposit/hold-policy';
 import { TenantBooking } from '../tenant/tenant.types';
 import { isValidSlotTimeVN } from '../tenant/slots.helper';
 import { DepositService } from '../deposit/deposit.service';
@@ -302,7 +303,7 @@ export class BookingService {
     }
 
     const fullViewing = await this.bookingAccess.loadOwned(createdViewing.bookingRefCode, user);
-    return toTenantBooking(fullViewing, { rawPhone: normPhone });
+    return toTenantBooking(fullViewing, { rawPhone: normPhone, defaultHoldHours: await readDefaultHoldHours(this.prisma) });
   }
 
   /** Lịch còn sống của chính khách cho (căn, giờ) — dùng cho idempotency của `createBooking`. */
@@ -319,7 +320,7 @@ export class BookingService {
     } catch {
       rawPhone = undefined; // SĐT giải mã lỗi ⇒ trả số đã che (toTenantBooking tự xử lý), không chặn việc trả lịch
     }
-    return toTenantBooking(full, { rawPhone });
+    return toTenantBooking(full, { rawPhone, defaultHoldHours: await readDefaultHoldHours(this.prisma) });
   }
 
   /**
@@ -356,6 +357,7 @@ export class BookingService {
       orderBy: { createdAt: 'desc' },
     });
 
+    const defaultHoldHours = await readDefaultHoldHours(this.prisma);
     return viewings.map((v) => {
       let rawPhone: string | undefined = undefined;
       if (v.contactPhoneEnc) {
@@ -365,7 +367,7 @@ export class BookingService {
           rawPhone = undefined;
         }
       }
-      return toTenantBooking(v, { rawPhone });
+      return toTenantBooking(v, { rawPhone, defaultHoldHours });
     });
   }
 
@@ -382,7 +384,7 @@ export class BookingService {
         rawPhone = undefined;
       }
     }
-    return toTenantBooking(viewing, { rawPhone });
+    return toTenantBooking(viewing, { rawPhone, defaultHoldHours: await readDefaultHoldHours(this.prisma) });
   }
 
   /**
@@ -429,7 +431,7 @@ export class BookingService {
     ]);
 
     const updated = await this.bookingAccess.loadOwned(ref, user);
-    return toTenantBooking(updated);
+    return toTenantBooking(updated, { defaultHoldHours: await readDefaultHoldHours(this.prisma) });
   }
 
   /**
@@ -535,7 +537,7 @@ export class BookingService {
     }
 
     const updated = await this.bookingAccess.loadOwned(ref, user);
-    return toTenantBooking(updated);
+    return toTenantBooking(updated, { defaultHoldHours: await readDefaultHoldHours(this.prisma) });
   }
 
   /**
@@ -559,7 +561,7 @@ export class BookingService {
     }
 
     const updated = await this.bookingAccess.loadOwned(ref, user);
-    return toTenantBooking(updated);
+    return toTenantBooking(updated, { defaultHoldHours: await readDefaultHoldHours(this.prisma) });
   }
 
   /**
@@ -584,7 +586,7 @@ export class BookingService {
     });
 
     const updated = await this.bookingAccess.loadOwned(ref, user);
-    return toTenantBooking(updated);
+    return toTenantBooking(updated, { defaultHoldHours: await readDefaultHoldHours(this.prisma) });
   }
 
   /**
@@ -621,7 +623,7 @@ export class BookingService {
     });
 
     const updated = await this.bookingAccess.loadOwned(ref, user);
-    return toTenantBooking(updated);
+    return toTenantBooking(updated, { defaultHoldHours: await readDefaultHoldHours(this.prisma) });
   }
 
 }

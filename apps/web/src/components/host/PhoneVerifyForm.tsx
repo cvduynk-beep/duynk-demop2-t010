@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Check, Loader2, MessageCircleMore, PencilLine, ShieldCheck, Smartphone } from "lucide-react";
-import { DevOtpHint } from "@/components/ui/DevOtpHint";
 import { OtpInput } from "@/components/ui/OtpInput";
 import { toast } from "@/components/ui/Toast";
+import { ZaloMockOtp } from "@/components/ui/ZaloMockOtp";
 import { refreshSession } from "@/lib/auth/client";
 import { fmtPhone, isValidVnPhone, normalizePhone } from "@/lib/format";
 import { hostApi, invalidateHostMe } from "@/lib/host/api";
@@ -25,8 +25,8 @@ export function PhoneVerifyForm({ onVerified }: { onVerified: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
-  /** Mã OTP backend luôn trả kèm (Zalo mô phỏng, mọi môi trường). */
-  const [devCode, setDevCode] = useState<string | null>(null);
+  /** Zalo giả lập: mã backend trả trong `devOtp` khi chạy `OTP_PROVIDER=mock`; kênh thật không có. Gửi lại thì thay mã cũ. */
+  const [devOtp, setDevOtp] = useState<string | null>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -51,7 +51,7 @@ export function PhoneVerifyForm({ onVerified }: { onVerified: () => void }) {
     }
     setSentTo(target);
     setCode("");
-    setDevCode(res.data.devCode ?? null);
+    setDevOtp(res.data.devOtp ?? null);
     setCooldown(res.data.resendInSeconds || DEFAULT_RESEND_SECONDS);
   }
 
@@ -74,7 +74,7 @@ export function PhoneVerifyForm({ onVerified }: { onVerified: () => void }) {
 
   function changeNumber() {
     setSentTo(null);
-    setDevCode(null);
+    setDevOtp(null);
     setCode("");
     setError(null);
   }
@@ -161,27 +161,15 @@ export function PhoneVerifyForm({ onVerified }: { onVerified: () => void }) {
               {error}
             </p>
           )}
-          {devCode ? (
-            <div className={styles.devCode} role="note">
-              <span>
-                <span className={styles.devTag}>Bản thử nghiệm</span> Mã OTP Zalo mô phỏng: <b className="tnum">{devCode}</b>
-              </span>
-              <button
-                type="button"
-                className={styles.linkBtn}
-                disabled={busy}
-                onClick={() => {
-                  setCode(devCode);
-                  setError(null);
-                  void verify(devCode);
-                }}
-              >
-                Điền mã
-              </button>
-            </div>
-          ) : (
-            <DevOtpHint />
-          )}
+          <ZaloMockOtp
+            code={devOtp}
+            disabled={busy}
+            onFill={(c) => {
+              setCode(c);
+              setError(null);
+              void verify(c);
+            }}
+          />
           <button
             type="button"
             className="btn btn-primary btn-block"

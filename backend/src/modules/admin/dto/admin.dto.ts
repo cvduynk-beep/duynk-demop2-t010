@@ -105,6 +105,21 @@ export class ReassignBookingDto {
   version?: unknown;
 }
 
+export class UpdateHoldPolicyDto {
+  // Chỉ khai báo trường (để ValidationPipe whitelist giữ lại); kiểm chi tiết + lỗi theo field ở AdminSettingsService.
+  @ApiProperty({ example: 48, description: 'Thời gian giữ chỗ mặc định toàn sàn, số giờ nguyên 12–72' })
+  @IsOptional()
+  defaultHours?: unknown;
+
+  @ApiProperty({ example: 'Mùa cao điểm, rút ngắn để căn quay vòng nhanh', description: 'Lý do thay đổi, 5–300 ký tự (lưu Audit)' })
+  @IsOptional()
+  reason?: unknown;
+
+  @ApiProperty({ example: 'default', description: '`version` lúc tải (GET); lệch ⇒ 409 hold_policy_conflict kèm giá trị mới nhất' })
+  @IsOptional()
+  version?: unknown;
+}
+
 export class TerminateMandateDto {
   @ApiProperty({ example: 'Chủ nhà đã báo trước đủ 15 ngày', description: 'Lý do chấm dứt ủy quyền (lưu Audit)' })
   @IsNotEmpty()
@@ -230,16 +245,3 @@ export class UpdateDepositPolicyDto {
   reason?: string;
 }
 
-
-export class UpdateDefaultHoldHoursDto {
-  @ApiProperty({ example: 48, description: 'Thời hạn giữ chỗ mặc định toàn sàn (giờ nguyên, 12–72)' })
-  @IsInt()
-  @Min(12)
-  @Max(72)
-  hours: number;
-
-  @ApiProperty({ example: 'Mùa cao điểm: rút ngắn để quay vòng căn nhanh', description: 'Lý do thay đổi (lưu Audit)' })
-  @IsNotEmpty()
-  @IsString()
-  reason: string;
-}

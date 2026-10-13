@@ -196,8 +196,10 @@ export interface SignOtpInfo {
   otpRequired: boolean;
   maskedPhone: string | null;
   expiresInSeconds: number;
-  /** Thời gian chờ tối thiểu trước khi xin mã mới. Response không bao giờ chứa mã OTP. */
+  /** Thời gian chờ tối thiểu trước khi xin mã mới. */
   resendInSeconds?: number;
+  /** Chỉ có khi backend chạy `OTP_PROVIDER=mock` (Zalo giả lập, dev/staging nội bộ). Kênh thật không bao giờ trả mã. */
+  devOtp?: string;
 }
 
 export interface ExitResult {

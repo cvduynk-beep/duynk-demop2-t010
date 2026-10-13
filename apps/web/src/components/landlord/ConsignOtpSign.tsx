@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { MessageCircleMore } from "lucide-react";
 import { OtpInput } from "@/components/ui/OtpInput";
-import { DevOtpHint } from "@/components/ui/DevOtpHint";
+import { ZaloMockOtp } from "@/components/ui/ZaloMockOtp";
 import { fmtPhone, isValidVnPhone, normalizePhone } from "@/lib/format";
 import { errorText, landlordApi } from "@/lib/landlord/api";
 import type { SignOtpInfo } from "@/lib/landlord/types";
@@ -20,8 +20,6 @@ interface ConsignOtpSignProps {
   onSign: (sig: { otp?: string; phone?: string }) => Promise<boolean>;
   onError: (message: string) => void;
 }
-
-const RESEND_SECONDS = 60;
 
 /** Ký ủy quyền bằng OTP Zalo gửi tới SĐT chủ nhà: gửi mã → nhập 4 số là tạo hồ sơ + ký (số đã xác thực thì ký thẳng). */
 export function ConsignOtpSign({ warranted, needPhone, onSign, onError }: ConsignOtpSignProps) {
@@ -49,10 +47,11 @@ export function ConsignOtpSign({ warranted, needPhone, onSign, onError }: Consig
       onError(errorText(res, "Không gửi được mã OTP."));
       return;
     }
+    // Gửi lại ⇒ `info` (kèm `devOtp` nếu Zalo giả lập) thay hẳn mã cũ. Thời gian chờ lấy từ server.
     setInfo(res.data);
     setCode("");
     setWrong(false);
-    setCooldown(RESEND_SECONDS);
+    setCooldown(res.data.resendInSeconds ?? 0);
   };
 
   const sign = async (otp?: string) => {
@@ -104,10 +103,10 @@ export function ConsignOtpSign({ warranted, needPhone, onSign, onError }: Consig
         Mã 4 số đã gửi qua Zalo tới <b className="tnum">{info.maskedPhone ?? fmtPhone(normalizePhone(phone))}</b>. Nhập mã để ký ủy quyền.
       </p>
       <OtpInput value={code} error={wrong} autoFocus disabled={busy} onChange={(v) => { setCode(v); setWrong(false); if (v.length === 4) void sign(v); }} />
+      <ZaloMockOtp code={info.devOtp} disabled={busy} onFill={(c) => { setCode(c); setWrong(false); void sign(c); }} />
       <button type="button" className="btn btn-quiet btn-sm" style={{ alignSelf: "flex-start" }} disabled={cooldown > 0 || busy} onClick={send}>
         {cooldown > 0 ? `Gửi lại mã sau ${cooldown}s` : "Gửi lại mã"}
       </button>
-      <DevOtpHint />
     </div>
   );
 }

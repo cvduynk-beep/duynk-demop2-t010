@@ -35,6 +35,7 @@ describe('/me (Nest thật + Prisma giả)', () => {
   beforeEach(async () => {
     prisma = createFakePrisma();
     prisma.viewing = { findMany: jest.fn(async () => []) };
+    prisma.feeConfig = { findUnique: jest.fn(async () => null) }; // chưa cài mặc định ⇒ 48 giờ
     prisma.contract = { findMany: jest.fn(async () => []) };
     // Bảng `favorite_units` + `units` giả tối thiểu: đủ để kiểm tra việc lưu tách theo người dùng.
     const unitRow = {

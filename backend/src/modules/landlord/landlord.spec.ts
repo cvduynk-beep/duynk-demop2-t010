@@ -442,6 +442,13 @@ describe('LandlordConsignmentService.sendSignOtp', () => {
     expect(JSON.stringify(out)).not.toContain('901234567');
   });
 
+  it('OTP_PROVIDER=mock (OtpService trả devOtp) ⇒ response chuyển tiếp devOtp; kênh thật (trả {}) ⇒ không có trường này', async () => {
+    const { otp, service } = build();
+    otp.send.mockResolvedValueOnce({ devOtp: '0427' });
+    expect(await service.sendSignOtp(ME)).toMatchObject({ otpRequired: true, devOtp: '0427' });
+    expect(await service.sendSignOtp(ME)).not.toHaveProperty('devOtp');
+  });
+
   it('số đã xác thực + không nhập số khác → otpRequired:false, KHÔNG gửi mã', async () => {
     const { prisma, otp, service } = build();
     prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: 'enc-phone', isPhoneVerified: true });

@@ -50,8 +50,8 @@ Màn: trang chủ chat AI, danh sách/chi tiết căn, đặt lịch xem & OTP, 
 | `GET /properties/units` (A1) | công khai | Catalog căn hộ: All-in Cost, Căn hời, ẩn căn 0 ảnh | ✅ |
 | `GET /properties/units/:code` (A2) | công khai | Chi tiết căn hộ: `holdHours`, `activeViewingAt`, `photos` | ✅ |
 | `GET /properties/units/:code/busy-slots` (A3) | công khai | Khung giờ đã bận của căn hộ trong 14 ngày | ✅ |
-| `POST /auth/otp/send` (A4) | công khai | Gửi OTP qua provider thật; hiện trả lỗi nếu chưa cấu hình Zalo/SMS | ⚠ |
-| `POST /auth/otp/verify` (A5) | công khai | Xác thực OTP thật → sinh `actionToken` dùng 1 lần (15 phút) | ⚠ phụ thuộc A4 |
+| `POST /auth/otp/send` (A4) `{phone, purpose}` | công khai | Gửi OTP 4 số → `{expiresInSeconds, resendInSeconds}`; `OTP_PROVIDER=mock` thêm `devOtp` (xem §4.1). Zalo thật chưa cấu hình ⇒ 502 `otp_send_failed` | ⚠ Zalo thật chưa tích hợp |
+| `POST /auth/otp/verify` (A5) `{phone, purpose, code}` | công khai | Xác thực OTP thật → sinh `actionToken` dùng 1 lần (15 phút) | ✅ |
 | `POST /bookings` (A6) | tenant | Đặt lịch xem phòng với `actionToken` hợp lệ | ✅ |
 | `GET /me/bookings` (A7) | tenant | Danh sách lịch xem của tôi (chỉ xem lịch thuộc tài khoản) | ✅ |
 | `GET /bookings/:ref` (A8) | tenant | Chi tiết lịch xem (timeline 7 bước, DTO TenantBooking) | ✅ |
@@ -83,8 +83,8 @@ Màn: tổng quan, căn của tôi, ký gửi căn mới, hồ sơ ký gửi, t�
 | `GET /landlord/consignments` · `GET /landlord/consignments/:id` | landlord | hồ sơ ký gửi + kết quả thẩm định | ✅ |
 | `POST /landlord/consignments` `{building, floor, door, layout, areaM2, askRent, suggestedDeposit, leaseTerm (mid\|long\|fixed), furnished, locks[], doorCode, note, draft}` | landlord | form ký gửi căn → tạo Unit `UNLISTED` + ủy quyền `PENDING_INSPECTION` (draft) | ✅ |
 | `POST /landlord/consignments/:id/photos` (multipart `files`) · `DELETE /landlord/consignments/:id/photos/:photoId` | landlord | đính kèm/xóa ảnh tham khảo của hồ sơ: JPG/PNG/WebP (kiểm tra theo nội dung file), ≤3MB/ảnh (web nén ảnh trước khi gửi), tối đa 8 ảnh; chỉ khi hồ sơ còn nháp hoặc chờ Host nhận. Lưu Supabase Storage bucket **private** `consignment-photos` (tự tạo lần đầu), xem qua link ký 1 giờ. **Không** ghi vào `UnitMedia` — ảnh Verified do Host chụp khi thẩm định | ✅ |
-| `POST /landlord/consignments/:id/send-otp` `{phone?}` | landlord | gửi OTP Zalo tới SĐT đã lưu của chủ nhà (chưa có SĐT thì dùng `phone` truyền lên) | ✅ |
-| `POST /landlord/consignments/:id/sign` `{ownershipWarranted, otp, phone?}` | landlord | ký ủy quyền bằng OTP (PHONE_VERIFY); số ĐÃ XÁC THỰC của tài khoản ⇒ KHÔNG cần OTP (`send-otp` trả `otpRequired:false`); nhập số khác hoặc tài khoản chưa có số ⇒ bắt buộc OTP trên số đó. Số ký lưu mã hoá trong hồ sơ ký gửi, KHÔNG gắn vào tài khoản, không kiểm trùng; → giao Inspector phân khu, SLA 48h | ✅ |
+| `POST /landlord/consignments/send-otp` `{phone?}` | landlord | gửi OTP Zalo tới SĐT đã lưu của chủ nhà (chưa có SĐT thì dùng `phone` truyền lên) → `{otpRequired, maskedPhone, expiresInSeconds, resendInSeconds}`; mock thêm `devOtp` (§4.1) | ✅ |
+| `POST /landlord/consignments` `{…form, ownershipWarranted, otp, phone?}` | landlord | ký ủy quyền bằng OTP (PHONE_VERIFY); số ĐÃ XÁC THỰC của tài khoản ⇒ KHÔNG cần OTP (`send-otp` trả `otpRequired:false`); nhập số khác hoặc tài khoản chưa có số ⇒ bắt buộc OTP trên số đó. Số ký lưu mã hoá trong hồ sơ ký gửi, KHÔNG gắn vào tài khoản, không kiểm trùng; → giao Inspector phân khu, SLA 48h | ✅ |
 | `GET /landlord/finance` | landlord | khoản thu: tháng này, 6 tháng, theo căn, cọc giữ hộ; phí dịch vụ đọc từ FeeConfig `landlord_service_fee_rate` (chưa có ⇒ 5% tạm, `feeSource: "default"`) | ✅ tính từ hợp đồng |
 | `POST /landlord/mandates/request-exit` `{mandateId, reason}` · `POST /landlord/mandates/cancel-exit` `{mandateId}` | landlord | thoát ủy quyền: chỉ khi căn `AVAILABLE`, báo trước 15 ngày | ✅ (chưa có job thu hồi mã cửa khi hết hạn) |
 
@@ -144,7 +144,8 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 | `PATCH /admin/field-hosts/:id` `{fullName?, assignedZone?, roles?, password?, isActive?}` | ops_admin | sửa tên/phân khu, đổi vai (AuditLog `HOST_ROLES_UPDATE`), đặt lại mật khẩu, khoá/mở. Email không sửa được. Phiên của Host đọc lại ngay | ✅ |
 | `DELETE /admin/field-hosts/:id` | ops_admin | khoá mềm (giữ lịch sử ticket/cọc/chi trả); Host đang có ticket OFFERED/ACCEPTED/CHECKED ⇒ 409 `host_has_active_tickets` | ✅ |
 | `GET /admin/commission-engine` · `POST /admin/commission-engine/config` | ops_admin | cấu hình biến phí + nhật ký thay đổi | ✅ |
-| `GET /admin/settings/hold-policy` · `PUT /admin/settings/hold-policy` `{unitId?, hours}` | ops_admin | thời hạn giữ chỗ toàn sàn / riêng từng căn + nhật ký | ⬜ |
+| `GET /admin/settings/hold-policy` · `PUT /admin/settings/hold-policy` `{defaultHours, reason, version}` | ops_admin | màn Cài đặt: thời gian giữ chỗ mặc định toàn sàn + người/thời điểm cập nhật cuối + 10 thay đổi gần nhất (gộp giờ riêng từng căn) — quy tắc ở §1.5.3 | ✅ |
+| `POST /admin/exclusive-inventory/:id/hold-hours` `{hours \| null, reason}` | ops_admin | giờ giữ chỗ riêng một căn (chỉ khi căn `AVAILABLE`), AuditLog `UNIT_HOLD_HOURS_UPDATED` | ✅ |
 | `GET /contracts/:id/evidence-package` | ops_admin | gói chứng cứ hợp đồng | ✅ |
 
 #### 1.5.1. Cách tính số liệu dashboard admin
@@ -169,6 +170,22 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 - **Sau khi giao**: ticket ⇒ `OFFERED`, Host mới, `offered_at = now`, `accepted_at = null`, giữ tầng & `sla_seconds` (Host mới phải bấm nhận, SLA tính lại).
 - **Đồng thời**: `version` = mã hoá (`ticketId`, `hostId`, `status`, `offered_at`) của ticket lúc client tải (không cần cột version). Lệch, hoặc ghi có điều kiện `updateMany where {id, hostId, status, offered_at}` đổi 0 dòng ⇒ **409 `reassign_conflict`**, `errors.latest` = dòng mới nhất; không ghi đè.
 - **Một transaction**: ghi ticket + `audit_logs` `DISPATCH_REASSIGNED` (actor, vai, `oldValue {hostId, status, tier, offeredAt}`, `newValue {hostId, status, tier, offeredAt, reason, viewingId}`). Ghi audit lỗi ⇒ rollback cả thay đổi. Trả dòng booking đã cập nhật.
+
+#### 1.5.3. Chính sách giữ chỗ (hold-policy)
+
+- **Nguồn duy nhất** `src/modules/deposit/hold-policy.ts` (`HOLD_HOURS_MIN 12`, `HOLD_HOURS_MAX 72`, `HOLD_HOURS_DEFAULT 48`,
+  `readDefaultHoldHours`, `resolveHoldHours`). Mọi luồng dùng chung: biên bản cọc (A14), tạo cọc, báo có (webhook VietQR),
+  duyệt UNC, catalog + chi tiết căn, căn đã lưu, lịch hẹn, chatbot, PDF hợp đồng.
+- **Thứ tự**: giờ đã chốt trong cọc (`holding_deposits.hold_hours`, ghi lúc khách tick điều khoản) → giờ riêng của căn
+  (`units.hold_hours_override`) → mặc định toàn sàn (`fee_configs.hold_hours_default`) → 48; làm tròn, kẹp [12, 72].
+- **Tác động khi đổi mặc định**: chỉ cọc tạo **sau** khi lưu. Cọc chờ thanh toán giữ số giờ đã chốt; cọc đang giữ giữ `expires_at`.
+- **GET** chưa ai lưu ⇒ `isDefault: true`, `defaultHours: 48`, `version: "default"`, `updatedBy: null`. Không có mock.
+- **PUT** `defaultHours` số nguyên 12–72, `reason` 5–300 ký tự (gom khoảng trắng), `version` từ GET. Sai ⇒ **400 `invalid_request`**
+  + `errors.<field>`. Cùng giá trị ⇒ 200 `changed:false`, không ghi gì.
+- **Đồng thời**: `version` = `fee_configs.updated_at`; ghi có điều kiện (CAS theo khoảng 1 ms vì Postgres giữ micro giây); lần
+  đầu (chưa có dòng) hai admin cùng tạo ⇒ unique `config_key` chặn người sau. Lệch ⇒ **409 `hold_policy_conflict`** + `errors.latest`.
+- **Một transaction**: ghi `fee_configs` + `audit_logs` `HOLD_POLICY_UPDATED` (actor, vai, `oldValue {defaultHours, isDefault}`,
+  `newValue {defaultHours, reason}`); audit lỗi ⇒ rollback, chính sách không đổi.
 
 ### 1.6. ⏱ Tác vụ nền (không có màn hình)
 
@@ -309,8 +326,32 @@ Hai cổng đăng nhập trên UI: `/login` (Khách thuê / Chủ nhà) và `/ad
 | `GET /auth/session`, `POST /auth/logout` | phiên hiện tại, đăng xuất (xoá cookie) |
 | `npm run set:password -- <email> <mật khẩu>` | đặt/đặt lại mật khẩu cho Profile có sẵn |
 | `GET /host/me` | Field Host xem hồ sơ của chính mình (vai, phân khu, SĐT đã xác thực, ca trực). Không có số thẻ/mật khẩu |
-| `POST /auth/otp/send`, `/otp/verify`, `/phone/verify` | OTP xác thực SĐT (không phải đăng nhập); Khách thuê nhận action token dùng một lần |
+| `POST /auth/otp/send`, `/otp/verify` | OTP xác thực SĐT của Khách thuê (không phải đăng nhập) → action token dùng một lần |
+| `POST /auth/phone/send-otp`, `/phone/verify` | Chủ nhà / Field Host xác thực SĐT của mình (PHONE_VERIFY) |
 | `/admin/field-hosts` (ops_admin) | Admin CRUD Field Host — xem §1.5. Host chỉ đăng nhập (email+mật khẩu hoặc Google); Profile `field_host` chưa có hồ sơ Host ⇒ 403 `host_not_provisioned`. Vai con: `@HostRoles('sale' \| 'inspector')` (guard `RolesGuard`, lỗi `host_role_missing`) |
+
+### 4.1. OTP và Zalo giả lập (`OTP_PROVIDER`)
+
+Một lõi `OtpService` cho mọi màn (đặt lịch, xác thực SĐT Chủ nhà/Host, ký ủy quyền): mã 4 số `crypto.randomInt`, lưu HMAC
+(`otp_codes.code_hash`), TTL `OTP_TTL_SECONDS` (300), sai `OTP_MAX_ATTEMPTS` (3) lần ⇒ khóa `OTP_LOCKOUT_SECONDS` (600),
+gửi lại sau `OTP_RESEND_SECONDS` (60), mã mới vô hiệu mã cũ. Kênh gửi là interface `OtpSender.send({phone, code, purpose, expiresAt})`:
+
+| `OTP_PROVIDER` | Sender | Response gửi OTP | Ghi chú |
+|---|---|---|---|
+| trống / `zalo` | `ZaloOtpSender` (ZNS → `SmsFallbackSender`) | `{expiresInSeconds, resendInSeconds}` — **không bao giờ có mã** | Chưa tích hợp: thiếu `ZALO_*` ⇒ 502 `otp_send_failed` |
+| `mock` | `MockZaloOtpSender` | thêm `devOtp: "0427"` | Không gửi gì ra ngoài; log `[MOCK-ZALO]`. Chỉ dev/staging nội bộ |
+| giá trị khác | — | — | backend không khởi động |
+
+`NODE_ENV=production` + `OTP_PROVIDER=mock` ⇒ backend **từ chối khởi động** (factory `otp-sender.factory.ts` throw lúc dựng DI;
+test `otp-sender.factory.spec.ts`, `auth.http.spec.ts`). `MockZaloOtpSender` còn tự chặn production lần nữa, và `OtpService` chỉ trả
+`devOtp` khi provider là mock. Mock chỉ thay kênh gửi: xác minh vẫn qua `/otp/verify` · `/phone/verify` · ký ủy quyền như thật.
+Giao diện chỉ hiện khối "Zalo giả lập" khi response có `devOtp` (không đọc biến `NEXT_PUBLIC_*`), mã chỉ nằm trong state của màn đang mở.
+
+Lỗi: 400 `invalid_phone` · 400 `otp_invalid` (`errors.attemptsRemaining`) · 400 `otp_not_found_or_expired` ·
+429 `otp_cooldown` / `otp_locked` (`errors.retryAfterSeconds`) · 502 `otp_send_failed`.
+
+Bật Zalo thật: điền `ZALO_OA_ID`, `ZALO_ACCESS_TOKEN`, `ZALO_ZNS_OTP_TEMPLATE_ID`, viết lời gọi API ở `TODO(zalo-zns)` trong
+`zalo-otp.sender.ts`, đặt `OTP_PROVIDER=zalo` (hoặc để trống). Không phải sửa logic nghiệp vụ.
 
 Portal `host` ↔ role `field_host`, `admin` ↔ `ops_admin`. Google: điền `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`JWT_SECRET` trong `.env`
 và thêm `${WEB_APP_URL}/api/v1/auth/google/callback` vào *Authorized redirect URIs* của OAuth client (Google Cloud Console) — không cần

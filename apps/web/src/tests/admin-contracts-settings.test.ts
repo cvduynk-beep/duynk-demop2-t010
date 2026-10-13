@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RegistryRow } from "@/lib/admin/api";
 import { contractsOfParty, parsePartyKey, partiesFromRegistry, registryKpis } from "@/lib/admin/contracts";
-import { validateDepositPolicy, validateHoldHours } from "@/lib/admin/settings";
+import { validateDepositPolicy } from "@/lib/admin/settings";
 import { contractsUsingTemplate } from "@/lib/mock/contract-templates";
 
 const NOW = Date.parse("2026-10-13T00:00:00Z");
@@ -66,12 +66,7 @@ describe("lib/admin/contracts", () => {
   });
 });
 
-describe("lib/admin/settings — kiểm trước khi gửi (khớp luật backend)", () => {
-  it("validateHoldHours: nguyên trong [min, max]", () => {
-    expect(validateHoldHours("48", 12, 72)).toBeNull();
-    for (const bad of ["", "11", "73", "24.5", "abc"]) expect(validateHoldHours(bad, 12, 72)).not.toBeNull();
-  });
-
+describe("lib/admin/settings — quy định tiền cọc (khớp luật backend)", () => {
   it("validateDepositPolicy", () => {
     expect(validateDepositPolicy({ minRatio: 0.5, maxRatio: 4, defaultRatio: 1 })).toBeNull();
     expect(validateDepositPolicy({ minRatio: 1, maxRatio: 1, defaultRatio: 1 })).toBeNull();

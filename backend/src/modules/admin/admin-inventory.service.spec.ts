@@ -34,6 +34,8 @@ function build(opts: { mandate?: any; unit?: any; contracts?: any[]; units?: any
     contract: {
       count: jest.fn(async ({ where }: any) => contracts.filter((c) => where.status.in.includes(c.status)).length),
     },
+    // Chưa có mặc định Admin cài ⇒ deposit/hold-policy dùng 48 giờ.
+    feeConfig: { findUnique: jest.fn(async () => null) },
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const audit = { log: jest.fn(async () => ({})) };
@@ -258,7 +260,11 @@ describe('AdminInventoryService — chi tiết căn: All-in, nội thất, Host 
   });
 
   it('biểu phí Admin cài (fee_configs) và phí gửi xe Host xác minh tại tòa được áp ngay', async () => {
-    const prisma: any = { unit: { findFirst: jest.fn(async () => ({ ...unit, motorbikeFee: 200_000 })) }, fieldHost: { findFirst: jest.fn(async () => null) } };
+    const prisma: any = {
+      unit: { findFirst: jest.fn(async () => ({ ...unit, motorbikeFee: 200_000 })) },
+      fieldHost: { findFirst: jest.fn(async () => null) },
+      feeConfig: { findUnique: jest.fn(async () => null) },
+    };
     const rates = { get: jest.fn(async () => ({ motorbike: 150_000, car: 1_250_000, utilityPerPerson: 400_000 })) };
     const svc = new AdminInventoryService(prisma, { log: jest.fn() } as any, rates as any);
     const d: any = await svc.getExclusiveInventoryDetail('u1');
@@ -332,48 +338,5 @@ describe('AdminInventoryService — hồ sơ ký gửi cho Admin', () => {
     await expect(svc.getConsignment('abc')).rejects.toBeInstanceOf(NotFoundException);
     await expect(svc.getConsignment('33333333-3333-4333-8333-333333333333')).rejects.toBeInstanceOf(NotFoundException);
     await expect(svc.getConsignment(MID)).resolves.toMatchObject({ id: MID, contractNumber: 'MD-001' });
-  });
-});
-
-describe('AdminInventoryService — cài đặt thời hạn giữ chỗ toàn sàn', () => {
-  function buildS(cfg: any = null, audits: any[] = []) {
-    const prisma: any = {
-      feeConfig: {
-        findUnique: jest.fn(async () => cfg),
-        upsert: jest.fn(async () => ({})),
-      },
-      auditLog: { findMany: jest.fn(async () => audits) },
-      unit: { findMany: jest.fn(async () => [{ id: 'u1', unitCode: 'VHOP-P1-0302' }]) },
-    };
-    const audit = { log: jest.fn(async () => ({})) };
-    return { svc: new AdminInventoryService(prisma, audit as any), prisma, audit };
-  }
-
-  it('đặt mặc định: upsert hold_hours_default + audit giá trị cũ/mới kèm lý do', async () => {
-    const { svc, prisma, audit } = buildS({ paramValue: 36 });
-    await expect(svc.updateDefaultHoldHours(24, ' Cao điểm ', ACTOR)).resolves.toEqual({ success: true, defaultHours: 24 });
-    expect(prisma.feeConfig.upsert.mock.calls[0][0].where).toEqual({ configKey: 'hold_hours_default' });
-    expect(audit.log).toHaveBeenCalledWith(
-      expect.objectContaining({ actionType: 'HOLD_HOURS_DEFAULT_UPDATED', oldValue: { holdHours: 36 }, newValue: { holdHours: 24, reason: 'Cao điểm' } }),
-    );
-  });
-
-  it.each([11, 73, 24.5])('400 khi hours = %s; 400 khi thiếu lý do — không ghi gì', async (hours) => {
-    const { svc, prisma } = buildS();
-    await expect(svc.updateDefaultHoldHours(hours, 'x', ACTOR)).rejects.toBeInstanceOf(BadRequestException);
-    await expect(svc.updateDefaultHoldHours(24, '  ', ACTOR)).rejects.toBeInstanceOf(BadRequestException);
-    expect(prisma.feeConfig.upsert).not.toHaveBeenCalled();
-  });
-
-  it('đọc chính sách: nguồn default khi chưa cấu hình; nhật ký gộp mặc định + riêng căn (kèm mã căn)', async () => {
-    const at = new Date('2026-10-13T03:00:00Z');
-    const { svc } = buildS(null, [
-      { id: 'a1', createdAt: at, actionType: 'UNIT_HOLD_HOURS_UPDATED', entityId: 'u1', actor: { fullName: 'Ops' }, oldValue: { holdHours: 48 }, newValue: { holdHours: 24, reset: false, reason: 'hot' } },
-      { id: 'a2', createdAt: at, actionType: 'HOLD_HOURS_DEFAULT_UPDATED', entityId: 'hold_hours_default', actor: null, actorRole: 'ops_admin', oldValue: { holdHours: 48 }, newValue: { holdHours: 36 } },
-    ]);
-    const p = await svc.getHoldPolicy();
-    expect(p).toMatchObject({ defaultHours: 48, min: 12, max: 72, source: 'default' });
-    expect(p.history[0]).toMatchObject({ scope: 'unit', unitCode: 'VHOP-P1-0302', from: 48, to: 24, by: 'Ops', reason: 'hot' });
-    expect(p.history[1]).toMatchObject({ scope: 'default', unitCode: null, to: 36, by: 'ops_admin', reason: null });
   });
 });
