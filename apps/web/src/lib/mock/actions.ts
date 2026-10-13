@@ -1,4 +1,4 @@
-import { bookingApi, depositApi, identityApi, contractApi, dispatchApi } from "@/lib/apiClient";
+import { bookingApi, depositApi, identityApi, dispatchApi } from "@/lib/apiClient";
 import { HOUR_MS, OCCUPANTS_MAX, PAYMENT_CYCLES, RATES, type PaymentCycle } from "./cost";
 import { fmtTime, dayLabel, normalizePhone, vnd } from "./format";
 import {
@@ -1196,8 +1196,6 @@ export function signLease(id: string, opts: LeaseInput): DealResult {
       return { ok: false, code: "no_kyc", reason: "Cần xác minh CCCD trước khi ký hợp đồng thuê" };
     }
   }
-
-  contractApi.signDepositAgreement({ depositId: id, signatureSvg: opts.signature || "", otp: "4829" }).catch(() => null);
 
   if (!PAYMENT_CYCLES.includes(opts.paymentCycle)) {
     return { ok: false, code: "invalid_input", reason: "Kỳ thanh toán phải là 1, 3 hoặc 6 tháng" };

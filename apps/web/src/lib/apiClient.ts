@@ -239,10 +239,6 @@ export const propertyApi = {
 };
 
 export const bookingApi = {
-  requestOtp: (dto: { phone: string; fullName?: string }) =>
-    api.post<{ message: string; phone: string; expiresInSeconds: number; testHint?: string }>("/bookings/request-otp", dto),
-  confirm: (dto: { phone: string; otp: string; unitId: string; viewingSlot: string }) =>
-    api.post<unknown>("/bookings/confirm", dto),
   create: (dto: { unitId: string; slot: string; name: string; phone: string; persons?: number; note?: string }) =>
     api.post<unknown>("/bookings", dto),
   getById: (id: string) =>
@@ -304,8 +300,6 @@ export const identityApi = {
 };
 
 export const contractApi = {
-  signDepositAgreement: (dto: { depositId: string; signatureSvg: string; otp: string }) =>
-    api.post<unknown>("/contracts/holding-agreement/sign", dto),
   getEvidencePackage: (id: string) =>
     api.get<unknown>(`/contracts/${id}/evidence-package`),
 };

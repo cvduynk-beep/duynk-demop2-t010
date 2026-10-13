@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { OtpInput } from "@/components/ui/OtpInput";
+import { ZaloMockOtp } from "@/components/ui/ZaloMockOtp";
 import { toast } from "@/components/ui/Toast";
 import { accountApi } from "@/lib/apiClient";
 import { fmtDateTime, fmtPhone, fmtTime, isValidVnPhone, normalizePhone } from "@/lib/format";
@@ -84,6 +85,8 @@ function Flow({ unit }: { unit: Unit }) {
   const [otpErrorMsg, setOtpErrorMsg] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const [otpTtl, setOtpTtl] = useState<number | null>(null);
+  /** Zalo giả lập: mã backend trả trong `devOtp`, gắn với SĐT đã xin mã (đổi số ⇒ không hiện mã cũ). */
+  const [mockOtp, setMockOtp] = useState<{ phone: string; code: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
@@ -99,7 +102,7 @@ function Flow({ unit }: { unit: Unit }) {
   const p = normalizePhone(phone);
 
   /**
-   * Gửi OTP (`POST /auth/otp/send`). Response KHÔNG chứa mã: Zalo đang mô phỏng nên ở dev mã chỉ nằm trong log backend.
+   * Gửi OTP (`POST /auth/otp/send`). Kênh thật không trả mã; backend `OTP_PROVIDER=mock` trả `devOtp` để hiện khối Zalo giả lập.
    * Thời gian chờ gửi lại / thời hạn mã lấy từ server (không ghi cứng).
    */
   const requestCode = async () => {
@@ -123,6 +126,7 @@ function Flow({ unit }: { unit: Unit }) {
       setCode("");
       setOtpTtl(res.data.expiresInSeconds);
       setCooldown(res.data.resendInSeconds);
+      setMockOtp(res.data.devOtp ? { phone: p, code: res.data.devOtp } : null);
       return true;
     } finally {
       setSubmitting(false);
@@ -465,6 +469,7 @@ function Flow({ unit }: { unit: Unit }) {
           <div className={styles.otpInputWrap}>
             <OtpInput value={code} onChange={(v) => void onCode(v)} error={otpError} autoFocus />
             {otpError && <p className="field-error">{otpErrorMsg ?? "Mã chưa đúng. Kiểm tra lại tin nhắn Zalo rồi nhập lại."}</p>}
+            <ZaloMockOtp code={mockOtp?.phone === p ? mockOtp.code : null} disabled={submitting} onFill={(c) => void onCode(c)} />
             <button
               type="button"
               className={`btn btn-quiet btn-sm ${styles.resendBtn}`}
@@ -474,12 +479,6 @@ function Flow({ unit }: { unit: Unit }) {
               {cooldown > 0 ? `Gửi lại mã sau ${cooldown}s` : "Gửi lại mã OTP qua Zalo"}
             </button>
           </div>
-
-          {process.env.NODE_ENV !== "production" && (
-            <p className="xs muted" style={{ marginTop: 8 }}>
-              Môi trường thử nghiệm: Zalo đang mô phỏng — mã OTP được ghi trong log backend (không gửi qua API).
-            </p>
-          )}
         </>
       )}
     </div>

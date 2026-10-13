@@ -1,21 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, Max } from 'class-validator';
-
-export class SignDepositAgreementDto {
-  @ApiProperty({ description: 'ID lượt cọc giữ chỗ (Holding Deposit ID)' })
-  @IsUUID()
-  depositId: string;
-
-  @ApiProperty({ example: '<svg>signature path</svg>', description: 'Vector nét vẽ chữ ký tay trên Canvas' })
-  @IsNotEmpty()
-  @IsString()
-  signatureSvg: string;
-
-  @ApiProperty({ example: '4829', description: 'Mã xác thực OTP ký số' })
-  @IsNotEmpty()
-  @IsString()
-  otp: string;
-}
+import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min, Max } from 'class-validator';
 
 export class CreateMandateDto {
   @ApiProperty({ description: 'Mã căn hộ (ví dụ: VHOP-S1.02-12A08)' })

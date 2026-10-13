@@ -18,13 +18,16 @@ import { GoogleStrategy } from './google/google.strategy';
 import { hashPassword } from './password-hasher';
 import { createFakePrisma, FakePrisma, seedProfile } from './testing/fake-prisma';
 import { createSessionTokens } from './testing/fake-session-token';
-import { ConsoleOtpSender } from './otp/senders/console-otp.sender';
+import { MockZaloOtpSender } from './otp/senders/mock-zalo-otp.sender';
+import { OtpMessage } from './otp/senders/otp-sender';
+import { ZaloOtpSender } from './otp/senders/zalo-otp.sender';
 import { containsValue } from './testing/contains-value';
 
 const ENV = {
   WEB_APP_URL: 'http://localhost:3000',
   API_PREFIX: 'api/v1',
   AES_SECRET_KEY: 'a-test-master-secret-of-32-chars!!',
+  OTP_PROVIDER: 'mock',
   OTP_RESEND_SECONDS: '0',
   JWT_SECRET: 'a-test-jwt-secret-of-at-least-32-chars',
   GOOGLE_CLIENT_ID: 'test-client-id.apps.googleusercontent.com',
@@ -83,7 +86,7 @@ async function createApp(prisma: FakePrisma, env: Record<string, string | undefi
   return app;
 }
 
-/** Mã OTP chỉ đi qua kênh gửi (log dev), không bao giờ nằm trong response ⇒ test đọc mã từ chính kênh gửi. */
+/** Mã mà kênh gửi đã nhận (mock vẫn chạy thật, chỉ ghi lại thêm) ⇒ so được với `devOtp` của response. */
 let deliveredCodes: string[] = [];
 const lastOtp = () => deliveredCodes[deliveredCodes.length - 1];
 
@@ -99,8 +102,10 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
 
   beforeEach(async () => {
     deliveredCodes = [];
-    jest.spyOn(ConsoleOtpSender.prototype, 'send').mockImplementation(async (_phone: string, code: string) => {
-      deliveredCodes.push(code);
+    const realMockSend = MockZaloOtpSender.prototype.send;
+    jest.spyOn(MockZaloOtpSender.prototype, 'send').mockImplementation(async function (this: MockZaloOtpSender, message: OtpMessage) {
+      deliveredCodes.push(message.code);
+      return realMockSend.call(this, message);
     });
     prisma = createFakePrisma();
     restoreEnv = applyEnv(ENV);
@@ -795,9 +800,9 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
     it('send → verify (Khách thuê) trả action token; sai mã báo số lần còn lại', async () => {
       const send = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
       expect(send.status).toBe(200);
-      // Zalo mô phỏng ⇒ luôn trả `devCode` để màn hình hiện mã.
-      expect(send.body.data).toEqual({ expiresInSeconds: expect.any(Number), resendInSeconds: expect.any(Number), devCode: lastOtp() });
-      const code: string = lastOtp();
+      // OTP_PROVIDER=mock ⇒ response có `devOtp` đúng bằng mã đã gửi; giao diện điền mã này rồi xác minh thật.
+      expect(send.body.data).toEqual({ expiresInSeconds: 300, resendInSeconds: expect.any(Number), devOtp: lastOtp() });
+      const code: string = send.body.data.devOtp;
       expect(code).toMatch(/^\d{4}$/);
 
       const wrongCode = code === '0000' ? '1111' : '0000';
@@ -829,7 +834,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect(ok.status).toBe(200);
     });
 
-    it('sai quá số lần → 429 otp_locked kèm retryAfterSeconds; production không có kênh thật → 502, không có mã', async () => {
+    it('sai quá số lần → 429 otp_locked kèm retryAfterSeconds', async () => {
       await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
       const wrong = lastOtp() === '0000' ? '1111' : '0000';
       const verify = () => request(app.getHttpServer()).post('/api/v1/auth/otp/verify').send({ phone: '0912345678', purpose: 'TENANT_VIEWING', code: wrong });
@@ -838,18 +843,68 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       const locked = await verify();
       expect(locked.status).toBe(429);
       expect(locked.body).toMatchObject({ code: 'otp_locked', errors: { retryAfterSeconds: expect.any(Number) } });
+    });
 
+    /** Dựng lại app với env khác (cùng Prisma giả). */
+    const reboot = async (env: Record<string, string | undefined>) => {
       await app.close();
       restoreEnv();
-      const prodEnv = { ...ENV, NODE_ENV: 'production' };
-      restoreEnv = applyEnv(prodEnv);
-      app = await createApp(prisma, prodEnv);
-      const before = deliveredCodes.length;
+      restoreEnv = applyEnv(env);
+      app = await createApp(prisma, env);
+    };
+
+    it('production + OTP_PROVIDER=mock ⇒ app KHÔNG khởi động được', async () => {
+      await app.close();
+      restoreEnv();
+      const env = { ...ENV, NODE_ENV: 'production', OTP_PROVIDER: 'mock' };
+      restoreEnv = applyEnv(env);
+      await expect(createApp(prisma, env)).rejects.toThrow(/OTP_PROVIDER=mock bị cấm khi NODE_ENV=production/);
+      restoreEnv();
+      restoreEnv = applyEnv(ENV);
+      app = await createApp(prisma, ENV); // để afterEach đóng được
+    });
+
+    it('production, OTP_PROVIDER mặc định (zalo, chưa cấu hình) ⇒ 502 otp_send_failed, không có mã, không qua kênh mock', async () => {
+      await reboot({ ...ENV, NODE_ENV: 'production', OTP_PROVIDER: undefined });
       const prod = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0987654321', purpose: 'TENANT_VIEWING' });
-      // Production chạy đúng một luồng mô phỏng như local.
-      expect(prod.status).toBe(200);
-      expect(deliveredCodes).toHaveLength(before + 1);
-      expect(prod.body.data.devCode).toBe(lastOtp());
+      expect(prod.status).toBe(502);
+      expect(prod.body.code).toBe('otp_send_failed');
+      expect(JSON.stringify(prod.body)).not.toContain('devOtp');
+      expect(deliveredCodes).toHaveLength(0);
+    });
+
+    it('OTP_PROVIDER=zalo gửi được ⇒ response KHÔNG có mã (otp/send và phone/send-otp); mã vẫn xác minh được', async () => {
+      await reboot({ ...ENV, OTP_PROVIDER: 'zalo' });
+      const sentToZalo: string[] = [];
+      jest.spyOn(ZaloOtpSender.prototype, 'send').mockImplementation(async (m: OtpMessage) => {
+        sentToZalo.push(m.code);
+        return { channel: 'ZALO' };
+      });
+
+      const send = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
+      expect(send.status).toBe(200);
+      expect(Object.keys(send.body.data).sort()).toEqual(['expiresInSeconds', 'resendInSeconds']);
+      expect(containsValue(send.body, sentToZalo[0])).toBe(false);
+      const ok = await request(app.getHttpServer()).post('/api/v1/auth/otp/verify').send({ phone: '0912345678', purpose: 'TENANT_VIEWING', code: sentToZalo[0] });
+      expect(ok.status).toBe(200);
+
+      seedUser('z@example.com', 'landlord');
+      const agent = request.agent(app.getHttpServer());
+      await login(agent, 'landlord', 'z@example.com');
+      const phoneSend = await agent.post('/api/v1/auth/phone/send-otp').send({ phone: '0912345679' });
+      expect(phoneSend.status).toBe(200);
+      expect(Object.keys(phoneSend.body.data).sort()).toEqual(['expiresInSeconds', 'resendInSeconds']);
+      expect(deliveredCodes).toHaveLength(0); // không đi qua mock
+    });
+
+    it('phone/send-otp ở chế độ mock trả devOtp; điền mã đó vào phone/verify thì gắn được SĐT', async () => {
+      seedUser('m@example.com', 'landlord');
+      const agent = request.agent(app.getHttpServer());
+      await login(agent, 'landlord', 'm@example.com');
+      const sent = await agent.post('/api/v1/auth/phone/send-otp').send({ phone: '0912345670' });
+      expect(sent.body.data).toEqual({ expiresInSeconds: 300, resendInSeconds: expect.any(Number), devOtp: lastOtp() });
+      const res = await agent.post('/api/v1/auth/phone/verify').send({ phone: '0912345670', code: sent.body.data.devOtp });
+      expect(res.status).toBe(200);
     });
 
     it('SĐT sai định dạng → 400 invalid_phone; PHONE_VERIFY không verify được ở endpoint tenant', async () => {

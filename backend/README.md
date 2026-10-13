@@ -50,8 +50,8 @@ Màn: trang chủ chat AI, danh sách/chi tiết căn, đặt lịch xem & OTP, 
 | `GET /properties/units` (A1) | công khai | Catalog căn hộ: All-in Cost, Căn hời, ẩn căn 0 ảnh | ✅ |
 | `GET /properties/units/:code` (A2) | công khai | Chi tiết căn hộ: `holdHours`, `activeViewingAt`, `photos` | ✅ |
 | `GET /properties/units/:code/busy-slots` (A3) | công khai | Khung giờ đã bận của căn hộ trong 14 ngày | ✅ |
-| `POST /auth/otp/send` (A4) | công khai | Gửi OTP qua provider thật; hiện trả lỗi nếu chưa cấu hình Zalo/SMS | ⚠ |
-| `POST /auth/otp/verify` (A5) | công khai | Xác thực OTP thật → sinh `actionToken` dùng 1 lần (15 phút) | ⚠ phụ thuộc A4 |
+| `POST /auth/otp/send` (A4) `{phone, purpose}` | công khai | Gửi OTP 4 số → `{expiresInSeconds, resendInSeconds}`; `OTP_PROVIDER=mock` thêm `devOtp` (xem §4.1). Zalo thật chưa cấu hình ⇒ 502 `otp_send_failed` | ⚠ Zalo thật chưa tích hợp |
+| `POST /auth/otp/verify` (A5) `{phone, purpose, code}` | công khai | Xác thực OTP thật → sinh `actionToken` dùng 1 lần (15 phút) | ✅ |
 | `POST /bookings` (A6) | tenant | Đặt lịch xem phòng với `actionToken` hợp lệ | ✅ |
 | `GET /me/bookings` (A7) | tenant | Danh sách lịch xem của tôi (chỉ xem lịch thuộc tài khoản) | ✅ |
 | `GET /bookings/:ref` (A8) | tenant | Chi tiết lịch xem (timeline 7 bước, DTO TenantBooking) | ✅ |
@@ -83,8 +83,8 @@ Màn: tổng quan, căn của tôi, ký gửi căn mới, hồ sơ ký gửi, t�
 | `GET /landlord/consignments` · `GET /landlord/consignments/:id` | landlord | hồ sơ ký gửi + kết quả thẩm định | ✅ |
 | `POST /landlord/consignments` `{building, floor, door, layout, areaM2, askRent, suggestedDeposit, leaseTerm (mid\|long\|fixed), furnished, locks[], doorCode, note, draft}` | landlord | form ký gửi căn → tạo Unit `UNLISTED` + ủy quyền `PENDING_INSPECTION` (draft) | ✅ |
 | `POST /landlord/consignments/:id/photos` (multipart `files`) · `DELETE /landlord/consignments/:id/photos/:photoId` | landlord | đính kèm/xóa ảnh tham khảo của hồ sơ: JPG/PNG/WebP (kiểm tra theo nội dung file), ≤3MB/ảnh (web nén ảnh trước khi gửi), tối đa 8 ảnh; chỉ khi hồ sơ còn nháp hoặc chờ Host nhận. Lưu Supabase Storage bucket **private** `consignment-photos` (tự tạo lần đầu), xem qua link ký 1 giờ. **Không** ghi vào `UnitMedia` — ảnh Verified do Host chụp khi thẩm định | ✅ |
-| `POST /landlord/consignments/:id/send-otp` `{phone?}` | landlord | gửi OTP Zalo tới SĐT đã lưu của chủ nhà (chưa có SĐT thì dùng `phone` truyền lên) | ✅ |
-| `POST /landlord/consignments/:id/sign` `{ownershipWarranted, otp, phone?}` | landlord | ký ủy quyền bằng OTP (PHONE_VERIFY); số ĐÃ XÁC THỰC của tài khoản ⇒ KHÔNG cần OTP (`send-otp` trả `otpRequired:false`); nhập số khác hoặc tài khoản chưa có số ⇒ bắt buộc OTP trên số đó. Số ký lưu mã hoá trong hồ sơ ký gửi, KHÔNG gắn vào tài khoản, không kiểm trùng; → giao Inspector phân khu, SLA 48h | ✅ |
+| `POST /landlord/consignments/send-otp` `{phone?}` | landlord | gửi OTP Zalo tới SĐT đã lưu của chủ nhà (chưa có SĐT thì dùng `phone` truyền lên) → `{otpRequired, maskedPhone, expiresInSeconds, resendInSeconds}`; mock thêm `devOtp` (§4.1) | ✅ |
+| `POST /landlord/consignments` `{…form, ownershipWarranted, otp, phone?}` | landlord | ký ủy quyền bằng OTP (PHONE_VERIFY); số ĐÃ XÁC THỰC của tài khoản ⇒ KHÔNG cần OTP (`send-otp` trả `otpRequired:false`); nhập số khác hoặc tài khoản chưa có số ⇒ bắt buộc OTP trên số đó. Số ký lưu mã hoá trong hồ sơ ký gửi, KHÔNG gắn vào tài khoản, không kiểm trùng; → giao Inspector phân khu, SLA 48h | ✅ |
 | `GET /landlord/finance` | landlord | khoản thu: tháng này, 6 tháng, theo căn, cọc giữ hộ; phí dịch vụ đọc từ FeeConfig `landlord_service_fee_rate` (chưa có ⇒ 5% tạm, `feeSource: "default"`) | ✅ tính từ hợp đồng |
 | `POST /landlord/mandates/request-exit` `{mandateId, reason}` · `POST /landlord/mandates/cancel-exit` `{mandateId}` | landlord | thoát ủy quyền: chỉ khi căn `AVAILABLE`, báo trước 15 ngày | ✅ (chưa có job thu hồi mã cửa khi hết hạn) |
 
@@ -309,8 +309,32 @@ Hai cổng đăng nhập trên UI: `/login` (Khách thuê / Chủ nhà) và `/ad
 | `GET /auth/session`, `POST /auth/logout` | phiên hiện tại, đăng xuất (xoá cookie) |
 | `npm run set:password -- <email> <mật khẩu>` | đặt/đặt lại mật khẩu cho Profile có sẵn |
 | `GET /host/me` | Field Host xem hồ sơ của chính mình (vai, phân khu, SĐT đã xác thực, ca trực). Không có số thẻ/mật khẩu |
-| `POST /auth/otp/send`, `/otp/verify`, `/phone/verify` | OTP xác thực SĐT (không phải đăng nhập); Khách thuê nhận action token dùng một lần |
+| `POST /auth/otp/send`, `/otp/verify` | OTP xác thực SĐT của Khách thuê (không phải đăng nhập) → action token dùng một lần |
+| `POST /auth/phone/send-otp`, `/phone/verify` | Chủ nhà / Field Host xác thực SĐT của mình (PHONE_VERIFY) |
 | `/admin/field-hosts` (ops_admin) | Admin CRUD Field Host — xem §1.5. Host chỉ đăng nhập (email+mật khẩu hoặc Google); Profile `field_host` chưa có hồ sơ Host ⇒ 403 `host_not_provisioned`. Vai con: `@HostRoles('sale' \| 'inspector')` (guard `RolesGuard`, lỗi `host_role_missing`) |
+
+### 4.1. OTP và Zalo giả lập (`OTP_PROVIDER`)
+
+Một lõi `OtpService` cho mọi màn (đặt lịch, xác thực SĐT Chủ nhà/Host, ký ủy quyền): mã 4 số `crypto.randomInt`, lưu HMAC
+(`otp_codes.code_hash`), TTL `OTP_TTL_SECONDS` (300), sai `OTP_MAX_ATTEMPTS` (3) lần ⇒ khóa `OTP_LOCKOUT_SECONDS` (600),
+gửi lại sau `OTP_RESEND_SECONDS` (60), mã mới vô hiệu mã cũ. Kênh gửi là interface `OtpSender.send({phone, code, purpose, expiresAt})`:
+
+| `OTP_PROVIDER` | Sender | Response gửi OTP | Ghi chú |
+|---|---|---|---|
+| trống / `zalo` | `ZaloOtpSender` (ZNS → `SmsFallbackSender`) | `{expiresInSeconds, resendInSeconds}` — **không bao giờ có mã** | Chưa tích hợp: thiếu `ZALO_*` ⇒ 502 `otp_send_failed` |
+| `mock` | `MockZaloOtpSender` | thêm `devOtp: "0427"` | Không gửi gì ra ngoài; log `[MOCK-ZALO]`. Chỉ dev/staging nội bộ |
+| giá trị khác | — | — | backend không khởi động |
+
+`NODE_ENV=production` + `OTP_PROVIDER=mock` ⇒ backend **từ chối khởi động** (factory `otp-sender.factory.ts` throw lúc dựng DI;
+test `otp-sender.factory.spec.ts`, `auth.http.spec.ts`). `MockZaloOtpSender` còn tự chặn production lần nữa, và `OtpService` chỉ trả
+`devOtp` khi provider là mock. Mock chỉ thay kênh gửi: xác minh vẫn qua `/otp/verify` · `/phone/verify` · ký ủy quyền như thật.
+Giao diện chỉ hiện khối "Zalo giả lập" khi response có `devOtp` (không đọc biến `NEXT_PUBLIC_*`), mã chỉ nằm trong state của màn đang mở.
+
+Lỗi: 400 `invalid_phone` · 400 `otp_invalid` (`errors.attemptsRemaining`) · 400 `otp_not_found_or_expired` ·
+429 `otp_cooldown` / `otp_locked` (`errors.retryAfterSeconds`) · 502 `otp_send_failed`.
+
+Bật Zalo thật: điền `ZALO_OA_ID`, `ZALO_ACCESS_TOKEN`, `ZALO_ZNS_OTP_TEMPLATE_ID`, viết lời gọi API ở `TODO(zalo-zns)` trong
+`zalo-otp.sender.ts`, đặt `OTP_PROVIDER=zalo` (hoặc để trống). Không phải sửa logic nghiệp vụ.
 
 Portal `host` ↔ role `field_host`, `admin` ↔ `ops_admin`. Google: điền `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`JWT_SECRET` trong `.env`
 và thêm `${WEB_APP_URL}/api/v1/auth/google/callback` vào *Authorized redirect URIs* của OAuth client (Google Cloud Console) — không cần

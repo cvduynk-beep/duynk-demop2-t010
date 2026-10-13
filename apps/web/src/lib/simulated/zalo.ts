@@ -2,7 +2,7 @@
  * MÔ PHỎNG ZALO OA / ZNS (giữ có chủ đích — chưa tích hợp Zalo ZNS thật).
  *
  * Nội dung tin là mô phỏng, nhưng MỌI tin đều dựng từ các mốc thời gian thật của lịch hẹn (`TenantBooking`). Không có
- * tin nào sinh ra từ dữ liệu giả. Mã OTP KHÔNG đi qua đây (API không trả mã; ở dev mã chỉ nằm trong log backend).
+ * tin nào sinh ra từ dữ liệu giả. Mã OTP KHÔNG đi qua đây (Zalo giả lập OTP là `components/ui/ZaloMockOtp`, chỉ hiện `devOtp` backend trả).
  * Khi tích hợp ZNS thật: backend gửi tin, FE chỉ hiển thị lịch sử do API trả — xoá module này.
  */
 import { fmtTime, vnd } from "@/lib/format";

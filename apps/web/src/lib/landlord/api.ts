@@ -1,6 +1,7 @@
 import { api, type ApiResponse } from "@/lib/apiClient";
 import type { EkycSubmitPayload } from "@/components/kyc/EkycCapture";
 import { EKYC_CONSENT_VERSION, type EkycScanResult } from "@/lib/tenant/types";
+import type { OtpSent } from "@/lib/tenant/api";
 import type {
   PriceInsight,
   LandlordDashboard,
@@ -50,7 +51,7 @@ export const landlordApi = {
     api.put<{ unitId: string; rent: number; previous: number; marketMedian: number | null }>(`${BASE}/units/${encodeURIComponent(id)}/rent`, { rent }),
   dashboard: () => api.get<LandlordDashboard>(`${BASE}/dashboard`),
   verification: () => api.get<LandlordVerification>(`${BASE}/verification`),
-  sendPhoneOtp: (phone: string) => api.post<{ expiresInSeconds: number; devCode?: string }>("/auth/phone/send-otp", { phone }),
+  sendPhoneOtp: (phone: string) => api.post<OtpSent>("/auth/phone/send-otp", { phone }),
   verifyPhone: (phone: string, code: string) => api.post<{ verified: boolean }>("/auth/phone/verify", { phone, code }),
   scanEkyc: () => api.post<EkycScanResult>(`${BASE}/verification/ekyc/scan`, { consent: true, consentVersion: EKYC_CONSENT_VERSION }),
   submitEkyc: (payload: EkycSubmitPayload) => api.post<LandlordVerification>(`${BASE}/verification/ekyc`, payload),

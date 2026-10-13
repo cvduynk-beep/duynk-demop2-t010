@@ -1,4 +1,5 @@
-import { OtpPurpose } from '@prisma/client';
+import { Logger } from '@nestjs/common';
+import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { AuthAuditService } from '../auth-audit.service';
 import { AuthException } from '../auth.errors';
 import { PhoneService } from '../phone/phone.service';
@@ -7,11 +8,29 @@ import { createFakePrisma } from '../testing/fake-prisma';
 import { containsValue } from '../testing/contains-value';
 import { ActionTokenService } from './action-token.service';
 import { OtpService } from './otp.service';
-import { ConsoleOtpSender } from './senders/console-otp.sender';
+import { MockZaloOtpSender } from './senders/mock-zalo-otp.sender';
+import { OtpSender } from './senders/otp-sender';
+import { SmsFallbackSender } from './senders/sms-fallback.sender';
+import { ZaloOtpSender } from './senders/zalo-otp.sender';
 
 const PHONE = '+84912345678';
 
-function setup(env: Record<string, string> = {}) {
+/** Ghi lại mọi dòng log (mọi mức) để kiểm mã OTP KHÔNG lọt ra log ngoài chế độ mock. */
+function captureLogs() {
+  const lines: string[] = [];
+  for (const level of ['log', 'warn', 'debug', 'error', 'verbose'] as const) {
+    jest.spyOn(Logger.prototype, level).mockImplementation((msg: unknown) => {
+      lines.push(String(msg));
+    });
+  }
+  return lines;
+}
+
+/**
+ * `provider` = sender thật được nối vào OtpService: `mock` (MockZaloOtpSender) hoặc `zalo` (ZaloOtpSender, mặc định chưa
+ * cấu hình ⇒ throw). Có thể truyền sender tự chế để kiểm chốt chặn.
+ */
+function setup(env: Record<string, string> = {}, provider: 'mock' | 'zalo' | OtpSender = 'mock') {
   const prisma = createFakePrisma();
   const config = fakeConfig({
     AES_SECRET_KEY: 'a-test-master-secret-of-32-chars!!',
@@ -20,19 +39,22 @@ function setup(env: Record<string, string> = {}) {
   });
   const phones = new PhoneService(config);
   const audit = new AuthAuditService(prisma as any);
-  const consoleSender = new ConsoleOtpSender();
-  const delivered = jest.spyOn(consoleSender, 'send').mockResolvedValue();
-  const otp = new OtpService(prisma as any, phones, audit, consoleSender, config);
+  const sms = new SmsFallbackSender();
+  const zalo = new ZaloOtpSender(config, sms);
+  const sender: OtpSender = provider === 'mock' ? new MockZaloOtpSender(config) : provider === 'zalo' ? zalo : provider;
+  const delivered = jest.spyOn(sender, 'send');
+  const otp = new OtpService(prisma as any, phones, audit, sender, config);
   const actionTokens = new ActionTokenService(config, otp);
-  /** Gửi mã qua kênh mô phỏng: mã trả về (`devCode`) phải trùng đúng mã đã đi qua kênh gửi (log dev). */
+  /** Chế độ mock: mã lấy từ `devOtp` của kết quả — đúng cách giao diện dùng. */
   const sendCode = async (phone = PHONE, purpose: OtpPurpose = OtpPurpose.TENANT_VIEWING) => {
     const result = await otp.send({ phone, purpose });
-    const deliveredCode = delivered.mock.calls[delivered.mock.calls.length - 1][1];
-    expect(result).toEqual({ devCode: deliveredCode });
-    return deliveredCode;
+    expect(result.devOtp).toMatch(/^\d{4}$/);
+    return result.devOtp!;
   };
-  return { prisma, otp, phones, actionTokens, sendCode, delivered, config, consoleSender, audit };
+  return { prisma, otp, phones, actionTokens, sendCode, delivered, zalo, sms };
 }
+
+afterEach(() => jest.restoreAllMocks());
 
 const errorCode = async (promise: Promise<unknown>) => {
   try {
@@ -44,25 +66,24 @@ const errorCode = async (promise: Promise<unknown>) => {
 };
 
 describe('OtpService', () => {
-  describe('send', () => {
-    it('lưu hash (không lưu mã, không lưu SĐT plaintext); kênh mô phỏng trả `devCode` trùng mã đã gửi', async () => {
-      const { prisma, sendCode } = setup();
-      const devCode = await sendCode();
+  describe('send — OTP_PROVIDER=mock', () => {
+    it('trả `devOtp` đúng bằng mã đã gửi; DB chỉ lưu hash (không lưu mã, không lưu SĐT plaintext), TTL 5 phút', async () => {
+      const { prisma, sendCode, delivered } = setup();
+      const devOtp = await sendCode();
 
-      expect(devCode).toMatch(/^\d{4}$/);
+      expect(delivered.mock.calls[0][0]).toMatchObject({ phone: PHONE, code: devOtp, purpose: 'TENANT_VIEWING', expiresAt: expect.any(Date) });
       const row = prisma.otpCode.rows[0];
-      expect(containsValue(row, devCode)).toBe(false); // không có trường nào lưu mã dạng rõ
-      expect(row.codeHash).not.toBe(devCode);
-      expect(JSON.stringify(row)).not.toContain('84912345678');
+      expect(containsValue(row, devOtp)).toBe(false); // không có trường nào lưu mã dạng rõ
       expect(row.codeHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(JSON.stringify(row)).not.toContain('84912345678');
       expect(row.status).toBe('PENDING');
+      expect(row.expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(300_000);
     });
 
-    it('một luồng duy nhất: production cũng ghi log + trả devCode như local', async () => {
-      const { otp, delivered } = setup({ NODE_ENV: 'production' });
-      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
-      expect(devCode).toMatch(/^\d{4}$/);
-      expect(delivered).toHaveBeenCalledWith(PHONE, devCode);
+    it('mã trong `devOtp` xác minh được qua verify thật', async () => {
+      const { otp, sendCode } = setup();
+      const devOtp = await sendCode();
+      expect((await otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: devOtp })).status).toBe('VERIFIED');
     });
 
     it('không có mã cố định: OTP_DEV_CODE bị bỏ qua, mã luôn ngẫu nhiên 4 số', async () => {
@@ -73,13 +94,31 @@ describe('OtpService', () => {
       expect(codes.size).toBeGreaterThan(1);
     });
 
+    it('log có nhãn [MOCK-ZALO], SĐT đã che', async () => {
+      const logs = captureLogs();
+      const { sendCode } = setup();
+      const devOtp = await sendCode();
+      const line = logs.find((l) => l.includes(`: ${devOtp} `));
+      expect(line).toContain('[MOCK-ZALO]');
+      expect(line).not.toContain('912345678');
+    });
+
+    it('MockZaloOtpSender tự chặn khi NODE_ENV=production (phòng khi bị nối ngoài factory) ⇒ 502, không tạo mã, không log mã', async () => {
+      const logs = captureLogs();
+      const { prisma, otp, delivered } = setup({ NODE_ENV: 'production' });
+      expect(await errorCode(otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_send_failed');
+      expect(prisma.otpCode.rows).toHaveLength(0);
+      const code = delivered.mock.calls[0][0].code;
+      expect(logs.some((l) => l.includes(code))).toBe(false);
+    });
+
     it('chặn gửi lại trong thời gian chờ', async () => {
       const { otp } = setup({ OTP_RESEND_SECONDS: '60' });
       await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
       expect(await errorCode(otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_cooldown');
     });
 
-    it('mã mới vô hiệu mã cũ chưa dùng', async () => {
+    it('gửi lại: mã mới vô hiệu mã cũ chưa dùng', async () => {
       const { prisma, otp, sendCode } = setup();
       const first = await sendCode();
       const second = await sendCode();
@@ -88,6 +127,41 @@ describe('OtpService', () => {
       expect(pending).toHaveLength(1);
       expect(await errorCode(otp.verify({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING, code: first })))
         .toBe(first === second ? 'no-error' : 'otp_invalid');
+    });
+  });
+
+  describe('send — OTP_PROVIDER=zalo (kênh thật)', () => {
+    it('chưa cấu hình Zalo/SMS ⇒ 502 otp_send_failed, không tạo mã, không log mã', async () => {
+      const logs = captureLogs();
+      const { prisma, otp, delivered } = setup({}, 'zalo');
+      expect(await errorCode(otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_send_failed');
+      expect(prisma.otpCode.rows).toHaveLength(0);
+      const code = delivered.mock.calls[0][0].code;
+      expect(logs.some((l) => l.includes(code))).toBe(false);
+      expect(logs.join('\n')).toContain('chưa cấu hình: thiếu ZALO_OA_ID, ZALO_ACCESS_TOKEN, ZALO_ZNS_OTP_TEMPLATE_ID');
+    });
+
+    it('đủ cấu hình nhưng chưa tích hợp API ⇒ vẫn 502 (không giả vờ gửi thành công)', async () => {
+      const { otp } = setup({ ZALO_OA_ID: 'oa', ZALO_ACCESS_TOKEN: 'tok', ZALO_ZNS_OTP_TEMPLATE_ID: 'tpl' }, 'zalo');
+      expect(await errorCode(otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_send_failed');
+    });
+
+    it('ZNS gửi được ⇒ kết quả KHÔNG có mã, kênh ZALO; ZNS lỗi ⇒ SMS dự phòng, kênh SMS', async () => {
+      const { prisma, otp, zalo, sms } = setup({}, 'zalo');
+      const zns = jest.spyOn(zalo as any, 'sendZns').mockResolvedValue(undefined);
+      expect(await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING })).toEqual({});
+      expect(prisma.otpCode.rows[0].channel).toBe(OtpChannel.ZALO);
+
+      zns.mockRejectedValue(new Error('zns down'));
+      jest.spyOn(sms, 'send').mockResolvedValue(undefined);
+      expect(await otp.send({ phone: '+84900000001', purpose: OtpPurpose.TENANT_VIEWING })).toEqual({});
+      expect(prisma.otpCode.rows[1].channel).toBe(OtpChannel.SMS);
+    });
+
+    it('chốt chặn: sender không phải mock mà lỡ trả devOtp ⇒ OtpService vẫn bỏ mã khỏi kết quả', async () => {
+      const leaky: OtpSender = { provider: 'zalo', send: async (m) => ({ channel: OtpChannel.ZALO, devOtp: m.code }) };
+      const { otp } = setup({}, leaky);
+      expect(await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING })).toEqual({});
     });
   });
 
