@@ -634,6 +634,53 @@
   align-items: start;
 }
 
+/* ── Dashboard: khoảng thời gian & trạng thái từng widget ── */
+.rangePicker {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.rangePresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rangeForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+.rangeForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rangeForm :global(.input) {
+  min-height: 36px;
+  width: auto;
+}
+.rangeForm button {
+  align-self: flex-end;
+}
+.fieldError {
+  color: var(--danger);
+}
+.widgetError {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 18px 20px;
+}
+.widgetError p {
+  color: var(--danger);
+}
+.widgetEmpty {
+  padding: 18px 20px;
+}
+
 @media (max-width: 1100px) {
   .kpis {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -647,6 +694,9 @@
 @media (max-width: 560px) {
   .kpis {
     grid-template-columns: 1fr;
+  }
+  .rangePicker {
+    align-items: stretch;
   }
   .fee {
     grid-template-columns: 1fr;
