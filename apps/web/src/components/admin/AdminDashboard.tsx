@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, ClipboardCheck, Clock3, Database, Timer } from "lucide-react";
+import { AlertTriangle, ArrowRight, ClipboardCheck, Clock3, FileWarning, Timer } from "lucide-react";
 import { BarList } from "@/components/charts/BarList";
 import { Funnel } from "@/components/charts/Funnel";
 import { Heatmap } from "@/components/charts/Heatmap";
@@ -11,239 +11,245 @@ import { StatTile } from "@/components/charts/StatTile";
 import { Trend } from "@/components/charts/Trend";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
-import { adminApi } from "@/lib/apiClient";
-import { dayLabel, fmtTime, relTime } from "@/lib/format";
-import { funnel, noShowRate, noticesFor, unitStatus } from "@/lib/mock/selectors";
-import { dailyBookings, heatRows, occupancyOverall } from "@/lib/mock/stats";
-import { useMock } from "@/lib/mock/store";
-import { HOSTS, UNITS } from "@/lib/mock/units";
-import { contractKpis, contractRows } from "@/lib/mock/contracts";
+import {
+  activityActor,
+  activityTitle,
+  fmtDuration,
+  fmtNumber,
+  fmtPercentValue,
+  fmtRange,
+  funnelSteps,
+  heatRows,
+  ictDay,
+  presetRange,
+  shortDay,
+  useDashboardActivity,
+  useDashboardBi,
+  useDashboardDispatch,
+  useDashboardWorkItems,
+  workItemViews,
+  type RangeInput,
+} from "@/lib/admin/dashboard";
+import { ACCEPT_SLA_SECONDS } from "@/lib/admin/hosts";
+import { fmtTime, relTime } from "@/lib/format";
+import type { Query } from "@/lib/query/useApiQuery";
 import { useNow } from "@/lib/useNow";
+import { DashboardRangePicker, type RangeChoice } from "./DashboardRangePicker";
 import styles from "./Admin.module.css";
 
-const SLA = 180;
+const NO_SHOW_TARGET = 5; // % (PRD: no-show ≤ 5%)
+const ICON = { manual: AlertTriangle, sla: AlertTriangle, consign: ClipboardCheck, exit: Timer, contracts: FileWarning } as const;
 
-interface LiveBiData {
-  funnel?: {
-    stages: { stage: string; count: number; dropRate: string }[];
-    noShowRate: string;
-    avgDecisionTimeMinutes: number;
-  };
-  occupancyHeatmap?: {
-    buildingCode: string;
-    zone: string;
-    total: number;
-    rented: number;
-    occupancyRate: string;
-    alert: string;
-  }[];
-  portfolioStatus?: {
-    totalUnits: number;
-    rentedUnits: number;
-    holdingUnits: number;
-    availableUnits: number;
-  };
+/** Mỗi widget tự chờ / báo lỗi + thử lại; một nguồn lỗi không làm sập cả trang. Đang làm mới ngầm thì giữ số cũ. */
+function Widget<T>({ query, title, height = 220, card = true, children }: { query: Query<T>; title: string; height?: number; card?: boolean; children: (data: T) => ReactNode }) {
+  const { state, reload } = query;
+  if (state.status === "loading") return <div className="skeleton" style={{ height, borderRadius: 16 }} aria-busy="true" aria-label={`Đang tải ${title.toLowerCase()}`} />;
+  if (state.status === "error") {
+    return (
+      <div className={`${card ? "card " : ""}${styles.widgetError}`} role="alert">
+        <b>{title}</b>
+        <p className="small">Không tải được số liệu: {state.message}</p>
+        <button type="button" className="btn btn-quiet btn-sm" onClick={reload}>
+          Thử lại
+        </button>
+      </div>
+    );
+  }
+  return <>{children(state.data)}</>;
 }
 
+const Empty = ({ children }: { children: ReactNode }) => <div className={`card muted small ${styles.widgetEmpty}`}>{children}</div>;
+
 export function AdminDashboard() {
-  const state = useMock();
-  const now = useNow(1000);
-  const [liveBi, setLiveBi] = useState<LiveBiData | null>(null);
-  const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const now = useNow(60_000);
+  const [choice, setChoice] = useState<RangeChoice>({ mode: "preset", days: 7 });
+  if (!now) return <div className="skeleton" style={{ height: 480 }} />;
+  const range: RangeInput = choice.mode === "preset" ? presetRange(choice.days, now) : { from: choice.from, to: choice.to };
+  return <DashboardBody now={now} range={range} choice={choice} onChoice={setChoice} />;
+}
 
-  useEffect(() => {
-    let active = true;
-    adminApi.getBiFunnel().then((biRes) => {
-      if (!active) return;
-      if (biRes.ok && biRes.data) {
-        setLiveBi(biRes.data);
-        setIsLiveConnected(true);
-      }
-    }).catch(() => {
-      // Seamless fallback to client state
-    });
-    return () => { active = false; };
-  }, []);
-
-  if (!state.ready || !now) return <div className="skeleton" style={{ height: 480 }} />;
-
-  const occ = occupancyOverall(state);
-  const overSla = state.bookings.filter((b) => b.status === "pending" && now - new Date(b.createdAt).getTime() > SLA * 1000);
-  const escalated = state.bookings.filter((b) => b.status === "pending" && b.dispatch?.escalated);
-  const pendingCs = state.consignments.filter((c) => c.status === "reviewing").length;
-  const exiting = Object.values(state.mandates).filter((m) => m.status === "exiting");
-  const nsr = noShowRate(state);
-  const daily = dailyBookings(state, now);
-  const todayCount = state.bookings.filter((b) => dayLabel(b.slot, now) === "Hôm nay" && !["cancelled", "rejected"].includes(b.status)).length;
-  const avgAccept = Math.round(HOSTS.reduce((s, h) => s + h.avgAcceptSec, 0) / HOSTS.length);
-  const holding = UNITS.filter((u) => unitStatus(state, u) === "holding").length;
-
-  // Hợp nhất số liệu giỏ hàng với Live Portfolio nếu có
-  const totalUnitsCount = liveBi?.portfolioStatus?.totalUnits ?? occ.total;
-  const rentedUnitsCount = liveBi?.portfolioStatus?.rentedUnits ?? Math.max(0, occ.used - holding);
-  const holdingUnitsCount = liveBi?.portfolioStatus?.holdingUnits ?? holding;
-  const availableUnitsCount = liveBi?.portfolioStatus?.availableUnits ?? (occ.total - occ.used);
-  const displayOccRate = totalUnitsCount > 0
-    ? Math.round((rentedUnitsCount / totalUnitsCount) * 100)
-    : Math.round(occ.rate * 100);
-
-  const counts = {
-    rented: rentedUnitsCount,
-    holding: holdingUnitsCount,
-    available: availableUnitsCount,
-  };
-  const feed = noticesFor(state, "admin").slice(0, 8);
-
-  // Phễu 6 bước: nếu có số liệu từ Backend BI Funnel thì kết hợp với tương tác realtime của phiên
-  const funnelSteps = (liveBi?.funnel?.stages && liveBi.funnel.stages.length >= 6) ? [
-    { key: "visit", label: "Lượt truy cập web", value: liveBi.funnel.stages[0].count },
-    { key: "chat", label: "Chat AI Matchmaker", value: liveBi.funnel.stages[1].count + state.chat.messages.filter((m) => m.role === "user").length },
-    { key: "book", label: "Đặt lịch xem (đã OTP)", value: liveBi.funnel.stages[2].count + state.bookings.filter((b) => !["rejected"].includes(b.status)).length },
-    { key: "checkin", label: "Check-in sảnh", value: liveBi.funnel.stages[3].count + state.bookings.filter((b) => !!b.lobbyAt).length },
-    { key: "deposit", label: "Quét VietQR cọc", value: liveBi.funnel.stages[4].count + state.bookings.filter((b) => !!b.deposit?.paidAt).length },
-    { key: "sign", label: "Ký thỏa thuận số", value: liveBi.funnel.stages[5].count + state.bookings.filter((b) => ["leased"].includes(b.status)).length },
-  ] : funnel(state);
-
-  const cRows = contractRows(state, now);
-  const cKpis = contractKpis(cRows);
-  const exitDueCount = cRows.filter((r) => r.status === "exit_due").length;
-  const expiringCount = cRows.filter((r) => r.status === "expiring" && r.needsAction).length;
-
-  const workItems = [
-    escalated.length > 0 && {
-      key: "escalated",
-      icon: AlertTriangle,
-      bad: true,
-      title: `${escalated.length} ticket cần điều phối tay`,
-      body: "Đã mở toàn phân khu nhưng chưa có Sale nhận ca.",
-      href: "/admin/bookings",
-      cta: "Điều phối",
-    },
-    overSla.length > 0 && {
-      key: "sla",
-      icon: AlertTriangle,
-      bad: true,
-      title: `${overSla.length} ticket quá SLA 3 phút`,
-      body: "Chưa có Host nhận, đã chuyển Open Pool 500m.",
-      href: "/admin/bookings",
-      cta: "Điều phối",
-    },
-    pendingCs > 0 && {
-      key: "cs",
-      icon: ClipboardCheck,
-      title: `${pendingCs} báo cáo thẩm định chờ duyệt`,
-      body: "Field Host đã nộp báo cáo % độ mới, chờ Admin chốt ký gửi.",
-      href: "/admin/inventory?tab=requests",
-      cta: "Xem",
-    },
-    exiting.length > 0 && {
-      key: "exit",
-      icon: Timer,
-      title: `${exiting.length} căn đang đếm ngược thoát uỷ quyền`,
-      body: "Hết 15 ngày hệ thống tự gỡ mã cửa khỏi mạng lưới Host.",
-      href: "/admin/inventory?tab=exit",
-      cta: "Xem",
-    },
-    cKpis.needsAction > 0 && {
-      key: "contracts",
-      icon: Clock3,
-      bad: true,
-      title: `${cKpis.needsAction} hợp đồng cần xử lý`,
-      body: `${exitDueCount > 0 ? `${exitDueCount} quá hạn offboard` : ""}${exitDueCount > 0 && expiringCount > 0 ? " · " : ""}${expiringCount > 0 ? `${expiringCount} HĐ sắp hết hạn chưa nhắc` : ""}`,
-      href: "/admin/contracts",
-      cta: "Mở sổ hợp đồng",
-    },
-  ].filter(Boolean) as { key: string; icon: typeof AlertTriangle; bad?: boolean; title: string; body: string; href: string; cta: string }[];
+function DashboardBody({ now, range, choice, onChoice }: { now: number; range: RangeInput; choice: RangeChoice; onChoice: (c: RangeChoice) => void }) {
+  const bi = useDashboardBi(range);
+  const dispatch = useDashboardDispatch(range);
+  const work = useDashboardWorkItems();
+  const activity = useDashboardActivity(8);
+  const label = fmtRange(range);
 
   return (
     <div className={styles.page}>
       <PageHeader
         title="Tổng quan vận hành"
-        description="Vinhomes Ocean Park 1 · dữ liệu tuần này, cập nhật theo thời gian thực"
-        actions={
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              className={`badge ${isLiveConnected ? "badge-kelp" : "badge-plain"}`}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 12 }}
-              title={isLiveConnected ? "Kết nối trực tiếp PostgreSQL Backend (/api/v1/admin/bi-funnel)" : "Chế độ dự phòng client-side"}
-            >
-              <Database size={13} />
-              {isLiveConnected ? "Live DB Synced" : "Client Fallback"}
-            </span>
-          </div>
-        }
+        description={`Vinhomes Ocean Park · ${label} (giờ Việt Nam). Lấp đầy, rổ hàng và việc cần xử lý là số hiện tại.`}
+        actions={<DashboardRangePicker value={choice} current={range} today={ictDay(now)} onChange={onChoice} />}
       />
 
-      {workItems.length > 0 && (
-        <Section title="Việc cần xử lý" flush>
-          <ul className={styles.alerts} aria-label="Cần xử lý">
-            {workItems.map((w) => (
-              <li key={w.key} className={w.bad ? styles.alertBad : undefined}>
-                <w.icon size={20} />
-                <div>
-                  <b>{w.title}</b>
-                  <p className="small">{w.body}</p>
-                </div>
-                <Link href={w.href} className="btn btn-quiet btn-sm">
-                  {w.cta} <ArrowRight size={14} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
+      <Widget query={work} title="Việc cần xử lý" height={96}>
+        {(w) => {
+          const items = workItemViews(w);
+          return (
+            <Section title="Việc cần xử lý" flush>
+              {items.length === 0 ? (
+                <p className={`muted small ${styles.widgetEmpty}`}>Không có việc tồn đọng.</p>
+              ) : (
+                <ul className={styles.alerts} aria-label="Cần xử lý">
+                  {items.map((it) => {
+                    const Icon = ICON[it.key as keyof typeof ICON] ?? AlertTriangle;
+                    return (
+                      <li key={it.key} className={it.bad ? styles.alertBad : undefined}>
+                        <Icon size={20} />
+                        <div>
+                          <b>{it.title}</b>
+                          <p className="small">{it.body}</p>
+                        </div>
+                        <Link href={it.href} className="btn btn-quiet btn-sm">
+                          {it.cta} <ArrowRight size={14} />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Section>
+          );
+        }}
+      </Widget>
 
       <Section flush>
         <div className={styles.kpis}>
-          <StatTile hero label="Tỷ lệ lấp đầy" value={`${displayOccRate}`} unit="%" delta={{ text: "+2 điểm so với tuần trước", tone: "good", dir: "up" }} spark={[71, 72, 72, 74, 73, 75, 76, 76, 77, 78, 78, displayOccRate]} />
-          <StatTile label="Lịch xem hôm nay" value={String(todayCount)} delta={{ text: "so với 11 hôm qua", tone: "flat" }} spark={daily.slice(-12).map((d) => d.value)} />
-          <StatTile label="Tỷ lệ khách bỏ hẹn" value={`${Math.round(nsr * 100)}`} unit="%" delta={{ text: "mục tiêu ≤ 5%", tone: nsr <= 0.05 ? "good" : "bad", dir: nsr <= 0.05 ? "down" : "up" }} />
-          <StatTile label="Host nhận ca trung bình" value={`${Math.floor(avgAccept / 60)}′${String(avgAccept % 60).padStart(2, "0")}″`} delta={{ text: `SLA 3′00″ · ${HOSTS.filter((h) => h.avgAcceptSec > SLA).length} Host vượt`, tone: "bad", dir: "up" }} />
+          <Widget query={bi} title="Tỷ lệ lấp đầy" height={128} card={false}>
+            {(d) => (
+              <StatTile
+                hero
+                label="Tỷ lệ lấp đầy"
+                value={fmtPercentValue(d.portfolioStatus.occupancyRate)}
+                unit={d.portfolioStatus.occupancyRate === null ? undefined : "%"}
+                delta={{ text: d.portfolioStatus.totalUnits === 0 ? "Chưa có căn trong hệ thống" : `${fmtNumber(d.portfolioStatus.rentedUnits)}/${fmtNumber(d.portfolioStatus.totalUnits)} căn đã cho thuê`, tone: "flat" }}
+              />
+            )}
+          </Widget>
+          <Widget query={bi} title="Lịch xem hôm nay" height={128} card={false}>
+            {(d) => <StatTile label="Lịch xem hôm nay" value={fmtNumber(d.viewingsToday.today)} delta={{ text: `so với ${fmtNumber(d.viewingsToday.yesterday)} hôm qua`, tone: "flat" }} />}
+          </Widget>
+          <Widget query={bi} title="Tỷ lệ khách bỏ hẹn" height={128} card={false}>
+            {(d) => {
+              const r = d.funnel.noShowRate;
+              return (
+                <StatTile
+                  label="Tỷ lệ khách bỏ hẹn"
+                  value={fmtPercentValue(r)}
+                  unit={r === null ? undefined : "%"}
+                  delta={
+                    r === null
+                      ? { text: "Chưa có lịch xem tới giờ hẹn trong khoảng", tone: "flat" }
+                      : { text: `${fmtNumber(d.funnel.noShowCount)}/${fmtNumber(d.funnel.noShowDenominator)} lịch · mục tiêu ≤ ${NO_SHOW_TARGET}%`, tone: r <= NO_SHOW_TARGET ? "good" : "bad", dir: r <= NO_SHOW_TARGET ? "down" : "up" }
+                  }
+                />
+              );
+            }}
+          </Widget>
+          <Widget query={dispatch} title="Host nhận ca trung bình" height={128} card={false}>
+            {(s) => {
+              const over = s.byHost.filter((h) => h.avgAcceptSeconds > ACCEPT_SLA_SECONDS).length;
+              return (
+                <StatTile
+                  label="Host nhận ca trung bình"
+                  value={fmtDuration(s.avgAcceptSeconds)}
+                  delta={
+                    s.avgAcceptSeconds === null
+                      ? { text: "Chưa có ca được nhận trong khoảng", tone: "flat" }
+                      : { text: `SLA ${fmtDuration(ACCEPT_SLA_SECONDS)} · ${fmtNumber(over)} Host vượt`, tone: over > 0 ? "bad" : "good", dir: over > 0 ? "up" : "down" }
+                  }
+                />
+              );
+            }}
+          </Widget>
         </div>
       </Section>
 
       <div className={styles.two}>
-        <Funnel steps={funnelSteps} />
-        <Trend title="Lịch xem đặt mới mỗi ngày" subtitle="14 ngày gần nhất, đã xác thực OTP Zalo" data={daily} seriesName="Lịch xem" />
+        <Widget query={bi} title="Phễu chuyển đổi" height={320}>
+          {(d) => <Funnel steps={funnelSteps(d.funnel.stages)} subtitle={`Lịch xem tạo trong ${label}, theo dõi tới ký hợp đồng`} />}
+        </Widget>
+        <Widget query={bi} title="Lịch xem đặt mới mỗi ngày" height={320}>
+          {(d) => (
+            <Trend
+              title="Lịch xem đặt mới mỗi ngày"
+              subtitle={`${label} · theo ngày tạo lịch, không tính lịch đã huỷ`}
+              data={d.dailyBookings.map((x) => ({ label: shortDay(x.date), value: x.count }))}
+              seriesName="Lịch xem"
+            />
+          )}
+        </Widget>
       </div>
 
       <div className={styles.two}>
-        <Heatmap rows={heatRows(state)} />
+        <Widget query={bi} title="Tỷ lệ lấp đầy theo toà" height={300}>
+          {(d) => (d.occupancyHeatmap.length === 0 ? <Empty>Chưa có căn nào trong hệ thống.</Empty> : <Heatmap rows={heatRows(d.occupancyHeatmap)} />)}
+        </Widget>
         <div className={styles.stackCol}>
-          <div className={`card ${styles.padCard}`}>
-            <StackBar title={`Rổ hàng ký gửi ${totalUnitsCount} căn`} segments={[{ label: "Đã cho thuê", value: counts.rented }, { label: "Đang giữ căn", value: counts.holding }, { label: "Còn trống", value: counts.available }]} />
-          </div>
-          <div className={`card ${styles.padCard}`}>
-            <h3 className={styles.feedTitle}>
-              <Clock3 size={17} /> Dòng sự kiện
-            </h3>
-            <ul className={styles.feed}>
-              {feed.map((n) => (
-                <li key={n.id} className={n.tone ? styles[`t-${n.tone}`] : ""}>
-                  <div>
-                    <b>{n.title}</b>
-                    <p className="small muted">{n.body}</p>
-                  </div>
-                  <span className="xs muted">
-                    {fmtTime(n.at)} · {relTime(n.at, now)}
-                  </span>
-                </li>
-              ))}
-              {feed.length === 0 && <li className="muted small">Chưa có sự kiện.</li>}
-            </ul>
-          </div>
+          <Widget query={bi} title="Rổ hàng" height={110}>
+            {(d) => {
+              const p = d.portfolioStatus;
+              return p.totalUnits === 0 ? (
+                <Empty>Chưa có căn nào trong hệ thống.</Empty>
+              ) : (
+                <div className={`card ${styles.padCard}`}>
+                  <StackBar
+                    title={`Rổ hàng ${fmtNumber(p.totalUnits)} căn`}
+                    segments={[
+                      { label: "Đã cho thuê", value: p.rentedUnits },
+                      { label: "Đang giữ căn", value: p.holdingUnits },
+                      { label: "Còn trống", value: p.availableUnits },
+                      { label: "Ngừng niêm yết / bảo trì", value: p.unlistedUnits + p.maintenanceUnits },
+                    ]}
+                  />
+                </div>
+              );
+            }}
+          </Widget>
+          <Widget query={activity} title="Dòng sự kiện" height={260}>
+            {(page) => (
+              <div className={`card ${styles.padCard}`}>
+                <h3 className={styles.feedTitle}>
+                  <Clock3 size={17} /> Dòng sự kiện
+                </h3>
+                <ul className={styles.feed}>
+                  {page.items.map((n) => (
+                    <li key={n.id}>
+                      <div>
+                        <b>{activityTitle(n.actionType)}</b>
+                        <p className="small muted">{activityActor(n)}</p>
+                      </div>
+                      <span className="xs muted">
+                        {fmtTime(n.createdAt)} · {relTime(n.createdAt, now)}
+                      </span>
+                    </li>
+                  ))}
+                  {page.items.length === 0 && <li className="muted small">Chưa có sự kiện.</li>}
+                </ul>
+              </div>
+            )}
+          </Widget>
         </div>
       </div>
 
-      <BarList
-        title="Thời gian nhận ca của Field Host"
-        subtitle="Trung bình tuần này; mục tiêu nhận ticket trong vòng 3 phút"
-        items={HOSTS.map((h) => ({ label: h.name, value: h.avgAcceptSec }))}
-        threshold={SLA}
-        thresholdLabel="Ngưỡng SLA 3 phút (180 giây)"
-        format={(v) => `${Math.floor(v / 60)}′${String(v % 60).padStart(2, "0")}″`}
-        unit="Thời gian nhận ca"
-      />
+      <Widget query={dispatch} title="Thời gian nhận ca của Field Host" height={220}>
+        {(s) =>
+          s.byHost.length === 0 ? (
+            <Empty>Chưa có ca nào được Host nhận trong {label}.</Empty>
+          ) : (
+            <BarList
+              title="Thời gian nhận ca của Field Host"
+              subtitle={`Trung bình trong ${label}; mục tiêu nhận ticket trong vòng 3 phút`}
+              items={s.byHost.map((h) => ({ label: h.hostName, value: h.avgAcceptSeconds, sub: `${fmtNumber(h.accepted)} ca` }))}
+              threshold={ACCEPT_SLA_SECONDS}
+              thresholdLabel="Ngưỡng SLA 3 phút (180 giây)"
+              format={(v) => fmtDuration(v)}
+              unit="Thời gian nhận ca"
+            />
+          )
+        }
+      </Widget>
     </div>
   );
 }

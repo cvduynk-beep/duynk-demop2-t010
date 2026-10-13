@@ -3,21 +3,18 @@
 import { BarChart3, Building2, FileSignature, Gauge, Radar, SlidersHorizontal, Users } from "lucide-react";
 import { loginPathFor } from "@/lib/auth/portals";
 import { useSession } from "@/lib/auth/client";
-import { DEMO_USERS } from "@/lib/mock/actors";
-import { contractKpis, contractRows } from "@/lib/mock/contracts";
-import { useMock } from "@/lib/mock/store";
-import { useNow } from "@/lib/useNow";
+import { useDashboardWorkItems } from "@/lib/admin/dashboard";
 import { AdminVinnyCopilot } from "@/components/admin/AdminVinnyCopilot";
 import { PortalShell } from "./PortalShell";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
-  const state = useMock();
-  const now = useNow(60_000);
-  const pendingCs = state.consignments.filter((c) => c.status === "reviewing").length;
-  const pendingBk = state.bookings.filter((b) => b.status === "pending").length;
-  const contractBadge = now ? contractKpis(contractRows(state, now)).needsAction : 0;
+  // Badge = cùng số với "Việc cần xử lý" trên dashboard (/admin/dashboard/work-items). Đang tải/lỗi ⇒ không hiện số.
+  const work = useDashboardWorkItems();
+  const w = work.state.status === "ready" ? work.state.data : null;
+  const pendingCs = w ? w.consignments.total : undefined;
+  const pendingBk = w ? w.dispatch.manualDispatch + w.dispatch.overSla : undefined;
+  const contractBadge = w ? w.contracts.needsAction : undefined;
   const session = useSession();
-  const u = DEMO_USERS.admin;
   return (
     <PortalShell
       portal="Quản trị nền tảng"
@@ -25,7 +22,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       hideTenantSwitch
       compactLogo
       logoHref="/admin/dashboard"
-      userName={session.user?.fullName ?? session.user?.email ?? u.name}
+      userName={session.user?.fullName ?? session.user?.email ?? "Quản trị viên"}
       userMeta="Operations Lead"
       signOutHref={loginPathFor("admin")}
       settingsHref="/admin/settings"

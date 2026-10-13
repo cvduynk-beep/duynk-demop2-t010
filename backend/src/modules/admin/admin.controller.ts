@@ -1,11 +1,14 @@
-import { Controller, Get, Post, Body, Param, Query, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Res, HttpCode } from '@nestjs/common';
 import type { Response } from 'express';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AdminFeeService } from './admin-fee.service';
 import { AdminPayoutService } from './admin-payout.service';
 import { AdminDispatchService } from './admin-dispatch.service';
 import { AdminBiService } from './admin-bi.service';
+import { AdminBookingsService } from './admin-bookings.service';
+import { AdminDashboardService, parseActivityLimit } from './admin-dashboard.service';
+import { parseReportRange } from './admin-range';
 import { AdminInventoryService } from './admin-inventory.service';
 import { AdminDepositService } from './admin-deposit.service';
 import { AdminKeyService } from './admin-key.service';
@@ -43,15 +46,44 @@ export class AdminController {
     private readonly depositService: AdminDepositService,
     private readonly keyService: AdminKeyService,
     private readonly registryService: AdminContractRegistryService,
+    private readonly dashboardService: AdminDashboardService,
+    private readonly bookingsService: AdminBookingsService,
   ) {}
 
   @Get('bi-funnel')
   @ApiOperation({
     summary: 'Module 1: BI Funnel & Bản đồ nhiệt lấp đầy (Occupancy Heatmap)',
-    description: 'Phễu 6 giai đoạn thời gian thực (no-show 3.8%) và Heatmap phân khu Sapphire 1 & 2',
+    description:
+      'Phễu + no-show theo NHÓM lịch xem tạo trong [from, to] (YYYY-MM-DD, giờ Asia/Ho_Chi_Minh, mặc định 7 ngày gần nhất, ' +
+      'tối đa 90 ngày; sai ⇒ 400 invalid_range). Lấp đầy, heatmap, rổ hàng, lịch xem hôm nay là ảnh chụp hiện tại.',
   })
-  async getBiFunnel() {
-    return this.biService.getBiFunnelAndHeatmap();
+  @ApiQuery({ name: 'from', required: false, example: '2026-10-07' })
+  @ApiQuery({ name: 'to', required: false, example: '2026-10-13' })
+  async getBiFunnel(@Query('from') from?: string, @Query('to') to?: string) {
+    const now = new Date();
+    return this.biService.getBiFunnelAndHeatmap(parseReportRange(from, to, now), now);
+  }
+
+  @Get('dashboard/work-items')
+  @ApiOperation({
+    summary: 'Số việc cần Admin xử lý (ảnh chụp hiện tại)',
+    description:
+      'dispatch.manualDispatch (ESCALATED + OFFERED tầng 3 quá hạn) · dispatch.overSla (OFFERED tầng 1–2 quá hạn) — chỉ lịch xem còn mở; ' +
+      'consignments.awaitingHost / overdue (SLA thẩm định 2h); mandatesExiting (EXIT_REQUESTED); contracts.needsAction (sổ hợp đồng).',
+  })
+  async getDashboardWorkItems() {
+    return this.dashboardService.getWorkItems();
+  }
+
+  @Get('activity')
+  @ApiOperation({
+    summary: 'Dòng sự kiện mới nhất từ audit log (phân trang con trỏ)',
+    description: 'Chỉ trả loại hành động, đối tượng, vai + tên người làm, thời điểm — không trả giá trị cũ/mới, IP, user-agent.',
+  })
+  @ApiQuery({ name: 'limit', required: false, example: 20 })
+  @ApiQuery({ name: 'before', required: false, description: 'nextCursor của trang trước' })
+  async getActivity(@Query('limit') limit?: string, @Query('before') before?: string) {
+    return this.dashboardService.getActivity(parseActivityLimit(limit), before || undefined);
   }
 
   @Get('exclusive-inventory')
@@ -112,9 +144,15 @@ export class AdminController {
   }
 
   @Get('dispatch-sla/summary')
-  @ApiOperation({ summary: 'Tóm tắt SLA theo tầng và số ticket quá hạn' })
-  async getDispatchSlaSummary() {
-    return this.dispatchService.getSlaSummary();
+  @ApiOperation({
+    summary: 'Tóm tắt SLA theo tầng, số ticket quá hạn và thời gian nhận ca của Host',
+    description: 'from/to (tuỳ chọn, như bi-funnel) chỉ lọc thời gian nhận ca theo offeredAt; không truyền ⇒ toàn bộ.',
+  })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  async getDispatchSlaSummary(@Query('from') from?: string, @Query('to') to?: string) {
+    const now = new Date();
+    return this.dispatchService.getSlaSummary(now, from || to ? parseReportRange(from, to, now) : undefined);
   }
 
   @Post('dispatch/:ticketId/escalate')
@@ -123,10 +161,36 @@ export class AdminController {
     return this.dispatchService.escalate(ticketId, dto, user);
   }
 
+  @Get('bookings')
+  @ApiOperation({
+    summary: 'Danh sách lịch xem cho điều phối (phân trang/lọc/tìm phía server)',
+    description: 'tab=open (đang xử lý, mặc định) | today (giờ hẹn hôm nay, giờ VN) | all; q tìm theo mã booking/mã căn; page ≥ 1; pageSize 1–50.',
+  })
+  @ApiQuery({ name: 'tab', required: false, enum: ['open', 'today', 'all'] })
+  @ApiQuery({ name: 'q', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'pageSize', required: false })
+  async listBookings(@Query('tab') tab?: string, @Query('q') q?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.bookingsService.list({ tab, q, page, pageSize });
+  }
+
+  @Get('bookings/:id/reassign-candidates')
+  @ApiOperation({ summary: 'Field Host đủ điều kiện nhận ca của lịch xem (:id = Viewing id) — cùng quy tắc với lúc giao lại' })
+  async reassignCandidates(@Param('id') id: string) {
+    return this.bookingsService.candidates(id);
+  }
+
   @Post('bookings/:id/reassign')
-  @ApiOperation({ summary: 'Điều phối tay lịch hẹn sang Field Host khác (:id = Viewing id)' })
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Điều phối tay lịch hẹn sang Field Host khác (:id = Viewing id)',
+    description:
+      'Body {hostId, reason 5–300 ký tự, version}. Một transaction: ghi có điều kiện + AuditLog DISPATCH_REASSIGNED. ' +
+      '404 not_found · 400 invalid_request (errors theo field) · 409 reassign_not_allowed (trạng thái) · ' +
+      '409 reassign_conflict (version lệch, errors.latest = dòng mới nhất) · 422 reassign_target_invalid (errors.hostId). Trả dòng booking đã cập nhật.',
+  })
   async reassignBooking(@Param('id') id: string, @Body() dto: ReassignBookingDto, @CurrentUser() user: any) {
-    return this.dispatchService.reassign(id, dto, user);
+    return this.bookingsService.reassign(id, dto, { id: user.id, role: user.role });
   }
 
   @Get('deposits')

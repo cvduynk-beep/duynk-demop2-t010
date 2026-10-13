@@ -160,8 +160,6 @@ const fail = (res: ApiResponse<unknown>) =>
 
 export const adminApi = {
   dispatch: () => api.get<AdminDispatchTicket[]>("/admin/dispatch-sla"),
-  reassign: (viewingId: string, hostId: string, reason: string) =>
-    api.post<{ success: boolean; message: string }>(`/admin/bookings/${encodeURIComponent(viewingId)}/reassign`, { hostId, reason }),
   commission: () => api.get<{ configs: AdminFeeConfig[] }>("/admin/commission-engine"),
   commissionAudit: () => api.get<AdminFeeAudit[]>("/admin/commission-engine/audit"),
   updateCommission: (configKey: string, paramValue: number, reason: string) =>

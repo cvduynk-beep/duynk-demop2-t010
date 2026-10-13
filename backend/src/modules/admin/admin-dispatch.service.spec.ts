@@ -120,67 +120,40 @@ describe('AdminDispatchService — bảng SLA', () => {
   });
 });
 
-describe('AdminDispatchService — reassign (:id = Viewing id)', () => {
-  const hosts = {
-    'h-new': { id: 'h-new', dutyStatus: 'ONLINE_AVAILABLE' },
-    'h-off': { id: 'h-off', dutyStatus: 'OFF_DUTY' },
-    'h-old': { id: 'h-old', dutyStatus: 'ONLINE_AVAILABLE' },
-  };
+describe('AdminDispatchService — việc cần xử lý (actionable) & lọc khoảng', () => {
+  const closed = (status: string) => ({ ...ticket().viewing, status });
 
-  it.each(['OFFERED', 'EXPIRED', 'ESCALATED'])('cho giao lại từ %s, giữ slaSeconds, reset offeredAt, có audit', async (status) => {
-    const { svc, rows, audit } = build([ticket({ status, tier: 2, slaSeconds: 180 })], hosts);
-    const res = await svc.reassign('v1', { hostId: 'h-new', reason: 'Host cũ kẹt thang' }, ACTOR, NOW);
-    expect(res).toEqual(expect.objectContaining({ bookingId: 'v1', newHostId: 'h-new' }));
-    expect(rows[0]).toEqual(
-      expect.objectContaining({ hostId: 'h-new', status: 'OFFERED', slaSeconds: 180, offeredAt: NOW }),
-    );
-    expect(audit.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: ACTOR.id,
-        actorRole: 'ops_admin',
-        actionType: 'DISPATCH_REASSIGNED',
-        entityName: 'DispatchTicket',
-        entityId: 't1',
-        oldValue: expect.objectContaining({ hostId: 'h-old', status }),
-        newValue: expect.objectContaining({ hostId: 'h-new', reason: 'Host cũ kẹt thang' }),
-      }),
-    );
+  it('manualDispatch = ESCALATED + OFFERED tầng 3 quá hạn; overSla = OFFERED tầng 1–2 quá hạn; chỉ lịch còn mở', async () => {
+    const { svc } = build([
+      ticket({ id: 'esc', status: 'ESCALATED', tier: 2, slaSeconds: 180 }),
+      ticket({ id: 't3-late', tier: 3, slaSeconds: 180, offeredAt: ago(200) }),
+      ticket({ id: 't3-ok', tier: 3, slaSeconds: 180, offeredAt: ago(60) }),
+      ticket({ id: 't1-late', tier: 1, slaSeconds: 300, offeredAt: ago(301) }),
+      ticket({ id: 't2-late', tier: 2, slaSeconds: 180, offeredAt: ago(181) }),
+      ticket({ id: 't1-ok', tier: 1, slaSeconds: 300, offeredAt: ago(299) }),
+      ticket({ id: 'accepted-late', status: 'ACCEPTED', offeredAt: ago(900) }),
+      ticket({ id: 'cancelled-viewing', offeredAt: ago(900), viewing: closed('CANCELLED') }),
+      ticket({ id: 'done-escalated', status: 'ESCALATED', viewing: closed('COMPLETED') }),
+    ]);
+    const s = await svc.getSlaSummary(NOW);
+    expect(s.actionable).toEqual({ manualDispatch: 2, overSla: 2 });
   });
 
-  it.each(['ACCEPTED', 'CHECKED', 'COMPLETED', 'CANCELLED'])('409 khi ticket ở %s, không ghi gì', async (status) => {
-    const { svc, prisma, audit } = build([ticket({ status })], hosts);
-    await expect(svc.reassign('v1', { hostId: 'h-new', reason: 'x' }, ACTOR, NOW)).rejects.toBeInstanceOf(ConflictException);
-    expect(prisma.dispatchTicket.update).not.toHaveBeenCalled();
-    expect(audit.log).not.toHaveBeenCalled();
-  });
-
-  it('409 khi viewing đã COMPLETED/NO_SHOW/CANCELLED', async () => {
-    const t = ticket();
-    t.viewing.status = 'NO_SHOW';
-    const { svc } = build([t], hosts);
-    await expect(svc.reassign('v1', { hostId: 'h-new', reason: 'x' }, ACTOR, NOW)).rejects.toBeInstanceOf(ConflictException);
-  });
-
-  it('từ chối host không tồn tại, offline, hoặc trùng host hiện tại', async () => {
-    const { svc } = build([ticket()], hosts);
-    await expect(svc.reassign('v1', { hostId: 'nope', reason: 'x' }, ACTOR, NOW)).rejects.toBeInstanceOf(NotFoundException);
-    await expect(svc.reassign('v1', { hostId: 'h-off', reason: 'x' }, ACTOR, NOW)).rejects.toBeInstanceOf(ConflictException);
-    await expect(svc.reassign('v1', { hostId: 'h-old', reason: 'x' }, ACTOR, NOW)).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('404 khi viewing không có ticket; bắt buộc có lý do', async () => {
-    const { svc } = build([], hosts);
-    await expect(svc.reassign('zz', { hostId: 'h-new', reason: 'x' }, ACTOR, NOW)).rejects.toBeInstanceOf(NotFoundException);
-    const b = build([ticket()], hosts);
-    await expect(b.svc.reassign('v1', { hostId: 'h-new', reason: '  ' }, ACTOR, NOW)).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('ticket chuyển sang Host mới (bảng /host/board của Host mới sẽ thấy ASSIGNED, Host cũ không)', async () => {
-    const { svc, rows } = build([ticket()], hosts);
-    await svc.reassign('v1', { hostId: 'h-new', reason: 'đổi host' }, ACTOR, NOW);
-    expect(rows[0]).toEqual(expect.objectContaining({ hostId: 'h-new', status: 'OFFERED', offeredAt: NOW }));
+  it('range chỉ lọc thời gian nhận ca theo offeredAt; không truyền ⇒ toàn bộ như trước', async () => {
+    const accepted = (id: string, offeredAgo: number, tookSec: number) =>
+      ticket({ id, hostId: 'h1', status: 'ACCEPTED', offeredAt: ago(offeredAgo), acceptedAt: ago(offeredAgo - tookSec) });
+    const { svc } = build([accepted('recent', 3_600, 60), accepted('old', 10 * 86_400, 300)]);
+    expect((await svc.getSlaSummary(NOW)).avgAcceptSeconds).toBe(180);
+    const lastDay = { start: new Date(NOW.getTime() - 86_400_000), end: NOW };
+    const s = await svc.getSlaSummary(NOW, lastDay);
+    expect(s.avgAcceptSeconds).toBe(60);
+    expect(s.byHost).toEqual([expect.objectContaining({ hostId: 'h1', accepted: 1, avgAcceptSeconds: 60 })]);
+    const empty = await svc.getSlaSummary(NOW, { start: new Date(0), end: new Date(1) });
+    expect([empty.avgAcceptSeconds, empty.byHost]).toEqual([null, []]);
   });
 });
+
+// Giao lại (reassign) đã chuyển sang AdminBookingsService — xem admin-bookings.service.spec.ts.
 
 describe('AdminDispatchService — escalate', () => {
   it('tầng 1 → 2: ESCALATED, bỏ host, slaSeconds 180, có audit', async () => {

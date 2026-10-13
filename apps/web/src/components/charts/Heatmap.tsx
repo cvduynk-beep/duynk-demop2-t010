@@ -21,7 +21,7 @@ export function Heatmap({ rows }: { rows: HeatRow[] }) {
       title="Tỷ lệ lấp đầy theo toà"
       subtitle="Ô nhạt là toà còn nhiều căn trống, nên đẩy chiến dịch tiếp thị vào đó"
       table={{
-        head: ["Phân khu", "Toà", "Đã thuê hoặc giữ chỗ", "Tổng căn", "Tỷ lệ lấp đầy"],
+        head: ["Phân khu", "Toà", "Đã cho thuê", "Tổng căn", "Tỷ lệ lấp đầy"],
         rows: rows.flatMap((r) => r.cells.map((c) => [r.zone, c.building, c.used, c.total, `${Math.round((c.used / c.total) * 100)}%`])),
       }}
     >
