@@ -17,6 +17,8 @@
     "prisma:studio": "prisma studio",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
+    "test:unit": "jest --testPathIgnorePatterns live.spec",
+    "test:live": "jest --testPathPattern live.spec",
     "create:admin": "ts-node --transpile-only scripts/create-admin.ts",
     "set:password": "ts-node --transpile-only scripts/set-password.ts",
     "rekey:door-codes": "ts-node --transpile-only scripts/rekey-door-codes.ts",
@@ -83,11 +85,17 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.ts$": "ts-jest"
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "<rootDir>/../tsconfig.spec.json"
+        }
+      ]
     },
     "testEnvironment": "node",
     "setupFiles": [
       "<rootDir>/testing/silence-logs.ts"
-    ]
+    ],
+    "testTimeout": 30000
   }
 }

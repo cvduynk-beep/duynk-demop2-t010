@@ -65,18 +65,21 @@ export class AccountController {
     res.send(buffer);
   }
 
+  @Roles('tenant')
   @Get('favorites')
   @ApiOperation({ summary: 'Danh sách căn hộ đã lưu yêu thích' })
   getFavorites(@CurrentUser('id') userId: string) {
     return this.accountService.getFavorites(userId);
   }
 
+  @Roles('tenant')
   @Put('favorites/:unitId')
   @ApiOperation({ summary: 'Thêm căn hộ vào danh sách yêu thích' })
   addFavorite(@CurrentUser('id') userId: string, @Param('unitId') unitId: string) {
     return this.accountService.addFavorite(userId, unitId);
   }
 
+  @Roles('tenant')
   @Delete('favorites/:unitId')
   @ApiOperation({ summary: 'Xóa căn hộ khỏi danh sách yêu thích' })
   removeFavorite(@CurrentUser('id') userId: string, @Param('unitId') unitId: string) {

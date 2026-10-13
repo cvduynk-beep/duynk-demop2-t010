@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { toPayoutView } from '../../common/payout/payout-account';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/account.dto';
@@ -59,10 +59,30 @@ export class AccountService {
     return { ...rest, phone, payoutAccount };
   }
 
-  /** Chỉ cho đổi họ tên: email là định danh đăng nhập, SĐT phải qua OTP Zalo (không đổi bằng PATCH này). */
+  /**
+   * Chỉ cho đổi họ tên. Email là định danh đăng nhập, SĐT chỉ đổi qua OTP Zalo ở bước đặt lịch ⇒ client gửi `email`/`phone`
+   * nhận 400 `field_not_editable` (không lặng lẽ bỏ qua). Lỗi kèm `errors.<field>` để FE hiện đúng ô.
+   */
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    const fullName = dto.fullName?.trim().slice(0, 100);
-    if (!fullName) return this.getProfile(userId);
+    const locked = (['email', 'phone'] as const).filter((k) => dto[k] !== undefined);
+    if (locked.length) {
+      throw new BadRequestException({
+        code: 'field_not_editable',
+        message: 'Không thể đổi email hoặc số điện thoại ở hồ sơ.',
+        errors: Object.fromEntries(
+          locked.map((k) => [k, k === 'email' ? 'Email là tài khoản đăng nhập, không thể thay đổi.' : 'Số điện thoại chỉ đổi qua xác thực OTP Zalo khi đặt lịch xem.']),
+        ),
+      });
+    }
+    if (dto.fullName === undefined) return this.getProfile(userId);
+    const fullName = typeof dto.fullName === 'string' ? dto.fullName.trim().replace(/\s+/g, ' ') : '';
+    if (fullName.length < 2 || fullName.length > 100) {
+      throw new BadRequestException({
+        code: 'profile_invalid',
+        message: 'Thông tin hồ sơ không hợp lệ.',
+        errors: { fullName: 'Họ tên phải từ 2 đến 100 ký tự.' },
+      });
+    }
     const updated = await this.prisma.profile.update({ where: { id: userId }, data: { fullName }, select: PROFILE_SELECT });
     return this.toOwnProfile(updated);
   }
@@ -133,18 +153,24 @@ export class AccountService {
     return { success: true, unitId: unit.unitCode, saved: true };
   }
 
+  /** Idempotent: bỏ lưu mục chưa lưu, hoặc căn không còn tồn tại ⇒ vẫn 200 `{ saved: false }`. Chỉ xoá dòng của chính người gọi. */
   async removeFavorite(userId: string, codeOrId: string) {
-    const unit = await this.resolveUnit(codeOrId);
+    const unit = await this.findUnit(codeOrId);
+    if (!unit) return { success: true, unitId: codeOrId, saved: false };
     await this.prisma.favoriteUnit.deleteMany({ where: { profileId: userId, unitId: unit.id } });
     return { success: true, unitId: unit.unitCode, saved: false };
   }
 
-  private async resolveUnit(codeOrId: string) {
+  private findUnit(codeOrId: string) {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(codeOrId);
-    const unit = await this.prisma.unit.findFirst({
+    return this.prisma.unit.findFirst({
       where: { OR: [{ unitCode: { equals: codeOrId, mode: 'insensitive' } }, ...(isUuid ? [{ id: codeOrId }] : [])] },
       select: { id: true, unitCode: true },
     });
+  }
+
+  private async resolveUnit(codeOrId: string) {
+    const unit = await this.findUnit(codeOrId);
     if (!unit) {
       throw new NotFoundException({ message: 'Không tìm thấy căn hộ.', code: 'unit_not_found' });
     }

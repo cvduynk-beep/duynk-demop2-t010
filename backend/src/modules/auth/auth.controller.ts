@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { isPortal, Portal, PORTALS } from './auth.constants';
@@ -107,6 +107,10 @@ export class AuthController {
 
   @Public()
   @Get('session')
+  // KHÔNG giới hạn tần suất: proxy Next gọi endpoint này cho MỌI lần điều hướng trang có chắn quyền (kể cả prefetch), từ
+  // CÙNG MỘT IP máy chủ Next ⇒ 429 sẽ bị hiểu là "chưa đăng nhập" và đá mọi người dùng về /login. Chỉ đọc phiên (không
+  // dò mật khẩu được); đăng nhập/đăng ký vẫn giữ giới hạn riêng.
+  @SkipThrottle()
   @ApiCookieAuth('session-cookie')
   @ApiOperation({
     summary: 'Phiên của một cổng (user hoặc null)',

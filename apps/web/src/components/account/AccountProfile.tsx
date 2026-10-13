@@ -12,6 +12,7 @@ import { fmtDate, fmtPhone } from "@/lib/format";
 import { primeApiData, useApiQuery } from "@/lib/query/useApiQuery";
 import { errorText } from "@/lib/tenant/api";
 import { latestKyc } from "@/lib/tenant/bookings";
+import { validateFullName } from "@/lib/account/profile";
 import { tenantQueries } from "@/lib/tenant/queries";
 
 /** Cùng khoá cache với BookingSheet (điền sẵn họ tên / SĐT khi đặt lịch). */
@@ -26,6 +27,7 @@ export function AccountProfile() {
   const bookings = useApiQuery(tenantQueries.bookings());
   const [nameInput, setNameInput] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const kyc = useMemo(() => (bookings.state.status === "ready" ? latestKyc(bookings.state.data) : null), [bookings.state]);
 
   const header = <PageHeader title="Hồ sơ của bạn" description="Thông tin dùng để đặt lịch xem và ký hợp đồng." />;
@@ -60,12 +62,20 @@ export function AccountProfile() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const fullName = name.trim();
-    if (!fullName || saving) return;
+    if (saving) return;
+    // Cùng luật với server (2–100 ký tự sau khi bỏ khoảng trắng thừa); server vẫn kiểm lại.
+    const fullName = name.trim().replace(/\s+/g, " ");
+    const local = validateFullName(fullName);
+    setFieldErrors(local ? { fullName: local } : {});
+    if (local) return;
     setSaving(true);
     const res = await accountApi.updateProfile({ fullName });
     setSaving(false);
-    if (!res.ok) return toast(apiErrorText(res, "Không lưu được thay đổi. Thử lại sau."));
+    if (!res.ok) {
+      const errs = Object.fromEntries(Object.entries(res.errors ?? {}).filter(([, v]) => typeof v === "string")) as Record<string, string>;
+      if (Object.keys(errs).length) setFieldErrors(errs);
+      return toast(apiErrorText(res, "Không lưu được thay đổi. Thử lại sau."));
+    }
     primeApiData(profileQuery.key, { ...profile, ...(res.data as ApiProfile), fullName });
     setNameInput(null);
     await refreshSession();
@@ -78,8 +88,17 @@ export function AccountProfile() {
 
       <Section title="Thông tin cá nhân">
         <form className="stack" onSubmit={onSubmit}>
-          <Field label="Họ tên">
-            <input className="input" value={name} onChange={(e) => setNameInput(e.target.value)} maxLength={100} required />
+          <Field label="Họ tên" error={fieldErrors.fullName}>
+            <input
+              className="input"
+              value={name}
+              onChange={(e) => {
+                setNameInput(e.target.value);
+                if (fieldErrors.fullName) setFieldErrors(({ fullName: _drop, ...rest }) => rest);
+              }}
+              maxLength={100}
+              aria-invalid={Boolean(fieldErrors.fullName)}
+            />
           </Field>
           <Field label="Số điện thoại" hint={phone ? "Đổi số điện thoại qua bước xác thực OTP khi đặt lịch xem." : "Bạn sẽ nhập và xác thực số (OTP Zalo) ở lần đặt lịch xem đầu tiên."}>
             <div className="row" style={{ display: "flex", alignItems: "center", gap: 10 }}>

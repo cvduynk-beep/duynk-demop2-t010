@@ -19,6 +19,7 @@ import { hashPassword } from './password-hasher';
 import { createFakePrisma, FakePrisma, seedProfile } from './testing/fake-prisma';
 import { createSessionTokens } from './testing/fake-session-token';
 import { ConsoleOtpSender } from './otp/senders/console-otp.sender';
+import { containsValue } from './testing/contains-value';
 
 const ENV = {
   WEB_APP_URL: 'http://localhost:3000',
@@ -778,12 +779,25 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
     });
   });
 
+  it('GET /auth/session không bị giới hạn tần suất (proxy gọi cho mọi lần điều hướng, cùng một IP)', async () => {
+    const http = request(app.getHttpServer());
+    const statuses = await Promise.all(Array.from({ length: 80 }, () => http.get('/api/v1/auth/session?portal=tenant').then((r) => r.status)));
+    expect(statuses.every((s) => s === 200)).toBe(true); // module test đặt hạn mức 60/phút
+  });
+
+  it('đăng nhập vẫn bị giới hạn tần suất (chống dò mật khẩu)', async () => {
+    const http = request(app.getHttpServer());
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i++) statuses.push((await http.post('/api/v1/auth/login').send({ email: `x${i}@example.com`, password: 'sai-mat-khau', portal: 'tenant' })).status);
+    expect(statuses).toContain(429);
+  });
+
   describe('OTP', () => {
     it('send → verify (Khách thuê) trả action token; sai mã báo số lần còn lại', async () => {
       const send = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
       expect(send.status).toBe(200);
       expect(send.body.data).toEqual({ expiresInSeconds: expect.any(Number), resendInSeconds: expect.any(Number) });
-      expect(JSON.stringify(send.body)).not.toContain(lastOtp());
+      expect(containsValue(send.body, lastOtp())).toBe(false);
       const code: string = lastOtp();
       expect(code).toMatch(/^\d{4}$/);
 
@@ -899,12 +913,6 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       await login(agent, 'tenant', 't@example.com');
       expect((await agent.post('/api/v1/auth/phone/verify').send({ phone: '0912345678', code: '1234' })).status).toBe(403);
     });
-  });
-
-  it.skip('demo-login bị tắt mặc định → 404 demo_disabled', async () => {
-    const res = await request(app.getHttpServer()).post('/api/v1/auth/demo-login').send({ portal: 'tenant' });
-    expect(res.status).toBe(404);
-    expect(res.body.code).toBe('demo_disabled');
   });
 
   it('đã gỡ POST /auth/demo-login và x-demo-role: kể cả AUTH_DEMO_MODE=true ⇒ 404 / 401, không set cookie', async () => {
