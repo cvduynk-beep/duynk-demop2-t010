@@ -1,135 +1,123 @@
 import { NextResponse } from "next/server";
-import { AGENT_KPIS, CAMPAIGN_DATA, HIGH_VALUE_PROSPECTS, RAW_DEALS } from "@/lib/mock/reports";
-
-import fs from "fs";
-import path from "path";
+import { answerFromFacts, buildPrompt, QUESTION_MAX, type CopilotFacts } from "@/lib/admin/copilot";
+import type { DealRow, DealSummary, HostEarningsSummary, HostPerformanceRow, HostPerformanceSummary, ReportPage } from "@/lib/admin/reports";
 
 export const dynamic = "force-dynamic";
 
-function getGeminiAdminKey(): string | undefined {
-  if (process.env.GEMINI_API_KEY_ADMIN && !process.env.GEMINI_API_KEY_ADMIN.includes("your-key")) {
-    return process.env.GEMINI_API_KEY_ADMIN;
+/** Số liệu Copilot: 7 ngày gần nhất (giờ VN), cùng định nghĩa với màn Báo cáo. */
+const RANGE_DAYS = 7;
+const BACKEND_TIMEOUT_MS = 10_000;
+const LLM_TIMEOUT_MS = 8_000;
+/** Lớp 3 (AGENTS): trần token đầu ra 200–250. */
+const MAX_OUTPUT_TOKENS = 250;
+
+/** Cùng nguồn với `lib/auth/session.backendUrl` (file đó là `server-only`, không import được trong test). */
+const backendUrl = () => (process.env.BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
+const ictDay = (ms: number) => new Date(ms + 7 * 3_600_000).toISOString().slice(0, 10);
+
+class UpstreamError extends Error {
+  constructor(readonly status: number) {
+    super(`backend ${status}`);
   }
-  if (process.env.NODE_ENV === "development") {
-    try {
-      const candidates = [
-        path.resolve(process.cwd(), ".env.local"),
-        path.resolve(process.cwd(), ".env"),
-      ];
-      for (const p of candidates) {
-        if (fs.existsSync(p)) {
-          const txt = fs.readFileSync(p, "utf8");
-          const m = txt.match(/GEMINI_API_KEY_ADMIN=([^\r\n]+)/);
-          if (m && m[1] && !m[1].includes("your-key")) {
-            return m[1].trim();
-          }
-        }
-      }
-    } catch {}
-  }
-  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 }
 
 /**
- * Endpoint AI Trợ Lý Điều Hành Admin (/api/admin/copilot)
- * Tích hợp LLM Gemini Flash với toàn bộ Context Báo cáo & KPI thực tế của hệ thống.
+ * Gọi báo cáo admin ở backend BẰNG cookie phiên của chính người hỏi ⇒ backend tự kiểm `ops_admin`
+ * (chưa đăng nhập 401, sai vai 403) — route này không tự quyết quyền và không có dữ liệu riêng.
+ */
+async function report<T>(req: Request, id: string, qs: string): Promise<T> {
+  const res = await fetch(`${backendUrl()}/api/v1/admin/reports/${id}?${qs}`, {
+    headers: { cookie: req.headers.get("cookie") ?? "", "x-portal": "admin" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new UpstreamError(res.status);
+  return ((await res.json()) as { data: T }).data;
+}
+
+async function loadFacts(req: Request): Promise<CopilotFacts> {
+  const today = ictDay(Date.now());
+  const from = new Date(Date.parse(`${today}T00:00:00Z`) - (RANGE_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  const range = `from=${from}&to=${today}`;
+  // Tuần tự: pool kết nối DB của backend nhỏ (Supabase session), Copilot không cần nhanh hơn màn Báo cáo.
+  const host = await report<ReportPage<HostPerformanceRow, HostPerformanceSummary>>(req, "host-performance", `${range}&sort=deals&dir=desc&pageSize=100`);
+  const deals = await report<ReportPage<DealRow, DealSummary>>(req, "deals", `${range}&sort=receivedAt&dir=desc&pageSize=20`);
+  const earnings = await report<ReportPage<unknown, HostEarningsSummary>>(req, "host-earnings", `${range}&pageSize=1`);
+  return {
+    from,
+    to: today,
+    today,
+    host: { summary: host.summary, rows: host.rows },
+    deals: { summary: deals.summary, rows: deals.rows },
+    earnings: { summary: earnings.summary },
+  };
+}
+
+/** Key Gemini CHỈ đọc từ biến môi trường của server (không đọc file, không lộ ra client). */
+function geminiKey(): string | undefined {
+  const k = process.env.GEMINI_API_KEY_ADMIN || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  return k && !k.includes("your-key") ? k : undefined;
+}
+
+async function askGemini(prompt: string): Promise<string | null> {
+  const key = geminiKey();
+  if (!key) return null;
+  const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.2, thinkingConfig: { thinkingBudget: 0 } },
+    }),
+    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    console.warn(`[copilot] Gemini trả ${res.status}; dùng câu trả lời theo luật từ cùng số liệu.`);
+    return null;
+  }
+  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+}
+
+/**
+ * Vinny Copilot của Admin. Trả `{ok, text, actions?, source, range}`. Số liệu luôn thật (báo cáo backend); có key Gemini
+ * thì LLM diễn đạt lại CHỈ từ số liệu đó, không có / lỗi ⇒ câu trả lời theo luật (cùng số liệu). Không có nhánh mock.
  */
 export async function POST(req: Request) {
+  let body: { question?: unknown; pageContext?: unknown };
   try {
-    const body = await req.json();
-    const { question, pageContext } = body;
-
-    if (!question || typeof question !== "string" || !question.trim()) {
-      return NextResponse.json({ ok: false, error: "Thiếu câu hỏi" }, { status: 400 });
-    }
-
-    const q = question.trim().slice(0, 300);
-
-    const geminiKey = getGeminiAdminKey();
-    if (geminiKey && !geminiKey.includes("your-key")) {
-      const modelName = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`;
-
-      const systemPrompt = `Bạn là Vinny Copilot - Trợ lý số điều hành vận hành cấp cao của Nền tảng Cho thuê VinStay AI tại Vinhomes Ocean Park 1.
-BẠN ĐANG TRỢ GIÚP QUẢN TRỊ VIÊN (ADMIN/OPERATIONS LEAD) TẠI TRANG: ${pageContext || "Báo cáo & KPI"}.
-
-DỮ LIỆU ĐỐI SOÁT HỆ THỐNG THỜI GIAN THỰC:
-1. HIỆU SUẤT SALE & KPI (${AGENT_KPIS.length} nhân sự):
-${AGENT_KPIS.map(
-  (a) =>
-    `- ${a.name} (${a.team}): Đạt ${a.kpiCompletionRate}% KPI, ${a.dealsActual}/${a.dealsTarget} deals, Doanh số GRV: ${(
-      a.grvActual / 1000000
-    ).toFixed(1)}M đ, Tốc độ nhận ticket: ${a.ticketAcceptSec}s (SLA < 180s), Đánh giá: ${a.rating}⭐ (${a.totalReviews} reviews), Ca trễ SLA: ${a.slaBreachCount}.`
-).join("\n")}
-
-2. GIAO DỊCH & HỢP ĐỒNG ĐÃ KÝ GẦN NHẤT (Hôm nay: 10/10/2026):
-${RAW_DEALS.slice(0, 4)
-  .map(
-    (d) =>
-      `- Ngày ${d.createdAt}: Khách ${d.clientName} (${d.clientType}) chốt căn ${d.unitAddress} (${d.layout}, giá ${(
-        d.monthlyRent / 1000000
-      ).toFixed(1)}M/tháng). Sale chốt: ${d.agentName}. Trạng thái: ${d.status}. Chu kỳ: ${d.salesCycleDays} ngày.`
-  )
-  .join("\n")}
-Lưu ý: Hôm nay (10/10) chưa có HĐ thuê mới hoàn tất ký số, deal gần nhất là ngày hôm qua 09/10 (Nguyễn Văn Hùng, Sale Lê Quốc Bảo).
-
-3. TOP KHÁCH HÀNG TIỀM NĂNG (AI LEAD SCORING 100đ):
-${HIGH_VALUE_PROSPECTS.slice(0, 3)
-  .map(
-    (p) =>
-      `- ${p.name} (${p.score}đ AI, ${p.clientType}): Ngân sách ${(p.budgetMonthly / 1000000).toFixed(1)}M/tháng (${
-        p.preferredLayout
-      }), cần vào ở gấp trong ${p.urgencyDays} ngày. Căn khớp: ${p.matchedUnitCode}. Sale: ${p.assignedHostName}. Note: ${p.aiNotes}.`
-  )
-  .join("\n")}
-
-4. CHIẾN DỊCH QUẢNG CÁO & ROI:
-${CAMPAIGN_DATA.map(
-  (c) =>
-    `- ${c.name} (${c.channel}): Chi ${(c.adSpend / 1000000).toFixed(1)}M -> GRV ${(
-      c.grossRentalValue / 1000000
-    ).toFixed(1)}M. ROI: +${c.roiPercent}%. Qualified Leads: ${c.qualifiedLeads} (CPQL: ${(
-      c.costPerQualifiedLead / 1000
-    ).toFixed(0)}k/lead). Deals: ${c.dealsClosed}.`
-).join("\n")}
-
-QUY TẮC PHẢN HỒI (BẮT BUỘC TUÂN THỦ NGHIÊM NGẶT):
-1. TRẢ LỜI THẲNG VÀO TRỌNG TÂM, SIÊU NGẮN GỌN (TỐI ĐA 2-4 DÒNG, DƯỚI 60-80 TỪ).
-2. ĐI THẲNG VÀO CÂU TRẢ LỜI NGAY TỪ ĐẦU TIÊN (Ví dụ hỏi "sáng giờ chốt được nhiêu khách rồi?" -> Trả lời ngay: "Hôm nay hệ thống chưa ghi nhận hợp đồng mới chốt thành công anh nhé...").
-3. TUYỆT ĐỐI KHÔNG DÙNG TIÊU ĐỀ HOA MỸ DÀI DÒNG, KHÔNG LIỆT KÊ DÀN TRẢI LỊCH SỬ NẾU KHÔNG ĐƯỢC HỎI.
-4. Chỉ nêu 1-2 con số quan trọng nhất trực tiếp giải đáp câu hỏi.
-5. Không in cú pháp LaTeX (dùng Unicode ≥, ≤, →, ⭐ thay vì $\\ge$).
-6. Văn phong gãy gọn, tinh tế, tự nhiên như một Trợ lý Điều hành báo cáo nhanh cho Sếp.
-7. Câu hỏi của Quản trị viên: "${q}"`;
-
-      const res = await fetch(geminiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: systemPrompt }] }],
-          generationConfig: {
-            maxOutputTokens: 1000,
-            temperature: 0.2,
-            thinkingConfig: {
-              thinkingBudget: 0,
-            },
-          },
-        }),
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          return NextResponse.json({ ok: true, text, source: "gemini" });
-        }
-      }
-    }
-
-    // Nếu không có key hoặc lỗi key -> trả về ok: false để client dùng Semantic Reasoner
-    return NextResponse.json({ ok: false, fallback: true });
-  } catch (err) {
-    return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : undefined, fallback: true });
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, code: "invalid_request", message: "Body phải là JSON." }, { status: 400 });
   }
+  const question = typeof body.question === "string" ? body.question.trim() : "";
+  if (!question) return NextResponse.json({ ok: false, code: "invalid_request", message: "Thiếu câu hỏi." }, { status: 400 });
+  if (question.length > QUESTION_MAX) {
+    return NextResponse.json({ ok: false, code: "question_too_long", message: `Câu hỏi tối đa ${QUESTION_MAX} ký tự.` }, { status: 400 });
+  }
+  const page = typeof body.pageContext === "string" ? body.pageContext.slice(0, 60) : "Báo cáo & KPI";
+
+  let facts: CopilotFacts;
+  try {
+    facts = await loadFacts(req);
+  } catch (err) {
+    if (err instanceof UpstreamError && (err.status === 401 || err.status === 403)) {
+      return NextResponse.json({ ok: false, code: err.status === 401 ? "unauthorized" : "forbidden", message: "Cần đăng nhập cổng Quản trị." }, { status: err.status });
+    }
+    console.error(`[copilot] Không đọc được số liệu báo cáo: ${(err as Error).message}`);
+    return NextResponse.json({ ok: false, code: "reports_unavailable", message: "Chưa đọc được số liệu báo cáo, vui lòng thử lại." }, { status: 502 });
+  }
+
+  const rules = answerFromFacts(question, facts);
+  let llm: string | null = null;
+  try {
+    llm = await askGemini(buildPrompt(question, facts, page));
+  } catch (err) {
+    console.warn(`[copilot] Gemini lỗi: ${(err as Error).message}; dùng câu trả lời theo luật.`);
+  }
+  return NextResponse.json(
+    { ok: true, text: llm ?? rules.text, actions: rules.actions ?? [], source: llm ? "gemini" : "rules", range: { from: facts.from, to: facts.to } },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
