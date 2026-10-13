@@ -259,17 +259,18 @@ describe('Inspection — nộp phiếu & tự niêm yết (E8)', () => {
     expect(w.db.media).toHaveLength(0);
   });
 
-  it('P1-13: reject không note ⇒ report_invalid note; có note ⇒ TERMINATED, unit UNLISTED, 0 media, ảnh giữ', async () => {
+  it('P1-13: reject không note ⇒ report_invalid note; có note ⇒ reviewing (chờ Admin), ủy quyền GIỮ, unit UNLISTED, 0 media, ảnh giữ', async () => {
     const { c, photos } = setup();
     const bad: any = await bodyOf(w.flow.submit(w.actor(a), c.mandate.id, validInput(photos, { recommendation: 'reject' })));
     expect(bad).toMatchObject({ code: 'report_invalid', field: 'note' });
     const out = await w.flow.submit(w.actor(a), c.mandate.id, validInput(photos, { recommendation: 'reject', note: '  Căn khác hẳn hình  ' }));
-    expect(out).toMatchObject({ stage: 'rejected', listedAt: null });
-    expect(w.mandateRow(c.mandate).status).toBe('TERMINATED');
+    expect(out).toMatchObject({ stage: 'reviewing', listedAt: null });
+    expect(w.mandateRow(c.mandate).status).toBe('PENDING_INSPECTION');
     expect(w.unitRow(c.unit)).toMatchObject({ status: 'UNLISTED', isVerified: false });
     expect(w.db.media).toHaveLength(0);
     const meta = w.metaOf(c.mandate);
-    expect(meta).toMatchObject({ stage: 'rejected', decisionNote: 'Căn khác hẳn hình' });
+    expect(meta).toMatchObject({ stage: 'reviewing', report: { recommendation: 'reject', note: 'Căn khác hẳn hình' } });
+    expect(meta.decidedAt).toBeUndefined();
     expect(meta.inspection?.photos).toHaveLength(photos.length);
   });
 

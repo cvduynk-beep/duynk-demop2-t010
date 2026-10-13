@@ -1,5 +1,5 @@
 import { FURNISHING_LABEL, ITEM_LABEL, type Unit } from "@/lib/units";
-import { allInCost, DEFAULT_HOUSEHOLD, RATES } from "@/lib/pricing/cost";
+import { allInCost, DEFAULT_HOUSEHOLD, RATES, unitRates } from "@/lib/pricing/cost";
 import { api } from "@/lib/apiClient";
 import type { ChatResponse } from "@/lib/chat/api";
 import { getUnitLivingInsights } from "./livingIntelligence";
@@ -167,8 +167,8 @@ export function answerUnitQuestion(unit: Unit, question: string): ConciergeAnswe
   ) {
     return {
       text: `🚗 Phương án đỗ & gửi xe tại toà ${unit.building}:
-• Ô tô / Xe hơi: ${vnd(RATES.car)}đ/tháng/xe theo biểu phí hệ thống (đỗ hầm toà nhà hoặc nhà xe nổi).
-• Xe máy / Xe điện: ${vnd(RATES.motorbike)}đ/tháng/xe.
+• Ô tô / Xe hơi: ${vnd(unitRates(unit).car)}đ/tháng/xe ${unit.carFee != null ? "theo biểu phí Field Host xác minh tại tòa" : "theo biểu phí hệ thống"} (đỗ hầm toà nhà hoặc nhà xe nổi).
+• Xe máy / Xe điện: ${vnd(unitRates(unit).motorbike)}đ/tháng/xe.${unit.feeNote ? `\n• Phí khác / tiện ích: ${unit.feeNote}` : ""}
 *(Mức phí và chỗ đỗ thực tế do BQL Vinhomes niêm yết từng thời điểm. Field Host hỗ trợ bạn đăng ký thẻ xe lúc nhận phòng.)*`,
       suggestBooking: true,
     };

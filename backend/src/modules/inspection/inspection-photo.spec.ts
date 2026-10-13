@@ -269,3 +269,72 @@ describe('Ảnh niêm yết công khai (E9)', () => {
     });
   });
 });
+
+describe('Đưa ảnh chủ nhà gửi vào ảnh niêm yết (import-landlord)', () => {
+  let w: World;
+  let a: ReturnType<World['addInspector']>;
+  const codeOf = async (p: Promise<unknown>) => p.then(() => 'OK', (e) => e.getResponse?.().code ?? e.message);
+
+  beforeEach(() => {
+    w = buildWorld();
+    a = w.addInspector('a');
+  });
+
+  /** Ca `inspecting` có ảnh tham khảo chủ nhà; `files` = nội dung từng ảnh khi tải xuống (null = mất file). */
+  const setup = (files: (Buffer | null)[], inspectionPhotos = [] as ReturnType<typeof photo>[]) => {
+    const c = w.addCase({ stage: 'inspecting', hostId: a.id, photos: inspectionPhotos });
+    const landlord = files.map((_, i) => ({ id: `ll-${i}`, path: `landlord-1/${c.mandate.id}/ll-${i}.jpg`, name: `anh-${i}.jpg`, size: 1000, mime: 'image/jpeg', uploadedAt: '2026-10-01T00:00:00.000Z' }));
+    w.mandateRow(c.mandate).doorAccessConfig.consignment.photos = landlord;
+    w.storage.download.mockImplementation(async (path: string) => files[landlord.findIndex((p) => p.path === path)] ?? null);
+    return { c, landlord };
+  };
+
+  it('sao chép ảnh hợp lệ thành ảnh niêm yết phòng "Khác" (fromLandlord), bỏ ảnh hỏng / quá nhỏ; gọi lại ⇒ []', async () => {
+    const { c, landlord } = setup([jpeg(1200, 900), png(100, 100), null, Buffer.from('not-an-image'), jpeg(800, 600)]);
+    const added = await w.photos.importLandlordPhotos(w.actor(a), c.mandate.id);
+    expect(added).toHaveLength(2);
+    expect(added.every((p) => p.slot === 'listing' && p.room === 'other' && p.fromLandlord && p.url)).toBe(true);
+    // File riêng trong thư mục thẩm định — không trỏ vào ảnh gốc của chủ nhà.
+    const paths = w.storage.uploadAt.mock.calls.map((x) => x[0] as string);
+    expect(paths).toHaveLength(2);
+    expect(paths.every((p) => p.startsWith(`inspections/${c.mandate.id}/`))).toBe(true);
+    const meta = w.metaOf(c.mandate);
+    expect(meta.inspection?.photos.map((p) => p.sourceLandlordPhotoId)).toEqual([landlord[0].id, landlord[4].id]);
+    expect(meta.inspection?.landlordPhotosImportedAt).toBeTruthy();
+    expect(meta.photos).toHaveLength(5); // ảnh gốc của chủ nhà giữ nguyên
+
+    const detail = await w.query.detail(w.actor(a), c.mandate.id, new Date());
+    expect(detail.landlordPhotosImported).toBe(true);
+    expect(await w.photos.importLandlordPhotos(w.actor(a), c.mandate.id)).toEqual([]);
+    expect(w.storage.uploadAt).toHaveBeenCalledTimes(2);
+  });
+
+  it('Host bỏ ảnh đã đưa ⇒ xoá bản sao, ảnh gốc chủ nhà còn; không đưa lại', async () => {
+    const { c, landlord } = setup([jpeg(1200, 900)]);
+    const [p] = await w.photos.importLandlordPhotos(w.actor(a), c.mandate.id);
+    await w.photos.remove(w.actor(a), c.mandate.id, p.id);
+    const removed = w.storage.remove.mock.calls.flat(2) as string[];
+    expect(removed.some((x) => x.startsWith(`inspections/${c.mandate.id}/`))).toBe(true);
+    expect(removed).not.toContain(landlord[0].path);
+    expect(await w.photos.importLandlordPhotos(w.actor(a), c.mandate.id)).toEqual([]);
+    expect(w.metaOf(c.mandate).inspection?.photos ?? []).toHaveLength(0);
+  });
+
+  it('chỉ lấy phần còn chỗ trong hạn mức ảnh niêm yết; bản sao thừa bị dọn khỏi Storage', async () => {
+    const full = Array.from({ length: 11 }, () => photo('listing', a.id));
+    const { c } = setup([jpeg(1200, 900), jpeg(1200, 900), jpeg(1200, 900)], full);
+    const added = await w.photos.importLandlordPhotos(w.actor(a), c.mandate.id);
+    expect(added).toHaveLength(1);
+    expect(w.metaOf(c.mandate).inspection?.photos.filter((x) => x.slot === 'listing')).toHaveLength(12);
+    const removed = w.storage.remove.mock.calls.flat(2) as string[];
+    expect(removed).toHaveLength(2);
+  });
+
+  it('không phải chủ ca ⇒ inspection_not_found; ca chưa nhận ⇒ inspection_bad_stage', async () => {
+    const { c } = setup([jpeg(1200, 900)]);
+    const b = w.addInspector('b');
+    expect(await codeOf(w.photos.importLandlordPhotos(w.actor(b), c.mandate.id))).toBe('inspection_not_found');
+    const waiting = w.addCase({ stage: 'awaiting_host', hostId: a.id });
+    expect(await codeOf(w.photos.importLandlordPhotos(w.actor(a), waiting.mandate.id))).toBe('inspection_bad_stage');
+  });
+});

@@ -41,12 +41,12 @@ export class OtpController {
   @Throttle(perMinute(5))
   @ApiOperation({
     summary: 'Gửi OTP 4 số qua Zalo (dự phòng SMS) để xác thực SĐT',
-    description: 'Mỗi SĐT+mục đích chỉ được gửi lại sau OTP_RESEND_SECONDS. OTP gửi qua nhà cung cấp đã cấu hình; ngoài production, khi OTP_ECHO_DEV_CODE=true và chưa có nhà cung cấp thì mã chỉ được ghi ra log backend. Response KHÔNG chứa mã.',
+    description: 'Mỗi SĐT+mục đích chỉ được gửi lại sau OTP_RESEND_SECONDS. Zalo đang mô phỏng: mã được ghi ra log backend và luôn trả kèm `devCode` để màn hình hiện mã.',
   })
   async send(@Body() dto: SendOtpDto, @Req() req: Request) {
     const phone = this.normalizedPhone(dto.phone);
-    await this.otp.send({ phone, purpose: dto.purpose, ...requestContext(req) });
-    return { expiresInSeconds: this.otp.expiresInSeconds, resendInSeconds: this.otp.resendInSeconds };
+    const { devCode } = await this.otp.send({ phone, purpose: dto.purpose, ...requestContext(req) });
+    return { expiresInSeconds: this.otp.expiresInSeconds, resendInSeconds: this.otp.resendInSeconds, ...(devCode ? { devCode } : {}) };
   }
 
   @Public()
@@ -71,13 +71,13 @@ export class OtpController {
   @ApiCookieAuth('session-cookie')
   @ApiOperation({
     summary: 'Chủ nhà / Field Host xin OTP để xác thực SĐT của mình (PHONE_VERIFY)',
-    description: 'Khác `POST /auth/otp/send`: số đang thuộc tài khoản khác ⇒ 409 `phone_already_registered` NGAY, chưa gửi mã. Sau đó gọi `POST /auth/phone/verify`.',
+    description: 'Khác `POST /auth/otp/send`: số đang thuộc tài khoản khác ⇒ 409 `phone_already_registered` NGAY, chưa gửi mã. Sau đó gọi `POST /auth/phone/verify`. Luôn kèm `devCode` (Zalo mô phỏng).',
   })
   async sendPhoneOtp(@CurrentUser() user: AuthenticatedUser, @Body() dto: SendPhoneOtpDto, @Req() req: Request) {
     const phone = this.normalizedPhone(dto.phone);
     await this.phoneVerification.assertAvailable(user.id, phone);
-    await this.otp.send({ phone, purpose: OtpPurpose.PHONE_VERIFY, ...requestContext(req) });
-    return { expiresInSeconds: this.otp.expiresInSeconds, resendInSeconds: this.otp.resendInSeconds };
+    const { devCode } = await this.otp.send({ phone, purpose: OtpPurpose.PHONE_VERIFY, ...requestContext(req) });
+    return { expiresInSeconds: this.otp.expiresInSeconds, resendInSeconds: this.otp.resendInSeconds, ...(devCode ? { devCode } : {}) };
   }
 
   @Roles('landlord', 'field_host')

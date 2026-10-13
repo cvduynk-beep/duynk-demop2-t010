@@ -8,8 +8,6 @@ import { containsValue } from '../testing/contains-value';
 import { ActionTokenService } from './action-token.service';
 import { OtpService } from './otp.service';
 import { ConsoleOtpSender } from './senders/console-otp.sender';
-import { SmsFallbackSender } from './senders/sms-fallback.sender';
-import { ZaloZnsSender } from './senders/zalo-zns.sender';
 
 const PHONE = '+84912345678';
 
@@ -17,7 +15,6 @@ function setup(env: Record<string, string> = {}) {
   const prisma = createFakePrisma();
   const config = fakeConfig({
     AES_SECRET_KEY: 'a-test-master-secret-of-32-chars!!',
-    OTP_ECHO_DEV_CODE: 'true',
     OTP_RESEND_SECONDS: '0',
     ...env,
   });
@@ -25,15 +22,16 @@ function setup(env: Record<string, string> = {}) {
   const audit = new AuthAuditService(prisma as any);
   const consoleSender = new ConsoleOtpSender();
   const delivered = jest.spyOn(consoleSender, 'send').mockResolvedValue();
-  const otp = new OtpService(prisma as any, phones, audit, new ZaloZnsSender(), new SmsFallbackSender(), consoleSender, config);
+  const otp = new OtpService(prisma as any, phones, audit, consoleSender, config);
   const actionTokens = new ActionTokenService(config, otp);
-  /** Gửi mã rồi đọc mã từ KÊNH GỬI (log dev), vì `send` không bao giờ trả mã cho caller. */
+  /** Gửi mã qua kênh mô phỏng: mã trả về (`devCode`) phải trùng đúng mã đã đi qua kênh gửi (log dev). */
   const sendCode = async (phone = PHONE, purpose: OtpPurpose = OtpPurpose.TENANT_VIEWING) => {
     const result = await otp.send({ phone, purpose });
-    expect(result).toBeUndefined();
-    return delivered.mock.calls[delivered.mock.calls.length - 1][1];
+    const deliveredCode = delivered.mock.calls[delivered.mock.calls.length - 1][1];
+    expect(result).toEqual({ devCode: deliveredCode });
+    return deliveredCode;
   };
-  return { prisma, otp, phones, actionTokens, sendCode, delivered };
+  return { prisma, otp, phones, actionTokens, sendCode, delivered, config, consoleSender, audit };
 }
 
 const errorCode = async (promise: Promise<unknown>) => {
@@ -47,7 +45,7 @@ const errorCode = async (promise: Promise<unknown>) => {
 
 describe('OtpService', () => {
   describe('send', () => {
-    it('lưu hash (không lưu mã, không lưu SĐT plaintext); mã chỉ đi qua kênh gửi, không trả về caller', async () => {
+    it('lưu hash (không lưu mã, không lưu SĐT plaintext); kênh mô phỏng trả `devCode` trùng mã đã gửi', async () => {
       const { prisma, sendCode } = setup();
       const devCode = await sendCode();
 
@@ -60,14 +58,11 @@ describe('OtpService', () => {
       expect(row.status).toBe('PENDING');
     });
 
-    it('không lộ mã và báo lỗi khi không kênh nào gửi được ngoài chế độ dev', async () => {
-      const { otp } = setup({ OTP_ECHO_DEV_CODE: 'false' });
-      expect(await errorCode(otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_send_failed');
-    });
-
-    it('không bao giờ echo mã ở production dù cờ dev bật', async () => {
-      const { otp } = setup({ NODE_ENV: 'production' });
-      expect(await errorCode(otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }))).toBe('otp_send_failed');
+    it('một luồng duy nhất: production cũng ghi log + trả devCode như local', async () => {
+      const { otp, delivered } = setup({ NODE_ENV: 'production' });
+      const { devCode } = await otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING });
+      expect(devCode).toMatch(/^\d{4}$/);
+      expect(delivered).toHaveBeenCalledWith(PHONE, devCode);
     });
 
     it('không có mã cố định: OTP_DEV_CODE bị bỏ qua, mã luôn ngẫu nhiên 4 số', async () => {
@@ -76,12 +71,6 @@ describe('OtpService', () => {
       for (let i = 0; i < 12; i++) codes.add(await sendCode('+849123456' + String(10 + i)));
       expect([...codes].every((c) => /^\d{4}$/.test(c))).toBe(true);
       expect(codes.size).toBeGreaterThan(1);
-    });
-
-    it('chế độ dev chỉ ghi log khi Zalo/SMS thật không gửi được; không bật ⇒ không gọi kênh log', async () => {
-      const off = setup({ OTP_ECHO_DEV_CODE: 'false' });
-      await off.otp.send({ phone: PHONE, purpose: OtpPurpose.TENANT_VIEWING }).catch(() => undefined);
-      expect(off.delivered).not.toHaveBeenCalled();
     });
 
     it('chặn gửi lại trong thời gian chờ', async () => {

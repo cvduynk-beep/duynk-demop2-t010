@@ -84,6 +84,11 @@ export interface Unit {
   areaM2: number;
   managementFee?: number;
   parkingFeeEstimate?: number;
+  /** Biểu phí gửi xe thực tế tại tòa (Host xác minh lúc thẩm định); thiếu ⇒ đơn giá chung `RATES`. */
+  motorbikeFee?: number;
+  carFee?: number;
+  /** Ghi chú phí khác / tiện ích nội khu. */
+  feeNote?: string;
   utilityCostEstimate?: number;
   direction: string;
   view: string;

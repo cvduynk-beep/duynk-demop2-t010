@@ -46,7 +46,9 @@ export class ListingPublisher {
     const listing = report.listing;
     // Giữ layout hiện tại nếu cùng loại (vd TWO_BED_TWO_BATH và '2PN' không bị hạ xuống ONE_BATH).
     const layout = facts && toLayoutKind(mandate.unit.layoutType) !== facts.layout ? toLayoutType(facts.layout) : null;
-    const mgmtRate = facts ? await mgmtFeePerM2(tx) : 0;
+    const fees = report.livingFees;
+    // Biểu phí Host xác minh tại tòa thắng đơn giá chung; không có ⇒ đơn giá chung `fee_configs` như trước.
+    const mgmtRate = fees ? fees.mgmtFeePerM2 : facts ? await mgmtFeePerM2(tx) : 0;
 
     await tx.unit.update({
       where: { id: mandate.unitId },
@@ -64,6 +66,17 @@ export class ListingPublisher {
               direction: facts.direction,
               floorNumber: facts.floor,
               managementFee: Math.round(facts.areaM2 * mgmtRate),
+            }
+          : fees
+            ? { managementFee: Math.round(Number(mandate.unit.carpetAreaM2) * mgmtRate) }
+            : {}),
+        ...(fees
+          ? {
+              motorbikeFee: fees.motorbikeFee,
+              carFee: fees.carFee,
+              // Ước tính gửi xe mặc định = 1 xe máy (hợp đồng PDF dùng cột này).
+              parkingFeeEstimate: fees.motorbikeFee,
+              feeNote: fees.note ?? null,
             }
           : {}),
         baseRentPrice: agreed.rent,

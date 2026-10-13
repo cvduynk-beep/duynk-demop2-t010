@@ -10,7 +10,7 @@ import { InspectionQueryService } from './inspection-query.service';
 import { ListingMediaController } from './listing-media.controller';
 import { ListingMediaService } from './listing-media.service';
 
-/** Luồng thẩm định ký gửi → tự niêm yết (hồ sơ 16). Không có bước Admin duyệt. */
+/** Luồng thẩm định ký gửi → tự niêm yết (hồ sơ 16). Căn bất thường (Inspector không duyệt) ⇒ Admin quyết ở `ConsignmentReviewService`. */
 @Module({
   imports: [AuthModule, ConsignmentCoreModule, DoorModule, HostViewingsModule],
   controllers: [InspectionController, ListingMediaController],

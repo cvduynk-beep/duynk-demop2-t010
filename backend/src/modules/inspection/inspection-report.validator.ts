@@ -1,5 +1,5 @@
 import type { ConsignmentMeta, InspectionPhoto, InspectionReport, InventoryLineReport } from '../landlord/landlord.mappers';
-import { assertListingText } from '../property/listing-text';
+import { assertListingText, detectListingTextViolation } from '../property/listing-text';
 import { holdingDepositAmount } from '../deposit/deposit-amount';
 import { DIRECTIONS } from '../property/unit-facts';
 import { INSPECTION_CATALOG } from './inspection.catalog';
@@ -126,6 +126,7 @@ export function validateSubmission(input: SubmitInspectionInput, meta: Consignme
 
   // V12–V14
   validateFactsPricingListing(input, meta);
+  validateLivingFees(input);
 }
 
 /** Giá/cọc chủ khai lúc ký gửi (cọc mặc định = giá chào), số nguyên. */
@@ -140,8 +141,8 @@ export function pricingChanged(pricing: { rent: number; securityDeposit: number 
 }
 
 /**
- * V12–V14 (hồ sơ 18): facts, pricing, listing. Bắt buộc khi `approve`; `reject` thì bỏ qua pricing (bỏ qua hoàn toàn,
- * không lưu) và chỉ kiểm facts/listing nếu có gửi. Chạy SAU V1–V10 để không đổi thứ tự lỗi của hồ sơ 16.
+ * V12–V14 (hồ sơ 18): facts, pricing, listing. Bắt buộc khi `approve`; `reject` (chờ Admin rà soát) thì không bắt buộc
+ * nhưng có gửi là kiểm như `approve` và LƯU lại — Admin duyệt niêm yết từ chính phiếu này. Chạy SAU V1–V10 để không đổi thứ tự lỗi của hồ sơ 16.
  */
 function validateFactsPricingListing(input: SubmitInspectionInput, meta: ConsignmentMeta): void {
   const approve = input.recommendation === 'approve';
@@ -161,7 +162,7 @@ function validateFactsPricingListing(input: SubmitInspectionInput, meta: Consign
   const p = input.pricing;
   if (p === undefined || p === null) {
     if (approve) throw reportInvalid('pricing', 'Thiếu giá thuê và tiền cọc bảo đảm.');
-  } else if (approve) {
+  } else {
     if (!Number.isInteger(p.rent) || p.rent < RENT_MIN || p.rent > RENT_MAX) {
       throw reportInvalid('pricing', 'Giá thuê phải là số nguyên từ 3.000.000đ đến 200.000.000đ.');
     }
@@ -187,6 +188,27 @@ function validateFactsPricingListing(input: SubmitInspectionInput, meta: Consign
     }
     for (const h of highlights) assertListingText('highlights', h);
   }
+}
+
+/** Trần hợp lý của biểu phí sinh hoạt (đ) — chặn gõ nhầm thêm số 0; số nguyên ≥ 0. */
+export const LIVING_FEE_MAX = { mgmtFeePerM2: 50_000, motorbikeFee: 2_000_000, carFee: 10_000_000 } as const;
+export const FEE_NOTE_MAX = 150;
+
+/** V15 — biểu phí sinh hoạt thực tế tại tòa: không bắt buộc (phiếu cũ), có gửi thì kiểm từng ô. Ghi chú hiện công khai ⇒ cấm SĐT/link (số tiền thì được). */
+function validateLivingFees(input: SubmitInspectionInput): void {
+  const f = input.livingFees;
+  if (f === undefined || f === null) return;
+  for (const key of ['mgmtFeePerM2', 'motorbikeFee', 'carFee'] as const) {
+    const v = f[key];
+    if (!Number.isInteger(v) || v < 0 || v > LIVING_FEE_MAX[key]) {
+      throw reportInvalid(`livingFees.${key}`, `Phí phải là số nguyên từ 0 đến ${LIVING_FEE_MAX[key].toLocaleString('vi-VN')}đ.`);
+    }
+  }
+  const note = typeof f.note === 'string' ? f.note.trim() : '';
+  if (note.length > FEE_NOTE_MAX) throw reportInvalid('livingFees.note', `Ghi chú phí tối đa ${FEE_NOTE_MAX} ký tự.`);
+  // Ghi chú phí được phép có số tiền (vd "nước 15.000đ/m³") nhưng không được lộ SĐT / link.
+  const reason = note ? detectListingTextViolation(note) : null;
+  if (reason === 'phone' || reason === 'url') assertListingText('livingFees.note', note);
 }
 
 /** Dựng `InspectionReport` từ dữ liệu đã hợp lệ: server đặt `hostId`, `submittedAt`, `avgCondition` (không nhận từ client). */
@@ -223,18 +245,28 @@ export function buildReport(input: SubmitInspectionInput, meta: ConsignmentMeta,
     functions: input.functions,
     netAreaM2: input.netAreaM2,
     furnishing: input.furnishing,
-    // Từ chối: giữ lại chỉ các ảnh niêm yết có thật (tránh id lạ trong bằng chứng).
+    // Không duyệt: giữ lại chỉ các ảnh niêm yết có thật (tránh id lạ khi Admin niêm yết từ phiếu).
     listingPhotoIds: input.recommendation === 'approve' ? input.listingPhotoIds : (input.listingPhotoIds ?? []).filter((id) => listingIds.has(id)),
     recommendation: input.recommendation,
     ...(note ? { note } : {}),
-    // Pricing chỉ ý nghĩa khi đạt (SPEC-P02 §5: "Submit fail kèm pricing ⇒ bỏ qua pricing").
+    // Không duyệt vẫn lưu facts/pricing/listing: Admin duyệt hồ sơ `reviewing` niêm yết theo đúng số liệu này.
     ...(input.facts ? { facts: { ...input.facts } } : {}),
-    ...(input.recommendation === 'approve' && input.pricing
+    ...(input.pricing
       ? {
           pricing: {
             rent: Math.round(input.pricing.rent),
             securityDeposit: Math.round(input.pricing.securityDeposit),
             ...(input.pricing.reason?.trim() ? { reason: input.pricing.reason.trim() } : {}),
+          },
+        }
+      : {}),
+    ...(input.livingFees
+      ? {
+          livingFees: {
+            mgmtFeePerM2: input.livingFees.mgmtFeePerM2,
+            motorbikeFee: input.livingFees.motorbikeFee,
+            carFee: input.livingFees.carFee,
+            ...(input.livingFees.note?.trim() ? { note: input.livingFees.note.trim() } : {}),
           },
         }
       : {}),

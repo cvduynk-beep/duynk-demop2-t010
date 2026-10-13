@@ -189,25 +189,57 @@ export const adminApi = {
   contractTemplate: (id: string) => api.get<AdminContractTemplate>(`/admin/contract-templates/${encodeURIComponent(id)}`),
 };
 
+export interface EarningsStats {
+  totalViewings: number;
+  viewingFeeTotal: number;
+  totalDeals: number;
+  dealCommissionTotal: number;
+  ratingBonusCount: number;
+  ratingBonus: number;
+  campaignBonusCount: number;
+  campaignBonus: number;
+  totalInspections: number;
+  inspectionFeeTotal: number;
+  totalEarnings: number;
+}
+
 export interface HostEarnings {
   hostId: string;
   fullName: string | null;
   roles: string[];
   rating: number;
+  /** Trung bình sao khách chấm sau ca xem; null = chưa có đánh giá. */
+  ratingAvg: number | null;
+  ratingCount: number;
   walletBalance: number;
-  stats: {
-    totalViewings: number;
-    totalDeals: number;
-    dealCommissionTotal: number;
-    viewingFeeTotal: number;
-    ratingBonus: number;
-    campaignBonus: number;
-    totalInspections: number;
-    inspectionFeeTotal: number;
-    totalEarnings: number;
+  /** Biểu phí Admin đang cấu hình; null = chưa cấu hình khoá đó. */
+  fees: {
+    baseViewingFee: number | null;
+    dealCommission: number | null;
+    ratingMultiplier: number | null;
+    ratingMinAvg: number;
+    campaignBonus: number | null;
+    campaignMaxDealsPerWeek: number;
+    inspectionFee: number | null;
+    peakMultiplier: number | null;
+    peakStart: number | null;
+    peakEnd: number | null;
   };
+  stats: EarningsStats;
+  week: EarningsStats & { period: string };
   currentPeriod: string | null;
-  payouts: { id: string; amount: number; period: string; status: string; createdAt: string }[];
+  /** Mỗi cọc Host được ghi công = một dòng; `commission` = hoa hồng + thưởng đánh giá, `campaignBonus` tách riêng. */
+  deals: {
+    depositId: string;
+    unit: string | null;
+    tenantName: string | null;
+    depositCode: string | null;
+    paidAt: string;
+    status: "PAID_HOLDING" | "CONVERTED_TO_CONTRACT" | "REFUNDED" | "FORFEITED" | string | null;
+    commission: number;
+    campaignBonus: number;
+    href: string | null;
+  }[];
 }
 
 export const useAdminDispatch = (): Query<AdminDispatchTicket[]> =>
