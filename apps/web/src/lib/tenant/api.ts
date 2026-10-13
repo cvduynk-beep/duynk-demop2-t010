@@ -90,6 +90,8 @@ export interface OtpSent {
   expiresInSeconds: number;
   /** Số giây tối thiểu trước khi được xin mã mới (khớp `otp_cooldown` của server). */
   resendInSeconds: number;
+  /** Chỉ có khi backend chạy `OTP_PROVIDER=mock` (Zalo giả lập, dev/staging nội bộ). Kênh thật không bao giờ trả mã. */
+  devOtp?: string;
 }
 
 /** Danh mục kèm nguồn: `mock` CHỈ xuất hiện khi server bật fallback có cờ (không bao giờ ở production). */
@@ -133,7 +135,7 @@ export const tenantApi = {
   },
 
   // A4: Gửi mã OTP xác thực SĐT
-  // Response KHÔNG chứa mã OTP (ở dev mã chỉ ghi ra log backend).
+  // Kênh thật: response KHÔNG chứa mã. Chỉ backend `OTP_PROVIDER=mock` mới trả thêm `devOtp`.
   sendOtp: (phone: string, purpose = "TENANT_VIEWING"): Promise<ApiResponse<OtpSent>> => {
     return api.post<OtpSent>("/auth/otp/send", { phone, purpose });
   },

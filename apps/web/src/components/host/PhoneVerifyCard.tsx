@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { DevOtpHint } from "@/components/ui/DevOtpHint";
+import { useEffect, useState } from "react";
+import { ZaloMockOtp } from "@/components/ui/ZaloMockOtp";
 import { Section } from "@/components/ui/Section";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { toast } from "@/components/ui/Toast";
 import { refreshSession } from "@/lib/auth/client";
 import { hostApi, invalidateHostMe, type HostMe } from "@/lib/host/api";
-import { errorText } from "@/lib/tenant/api";
+import { errorText, retryAfterSeconds, type OtpSent } from "@/lib/tenant/api";
 import styles from "./Host.module.css";
 
 /**
@@ -26,27 +26,41 @@ export function PhoneVerifyCard({
   const [editing, setEditing] = useState(!me.isPhoneVerified);
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [sent, setSent] = useState(false);
+  /** Response gửi mã gần nhất (kèm `devOtp` khi Zalo giả lập); null = chưa gửi. Gửi lại thì thay hẳn. */
+  const [sent, setSent] = useState<OtpSent | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   async function send() {
     setBusy(true);
     setError(null);
     const res = await hostApi.sendPhoneOtp(phone.trim());
     setBusy(false);
-    if (!res.ok) return setError(errorText(res));
-    setSent(true);
+    if (!res.ok) {
+      const wait = retryAfterSeconds(res);
+      if (res.code === "otp_cooldown" && wait) setCooldown(wait);
+      return setError(errorText(res));
+    }
+    setSent(res.data);
+    setCode("");
+    setCooldown(res.data.resendInSeconds);
   }
 
-  async function verify() {
+  async function verify(otp = code.trim()) {
     setBusy(true);
     setError(null);
-    const res = await hostApi.verifyPhone(phone.trim(), code.trim());
+    const res = await hostApi.verifyPhone(phone.trim(), otp);
     setBusy(false);
     if (!res.ok) return setError(errorText(res));
     toast("Đã xác thực số điện thoại", "success");
-    setSent(false);
+    setSent(null);
     setCode("");
     setPhone("");
     setEditing(false);
@@ -85,7 +99,7 @@ export function PhoneVerifyCard({
                 inputMode="tel"
                 placeholder="09xx xxx xxx"
                 value={phone}
-                disabled={busy || sent}
+                disabled={busy || sent !== null}
                 onChange={(e) => setPhone(e.target.value)}
               />
             </label>
@@ -97,11 +111,11 @@ export function PhoneVerifyCard({
               <>
                 <p className="muted small">
                   Đã gửi mã 4 số tới Zalo <b className="tnum">{phone.trim()}</b>.{" "}
-                  <button type="button" className="btn btn-quiet btn-sm" disabled={busy} onClick={() => { setSent(false); setCode(""); }}>
-                    Đổi số / gửi lại
+                  <button type="button" className="btn btn-quiet btn-sm" disabled={busy} onClick={() => { setSent(null); setCode(""); setError(null); }}>
+                    Đổi số
                   </button>
                 </p>
-                <DevOtpHint />
+                <ZaloMockOtp code={sent.devOtp} disabled={busy} onFill={(c) => { setCode(c); void verify(c); }} />
                 <label className="field">
                   Mã 4 số
                   <input
@@ -113,13 +127,16 @@ export function PhoneVerifyCard({
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                   />
                 </label>
-                <button type="button" className="btn btn-primary" disabled={busy || code.length !== 4} onClick={verify}>
+                <button type="button" className="btn btn-primary" disabled={busy || code.length !== 4} onClick={() => void verify()}>
                   Xác thực
+                </button>
+                <button type="button" className="btn btn-quiet btn-sm" disabled={busy || cooldown > 0} onClick={() => void send()}>
+                  {cooldown > 0 ? `Gửi lại mã sau ${cooldown}s` : "Gửi lại mã"}
                 </button>
               </>
             )}
             {verified && (
-              <button type="button" className="btn btn-quiet btn-sm" onClick={() => { setEditing(false); setSent(false); setCode(""); setPhone(""); }}>
+              <button type="button" className="btn btn-quiet btn-sm" onClick={() => { setEditing(false); setSent(null); setCode(""); setPhone(""); }}>
                 Huỷ
               </button>
             )}
