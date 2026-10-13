@@ -334,8 +334,6 @@ export const adminApi = {
     api.get<unknown[]>("/admin/exclusive-inventory"),
   getDispatchSla: () =>
     api.get<unknown[]>("/admin/dispatch-sla"),
-  reassignBooking: (bookingId: string, hostId: string) =>
-    api.post<unknown>(`/admin/bookings/${encodeURIComponent(bookingId)}/reassign`, { hostId }),
   getFieldHosts: () =>
     api.get<unknown[]>("/admin/hosts"),
   getFieldHostById: (id: string) =>

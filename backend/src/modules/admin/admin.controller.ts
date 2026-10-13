@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, Res } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Res, HttpCode } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
@@ -6,6 +6,7 @@ import { AdminFeeService } from './admin-fee.service';
 import { AdminPayoutService } from './admin-payout.service';
 import { AdminDispatchService } from './admin-dispatch.service';
 import { AdminBiService } from './admin-bi.service';
+import { AdminBookingsService } from './admin-bookings.service';
 import { AdminDashboardService, parseActivityLimit } from './admin-dashboard.service';
 import { parseReportRange } from './admin-range';
 import { AdminInventoryService } from './admin-inventory.service';
@@ -46,6 +47,7 @@ export class AdminController {
     private readonly keyService: AdminKeyService,
     private readonly registryService: AdminContractRegistryService,
     private readonly dashboardService: AdminDashboardService,
+    private readonly bookingsService: AdminBookingsService,
   ) {}
 
   @Get('bi-funnel')
@@ -156,10 +158,36 @@ export class AdminController {
     return this.dispatchService.escalate(ticketId, dto, user);
   }
 
+  @Get('bookings')
+  @ApiOperation({
+    summary: 'Danh sách lịch xem cho điều phối (phân trang/lọc/tìm phía server)',
+    description: 'tab=open (đang xử lý, mặc định) | today (giờ hẹn hôm nay, giờ VN) | all; q tìm theo mã booking/mã căn; page ≥ 1; pageSize 1–50.',
+  })
+  @ApiQuery({ name: 'tab', required: false, enum: ['open', 'today', 'all'] })
+  @ApiQuery({ name: 'q', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'pageSize', required: false })
+  async listBookings(@Query('tab') tab?: string, @Query('q') q?: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.bookingsService.list({ tab, q, page, pageSize });
+  }
+
+  @Get('bookings/:id/reassign-candidates')
+  @ApiOperation({ summary: 'Field Host đủ điều kiện nhận ca của lịch xem (:id = Viewing id) — cùng quy tắc với lúc giao lại' })
+  async reassignCandidates(@Param('id') id: string) {
+    return this.bookingsService.candidates(id);
+  }
+
   @Post('bookings/:id/reassign')
-  @ApiOperation({ summary: 'Điều phối tay lịch hẹn sang Field Host khác (:id = Viewing id)' })
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Điều phối tay lịch hẹn sang Field Host khác (:id = Viewing id)',
+    description:
+      'Body {hostId, reason 5–300 ký tự, version}. Một transaction: ghi có điều kiện + AuditLog DISPATCH_REASSIGNED. ' +
+      '404 not_found · 400 invalid_request (errors theo field) · 409 reassign_not_allowed (trạng thái) · ' +
+      '409 reassign_conflict (version lệch, errors.latest = dòng mới nhất) · 422 reassign_target_invalid (errors.hostId). Trả dòng booking đã cập nhật.',
+  })
   async reassignBooking(@Param('id') id: string, @Body() dto: ReassignBookingDto, @CurrentUser() user: any) {
-    return this.dispatchService.reassign(id, dto, user);
+    return this.bookingsService.reassign(id, dto, { id: user.id, role: user.role });
   }
 
   @Get('deposits')

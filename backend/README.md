@@ -128,7 +128,9 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 | `GET /admin/exclusive-inventory` | ops_admin | rổ hàng ký gửi | ✅ |
 | `POST /admin/consignments/:id/approve` · `/reject` `{note}` | ops_admin | duyệt / từ chối hồ sơ ký gửi sau thẩm định | ⬜ |
 | `GET /admin/dispatch-sla` | ops_admin | lịch hẹn & cảnh báo quá SLA | ✅ |
-| `POST /admin/bookings/:id/reassign` `{hostId}` | ops_admin | điều phối tay sang Host khác | ⬜ |
+| `GET /admin/bookings` `?tab=open\|today\|all&q&page&pageSize≤50` | ops_admin | màn điều phối: lịch xem + ticket hiện tại (Host, tầng, hạn SLA), khách (SĐT che bớt), `canReassign` + lý do, "Admin đã giao" (từ audit), `version` — phân trang/lọc/tìm (mã booking, mã căn) phía server | ✅ |
+| `GET /admin/bookings/:id/reassign-candidates` | ops_admin | Host đủ điều kiện nhận ca (cùng quy tắc lúc ghi), cùng phân khu lên trước, `sameZone` để cảnh báo; `ineligible` kèm lý do; không trả SĐT/email | ✅ |
+| `POST /admin/bookings/:id/reassign` `{hostId, reason, version}` | ops_admin | điều phối tay — quy tắc ở §1.5.2 | ✅ |
 | `GET /admin/contracts` · `GET /admin/contracts/:id` | ops_admin | sổ hợp đồng: uỷ quyền, giữ chỗ, thuê, hợp tác Host | ⬜ |
 | `POST /admin/contracts/:id/void-hold` `{reason: landlord_breach \| force_majeure, note}` | ops_admin | huỷ cọc giữ chỗ (chủ nhà vi phạm / bất khả kháng) | ⬜ |
 | `POST /admin/contracts/:id/complete-exit` | ops_admin | hoàn tất thoát uỷ quyền sau 15 ngày | ⬜ |
@@ -156,6 +158,16 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 - **Việc điều phối** (chỉ ticket của lịch còn `PENDING_CONFIRMATION | CONFIRMED`): `manualDispatch` = `ESCALATED` + `OFFERED` tầng 3 quá hạn; `overSla` = `OFFERED` tầng 1–2 quá hạn (hạn = `offered_at + sla_seconds`; tầng 1 300 s, tầng 2–3 180 s). Không đếm trùng.
 - **Hồ sơ ký gửi**: uỷ quyền `PENDING_INSPECTION` đã ký; `awaitingHost` = stage `awaiting_host`; `overdue` = stage `awaiting_host | inspecting` có `inspectDueAt` (SLA 2 h) đã qua; `total` = số hồ sơ không trùng của hai nhóm (badge menu).
 - **Không cache**: mỗi lần gọi đọc DB trực tiếp (số liệu nhỏ, cần phản ánh ngay sau thao tác). Khi `viewings` lớn, đề xuất index `viewings(created_at)` (cần migration riêng, chưa làm).
+
+#### 1.5.2. Quy tắc giao lại ca xem (reassign)
+
+- `:id` = viewing id; ticket hiện tại = ticket mới nhất theo `offered_at`.
+- **Được giao lại** khi ticket `OFFERED | EXPIRED | ESCALATED` **và** lịch `PENDING_CONFIRMATION | CONFIRMED`. Ticket `ACCEPTED/CHECKED` (Host đã nhận) hoặc lịch `LOBBY/RECEIVING/VIEWING/CLOSING` (Host đang đón/dẫn) hoặc đã kết thúc ⇒ **409 `reassign_not_allowed`**.
+- **Host nhận hợp lệ**: tài khoản còn hoạt động + vai `SALE` + `ONLINE_AVAILABLE` + khác Host hiện tại + không có ticket `OFFERED/ACCEPTED/CHECKED` cho lịch khác có giờ hẹn cách < 45 phút. Sai ⇒ **422 `reassign_target_invalid`** kèm `errors.hostId`. Khác phân khu vẫn cho (UI cảnh báo).
+- **Body**: `reason` 5–300 ký tự (gom khoảng trắng); thiếu/sai ⇒ **400 `invalid_request`** kèm lỗi theo field.
+- **Sau khi giao**: ticket ⇒ `OFFERED`, Host mới, `offered_at = now`, `accepted_at = null`, giữ tầng & `sla_seconds` (Host mới phải bấm nhận, SLA tính lại).
+- **Đồng thời**: `version` = mã hoá (`ticketId`, `hostId`, `status`, `offered_at`) của ticket lúc client tải (không cần cột version). Lệch, hoặc ghi có điều kiện `updateMany where {id, hostId, status, offered_at}` đổi 0 dòng ⇒ **409 `reassign_conflict`**, `errors.latest` = dòng mới nhất; không ghi đè.
+- **Một transaction**: ghi ticket + `audit_logs` `DISPATCH_REASSIGNED` (actor, vai, `oldValue {hostId, status, tier, offeredAt}`, `newValue {hostId, status, tier, offeredAt, reason, viewingId}`). Ghi audit lỗi ⇒ rollback cả thay đổi. Trả dòng booking đã cập nhật.
 
 ### 1.6. ⏱ Tác vụ nền (không có màn hình)
 

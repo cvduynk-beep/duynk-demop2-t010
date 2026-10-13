@@ -26,6 +26,7 @@ import { AdminInventoryService } from './admin-inventory.service';
 import { AdminDepositService } from './admin-deposit.service';
 import { AdminKeyService } from './admin-key.service';
 import { AdminDashboardService } from './admin-dashboard.service';
+import { AdminBookingsService } from './admin-bookings.service';
 import { AdminService } from './admin.service';
 
 const ENV = {
@@ -72,6 +73,9 @@ const ADMIN_ROUTES: Route[] = [
   // Dashboard admin
   { method: 'get', path: 'dashboard/work-items' },
   { method: 'get', path: 'activity' },
+  // Điều phối lịch xem
+  { method: 'get', path: 'bookings' },
+  { method: 'get', path: 'bookings/x/reassign-candidates' },
 ];
 
 describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
@@ -129,6 +133,8 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
       .overrideProvider(AdminKeyService)
       .useValue(fakeService)
       .overrideProvider(AdminDashboardService)
+      .useValue(fakeService)
+      .overrideProvider(AdminBookingsService)
       .useValue(fakeService)
       .compile();
     app = moduleRef.createNestApplication();
