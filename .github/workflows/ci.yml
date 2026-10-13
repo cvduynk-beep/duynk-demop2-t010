@@ -74,6 +74,12 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          # NODE_ENV=test tắt các job quét nền (payout, hết hạn giữ chỗ) ⇒ không ghi vào DB thật.
+          NODE_ENV: test
+          # AppModule đòi cấu hình Supabase lúc khởi tạo; suite này chỉ đọc qua Prisma, không dùng Storage
+          # ⇒ giá trị giữ chỗ, KHÔNG đưa service-role key thật lên CI.
+          SUPABASE_URL: https://ci-placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-not-a-secret
 
   # Web Next.js (4 cổng).
   web:
