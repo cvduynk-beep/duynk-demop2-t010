@@ -253,4 +253,62 @@ describe('FieldHostsService', () => {
       expect(await codeOf(service.update('00000000-0000-4000-8000-000000000000', { fullName: 'X' }, ADMIN, CTX))).toBe('host_not_found');
     });
   });
+
+  describe('phạm vi phân khu (PUT /admin/field-hosts/:id/zone-scope)', () => {
+    async function scoped() {
+      const ctx = setup();
+      ctx.prisma.building.rows.push({ id: 'b3', zoneName: 'The Beverly' });
+      const host = await ctx.service.create(input({ roles: ['sale'] }) as any, ADMIN, CTX);
+      ctx.prisma.auditLog.rows.length = 0;
+      ctx.invalidate.mockClear();
+      return { ...ctx, host };
+    }
+
+    it('host cũ mặc định selected + chỉ phân khu chính (không đổi hành vi); detail có zones + version', async () => {
+      const { host } = await scoped();
+      expect(host).toMatchObject({ zoneScope: 'selected', managedZones: [], zones: ['The Sapphire 1'], zoneScopeVersion: 'selected:' });
+    });
+
+    it('gán selected: bỏ trùng + bỏ phân khu chính; audit cũ/mới; invalidate phiên; gửi lại y hệt ⇒ changed false, không log thêm', async () => {
+      const { service, prisma, host, invalidate } = await scoped();
+      const res = await service.updateZoneScope(host.id, { zoneScope: 'selected', managedZones: [' The Zenpark ', 'The Zenpark', 'The Sapphire 1'], version: host.zoneScopeVersion }, ADMIN, CTX);
+      expect(res).toMatchObject({ changed: true, zoneScope: 'selected', managedZones: ['The Zenpark'], zones: ['The Sapphire 1', 'The Zenpark'] });
+      expect(prisma.fieldHost.rows[0]).toMatchObject({ zoneScope: 'SELECTED', managedZones: ['The Zenpark'] });
+      const log = prisma.auditLog.rows.find((r: any) => r.actionType === 'HOST_ZONE_SCOPE_UPDATE');
+      expect(log).toMatchObject({ actorId: ADMIN.id, entityId: host.id, oldValue: { zoneScope: 'selected', managedZones: [] }, newValue: { zoneScope: 'selected', managedZones: ['The Zenpark'] } });
+      expect(invalidate).toHaveBeenCalledWith(host.profileId);
+      const again = await service.updateZoneScope(host.id, { zoneScope: 'selected', managedZones: ['The Zenpark'], version: res.zoneScopeVersion }, ADMIN, CTX);
+      expect(again.changed).toBe(false);
+      expect(prisma.auditLog.rows).toHaveLength(1);
+    });
+
+    it('gán all ⇒ zones null (wildcard); phân khu không tồn tại ⇒ invalid_zone, không ghi gì', async () => {
+      const { service, prisma, host } = await scoped();
+      expect(await codeOf(service.updateZoneScope(host.id, { zoneScope: 'selected', managedZones: ['Nowhere'], version: host.zoneScopeVersion }, ADMIN, CTX))).toBe('invalid_zone');
+      expect(prisma.auditLog.rows).toHaveLength(0);
+      const res = await service.updateZoneScope(host.id, { zoneScope: 'all', managedZones: [], version: host.zoneScopeVersion }, ADMIN, CTX);
+      expect(res).toMatchObject({ zoneScope: 'all', zones: null });
+      expect(prisma.fieldHost.rows[0].zoneScope).toBe('ALL');
+    });
+
+    it('version cũ (Admin khác vừa đổi) ⇒ 409 zone_scope_conflict kèm giá trị mới nhất; dữ liệu giữ nguyên', async () => {
+      const { service, prisma, host } = await scoped();
+      await service.updateZoneScope(host.id, { zoneScope: 'all', managedZones: [], version: host.zoneScopeVersion }, ADMIN, CTX);
+      const err: any = await service.updateZoneScope(host.id, { zoneScope: 'selected', managedZones: ['The Beverly'], version: host.zoneScopeVersion }, ADMIN, CTX).catch((e) => e);
+      expect(err.code).toBe('zone_scope_conflict');
+      expect(err.getResponse().errors.latest).toMatchObject({ zoneScope: 'all', zoneScopeVersion: 'all:' });
+      expect(prisma.fieldHost.rows[0]).toMatchObject({ zoneScope: 'ALL', managedZones: [] });
+    });
+
+    it('hai Admin lưu cùng lúc cùng version ⇒ đúng 1 thành công (CAS trong transaction)', async () => {
+      const { service, host } = await scoped();
+      const v = host.zoneScopeVersion;
+      const codes = await Promise.all([
+        codeOf(service.updateZoneScope(host.id, { zoneScope: 'all', managedZones: [], version: v }, ADMIN, CTX)),
+        codeOf(service.updateZoneScope(host.id, { zoneScope: 'selected', managedZones: ['The Beverly'], version: v }, ADMIN, CTX)),
+      ]);
+      expect(codes.sort()).toEqual(['no-error', 'zone_scope_conflict']);
+    });
+  });
 });
+

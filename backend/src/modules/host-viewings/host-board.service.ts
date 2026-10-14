@@ -3,7 +3,8 @@ import { TicketStatus, ViewingStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PhoneService } from '../auth/phone/phone.service';
 import { vnDayRange } from '../dispatch/dispatch-assigner.service';
-import { inZone, ticketTierAt } from '../dispatch/ticket-tier';
+import { ticketTierAt } from '../dispatch/ticket-tier';
+import { coversZone } from '../field-hosts/host-scope';
 import { toSummary, toTicketCard, UNIT_INCLUDE } from './host-viewings.mappers';
 import type { HostActor, HostBoard, TicketCard } from './host-viewings.types';
 
@@ -65,7 +66,8 @@ export class HostBoardService {
         if (own) assigned.push(toTicketCard(t, tier, { canAccept: true, canClaim: false }, this.phones));
         continue; // ASSIGNED của Sale khác không lộ
       }
-      if (tier === 'ZONE_POOL' && !own && !inZone(host.assignedZone, t.viewing.unit.building.zoneName)) continue;
+      // ZONE_POOL: chỉ Sale có phạm vi phủ phân khu của tòa (phân khu chính / phân khu thêm / tất cả). WIDE_POOL: mọi Sale.
+      if (tier === 'ZONE_POOL' && !own && !coversZone(host, t.viewing.unit.building.zoneName)) continue;
       pooled.push(toTicketCard(t, tier, { canAccept: false, canClaim: true }, this.phones));
     }
     const requests = [...assigned, ...pooled];

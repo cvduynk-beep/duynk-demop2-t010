@@ -28,12 +28,14 @@ export function buildWorld() {
   const w = {
     db, prisma, phones, assigner, doors, flow, board, actors,
 
-    addHost(name: string, o: { zone?: string; roles?: string[]; duty?: string; active?: boolean; verified?: boolean; rating?: number } = {}) {
+    addHost(name: string, o: { zone?: string; scope?: 'ALL' | 'SELECTED'; managed?: string[]; roles?: string[]; duty?: string; active?: boolean; verified?: boolean; rating?: number } = {}) {
       n += 1;
       const host = {
         id: `host-${name}`,
         profileId: `prof-${name}`,
         assignedZone: o.zone ?? 'The Sapphire 1',
+        zoneScope: o.scope ?? 'SELECTED',
+        managedZones: o.managed ?? [],
         roles: o.roles ?? ['SALE'],
         dutyStatus: o.duty ?? 'ONLINE_AVAILABLE',
         rating: o.rating ?? 5,

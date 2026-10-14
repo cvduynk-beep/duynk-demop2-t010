@@ -16,6 +16,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   host_already_exists: "Email này đã là Field Host.",
   host_has_active_tickets: "Field Host đang có ca được giao/đang dẫn. Điều phối lại ca trước khi khoá.",
   invalid_zone: "Phân khu không hợp lệ.",
+  zone_scope_conflict: "Phạm vi phân khu của Host vừa được quản trị viên khác thay đổi. Đã tải giá trị mới nhất, kiểm tra rồi lưu lại.",
   unauthorized: "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.",
   rate_limited: "Bạn thao tác quá nhanh. Thử lại sau ít phút.",
   login_locked: "Bạn đã nhập sai mật khẩu quá nhiều lần. Tài khoản tạm khoá đăng nhập, thử lại sau ít phút.",

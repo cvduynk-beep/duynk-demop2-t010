@@ -493,3 +493,46 @@ describe('HostService.setDuty (SPEC-P01 §5; H1)', () => {
     expect(hostRoles).toEqual(['sale']);
   });
 });
+
+describe('Phạm vi phân khu (zone scope, 2026-10-14)', () => {
+  it('ZONE_POOL: phân khu thêm / tất cả thấy + nhận được; chỉ phân khu chính thì không; tự giao vẫn theo phân khu chính', async () => {
+    const w = buildWorld();
+    const a = w.addHost('a');
+    const extra = w.addHost('extra', { zone: 'Zen Park', managed: ['The Sapphire 1'] });
+    const all = w.addHost('all', { zone: 'Zen Park', scope: 'ALL' });
+    const none = w.addHost('none', { zone: 'Zen Park' });
+    const t = w.addTicket(w.addViewing(w.addUnit('U1')), { hostId: a.id });
+
+    const view = async (h: any) => (await w.board.board(await w.actor(h), sec(200))).requests.map((r) => r.tier);
+    expect(await view(extra)).toEqual(['ZONE_POOL']);
+    expect(await view(all)).toEqual(['ZONE_POOL']);
+    expect(await view(none)).toEqual([]);
+
+    jest.setSystemTime(sec(200));
+    expect(await codeOf(w.flow.claim(t.id, await w.actor(none)))).toBe('zone_mismatch');
+    expect(await codeOf(w.flow.claim(t.id, await w.actor(all)))).toBe('ok');
+    expect(w.db.tickets.find((x) => x.id === t.id)).toMatchObject({ status: 'ACCEPTED', hostId: all.id });
+  });
+
+  it('nhận ca đọc phạm vi MỚI trong transaction: Admin vừa thu hẹp (cache actor còn cũ) ⇒ zone_mismatch', async () => {
+    const w = buildWorld();
+    const a = w.addHost('a');
+    const b = w.addHost('b', { zone: 'Zen Park', scope: 'ALL' });
+    const t = w.addTicket(w.addViewing(w.addUnit('U1')), { hostId: a.id });
+    const stale = await w.actor(b); // actor còn scope ALL
+    w.db.hosts.find((h) => h.id === b.id).zoneScope = 'SELECTED';
+    jest.setSystemTime(sec(200));
+    expect(await codeOf(w.flow.claim(t.id, stale))).toBe('zone_mismatch');
+  });
+
+  it('hai Sale cùng phạm vi nhận một ca pool cùng lúc ⇒ đúng 1 người thắng, người sau ticket_taken', async () => {
+    const w = buildWorld();
+    const a = w.addHost('a');
+    const p = w.addHost('p', { zone: 'Zen Park', scope: 'ALL' });
+    const q = w.addHost('q', { zone: 'Zen Park', managed: ['The Sapphire 1'] });
+    const t = w.addTicket(w.addViewing(w.addUnit('U1')), { hostId: a.id });
+    jest.setSystemTime(sec(200));
+    const codes = await Promise.all([codeOf(w.flow.claim(t.id, await w.actor(p))), codeOf(w.flow.claim(t.id, await w.actor(q)))]);
+    expect(codes.sort()).toEqual(['ok', 'ticket_taken']);
+  });
+});

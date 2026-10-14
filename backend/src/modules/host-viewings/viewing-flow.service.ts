@@ -9,7 +9,8 @@ import {
   NO_SHOW_GRACE_MIN,
   REMINDER_LEAD_MIN,
 } from '../dispatch/dispatch.constants';
-import { inZone, ticketTierAt } from '../dispatch/ticket-tier';
+import { ticketTierAt } from '../dispatch/ticket-tier';
+import { coversZone } from '../field-hosts/host-scope';
 import { DoorCodeService } from '../door/door-code.service';
 import type { EmergencyKind } from './dto/host-viewings.dto';
 import {
@@ -63,8 +64,13 @@ export class ViewingFlowService {
       const tier = ticketTierAt(ticket, now);
       const own = ticket.hostId === host.hostId;
       if (tier === 'ASSIGNED' && !own) throw hostConflict('ticket_not_open');
-      if (tier === 'ZONE_POOL' && !own && !inZone(host.assignedZone, ticket.viewing.unit.building.zoneName)) {
-        throw zoneMismatch();
+      if (tier === 'ZONE_POOL' && !own) {
+        // Phạm vi đọc lại trong transaction (HostActor cache 30s): Admin vừa thu hẹp phạm vi thì lập tức không nhận được.
+        const scope = await tx.fieldHost.findUnique({
+          where: { id: host.hostId },
+          select: { assignedZone: true, zoneScope: true, managedZones: true },
+        });
+        if (!scope || !coversZone(scope, ticket.viewing.unit.building.zoneName)) throw zoneMismatch();
       }
       // Sale đã từ chối ca này không được nhận lại qua pool.
       const rejectedByMe = await tx.dispatchTicket.count({

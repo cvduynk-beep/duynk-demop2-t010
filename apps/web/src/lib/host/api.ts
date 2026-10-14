@@ -19,6 +19,10 @@ export interface HostMe {
   phone: string | null;
   isPhoneVerified: boolean;
   assignedZone: string;
+  /** Phạm vi nhận ca pool + xem (Admin gán). `zones` null = tất cả phân khu. */
+  zoneScope: "all" | "selected";
+  managedZones: string[];
+  zones: string[] | null;
   roles: HostRoleCode[];
   dutyStatus: HostDuty;
   rating: number;

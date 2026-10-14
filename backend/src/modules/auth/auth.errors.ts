@@ -31,6 +31,7 @@ const MESSAGES: Record<string, [HttpStatus, string]> = {
   host_has_active_tickets: [HttpStatus.CONFLICT, 'Field Host đang có ca được giao hoặc đang dẫn, cần điều phối lại trước khi khoá'],
   HOST_ROLES_INVALID: [HttpStatus.BAD_REQUEST, 'Vai Field Host chỉ được là Sale hoặc Sale + Thẩm định'],
   invalid_zone: [HttpStatus.BAD_REQUEST, 'Phân khu không hợp lệ'],
+  zone_scope_conflict: [HttpStatus.CONFLICT, 'Phạm vi phân khu của Host vừa được người khác thay đổi. Xem giá trị mới nhất rồi lưu lại.'],
   invalid_request: [HttpStatus.BAD_REQUEST, 'Thông tin chưa hợp lệ'],
   unauthorized: [HttpStatus.UNAUTHORIZED, 'Chưa đăng nhập hoặc phiên đã hết hạn'],
   forbidden: [HttpStatus.FORBIDDEN, 'Bạn không có quyền thực hiện thao tác này'],

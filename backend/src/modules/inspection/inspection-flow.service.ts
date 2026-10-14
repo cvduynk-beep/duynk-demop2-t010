@@ -16,6 +16,7 @@ import {
   inspectionTaken,
   reportInvalid,
 } from './inspection.errors';
+import { coversZone } from '../field-hosts/host-scope';
 import { assertCaseOwner, isOpenPool, mutateInspection } from './inspection.helpers';
 import { InspectionQueryService } from './inspection-query.service';
 import { buildReport, originalPricing, pricingChanged, validateSubmission } from './inspection-report.validator';
@@ -61,6 +62,12 @@ export class InspectionFlowService {
       if (stage !== 'awaiting_host') throw inspectionBadStage();
       if (claimed) {
         if (!isOpenPool(meta, locked.signedAt, now)) throw inspectionNotOpen();
+        // Phạm vi đọc lại trong transaction (HostActor cache 30s). Ngoài phạm vi ⇒ như không tồn tại (không lộ ca).
+        const scope = await tx.fieldHost.findUnique({
+          where: { id: actor.hostId },
+          select: { assignedZone: true, zoneScope: true, managedZones: true },
+        });
+        if (!scope || !coversZone(scope, locked.unit.building.zoneName)) throw inspectionNotFound();
       } else if (meta.hostId !== actor.hostId) {
         throw inspectionNotFound();
       }

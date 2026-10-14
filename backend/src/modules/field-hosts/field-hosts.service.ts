@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { HostDutyStatus, Prisma, TicketStatus } from '@prisma/client';
+import { HostDutyStatus, HostZoneScope, Prisma, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestContext } from '../auth/auth.service';
 import { authError } from '../auth/auth.errors';
@@ -12,7 +12,8 @@ import { AuthSessionService } from '../auth/session/auth-session.service';
 import { RoleIdService } from '../auth/session/role-ids.service';
 import { AuthenticatedUser } from '../auth/session/authenticated-user';
 import { isoWeekPeriod } from '../admin/admin-payout.service';
-import { CreateFieldHostDto, ListFieldHostsQueryDto, UpdateFieldHostDto } from './dto/field-hosts.dto';
+import { CreateFieldHostDto, ListFieldHostsQueryDto, UpdateFieldHostDto, UpdateZoneScopeDto } from './dto/field-hosts.dto';
+import { zoneScopeVersion, zoneScopeView } from './host-scope';
 
 const HOST_INCLUDE = {
   profile: {
@@ -291,6 +292,44 @@ export class FieldHostsService {
     return this.detail(id);
   }
 
+  /**
+   * Phạm vi nhận ca pool + xem của Host (chỉ Admin — class đã `@Roles('ops_admin')`). Validate từng phân khu theo danh
+   * sách tòa hiện có; phân khu chính luôn thuộc phạm vi nên bị bỏ khỏi `managedZones`. Ghi có điều kiện theo `version`
+   * trong transaction cùng audit `HOST_ZONE_SCOPE_UPDATE` (cũ → mới); lệch ⇒ 409 `zone_scope_conflict` kèm giá trị mới nhất.
+   */
+  async updateZoneScope(id: string, dto: UpdateZoneScopeDto, actor: AuthenticatedUser, ctx: RequestContext) {
+    const host = await this.load(id);
+    const known = new Set(await this.zones());
+    const wanted = [...new Set(dto.managedZones.map((z) => z.trim()).filter(Boolean))].filter((z) => z !== host.assignedZone);
+    const unknown = wanted.filter((z) => !known.has(z));
+    if (unknown.length) throw authError('invalid_zone', { managedZones: `Phân khu không hợp lệ: ${unknown.join(', ')}` });
+    if (dto.version !== zoneScopeVersion(host)) throw await this.scopeConflict(id);
+
+    const next = { zoneScope: dto.zoneScope === 'all' ? HostZoneScope.ALL : HostZoneScope.SELECTED, managedZones: wanted.sort() };
+    const before = zoneScopeView(host);
+    const after = zoneScopeView({ assignedZone: host.assignedZone, ...next });
+    if (zoneScopeVersion(host) === zoneScopeVersion({ assignedZone: host.assignedZone, ...next })) {
+      return { ...(await this.detail(id)), changed: false };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // CAS trên đúng giá trị vừa đọc: hai Admin lưu cùng lúc ⇒ người sau count 0 ⇒ 409.
+      const res = await tx.fieldHost.updateMany({
+        where: { id, zoneScope: host.zoneScope, managedZones: { equals: host.managedZones } },
+        data: next,
+      });
+      if (res.count !== 1) throw await this.scopeConflict(id, tx);
+      await this.audit(tx, actor, ctx, 'HOST_ZONE_SCOPE_UPDATE', id, before, { ...after, assignedZone: host.assignedZone });
+    });
+    this.sessions.invalidate(host.profileId);
+    return { ...(await this.detail(id)), changed: true };
+  }
+
+  private async scopeConflict(id: string, db: Prisma.TransactionClient | PrismaService = this.prisma) {
+    const latest = await db.fieldHost.findUnique({ where: { id }, select: { assignedZone: true, zoneScope: true, managedZones: true } });
+    return authError('zone_scope_conflict', latest ? { latest: { ...zoneScopeView(latest), zoneScopeVersion: zoneScopeVersion(latest) } } : undefined);
+  }
+
   /** Khoá mềm (idempotent): Profile `isActive=false` ⇒ đăng nhập trả `account_suspended`, phiên đang có bị xoá. */
   deactivate(id: string, actor: AuthenticatedUser, ctx: RequestContext) {
     return this.update(id, { isActive: false }, actor, ctx);
@@ -345,6 +384,8 @@ export class FieldHostsService {
       phone: decryptPhoneForDisplay(this.phones, row.profile.phoneEnc),
       isPhoneVerified: row.profile.isPhoneVerified,
       assignedZone: row.assignedZone,
+      ...zoneScopeView(row),
+      zoneScopeVersion: zoneScopeVersion(row),
       roles: toHostRoleCodes(row.roles),
       dutyStatus: row.dutyStatus,
       rating: Number(row.rating),
