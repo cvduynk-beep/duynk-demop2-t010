@@ -1,5 +1,5 @@
 /**
- * Chính sách giữ chỗ — NGUỒN DUY NHẤT cho số giờ khoá căn sau khi cọc 2.000.000đ được báo có (AGENTS: mặc định 48h,
+ * Chính sách giữ chỗ — NGUỒN DUY NHẤT cho số giờ khoá căn sau khi Tiền cọc bảo đảm được báo có (AGENTS: mặc định 48h,
  * Admin cài 12–72h trên `/admin/settings`, chỉnh riêng từng căn ở Kho căn).
  *
  * Thứ tự ưu tiên (mọi nơi: biên bản cọc, tạo cọc, báo có webhook / duyệt UNC, catalog, căn đã lưu, chatbot):

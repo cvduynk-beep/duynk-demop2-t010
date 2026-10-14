@@ -1,8 +1,8 @@
-import { holdingDepositAmount } from './deposit-amount';
 import { DepositTermsDoc } from '../tenant/tenant.types';
 import { clampHoldHours, HOLD_HOURS_DEFAULT } from './hold-policy';
 
-export const DEPOSIT_TERMS_VERSION = 'HOLD-2026.10-v1';
+/** v2 (2026-10-14): chuyển thẳng Tiền cọc bảo đảm thay cọc giữ chỗ 2.000.000đ; khách đã tick v1 phải tick lại. */
+export const DEPOSIT_TERMS_VERSION = 'DEP-2026.10-v2';
 
 export const HOUSE_RULES = [
   {
@@ -43,17 +43,24 @@ export const HOUSE_RULES = [
   },
 ] as const;
 
-export function buildDepositTerms(holdHours: number = HOLD_HOURS_DEFAULT): DepositTermsDoc {
+const fmt = (n: number) => `${new Intl.NumberFormat('vi-VN').format(n)} VNĐ`;
+
+/**
+ * Biên bản điều khoản cọc khách đọc trước khi tick. `amount` = Tiền cọc bảo đảm của căn (0 khi chưa chọn căn ⇒ câu chữ
+ * chung). Chốt nhanh hiển thị ở modal riêng; điều khoản ở đây nêu quy tắc chung để mọi khoản cọc đều cùng một văn bản.
+ */
+export function buildDepositTerms(holdHours: number = HOLD_HOURS_DEFAULT, amount = 0): DepositTermsDoc {
   const clampedHoldHours = clampHoldHours(holdHours);
+  const money = amount > 0 ? fmt(amount) : 'Tiền cọc bảo đảm của căn (chủ nhà quy định; chưa quy định thì bằng 01 tháng tiền thuê)';
 
   return {
     version: DEPOSIT_TERMS_VERSION,
-    amount: holdingDepositAmount(),
+    amount,
     holdHours: clampedHoldHours,
     items: [
       {
         id: 'amount',
-        text: 'Khoản cọc giữ chỗ 2.000.000 VNĐ chuyển qua mã VietQR động vào tài khoản định danh của nền tảng VinStay AI, nội dung COC <mã căn> <SĐT>; không chuyển cho Field Host hay chủ nhà.',
+        text: `Bên B chốt căn bằng cách chuyển ${money} — chính là Tiền cọc bảo đảm tài sản & nội thất — qua mã VietQR động vào tài khoản định danh của nền tảng VinStay AI, nội dung COC <mã căn> <mã lịch>; không chuyển cho Field Host hay chủ nhà.`,
         source: 'legal/02 Điều 2.1–2.2 · tenant/02 §2.2',
       },
       {
@@ -63,8 +70,18 @@ export function buildDepositTerms(holdHours: number = HOLD_HOURS_DEFAULT): Depos
       },
       {
         id: 'obligation',
-        text: `Trong ${clampedHoldHours} giờ, Bên B hoàn tất xác minh danh tính eKYC (CCCD gắn chip) trên ứng dụng để hệ thống lập Hợp đồng thuê.`,
-        source: 'legal/02 Điều 3 (rút gọn theo quyết định 2026-10-04)',
+        text: `Trong ${clampedHoldHours} giờ, Bên B hoàn tất xác minh danh tính eKYC (CCCD gắn chip) và ký Hợp đồng thuê trên ứng dụng.`,
+        source: 'legal/02 Điều 3',
+      },
+      {
+        id: 'fast_close',
+        text: 'Chốt nhanh (chỉ khi chủ nhà ủy quyền): Bên B cam kết chu kỳ thanh toán 1/3/6 tháng để được giảm giá thuê (không thấp hơn giá sàn chủ nhà đặt) và giảm khoảng 5% tiền cọc; ưu đãi chỉ giữ khi tiền cọc về trong 24 giờ, quá hạn hệ thống hoàn lại khoản đã chuyển và Bên B đặt cọc lại theo giá thường. Hợp đồng thuê bắt buộc đúng chu kỳ và giá đã chốt.',
+        source: 'AGENTS.md Chủ nhà #1 (Giá sàn an toàn) · legal/02 Điều 2.6',
+      },
+      {
+        id: 'move_in',
+        text: 'Ngày dọn vào sớm nhất là 02 ngày sau khi cọc về (BQL duyệt cư dân, thẻ thang máy, Field Host kiểm định). Miễn phí chờ dọn vào tối đa 07 ngày kể từ khi cọc về; chọn ngày sau đó (tối đa 30 ngày) thì Hợp đồng và tiền thuê bắt đầu tính từ ngày thứ 08.',
+        source: 'legal/02 Điều 2.5 · legal/06 Điều 2.4 (Smart Move-in Window Protocol)',
       },
       {
         id: 'forfeit',
@@ -73,17 +90,17 @@ export function buildDepositTerms(holdHours: number = HOLD_HOURS_DEFAULT): Depos
       },
       {
         id: 'landlord_breach',
-        text: 'Chủ nhà đổi giá, đổi hiện trạng hoặc từ chối cho thuê trong thời hạn giữ chỗ: hoàn 100% cọc và phạt cọc bằng 2.000.000 VNĐ (tổng 4.000.000 VNĐ). Bất khả kháng: hoàn 100%, không phạt.',
+        text: `Chủ nhà đổi giá, đổi hiện trạng hoặc từ chối cho thuê trong thời hạn giữ chỗ: hoàn 100% cọc và phạt cọc bằng đúng số tiền cọc (Điều 328 BLDS 2015)${amount > 0 ? ` — tổng ${fmt(amount * 2)}` : ''}. Bất khả kháng: hoàn 100%, không phạt.`,
         source: 'legal/02 Điều 6.2–6.3',
       },
       {
         id: 'convert',
-        text: 'Khi lập Hợp đồng thuê, 2.000.000 VNĐ chuyển 100% thành một phần Tiền cọc bảo đảm tài sản & nội thất, giữ suốt kỳ thuê; tuyệt đối không trừ vào tiền thuê tháng đầu.',
+        text: 'Khi ký Hợp đồng thuê, khoản đã chuyển trở thành 100% Tiền cọc bảo đảm tài sản & nội thất, giữ suốt kỳ thuê (không thu bù); tuyệt đối không trừ vào tiền thuê tháng đầu.',
         source: 'AGENTS.md · legal/02 Điều 4',
       },
     ],
     houseRules: HOUSE_RULES.map((r) => ({ ...r })),
     consentLabel:
-      'Tôi đã đọc và đồng ý điều khoản đặt cọc giữ chỗ và nội quy căn hộ theo Điều 328 Bộ luật Dân sự 2015, và cho phép VinStay AI xử lý dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP.',
+      'Tôi đã đọc và đồng ý điều khoản đặt Tiền cọc bảo đảm và nội quy căn hộ theo Điều 328 Bộ luật Dân sự 2015, và cho phép VinStay AI xử lý dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP.',
   };
 }

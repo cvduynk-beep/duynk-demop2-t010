@@ -69,10 +69,10 @@ Field Host được nhận thù lao cho mỗi lượt dẫn khách xem phòng ho
 Đây là khoản thu nhập tạo đòn bẩy tài chính lớn nhất, khuyến khích Host tư vấn tận tâm và hỗ trợ khách thuê chốt cọc nhanh:
 
 1. **Tỷ lệ hoa hồng chốt cọc thành công:**
-   - Khi khách thuê quét mã VietQR động chuyển cọc 2.000.000 VNĐ và ký Hợp đồng Thuê căn hộ chính thức:
+   - Khi khách thuê quét mã VietQR động chuyển cọc chốt căn và ký Hợp đồng Thuê căn hộ chính thức:
    - Field Host được hưởng hoa hồng từ **300.000 VNĐ đến 1.000.000 VNĐ / hợp đồng chốt thành công** (tương đương **20% đến 40%** trên tổng phí dịch vụ nền tảng thu được từ giao dịch đó).
 2. **Cơ chế Khóa Quyền Lợi Bản Quyền (Attribution Lock):**
-   - Ngay khi giao dịch cọc 2.000.000 VNĐ được xác nhận qua Webhook ngân hàng, hệ thống tự động khóa cứng mã Host ID của người dẫn phòng với hồ sơ căn hộ (`holding_deposits.host_id`).
+   - Ngay khi giao dịch cọc chốt căn được xác nhận qua Webhook ngân hàng, hệ thống tự động khóa cứng mã Host ID của người dẫn phòng với hồ sơ căn hộ (`holding_deposits.host_id`).
    - Quyền lợi hoa hồng được bảo đảm 100% cho Host trực tiếp dẫn phòng, không bị chia sẻ hay tranh chấp bởi bất kỳ nhân sự nào khác.
 
 ---

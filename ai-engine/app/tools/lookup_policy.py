@@ -62,7 +62,8 @@ def substitute(body: str, terms: dict | None) -> tuple[str, list[str]]:
     """Thay biến từ DepositTermsDoc (`amount`, `holdHours`). API không có min/max ⇒ luôn missing_params, CẤM đoán."""
     values: dict[str, str] = {}
     if terms:
-        if isinstance(terms.get("amount"), int | float):
+        # Cọc v2: số tiền theo từng căn; điều khoản chung (không mã căn) trả 0 ⇒ coi là thiếu, CẤM nói "cọc 0đ".
+        if isinstance(terms.get("amount"), int | float) and terms["amount"] > 0:
             values["holding_deposit"] = _vn(int(terms["amount"]))
         if isinstance(terms.get("holdHours"), int | float):
             values["hold_hours"] = str(int(terms["holdHours"]))

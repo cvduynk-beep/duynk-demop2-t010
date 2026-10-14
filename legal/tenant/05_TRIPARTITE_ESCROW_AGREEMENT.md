@@ -46,8 +46,8 @@ Các Bên thống nhất ký kết Thỏa thuận Ký quỹ Giữ hộ Tiền C�
 ### ĐIỀU 1: ĐỐI TƯỢNG VÀ MỤC ĐÍCH KÝ QUỸ GIỮ HỘ
 1. **Đối tượng ký quỹ:** Toàn bộ khoản **Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)** của Căn hộ số **[MÃ CĂN]** Tòa **[TÒA]** The Sapphire, Vinhomes Ocean Park theo Hợp đồng thuê số VSA-TENANT-04-LEASE-[MÃ CĂN].
 2. **Tổng số tiền ký quỹ:** **[...] VNĐ (Bằng chữ: [...])**, bao gồm:
-   * **2.000.000 VNĐ (Hai triệu đồng):** Đã chuyển khoản qua VietQR cọc giữ chỗ 24h và được chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản.
-   * **[...] VNĐ:** Phần tiền cọc bảo đảm còn thiếu được Bên A nộp bổ sung trước khi nhận nhà.
+   * **[...] VNĐ:** Tiền đặt cọc Bên A đã chuyển qua VietQR khi chốt căn (bằng Tiền Cọc Bảo Đảm của căn), được chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản; Bên A không phải nộp bù.
+   * *(Riêng khoản cọc giữ chỗ 2.000.000 VNĐ theo điều khoản cũ `HOLD-2026.10-v1`: cộng phần còn thiếu **[...] VNĐ** Bên A nộp bổ sung trước khi nhận nhà.)*
 3. **Mục đích giữ hộ:** Bên A và Bên B đồng ý ủy quyền cho Bên C làm Đơn vị Trung gian Giữ hộ Tiền cọc (Escrow Agent) độc lập, khách quan để bảo đảm quyền lợi tài sản cho Bên B (Chủ nhà) và bảo đảm quyền được hoàn lại cọc đúng hạn, không bị bắt chẹt cho Bên A (Khách thuê).
 
 ---

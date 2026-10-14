@@ -63,7 +63,7 @@ export function LandlordExitRequest() {
 
       <Section>
         <p className="small muted" style={{ margin: 0 }}>
-          Báo trước tối thiểu 15 ngày. Căn phải đang trống — không có cọc giữ chỗ hay hợp đồng thuê hiệu lực. Sau 15 ngày, mã cửa và chìa cơ của căn được gỡ khỏi mạng lưới Field Host.
+          Báo trước tối thiểu 15 ngày. Căn phải đang trống — không có cọc đang giữ căn hay hợp đồng thuê hiệu lực. Sau 15 ngày, mã cửa và chìa cơ của căn được gỡ khỏi mạng lưới Field Host.
         </p>
       </Section>
 

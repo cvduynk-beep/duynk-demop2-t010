@@ -196,7 +196,7 @@ export function buildTimeline(b: TenantBookingView | TenantBooking): TimelineSte
     },
     {
       key: "holding",
-      label: "Khóa căn giữ chỗ (2.000.000đ)",
+      label: "Khóa căn bằng tiền cọc",
       at: b.deposit?.paidAt,
       hint: "Chuyển cọc qua VietQR động, khoá căn độc quyền",
       done: currentRank >= 7,

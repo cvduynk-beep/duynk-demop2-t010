@@ -34,8 +34,8 @@ export class DepositController {
   @Public()
   @Get('legal/deposit-terms')
   @ApiOperation({
-    summary: 'A14 (công khai): biên bản điều khoản đặt cọc giữ chỗ — khách đọc trước khi tick và quét VietQR',
-    description: 'Có `?unitCode=` thì số giờ giữ chỗ là của căn đó; không có thì dùng giờ mặc định Admin cài.',
+    summary: 'A14 (công khai): biên bản điều khoản đặt Tiền cọc bảo đảm — khách đọc trước khi tick và quét VietQR',
+    description: 'Có `?unitCode=` thì số tiền cọc và số giờ giữ chỗ là của căn đó; không có thì câu chữ chung + giờ mặc định Admin cài.',
   })
   async getPublicDepositTerms(@Query('unitCode') unitCode?: string) {
     return this.depositService.getPublicDepositTerms(unitCode);
@@ -44,16 +44,29 @@ export class DepositController {
   @Roles('tenant')
   @Get('bookings/:ref/deposit/terms')
   @ApiOperation({
-    summary: 'A14: Lấy biên bản điều khoản đặt cọc giữ chỗ trước khi tick chấp thuận',
+    summary: 'A14: Lấy biên bản điều khoản đặt Tiền cọc bảo đảm (số tiền của căn) trước khi tick chấp thuận',
   })
   async getDepositTerms(@Param('ref') ref: string, @CurrentUser() user: any) {
     return this.depositService.getDepositTerms(ref, user);
   }
 
   @Roles('tenant')
+  @Get('bookings/:ref/fast-close')
+  @ApiOperation({
+    summary: 'Báo giá Chốt nhanh của chủ lịch hẹn (bước chốt cọc): giá thuê theo chu kỳ 1/3/6 tháng + tiền cọc đã giảm',
+    description: 'Chỉ khi chủ nhà ủy quyền chốt nhanh và lịch ở trạng thái closing; không lộ giá sàn. Không đủ điều kiện ⇒ `eligible: false`.',
+  })
+  async getFastCloseQuotes(@Param('ref') ref: string, @CurrentUser() user: any) {
+    return this.depositService.getFastCloseQuotes(ref, user);
+  }
+
+  @Roles('tenant')
   @Post('bookings/:ref/deposit')
   @ApiOperation({
-    summary: 'A15: Chấp thuận điều khoản cọc & Tạo giao dịch cọc VietQR 2.000.000 VNĐ',
+    summary: 'A15: Chấp thuận điều khoản & tạo giao dịch VietQR Tiền cọc bảo đảm (số tiền do server tính; `fastCloseCycle` tuỳ chọn)',
+    description:
+      'Số tiền = Tiền cọc bảo đảm của căn (units.security_deposit, chưa đặt ⇒ 1 tháng tiền thuê); chốt nhanh ⇒ giảm ~5% cọc, ưu đãi giữ 24 giờ. ' +
+      'Cọc chưa có tiền về được báo giá lại trên cùng khoản. Lỗi: 400 invalid_request (errors.fastCloseCycle), 409 fast_close_unavailable / deposit_unavailable / bad_status / terms_version_stale.',
   })
   async createDeposit(
     @Param('ref') ref: string,

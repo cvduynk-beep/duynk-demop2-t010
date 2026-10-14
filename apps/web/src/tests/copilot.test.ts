@@ -52,7 +52,7 @@ describe("Copilot — trả lời theo luật CHỈ từ số liệu thật", ()
   it("hôm nay: lọc theo NGÀY VN (00:30 VN hôm nay = 17:30Z hôm trước)", () => {
     expect(answerFromFacts("hôm nay chốt được căn nào?", facts()).text).toContain("1 căn chốt cọc**: VHOP-S1.01-1002");
     const none = facts({ today: "2026-10-14" });
-    expect(answerFromFacts("hôm nay chốt được căn nào?", none).text).toContain("chưa có khoản cọc giữ chỗ nào báo có");
+    expect(answerFromFacts("hôm nay chốt được căn nào?", none).text).toContain("chưa có khoản cọc nào báo có");
   });
 
   it("không có dữ liệu (lead scoring, chiến dịch/ROI) ⇒ nói thẳng, không bịa tên/số", () => {

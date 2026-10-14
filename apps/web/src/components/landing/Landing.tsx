@@ -14,7 +14,7 @@ import styles from "./Landing.module.css";
 
 const FAQ = [
   { q: "All-in Cost gồm những khoản nào?", a: `Tiền thuê, phí quản lý Vinhomes (diện tích × ${vnd(RATES.mgmtPerM2)}đ/m²), phí gửi xe (${vnd(RATES.motorbike)}đ/xe máy, ${vnd(RATES.car)}đ/ô tô) và dự toán điện nước (${vnd(RATES.utilityPerPerson)}đ/người). Bốn khoản này luôn hiển thị trước khi bạn đặt lịch.` },
-  { q: "Cọc 2 triệu có bị trừ vào tiền thuê tháng đầu không?", a: "Không. Khoản 2.000.000đ khoá căn theo thời hạn giữ chỗ (mặc định 48 giờ). Khi bạn ký hợp đồng thuê, đúng khoản này chuyển 100% thành một phần Tiền cọc bảo đảm tài sản và giữ nguyên suốt kỳ thuê. Tiền thuê tháng đầu vẫn thanh toán đủ." },
+  { q: "Tiền cọc có bị trừ vào tiền thuê tháng đầu không?", a: "Không. Khi ưng căn, bạn chuyển Tiền cọc bảo đảm của căn (thường bằng 1 tháng thuê) để khoá căn theo thời hạn giữ chỗ (mặc định 48 giờ). Khi ký hợp đồng thuê, đúng khoản này chuyển 100% thành Tiền cọc bảo đảm tài sản, không phải nộp bù và giữ nguyên suốt kỳ thuê. Tiền thuê tháng đầu vẫn thanh toán đủ." },
   { q: "Tôi có cần tài khoản để đặt lịch xem?", a: "Không. Bạn chỉ cần số điện thoại và mã 4 số gửi qua Zalo. Tài khoản chỉ cần khi muốn chat không giới hạn với AI." },
   { q: "Nếu tôi đến trễ hoặc không đến được?", a: "Bấm “Đang trên đường” trong tin Zalo để xin trễ 10 phút, hoặc đổi và huỷ lịch ngay trên trang theo dõi. Quá 15 phút không phản hồi thì ca trực được giải phóng để Host phục vụ khách khác." },
   { q: "Ảnh CCCD của tôi được xử lý thế nào?", a: "AI đọc CCCD trong khoảng 5 giây để điền thỏa thuận. Dữ liệu được mã hoá AES-256 theo Nghị định 13/2023/NĐ-CP, chỉ dùng cho giao dịch này và không gửi cho môi giới hay chủ nhà." },
@@ -112,19 +112,19 @@ export function Landing(_props: LandingProps = {}) {
       <section className={`${styles.section} ${styles.tint}`}>
         <div className={`wrap ${styles.deposit}`}>
           <div className={styles.copy}>
-            <h2 className={styles.h2}>Cọc 2 triệu đi đâu?</h2>
+            <h2 className={styles.h2}>Tiền cọc đi đâu?</h2>
             <p>Bạn chỉ cọc sau khi đã xem phòng và ưng ý. Khoản cọc không nằm trong túi môi giới: nó vào tài khoản định danh của nền tảng và có đường đi rõ ràng.</p>
           </div>
-          <div className={`card ${styles.money}`} role="img" aria-label="Cọc giữ chỗ 2.000.000 đồng chuyển 100 phần trăm thành Tiền cọc bảo đảm khi ký hợp đồng; tiền thuê tháng đầu không bị trừ">
+          <div className={`card ${styles.money}`} role="img" aria-label="Tiền cọc chốt căn bằng Tiền cọc bảo đảm của căn, chuyển 100 phần trăm thành Tiền cọc bảo đảm khi ký hợp đồng; tiền thuê tháng đầu không bị trừ">
             <div className={styles.moneyRow}>
               <div className={styles.chunk}>
-                <span className="muted small">Cọc giữ chỗ</span>
-                <strong className="num">2.000.000đ</strong>
+                <span className="muted small">Cọc chốt căn</span>
+                <strong className="num">= cọc bảo đảm</strong>
               </div>
               <span className={styles.arrow}>ký hợp đồng thuê</span>
               <div className={`${styles.chunk} ${styles.chunkOn}`}>
                 <span className="small">Tiền cọc bảo đảm</span>
-                <strong className="num">gồm 2.000.000đ</strong>
+                <strong className="num">giữ nguyên 100%</strong>
               </div>
             </div>
             <div className={`${styles.chunk} ${styles.chunkFull}`}>

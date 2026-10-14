@@ -29,6 +29,9 @@ def test_a5_missing_params_never_guessed():
     assert "{hold_hours_min}" in out and out.startswith("24 giờ")
     _, missing_all = lp.substitute("{holding_deposit}", None)
     assert missing_all == ["holding_deposit"]
+    # Cọc v2: điều khoản chung (không mã căn) trả amount 0 ⇒ thiếu tham số, không bao giờ nói "cọc 0".
+    out0, missing0 = lp.substitute("Cọc {holding_deposit}", {"amount": 0, "holdHours": 48})
+    assert missing0 == ["holding_deposit"] and out0 == "Cọc {holding_deposit}"
 
 
 async def test_a5_run_with_core_and_without(tmp_path, monkeypatch):

@@ -30,10 +30,10 @@ Giá thuê và phí quản lý căn lấy từ bản ghi Supabase. Biểu giá g
 | Xác thực SĐT | OTP Zalo bắt buộc trước khi đặt lịch, mỗi SĐT xác thực một lần | AGENTS (Chủ nhà #2) |
 | Điều phối | 3 tầng: Host gần nhất → Open Pool 500m sau 3 phút → Area Lead; nhắc hẹn kép T-10m | AGENTS (Vận hành #3, #5) |
 | Mã cửa | chỉ cấp khi Host xác nhận xem phòng tại cửa; không Lockbox, không QR sảnh | AGENTS (Chủ nhà #2) |
-| Cọc giữ chỗ | 2.000.000đ qua VietQR cấu hình bằng tài khoản nhận thật; tạo giao dịch bị khóa nếu thiếu cấu hình nhận/đối soát | [legal/02](../legal/02_HOLDING_AND_SECURITY_DEPOSIT_AGREEMENT.md) |
+| Cọc chốt căn (cọc v2) | khách chuyển ngay **Tiền cọc bảo đảm của căn** (`units.security_deposit`, mặc định 1 tháng thuê; không còn 2.000.000đ cố định) qua VietQR cấu hình bằng tài khoản nhận thật; số tiền do server tính; tạo giao dịch bị khóa nếu thiếu cấu hình nhận/đối soát — xem §1.1.1 | [legal/02](../legal/02_HOLDING_AND_SECURITY_DEPOSIT_AGREEMENT.md) |
 | Điều khoản cọc | khách tick đồng ý trước khi hiện VietQR — **không** ký thỏa thuận cọc riêng | AGENTS (Chủ nhà #3) |
-| Kết cục cọc | ký HĐ thuê → chuyển **100%** vào Tiền cọc bảo đảm (không trừ tiền thuê tháng đầu) · khách quá hạn/từ chối → mất cọc, chia 50% chủ nhà / 50% nền tảng · chủ nhà vi phạm → hoàn cọc + phạt tương đương · bất khả kháng → hoàn 100% | [legal/02 Điều 6](../legal/02_HOLDING_AND_SECURITY_DEPOSIT_AGREEMENT.md) |
-| Tiền cọc bảo đảm | 1–2 tháng tiền thuê; giữ nguyên suốt kỳ thuê để cấn trừ hư hỏng nội thất, phạt BQL, nợ điện nước; hoàn khách khi thanh lý HĐ | [legal/06 Điều 4](../legal/06_OFFICIAL_APARTMENT_LEASE_AGREEMENT.md) |
+| Kết cục cọc | ký HĐ thuê → chuyển **100%** vào Tiền cọc bảo đảm, không nộp bù (không trừ tiền thuê tháng đầu) · khách quá hạn/từ chối → mất cọc, chia 50% chủ nhà / 50% nền tảng · chủ nhà vi phạm → hoàn cọc + phạt tương đương · bất khả kháng → hoàn 100% | [legal/02 Điều 6](../legal/02_HOLDING_AND_SECURITY_DEPOSIT_AGREEMENT.md) |
+| Tiền cọc bảo đảm | chủ nhà đặt từ nửa tháng đến 3 tháng thuê (mặc định 1 tháng) = khoản cọc khi chốt căn; giữ nguyên suốt kỳ thuê để cấn trừ hư hỏng nội thất, phạt BQL, nợ điện nước; hoàn khách khi thanh lý HĐ | [legal/06 Điều 4](../legal/06_OFFICIAL_APARTMENT_LEASE_AGREEMENT.md) |
 | Uỷ quyền độc quyền | 12 tháng, tự gia hạn; chủ nhà thoát khi căn trống, báo trước 15 ngày, hết hạn thì thu hồi mã cửa | [legal/01 Điều 8](../legal/01_EXCLUSIVE_RENTAL_MANDATE.md) |
 | Biến phí Field Host | phí lượt dẫn, hoa hồng chốt cọc, hệ số đánh giá, thưởng nóng — Admin cấu hình, có nhật ký | AGENTS (Vận hành #4) |
 
@@ -60,14 +60,35 @@ Màn: trang chủ chat AI, danh sách/chi tiết căn, đặt lịch xem & OTP, 
 | `POST /bookings/:ref/late` (A11) | tenant | Báo xin đến muộn 10 phút | ✅ |
 | `POST /bookings/:ref/lobby-checkin` (A12) | tenant | Bấm "Tôi đã có mặt tại sảnh" | ✅ |
 | `POST /bookings/:ref/rating` (A13) | tenant | Chấm sao đánh giá Field Host | ✅ |
-| `GET /legal/deposit-terms` (A14) | công khai | Văn bản điều khoản cọc, 6 nội quy BQL, phiên bản pháp lý | ✅ |
-| `POST /bookings/:ref/deposit` (A15) | tenant | Tạo cọc và URL VietQR từ tài khoản nhận thật; từ chối nếu thiếu webhook secret | ⚠ thiếu cấu hình trong `.env` hiện tại |
+| `GET /legal/deposit-terms` (A14) | công khai | Văn bản điều khoản cọc (`DEP-2026.10-v2`), 6 nội quy BQL, phiên bản pháp lý; `?unitCode=` ⇒ số tiền + giờ giữ căn của căn đó (không có ⇒ `amount: 0`) | ✅ |
+| `GET /bookings/:ref/fast-close` (A14b) | tenant (chủ lịch) | Báo giá chốt nhanh 1/3/6 tháng khi lịch `closing` và chủ nhà ủy quyền; không bao giờ trả giá sàn | ✅ |
+| `POST /bookings/:ref/deposit` (A15) `{acceptTerms, termsVersion, fastCloseCycle?}` | tenant | Tạo cọc và URL VietQR từ tài khoản nhận thật; chưa có tiền về thì gọi lại để báo giá lại trên cùng khoản cọc; từ chối nếu thiếu webhook secret | ⚠ thiếu cấu hình trong `.env` hiện tại |
 | `POST /vietqr/webhook` (A16) | ngân hàng/đối tác webhook | First-to-Pay Wins; cần cấu hình callback thật về endpoint này | ⚠ chưa có provider callback |
 | `POST /bookings/:ref/ekyc/scan` (A17) | tenant | Quét CCCD qua provider eKYC | ⚠ chưa tích hợp provider |
 | `POST /bookings/:ref/ekyc` (A18) | tenant | Xác minh danh tính và xác lập HĐ sau khi provider trả kết quả thật | ⚠ chưa tích hợp provider |
+| `POST /contracts/lease/sign` (A18b) `{bookingRef, startDate, months, paymentCycle, signatureSvg}` | tenant | Ký HĐ thuê: `startDate` = ngày dọn vào (T0+2…T0+30), HĐ tính tiền từ ngày dọn vào hoặc T0+7 nếu muộn hơn; cọc chốt nhanh bắt buộc đúng chu kỳ + giá đã chốt (422 `lease_terms_invalid`) | ✅ |
 | `GET /me/contracts` (A19) | tenant | Danh sách hợp đồng thuê: thời hạn, cọc, tiền thanh toán kỳ 1 | ✅ |
 | `GET /me/contracts/:id/pdf` (A20) | tenant | Tải PDF HĐ thuê chính thức tiếng Việt có niêm phong sha256 | ✅ |
 | `GET/PUT/DELETE /me/favorites[/:code]` | đăng nhập | Căn đã lưu theo tài khoản (bảng `favorite_units`), nhận mã căn hoặc UUID, trả DTO `TenantUnit` | ✅ |
+
+#### 1.1.1. Cọc v2 — cọc bằng Tiền cọc bảo đảm, Chốt nhanh, Smart Move-in (2026-10-14)
+
+- **Số tiền** (`deposit/deposit-amount.ts#securityDepositAmount`): `units.security_deposit`, chưa đặt ⇒ `base_rent_price`. Server tính,
+  bỏ qua `amount` client gửi. VietQR in đúng `holding_deposits.amount`; webhook chỉ gạch nợ khi số tiền **khớp đúng** khoản cọc
+  (lệch ⇒ `ignored` + audit `DEPOSIT_AMOUNT_MISMATCH {expected, received}`).
+- **Chốt nhanh** (`deposit/fast-close.ts`): chỉ khi meta ký gửi mới nhất có `allowFastClose` + `floorRent`
+  (`exclusiveMandate.doorAccessConfig.consignment.form`, đọc bằng `readConsignmentMeta`). Chu kỳ 1/3/6 ⇒ giá thuê
+  `max(floor, round50k(rent × (1 − 3,5% / 5,5% / 10%)))`; cọc giảm `max(200k, round50k(5%))`, trần `floor50k(8%)`.
+  Báo giá hết hạn sau **24 giờ** (`quote_expires_at`); tiền về sau mốc đó ⇒ `REFUNDED` + escrow `INBOUND_DEPOSIT`/`REFUND`,
+  audit `DEPOSIT_QUOTE_EXPIRED_REFUND`, căn không khóa. Đổi lựa chọn khi chưa có tiền về ⇒ ghi đè đúng dòng
+  (`viewing_id` UNIQUE), audit `DEPOSIT_REQUOTED` (cũ/mới). Không phụ phí thuê ngắn hạn.
+- **Smart Move-in** (`contract/move-in.ts`, giờ VN): T0 = `paid_at`; dọn vào T0+2…T0+30; miễn phí chờ tới T0+7, muộn hơn
+  ⇒ HĐ + tiền thuê bắt đầu T0+7. Sai khung ⇒ 422 `lease_terms_invalid` + `errors.startDate` + `errors.window`.
+- **Ký HĐ**: `monthlyRent = quoted_monthly_rent ?? base_rent_price`; cọc v2 ⇒ `securityDeposit = amount`, không thu bù. Cọc cũ
+  (`terms_version` `HOLD-*`, 2.000.000đ) vẫn ký được: cọc bảo đảm theo căn, kỳ đầu thu phần chênh.
+- **Migration** (đã áp DB thật 2026-10-14): `prisma/migrations-sql/20261014_deposit_v2_fast_close/{up,down}.sql` — thêm 4 cột
+  nullable `base_amount`, `fast_close_cycle`, `quoted_monthly_rent`, `quote_expires_at` vào `holding_deposits`.
+  Áp: `npx prisma db execute --file prisma/migrations-sql/20261014_deposit_v2_fast_close/up.sql --schema prisma/schema.prisma`.
 
 ### 1.3. 🏠 Chủ nhà
 
@@ -133,7 +154,7 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 | `GET /admin/bookings/:id/reassign-candidates` | ops_admin | Host đủ điều kiện nhận ca (cùng quy tắc lúc ghi), cùng phân khu lên trước, `sameZone` để cảnh báo; `ineligible` kèm lý do; không trả SĐT/email | ✅ |
 | `POST /admin/bookings/:id/reassign` `{hostId, reason, version}` | ops_admin | điều phối tay — quy tắc ở §1.5.2 | ✅ |
 | `GET /admin/contracts` · `GET /admin/contracts/:id` | ops_admin | sổ hợp đồng: uỷ quyền, giữ chỗ, thuê, hợp tác Host | ⬜ |
-| `POST /admin/contracts/:id/void-hold` `{reason: landlord_breach \| force_majeure, note}` | ops_admin | huỷ cọc giữ chỗ (chủ nhà vi phạm / bất khả kháng) | ⬜ |
+| `POST /admin/contracts/:id/void-hold` `{reason: landlord_breach \| force_majeure, note}` | ops_admin | huỷ cọc chốt căn (chủ nhà vi phạm ⇒ hoàn 2× / bất khả kháng ⇒ hoàn 1×) | ⬜ |
 | `POST /admin/contracts/:id/complete-exit` | ops_admin | hoàn tất thoát uỷ quyền sau 15 ngày | ⬜ |
 | `POST /admin/contracts/:id/remind-renewal` | ops_admin | nhắc gia hạn HĐ thuê sắp hết hạn | ⬜ |
 | `GET /admin/contract-templates[/:id]` · `GET /admin/contract-parties[/:id]` | ops_admin | thư viện mẫu văn bản, danh bạ bên ký | ⬜ |
@@ -264,7 +285,7 @@ backend/
 │       ├── dispatch/          # DispatchAssignerService (chọn Sale), tầng 3 lớp tính lúc đọc — route `/dispatch/*` giả đã xoá (hồ sơ 15)
 │       ├── host-viewings/     # Cổng Sale `/host/board|tickets|viewings` — ViewingFlowService là nguồn duy nhất chuyển trạng thái ca (hồ sơ 15)
 │       ├── door/              # DoorCodeService: mã cửa `aes:<AES-256-GCM>` (`npm run rekey:door-codes`)
-│       ├── deposit/           # VietQR cọc giữ chỗ, webhook, Conflict Resolver
+│       ├── deposit/           # VietQR cọc chốt căn (v2), chốt nhanh, webhook, Conflict Resolver
 │       ├── identity/          # eKYC CCCD
 │       ├── contract/          # Mandate, gói chứng cứ
 │       ├── landlord/          # Dashboard, audit trail, thoát uỷ quyền

@@ -10,7 +10,7 @@ Team P-010 (VinUni AI20K Build Phase) is building **VinStay AI**, a rental and o
 - AI does computation, filtering, CCCD (ID card) OCR and incident triage. Field Hosts (humans holding resident RFID elevator cards) do the on-site work.
 - Do not use door lockboxes, IoT smart-lock integrations or QR codes posted in lobbies. Door codes are released in-app when the Host confirms the viewing.
 - Asset-light model: the platform only *refers* outside handymen and never does repairs itself.
-- The 2,000,000 VNĐ holding deposit (paid by VietQR, locks the unit in `holding` for 24h) is converted **in full** into the Security Deposit when the lease is signed. It is **never** deducted from the first month's rent.
+- Deposit v2 (2026-10-14): there is no fixed 2,000,000 VNĐ holding deposit any more. At closing the tenant pays the unit's **Security Deposit** (`units.security_deposit`, default one month's rent) by VietQR, which locks the unit in `holding` for the Admin-set hold time (default 48h). When the lease is signed it is converted **in full** into the Security Deposit (no top-up). It is **never** deducted from the first month's rent. Fast close (landlord opt-in, floor price never exposed): 1/3/6-month prepaid cycles get 3.5/5.5/10% off rent plus ~5% off the deposit, only if paid within 24h. Smart move-in: move in T0+2…T0+30 (T0 = deposit paid), rent starts no later than T0+7.
 
 ## Commands
 

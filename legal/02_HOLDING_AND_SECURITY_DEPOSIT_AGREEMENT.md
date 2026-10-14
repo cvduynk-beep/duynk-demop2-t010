@@ -2,8 +2,10 @@
 **Độc lập – Tự do – Hạnh phúc**
 ***
 
-# THỎA THUẬN ĐẶT CỌC GIỮ CHỖ LINH HOẠT & CHUYỂN ĐỔI TIỀN CỌC BẢO ĐẢM TÀI SẢN NỘI THẤT
-*(Căn cứ Điều 328 Bộ luật Dân sự 2015 • Mã tra cứu số: VSA-HOLD-[MÃ CĂN]-[SĐT])*
+# THỎA THUẬN ĐẶT CỌC CHỐT CĂN BẰNG TIỀN CỌC BẢO ĐẢM TÀI SẢN NỘI THẤT
+*(Căn cứ Điều 328 Bộ luật Dân sự 2015 • Mã tra cứu số: VSA-HOLD-[MÃ CĂN]-[SĐT] • Phiên bản điều khoản `DEP-2026.10-v2`)*
+
+> **BẢN NHÁP CỌC v2 (2026-10-14) — CẦN PHÁP CHẾ RÀ SOÁT TRƯỚC KHI ÁP DỤNG.** Thay cho khoản cọc giữ chỗ cố định 2.000.000 VNĐ (`HOLD-2026.10-v1`): khách chuyển ngay Tiền Cọc Bảo Đảm của căn khi chốt căn. Các khoản cọc đã tạo theo `HOLD-2026.10-v1` tiếp tục áp dụng bản cũ (nộp bù phần cọc bảo đảm còn thiếu khi ký Hợp đồng thuê).
 
 * Căn cứ **Bộ luật Dân sự số 91/2015/QH13** ngày 24/11/2015 (Đặc biệt là Điều 328 về Đặt cọc, Điều 357 về Trách nhiệm do chậm thực hiện nghĩa vụ trả tiền, Điều 562–564 về Hợp đồng ủy quyền);
 * Căn cứ **Luật Kinh doanh Bất động sản số 29/2023/QH15** ngày 28/11/2023;
@@ -62,20 +64,30 @@ Hai Bên thống nhất xác lập Thỏa thuận đặt cọc với các điề
 
 ---
 
-### ĐIỀU 2: SỐ TIỀN CỌC GIỮ CHỖ, PHƯƠNG THỨC THANH TOÁN VIETQR & THỜI HẠN GIỮ CHỖ TÙY CHỈNH THEO ADMIN PORTAL
-1. **Số tiền đặt cọc giữ chỗ:**
-   * Số tiền: **`[SỐ TIỀN CỌC GIỮ CHỖ]` VNĐ** *(Bằng chữ: [...])*.
-   * Mức cọc giữ chỗ mặc định là 2.000.000 VNĐ (Hai triệu đồng chẵn) hoặc được xác định linh hoạt theo định mức dữ liệu đầu vào do Quản trị viên cấu hình cho từng căn hộ trên hệ thống tại thời điểm niêm yết.
+### ĐIỀU 2: SỐ TIỀN CỌC, PHƯƠNG THỨC THANH TOÁN VIETQR & THỜI HẠN GIỮ CĂN TÙY CHỈNH THEO ADMIN PORTAL
+1. **Số tiền đặt cọc (bằng Tiền Cọc Bảo Đảm Tài Sản của căn):**
+   * Số tiền: **`[SỐ TIỀN CỌC]` VNĐ** *(Bằng chữ: [...])*.
+   * Số tiền đặt cọc bằng đúng **Tiền Cọc Bảo Đảm Tài Sản & Nội Thất** niêm yết của căn hộ, do Chủ nhà xác lập trong biên độ chính sách cọc (deposit-policy) của Nền tảng và được Field Host xác nhận khi kiểm định (từ nửa tháng đến 03 tháng tiền thuê; Chủ nhà không xác lập thì mặc định bằng **01 tháng tiền thuê**). Số tiền do hệ thống tính và in sẵn trên mã VietQR; Bên B không tự nhập số tiền.
+   * Trường hợp Bên B chọn ưu đãi Chốt nhanh tại Khoản 6 Điều này, số tiền đặt cọc là số tiền đã giảm hiển thị trên mã VietQR.
 2. **Phương thức thanh toán tức thì:**
    * Bên B thực hiện chuyển khoản số tiền cọc nêu trên qua mã **VietQR động chuẩn NAPAS 247** được sinh trực tiếp trên ứng dụng VinStay AI vào Tài khoản Ký quỹ Phong tỏa của Nền tảng mở tại Ngân hàng liên kết.
    * Cú pháp chuyển khoản chuẩn được hệ thống mã hóa tự động: `COC [MÃ CĂN] [SĐT KHÁCH]` *(Ví dụ: COC S102-1208 0912345678)*.
 3. **Thời hạn giữ chỗ tùy chỉnh theo Trang Quản trị (Dynamic Holding Window):**
    * Căn hộ được khóa trạng thái giữ chỗ ưu tiên độc quyền cho Bên B trong khoảng thời gian: **`[SỐ GIỜ GIỮ CHỖ]` (bằng chữ: [...]) giờ**.
-   * Thời lượng giữ chỗ được xác lập linh hoạt theo cấu hình dữ liệu của từng sản phẩm/căn hộ trên Trang Quản trị (Admin Portal) của VinStay AI (thời lượng mặc định là 24 giờ, hoặc dao động từ 12 giờ đến 72 giờ tùy theo đặc thù phân khu, tốc độ thanh khoản và chính sách điều phối từng thời kỳ).
+   * Thời lượng giữ chỗ được xác lập linh hoạt theo cấu hình dữ liệu của từng sản phẩm/căn hộ trên Trang Quản trị (Admin Portal) của VinStay AI (thời lượng mặc định là 48 giờ, hoặc dao động từ 12 giờ đến 72 giờ tùy theo đặc thù phân khu, tốc độ thanh khoản và chính sách điều phối từng thời kỳ).
    * **Mốc kích hoạt đếm ngược:** Thời gian giữ chỗ được tính tự động từ giây hệ thống nhận được tín hiệu gạch nợ thành công qua Webhook ngân hàng (chính xác đến từng giây kèm Timestamp điện tử).
    * **Đồng hồ đếm ngược (Countdown Timer):** Được kích hoạt và hiển thị trực tiếp theo thời gian thực trên giao diện ứng dụng của Bên B, đồng thời tự động gửi thông báo xác nhận qua Zalo/SMS cho Bên A và Chủ sở hữu căn hộ.
 4. **Hiệu lực đóng băng giao dịch (`HOLDING`):**
    * Trong suốt thời hạn `[SỐ GIỜ GIỮ CHỖ]` giờ nêu trên, căn hộ được khóa trạng thái `HOLDING` trên toàn mạng lưới VinStay AI. Hệ thống tự động từ chối mọi lịch xem phòng mới và vô hiệu hóa chức năng đặt cọc đối với tất cả khách hàng khác.
+5. **Quy định về Ngày dọn vào dự kiến & Khung chờ dọn vào tiêu chuẩn (Smart Move-in Window Protocol):**
+   * **Ngày dọn vào sớm nhất:** Được xác lập tối thiểu sau **48 giờ** kể từ thời điểm đặt cọc thành công nhằm bảo đảm thời gian tối thiểu cho Ban Quản lý Vinhomes hoàn tất thủ tục khai báo cư dân, kích hoạt thẻ cư dân thang máy, đăng ký phương tiện và Field Host hoàn tất kiểm định kỹ thuật 10 hạng mục nội thất.
+   * **Khung chờ dọn vào miễn phí:** Bên B được bảo lưu thời gian chờ dọn vào không tính tiền thuê tối đa **07 (bảy) ngày** kể từ thời điểm đặt cọc thành công để thu xếp việc chuyển dọn đồ đạc.
+   * **Nguyên tắc xác định ngày bắt đầu tính tiền thuê (Billing Start Date):** Trường hợp Bên B đăng ký ngày dọn vào sau 07 ngày (tối đa không quá 30 ngày), Hợp đồng thuê và nghĩa vụ thanh toán tiền thuê nhà bắt buộc bắt đầu tính từ **ngày thứ 08** kể từ ngày đặt cọc thành công. Bên B có toàn quyền nhận mã mở cửa và dọn vào lưu trú bất kỳ lúc nào từ ngày thứ 08 trở đi. Quy định này nhằm bảo vệ lợi ích hợp pháp của Bên A/Chủ nhà, triệt tiêu tổn thất tài chính do giam căn trống kéo dài (Pre-leasing vacancy loss).
+6. **Ưu đãi Chốt nhanh (Fast-Close) — chỉ khi Chủ nhà ủy quyền Chốt nhanh & Giá sàn An toàn:**
+   * Bên B được chọn cam kết trả trước tiền thuê theo chu kỳ **01, 03 hoặc 06 tháng/kỳ** để nhận mức giá thuê ưu đãi giảm lần lượt **3,5% / 5,5% / 10%** so với giá chào thuê (làm tròn tới 50.000 VNĐ) và giảm khoảng **5% tiền đặt cọc** (tối thiểu 200.000 VNĐ, tối đa 8%). Giá thuê ưu đãi **không bao giờ thấp hơn Giá sàn** bảo mật của Chủ nhà; Giá sàn không được công khai cho Bên B.
+   * Ưu đãi chỉ có hiệu lực khi tiền đặt cọc được ngân hàng báo có trong vòng **24 giờ** kể từ thời điểm Bên B chấp thuận điều khoản. Tiền về sau thời hạn này: ưu đãi hết hiệu lực, căn hộ **không** bị khóa và Nền tảng hoàn lại đúng số tiền đã nhận cho Bên B trong 24 giờ làm việc; Bên B có thể chấp thuận lại điều khoản để đặt cọc theo mức hiện hành.
+   * Khi chưa có tiền về, Bên B được đổi lựa chọn (cọc thường hoặc chu kỳ Chốt nhanh khác); hệ thống báo giá lại trên cùng khoản cọc.
+   * Hợp đồng thuê chính thức bắt buộc ghi đúng chu kỳ thanh toán và giá thuê đã chốt. Nền tảng không áp dụng phụ phí thuê ngắn hạn.
 
 ---
 
@@ -86,21 +98,21 @@ Trong thời hạn giữ chỗ `[SỐ GIỜ GIỮ CHỖ]` giờ quy định tạ
 2. **Bước 2: Khai báo danh sách cư trú:**
    * Bên B hoàn tất biểu mẫu khai báo danh sách những người dự kiến cùng lưu trú thường xuyên tại căn hộ (họ tên, số CCCD/ngày sinh, số điện thoại) để Nền tảng hỗ trợ đăng ký tạm trú với Công an địa phương và làm thủ tục cấp thẻ cư dân/thẻ thang máy với Ban Quản lý tòa nhà.
 3. **Bước 3: Ký số Hợp đồng Thuê chính thức & Thanh toán tài chính:**
-   * Bên B thực hiện ký số điện tử qua mã OTP Zalo/SMS vào **Hợp đồng Thuê Căn hộ Chính thức** (theo mẫu quy chuẩn `06_OFFICIAL_APARTMENT_LEASE_AGREEMENT.md`), đồng thời hoàn tất thanh toán tiền thuê nhà kỳ đầu tiên và bổ sung đủ phần còn lại của Tiền Cọc Bảo Đảm Tài Sản.
+   * Bên B thực hiện ký số điện tử qua mã OTP Zalo/SMS vào **Hợp đồng Thuê Căn hộ Chính thức** (theo mẫu quy chuẩn `06_OFFICIAL_APARTMENT_LEASE_AGREEMENT.md`), đồng thời hoàn tất thanh toán tiền thuê nhà kỳ đầu tiên. Tiền đặt cọc đã chuyển là toàn bộ Tiền Cọc Bảo Đảm Tài Sản nên Bên B không phải nộp bù.
 
 ---
 
 ### ĐIỀU 4: NGUYÊN TẮC CỐT LÕI — CHUYỂN ĐỔI 100% THÀNH TIỀN CỌC BẢO ĐẢM TÀI SẢN NỘI THẤT (SECURITY DEPOSIT)
 Nhằm bảo vệ tối đa giá trị tài sản nội thất cho Chủ nhà và bảo đảm quyền lợi tài chính minh bạch cho Khách thuê, Hai Bên cam kết thực hiện đúng nguyên tắc tài chính bất biến sau:
 1. **Cơ cấu Tiền Cọc Bảo Đảm Tài Sản & Nội Thất:**
-   * Tổng số Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit) của căn hộ quy định tại Hợp đồng thuê chính thức là: **`[TỔNG TIỀN CỌC BẢO ĐẢM]` VNĐ** *(thông thường tương đương từ 01 đến 02 tháng tiền thuê nhà tùy theo giá trị gói trang thiết bị nội thất thực tế)*.
-2. **Chuyển đổi 100% từ Cọc giữ chỗ:**
-   * Tại thời điểm Bên B ký kết Hợp đồng thuê chính thức, toàn bộ số tiền cọc giữ chỗ **`[SỐ TIỀN CỌC GIỮ CHỖ]` VNĐ** đã nạp sẽ được **tự động chuyển đổi 100% thành một phần của Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)**.
+   * Tổng số Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit) quy định tại Hợp đồng thuê chính thức là: **`[TỔNG TIỀN CỌC BẢO ĐẢM]` VNĐ**, bằng đúng số tiền đặt cọc Bên B đã chuyển theo Điều 2 *(mặc định 01 tháng tiền thuê; Chốt nhanh là số tiền đã giảm)*.
+2. **Chuyển đổi 100% tiền đặt cọc:**
+   * Tại thời điểm Bên B ký kết Hợp đồng thuê chính thức, toàn bộ số tiền đặt cọc **`[SỐ TIỀN CỌC]` VNĐ** đã nạp được **tự động chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)**.
    * Khoản tiền cọc này được giữ nguyên trạng thái phong tỏa an toàn tại Tài khoản Ký quỹ suốt toàn bộ thời hạn thuê nhà.
-3. **Nghĩa vụ bổ sung phần cọc còn thiếu:**
-   * Bên B có trách nhiệm thanh toán nốt phần giá trị còn thiếu của Tiền Cọc Bảo Đảm Tài Sản (được xác định bằng: `[TỔNG TIỀN CỌC BẢO ĐẢM]` trừ đi `[SỐ TIỀN CỌC GIỮ CHỖ]`) cùng lúc với tiền thuê nhà kỳ đầu tiên theo thông báo thanh toán trên hệ thống trước khi nhận bàn giao phòng.
+3. **Không nộp bù:**
+   * Vì tiền đặt cọc đã bằng Tiền Cọc Bảo Đảm Tài Sản, Bên B không phải thanh toán thêm khoản cọc nào khi ký Hợp đồng thuê; kỳ đầu chỉ gồm tiền thuê nhà theo chu kỳ đã chọn. *(Khoản cọc giữ chỗ tạo theo điều khoản cũ `HOLD-2026.10-v1` vẫn nộp bù phần còn thiếu như bản cũ.)*
 4. **Nguyên tắc cấm tuyệt đối khấu trừ vào tiền thuê tháng đầu:**
-   * **TUYỆT ĐỐI KHÔNG ĐƯỢC KHẤU TRỪ số tiền cọc giữ chỗ này vào tiền thuê nhà của tháng đầu tiên.**
+   * **TUYỆT ĐỐI KHÔNG ĐƯỢC KHẤU TRỪ số tiền đặt cọc này vào tiền thuê nhà của tháng đầu tiên.**
    * Quy định này nhằm duy trì nguồn tài chính bảo chứng cố định, bảo vệ toàn vẹn tài sản, thiết bị điện tử của Chủ nhà và bảo đảm nguồn dự phòng thanh toán dứt điểm hóa đơn tiền điện nước EVN khi kết thúc hợp đồng thuê.
 
 ---
@@ -124,13 +136,13 @@ Bằng việc xác lập Thỏa thuận đặt cọc này, Bên B cam kết tự
 ### ĐIỀU 6: XỬ LÝ VI PHẠM CỌC THEO ĐIỀU 328 BỘ LUẬT DÂN SỰ & MIỄN TRỪ BẤT KHẢ KHÁNG
 Căn cứ Điều 328 Bộ luật Dân sự năm 2015 và hướng dẫn tại Nghị quyết số 01/2003/NQ-HĐTP của Hội đồng Thẩm phán TAND Tối cao, Các Bên thống nhất chế tài xử lý vi phạm cam kết đặt cọc như sau:
 1. **Xử lý vi phạm từ phía Bên B (Khách thuê bỏ cọc):**
-   * Nếu quá thời hạn giữ chỗ **`[SỐ GIỜ GIỮ CHỖ]` giờ** kể từ thời điểm gạch nợ thành công mà Bên B không thực hiện đầy đủ 03 bước thủ tục tại Điều 3 hoặc tự ý yêu cầu hủy cọc/từ chối ký Hợp đồng thuê chính thức mà không có lý do bất khả kháng được công nhận, Bên B sẽ **bị mất toàn bộ số tiền cọc giữ chỗ `[SỐ TIỀN CỌC GIỮ CHỖ]` VNĐ**.
+   * Nếu quá thời hạn giữ chỗ **`[SỐ GIỜ GIỮ CHỖ]` giờ** kể từ thời điểm gạch nợ thành công mà Bên B không thực hiện đầy đủ 03 bước thủ tục tại Điều 3 hoặc tự ý yêu cầu hủy cọc/từ chối ký Hợp đồng thuê chính thức mà không có lý do bất khả kháng được công nhận, Bên B sẽ **bị mất toàn bộ số tiền đặt cọc `[SỐ TIỀN CỌC]` VNĐ**.
    * Số tiền cọc này được hệ thống xử lý phân bổ tự động: 50% chuyển cho Chủ sở hữu căn hộ để bù đắp tổn thất chi phí cơ hội trống phòng (Pre-leasing vacancy loss), và 50% trích nạp chi phí vận hành, marketing và điều phối nhân sự của Nền tảng VinStay AI. Căn hộ lập tức được mở lại trạng thái `AVAILABLE` trên hệ thống.
 2. **Xử lý vi phạm từ phía Bên A / Chủ nhà (Chủ nhà bẻ cọc / tăng giá / từ chối cho thuê):**
-   * Nếu trong thời hạn giữ chỗ, Bên A hoặc Chủ sở hữu căn hộ tự ý thay đổi giá thuê, thay đổi hiện trạng nội thất hoặc từ chối ký Hợp đồng thuê căn hộ cho Bên B theo đúng các điều kiện đã cam kết, Bên A/Chủ nhà có nghĩa vụ: **Hoàn trả lại 100% số tiền cọc đã nhận (`[SỐ TIỀN CỌC GIỮ CHỖ]` VNĐ) và bồi thường phạt cọc cho Bên B một khoản tiền tương đương số tiền đã đặt cọc (`[SỐ TIỀN CỌC GIỮ CHỖ]` VNĐ)** theo đúng quy định tại Khoản 2 Điều 328 Bộ luật Dân sự 2015.
+   * Nếu trong thời hạn giữ chỗ, Bên A hoặc Chủ sở hữu căn hộ tự ý thay đổi giá thuê, thay đổi hiện trạng nội thất hoặc từ chối ký Hợp đồng thuê căn hộ cho Bên B theo đúng các điều kiện đã cam kết, Bên A/Chủ nhà có nghĩa vụ: **Hoàn trả lại 100% số tiền cọc đã nhận (`[SỐ TIỀN CỌC]` VNĐ) và bồi thường phạt cọc cho Bên B một khoản tiền tương đương số tiền đã đặt cọc (`[SỐ TIỀN CỌC]` VNĐ)** theo đúng quy định tại Khoản 2 Điều 328 Bộ luật Dân sự 2015.
    * Nền tảng VinStay AI kích hoạt lệnh tự động giải tỏa hoàn tiền cọc và thanh toán tiền phạt cọc từ Quỹ Bảo lãnh về Tài khoản thụ hưởng của Bên B trong vòng 24 giờ làm việc.
 3. **Miễn trừ trách nhiệm trong trường hợp Bất khả kháng (Force Majeure):**
-   * Trường hợp xảy ra các sự kiện bất khả kháng khách quan (thiên tai nghiêm trọng, hỏa hoạn tại tòa nhà, hoặc quyết định phong tỏa hành chính đột xuất của cơ quan Nhà nước có thẩm quyền) làm cho căn hộ không thể bàn giao sử dụng bình thường: Thỏa thuận đặt cọc tự động chấm dứt, Bên A hoàn trả lại 100% tiền cọc giữ chỗ cho Bên B trong vòng 24 giờ làm việc mà không áp dụng bất kỳ khoản tiền phạt cọc nào đối với Các Bên.
+   * Trường hợp xảy ra các sự kiện bất khả kháng khách quan (thiên tai nghiêm trọng, hỏa hoạn tại tòa nhà, hoặc quyết định phong tỏa hành chính đột xuất của cơ quan Nhà nước có thẩm quyền) làm cho căn hộ không thể bàn giao sử dụng bình thường: Thỏa thuận đặt cọc tự động chấm dứt, Bên A hoàn trả lại 100% tiền đặt cọc cho Bên B trong vòng 24 giờ làm việc mà không áp dụng bất kỳ khoản tiền phạt cọc nào đối với Các Bên.
 
 ---
 

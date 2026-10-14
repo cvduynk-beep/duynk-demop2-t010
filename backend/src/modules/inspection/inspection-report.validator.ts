@@ -1,6 +1,5 @@
 import type { ConsignmentMeta, InspectionPhoto, InspectionReport, InventoryLineReport } from '../landlord/landlord.mappers';
 import { assertListingText, detectListingTextViolation } from '../property/listing-text';
-import { holdingDepositAmount } from '../deposit/deposit-amount';
 import { DIRECTIONS } from '../property/unit-facts';
 import { INSPECTION_CATALOG } from './inspection.catalog';
 import { CATALOG_SIZE, LISTING_PHOTOS_MAX, LISTING_PHOTOS_MIN, MAX_EXTRA_LINES, PHOTOS_PER_LINE_MAX } from './inspection.constants';
@@ -166,9 +165,9 @@ function validateFactsPricingListing(input: SubmitInspectionInput, meta: Consign
     if (!Number.isInteger(p.rent) || p.rent < RENT_MIN || p.rent > RENT_MAX) {
       throw reportInvalid('pricing', 'Giá thuê phải là số nguyên từ 3.000.000đ đến 200.000.000đ.');
     }
-    // Cọc giữ chỗ chuyển 100% vào cọc bảo đảm ⇒ cọc bảo đảm không được nhỏ hơn cọc giữ chỗ; tối đa 3 tháng thuê.
-    if (!Number.isInteger(p.securityDeposit) || p.securityDeposit < holdingDepositAmount() || p.securityDeposit > 3 * p.rent) {
-      throw reportInvalid('pricing', 'Tiền cọc bảo đảm phải là số nguyên từ cọc giữ chỗ (2.000.000đ) đến 3 lần giá thuê.');
+    // Cọc v2: khách chuyển thẳng khoản này khi chốt căn ⇒ từ nửa tháng (mặc định deposit-policy) đến 3 tháng thuê.
+    if (!Number.isInteger(p.securityDeposit) || p.securityDeposit < Math.ceil(p.rent / 2) || p.securityDeposit > 3 * p.rent) {
+      throw reportInvalid('pricing', 'Tiền cọc bảo đảm phải là số nguyên từ 50% đến 3 lần giá thuê.');
     }
     if (pricingChanged(p, meta)) {
       const reason = typeof p.reason === 'string' ? p.reason.trim() : '';

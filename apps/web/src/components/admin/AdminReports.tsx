@@ -872,7 +872,7 @@ export function AdminReports() {
       <ReportSection<DealRow, DealSummary>
         id="deals"
         title="Giao dịch cọc & hợp đồng"
-        description="Đối soát từng khoản cọc giữ chỗ có tiền về trong khoảng. Tên và SĐT khách đã che (cả khi xuất file)."
+        description="Đối soát từng khoản cọc chốt căn có tiền về trong khoảng. Tên và SĐT khách đã che (cả khi xuất file)."
         prefix="dl"
         common={common}
         sp={sp}

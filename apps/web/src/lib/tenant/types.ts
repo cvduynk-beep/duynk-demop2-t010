@@ -60,7 +60,7 @@ export interface TenantUnit {
   holdHours: number; // 12..72 — B4
   activeViewingAt: string | null; // ca xem sớm nhất hôm nay đang CONFIRMED/LOBBY/RECEIVING/VIEWING — nhãn FOMO
   securityDeposit: number; // Tiền cọc bảo đảm: units.securityDeposit ?? baseRentPrice
-  holdingDeposit: number; // Cọc giữ chỗ backend đang thu — chỉ đọc từ API
+  holdingDeposit: number; // Khoản cọc khách chuyển khi chốt căn (cọc v2 = Tiền cọc bảo đảm) — chỉ đọc từ API
   highlights: string[]; // ≤ 3
   inventory: UnitInventoryLine[]; // chỉ ở chi tiết căn; danh sách = []
 }
@@ -112,6 +112,13 @@ export interface TenantBooking {
     paidAt?: string;
     holdHours?: number;
     expiresAt?: string;
+    /** Có ⇒ khách đã chọn chốt nhanh: `amount` là cọc đã giảm, `monthlyRent` là giá thuê đã chốt (bắt buộc giữ khi ký HĐ). */
+    fastClose?: {
+      cycle: FastCloseCycle;
+      baseAmount: number;
+      monthlyRent: number;
+      quoteExpiresAt: string; // tiền về sau mốc này ⇒ hoàn cọc, không giữ căn
+    };
     outcome: 'awaiting_payment' | 'active' | 'expired' | 'converted' | 'refunded' | 'forfeited';
     vietqr: {
       bankId: string;
@@ -130,8 +137,26 @@ export interface TenantBooking {
   contractId?: string;
 }
 
+export type FastCloseCycle = 1 | 3 | 6;
+
+/** `GET /bookings/:ref/fast-close` — báo giá chốt nhanh (giá sàn của chủ nhà không bao giờ lộ ra). */
+export interface FastCloseQuotes {
+  eligible: boolean; // false ⇒ chủ nhà chưa ủy quyền chốt nhanh
+  quoteHours: number; // phải chuyển cọc trong số giờ này
+  rent: number;
+  deposit: number;
+  quotes: {
+    cycle: FastCloseCycle;
+    rent: number;
+    rentDiscount: number;
+    rentDiscountPct: number;
+    deposit: number;
+    depositDiscount: number;
+  }[];
+}
+
 export interface DepositTermsDoc {
-  version: string; // 'HOLD-2026.10-v1'
+  version: string; // 'DEP-2026.10-v2'
   amount: number;
   holdHours: number;
   items: { id: string; text: string; source: string }[]; // source = "legal/02 Điều 6.1" …
@@ -169,7 +194,7 @@ export interface SubmitEkycDto {
 /** `POST /contracts/lease/sign` — ký Hợp đồng thuê (sau eKYC, khi đang giữ chỗ). */
 export interface SignLeaseDto {
   bookingRef: string;
-  startDate: string; /* YYYY-MM-DD, trong 30 ngày tới */
+  startDate: string; /* YYYY-MM-DD = ngày dọn vào, T0+2 … T0+30 (T0 = ngày cọc về) */
   months: number; // min_lease_months của căn .. 36
   paymentCycle: 1 | 3 | 6;
   signatureSvg: string; // chữ ký tay (SVG / data URL)

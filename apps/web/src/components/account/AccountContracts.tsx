@@ -28,7 +28,7 @@ export function AccountContracts() {
     [bookings.state, contracts.state],
   );
 
-  const header = <PageHeader title="Hợp đồng & tiền cọc" description="Theo dõi khoản cọc giữ chỗ, hợp đồng thuê và biên bản bàn giao của bạn." />;
+  const header = <PageHeader title="Hợp đồng & tiền cọc" description="Theo dõi khoản cọc chốt căn, hợp đồng thuê và biên bản bàn giao của bạn." />;
 
   const failed = bookings.state.status === "error" ? bookings.state : contracts.state.status === "error" ? contracts.state : null;
   if (failed) {
@@ -68,7 +68,7 @@ export function AccountContracts() {
       {header}
       {rows.length === 0 ? (
         <Section>
-          <p className="muted">Chưa có khoản cọc hay hợp đồng nào. Cọc giữ chỗ chỉ phát sinh sau khi bạn xem căn cùng Field Host.</p>
+          <p className="muted">Chưa có khoản cọc hay hợp đồng nào. Khoản cọc chỉ phát sinh sau khi bạn xem căn cùng Field Host.</p>
           <Link href="/account/bookings" className="btn btn-quiet btn-sm">
             Xem lịch hẹn của tôi
           </Link>
@@ -92,7 +92,7 @@ function DepositCard({ row }: { row: DepositRow }) {
       <KeyValue
         items={[
           {
-            label: "Cọc giữ chỗ",
+            label: "Cọc chốt căn",
             value: deposit ? (
               <>
                 {vnd(deposit.amount)}đ · {outcome && <StatusBadge tone={outcome.tone}>{outcome.label}</StatusBadge>}
@@ -118,7 +118,7 @@ function DepositCard({ row }: { row: DepositRow }) {
 
       {contract ? (
         <p className={`muted small ${styles.note}`}>
-          Khoản cọc giữ chỗ {vnd(contract.convertedHolding)}đ đã chuyển toàn bộ thành tiền cọc bảo đảm tài sản, không trừ vào tiền thuê tháng đầu.
+          Khoản cọc {vnd(contract.convertedHolding)}đ đã chuyển khi chốt căn được tính toàn bộ vào tiền cọc bảo đảm tài sản, không trừ vào tiền thuê tháng đầu.
         </p>
       ) : deposit ? (
         <p className={`muted small ${styles.note}`}>

@@ -26,7 +26,7 @@
 │           NỖI ĐAU THỰC TẾ CHỦ NHÀ            │                 VĂN BẢN & CƠ CHẾ PHÁP LÝ XỬ LÝ                 │
 ├──────────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
 │ 1. Trống phòng kéo dài & Thiệt hại tài chính │ • Bước 1 (01_EXCLUSIVE_RENTAL_MANDATE_AGREEMENT.md)            │
-│    kép (mất 6-12tr/tháng + nợ vay + phí BQL) │ • AI Matchmaker khớp căn 30s; Cọc VietQR 24h khóa căn nhanh.  │
+│    kép (mất 6-12tr/tháng + nợ vay + phí BQL) │ • AI Matchmaker khớp căn 30s; Cọc VietQR khóa căn ngay.      │
 │                                              │ • Thoát linh hoạt 15 ngày khi nhà trống (phí phạt 0đ).         │
 ├──────────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
 │ 2. Cực hình đi xa 20-30km mở cửa & Môi giới  │ • Bước 1 & Bước 2 (02_SMART_LOCK_AND_KEY_CUSTODY_PROTOCOL.md)  │

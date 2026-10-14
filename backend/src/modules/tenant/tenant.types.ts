@@ -63,6 +63,7 @@ export interface TenantUnit {
   /** Cọc bảo đảm: `units.securityDeposit ?? baseRentPrice`. */
   securityDeposit: number;
   /** Cọc giữ chỗ backend đang thu (`holdingDepositAmount()`). */
+  /** Cọc v2: số tiền khách chuyển để chốt căn = Tiền cọc bảo đảm của căn (VNĐ). Tên giữ nguyên để không đổi API. */
   holdingDeposit: number;
   highlights: string[];
   /** Chỉ ở chi tiết căn; list = []. có conditionPct (độ mới %), KHÔNG có compensation/photoIds (B6). */
@@ -117,6 +118,8 @@ export interface TenantBooking {
     holdHours?: number;
     expiresAt?: string;
     outcome: 'awaiting_payment' | 'active' | 'expired' | 'converted' | 'refunded' | 'forfeited';
+    /** Chốt nhanh đã cam kết: chu kỳ, cọc trước giảm, giá thuê đã chốt, hạn chuyển cọc (24h). */
+    fastClose?: { cycle: number; baseAmount: number; monthlyRent: number; quoteExpiresAt: string | null };
     vietqr: {
       bankId: string;
       bankName?: string;

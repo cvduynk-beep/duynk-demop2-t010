@@ -37,7 +37,7 @@ export interface LeaseTemplateData {
     monthlyRentPrice: number;
     paymentCycleMonths: number;
     securityDepositAmount: number;
-    convertedHoldingAmount: number; // 2000000
+    convertedHoldingAmount: number; // khoản đã chuyển khi chốt căn (cọc v2 = cọc bảo đảm; HĐ cũ = 2.000.000)
     depositTopUp: number;
     firstRentAmount: number;
     totalFirstPayment: number;

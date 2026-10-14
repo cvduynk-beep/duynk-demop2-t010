@@ -32,7 +32,7 @@ Nhằm bảo vệ an toàn thông tin theo Nghị định 13/2023/NĐ-CP, hệ t
 │   • Quản lý Kho chìa khóa cơ 2 lớp két tại Văn phòng Phân khu; kiểm tra chất lượng bàn giao.     │
 │                                                                                                  │
 │   [CẤP 3: FINANCE & ESCROW AUDITOR] ──► Kế Toán Trưởng & Chuyên Viên Đối Soát Ký Quỹ            │
-│   • Giám sát tài khoản định danh VietQR; đối soát gạch nợ tiền cọc giữ chỗ 2.000.000 VNĐ.       │
+│   • Giám sát tài khoản định danh VietQR; đối soát gạch nợ tiền cọc chốt căn (= cọc bảo đảm).   │
 │   • Đối soát chỉ số điện nước EVN, phê duyệt giải tỏa cọc bảo đảm (Security Deposit) Check-out. │
 │   • Điều chỉnh bảng tham số thù lao (`fee_configs`) theo phê duyệt của Ban Điều Hành.           │
 │                                                                                                  │
@@ -72,7 +72,7 @@ Module BI Funnel trên Admin Portal theo dõi hành trình chuyển đổi của
 │                 Khách bấm nút Zalo xác nhận tại sảnh; Field Host quẹt thẻ thang máy dẫn lên xem. │
 │         │                                                                                        │
 │         ▼ (Tỷ lệ chuyển đổi mục tiêu: >= 25%)                                                    │
-│   [GIAI ĐOẠN 5] KHÓA CĂN GIỮ CHỖ 24H QUA VIETQR ĐỘNG (2.000.000 VNĐ Holding Escrow)              │
+│   [GIAI ĐOẠN 5] KHÓA CĂN QUA VIETQR ĐỘNG BẰNG TIỀN CỌC BẢO ĐẢM (Holding Escrow, mặc định 48h)    │
 │                 Quét VietQR gạch nợ tức thì; căn hộ chuyển trạng thái 'holding' khóa toàn sàn.   │
 │         │                                                                                        │
 │         ▼ (Tỷ lệ chuyển đổi mục tiêu: >= 95%)                                                    │

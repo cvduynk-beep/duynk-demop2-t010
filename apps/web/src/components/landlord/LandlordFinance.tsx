@@ -120,7 +120,7 @@ function FinanceBody({ f }: { f: Finance }) {
         <section className="card" style={{ overflow: "hidden" }} aria-label="Bồi thường trống phòng">
           <h2 className={styles.h2} style={{ padding: "18px 20px 0" }}>Bồi thường trống phòng</h2>
           <p className="muted small" style={{ padding: "4px 20px 0", margin: 0 }}>
-            Khách đã cọc giữ chỗ nhưng quá hạn mà không ký hợp đồng: bạn nhận 50% khoản cọc (legal/02 Điều 6.1), không trừ phí dịch vụ.
+            Khách đã cọc chốt căn nhưng quá hạn mà không ký hợp đồng: bạn nhận 50% khoản cọc (legal/02 Điều 6.1), không trừ phí dịch vụ.
           </p>
           <div className={styles.tableScroll}>
             <table className={styles.finRows}>
@@ -161,7 +161,7 @@ function FinanceBody({ f }: { f: Finance }) {
               <tr>
                 <th scope="col">Kỳ</th>
                 <th scope="col" className={styles.r}>Tiền thuê</th>
-                <th scope="col" className={styles.r} title="50% cọc giữ chỗ khách bỏ (legal/02 Điều 6.1)">Bồi thường trống phòng</th>
+                <th scope="col" className={styles.r} title="50% tiền cọc khách bỏ (legal/02 Điều 6.1)">Bồi thường trống phòng</th>
                 <th scope="col" className={styles.r}>Thực nhận</th>
                 <th scope="col">Trạng thái</th>
               </tr>
@@ -184,7 +184,7 @@ function FinanceBody({ f }: { f: Finance }) {
           </table>
         </div>
         <p className="muted xs" style={{ padding: "0 20px 16px", margin: 0 }}>
-          Số liệu tính từ hợp đồng thuê còn hiệu lực trong từng tháng. Bồi thường trống phòng = 50% cọc giữ chỗ khi khách quá hạn mà không ký hợp đồng, ghi vào tháng hết hạn giữ chỗ. Trạng thái chuyển khoản sẽ có khi hệ thống ghi nhận chi trả.
+          Số liệu tính từ hợp đồng thuê còn hiệu lực trong từng tháng. Bồi thường trống phòng = 50% tiền cọc khi khách quá hạn mà không ký hợp đồng, ghi vào tháng hết hạn giữ chỗ. Trạng thái chuyển khoản sẽ có khi hệ thống ghi nhận chi trả.
         </p>
       </section>
     </>

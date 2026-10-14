@@ -68,6 +68,8 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
   const contract =
     booking?.contractId && contracts.state.status === "ready" ? contracts.state.data.find((c) => c.id === booking.contractId) : undefined;
   const [busy, setBusy] = useState(false);
+  /** Đang đổi lựa chọn cọc (thường ↔ chốt nhanh) khi chưa có tiền về. */
+  const [changingDeposit, setChangingDeposit] = useState(false);
 
   /** Gọi một hành động của khách; backend trả lịch đã cập nhật ⇒ ghi thẳng vào cache, không cần tải lại. */
   const act = async (fn: () => Promise<ApiResponse<TenantBooking>>, success: string) => {
@@ -139,6 +141,10 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
   const deposit = booking.deposit;
   const holdHours = deposit?.holdHours ?? unit.holdHours;
   const outcome = deposit?.outcome;
+  const fastClose = deposit?.fastClose;
+  // Chốt nhanh mà tiền về sau hạn báo giá ⇒ backend đã hoàn (không ghi paidAt vì căn chưa từng khoá), lịch vẫn closing;
+  // khách chọn lại được. Hoàn vì lý do khác (thua First-to-Pay, Admin huỷ) thì lịch không còn closing.
+  const quoteMissed = outcome === "refunded" && !!fastClose && booking.status === "closing";
   const awaitingHost = booking.status === "pending" && !host;
 
   return (
@@ -188,11 +194,14 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
             {/* ─── KHỐI VIỆC CẦN LÀM (THEO SPEC-P05 §2.3 & 01-CONTRACTS §6) ─── */}
 
             {/* 1. closing & chưa đồng ý điều khoản cọc: tick điều khoản ngay trước khi quét VietQR (không ký thỏa thuận riêng) */}
-            {booking.status === "closing" && !deposit && (
+            {booking.status === "closing" && (!deposit || changingDeposit || quoteMissed) && (
               <DepositTermsBox
                 refCode={booking.ref}
                 unitCode={unit.code}
+                currentCycle={changingDeposit ? fastClose?.cycle ?? null : null}
+                onCancel={changingDeposit ? () => setChangingDeposit(false) : undefined}
                 onSuccess={(next) => {
+                  setChangingDeposit(false);
                   primeApiData(bookingDef.key, next);
                   invalidateTenantBookings();
                 }}
@@ -200,7 +209,7 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
             )}
 
             {/* 2. closing & đã đồng ý điều khoản: VietQR động do backend phát */}
-            {booking.status === "closing" && deposit && !deposit.paidAt && (
+            {booking.status === "closing" && deposit && outcome === "awaiting_payment" && !changingDeposit && (
               <div className={styles.qr} style={{ padding: "16px 0", borderTop: "1px solid var(--line)" }}>
                 <VietQR
                   amount={deposit.amount}
@@ -214,8 +223,18 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
                 <div style={{ textAlign: "center", marginTop: 8 }}>
                   <b style={{ color: "var(--ink)" }}>Đang chờ thanh toán cọc...</b>
                   <p className="muted xs" style={{ maxWidth: 480, margin: "4px auto 0" }}>
-                    Chuyển khoản {vnd(deposit.amount)}đ vào tài khoản định danh nền tảng. Căn được giữ riêng cho bạn {holdHours} giờ kể từ khi ngân hàng báo có.
+                    Chuyển khoản {vnd(deposit.amount)}đ (Tiền cọc bảo đảm) vào tài khoản định danh nền tảng. Căn được giữ riêng cho bạn {holdHours} giờ
+                    kể từ khi ngân hàng báo có; khi ký Hợp đồng thuê, khoản này chuyển 100% thành cọc bảo đảm, không trừ vào tiền thuê.
                   </p>
+                  {fastClose && (
+                    <p className="xs" style={{ maxWidth: 480, margin: "8px auto 0", color: "var(--amber-900, #78350f)" }}>
+                      Chốt nhanh {fastClose.cycle} tháng/kỳ: giá thuê {vnd(fastClose.monthlyRent)}đ/tháng, cọc đã giảm từ {vnd(fastClose.baseAmount)}đ. Chuyển
+                      trước <b>{fmtDateTime(fastClose.quoteExpiresAt)}</b>, quá hạn sẽ được hoàn tiền và căn không bị khoá.
+                    </p>
+                  )}
+                  <button type="button" className="btn btn-quiet btn-sm" style={{ marginTop: 8 }} onClick={() => setChangingDeposit(true)}>
+                    Đổi lựa chọn cọc
+                  </button>
                 </div>
                 {/* MÔ PHỎNG VietQR: backend chỉ nhận lệnh này khi DEMO_TOOLS=true và không phải production. */}
                 <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
@@ -246,7 +265,7 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
                 <CountdownBanner expiresAt={deposit?.expiresAt} holdHours={holdHours} now={now} />
                 <div className="card" style={{ padding: 16, background: "var(--surface)", marginTop: 12 }}>
                   <div style={{ marginBottom: 12 }}>
-                    <b style={{ fontSize: 16 }}>Căn hộ đang được giữ chỗ cho bạn ({holdHours} giờ)</b>
+                    <b style={{ fontSize: 16 }}>Căn hộ đang được giữ riêng cho bạn ({holdHours} giờ)</b>
                     <p className="muted xs" style={{ margin: "4px 0 0" }}>
                       {booking.kyc
                         ? `Khoản cọc ${vnd(deposit?.amount ?? 0)}đ đã nhận. Danh tính eKYC đã xác thực chính chủ. Mời bạn ký Hợp đồng thuê căn hộ.`
@@ -272,7 +291,8 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
                   <div>
                     <b style={{ fontSize: 16 }}>Đã hết hạn giữ căn</b>
                     <p style={{ fontSize: 13.5, margin: "4px 0 10px" }}>
-                      Hết thời hạn giữ chỗ {holdHours} giờ. Khoản cọc 2.000.000đ không được hoàn theo Điều 328 Bộ luật Dân sự 2015: 1.000.000đ bồi thường cho chủ nhà, 1.000.000đ chi phí vận hành nền tảng.
+                      Hết thời hạn giữ căn {holdHours} giờ mà chưa ký Hợp đồng thuê. Khoản cọc {vnd(deposit.amount)}đ không được hoàn theo Điều 328 Bộ luật Dân sự
+                      2015: {vnd(Math.floor(deposit.amount / 2))}đ bồi thường cho chủ nhà, {vnd(deposit.amount - Math.floor(deposit.amount / 2))}đ chi phí vận hành nền tảng.
                     </p>
                     <Link href="/?view=all" className="btn btn-amber btn-sm">
                       Tìm căn khác
@@ -290,7 +310,9 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
                   <div>
                     <b style={{ fontSize: 16 }}>Đã huỷ giữ căn và hoàn cọc</b>
                     <p style={{ fontSize: 13.5, margin: "4px 0 10px" }}>
-                      Admin đã huỷ cọc giữ chỗ (chủ nhà không giữ cam kết hoặc bất khả kháng). VinStay hoàn tiền theo Điều 328 BLDS trong 24 giờ làm việc.
+                      {quoteMissed
+                        ? `Tiền cọc về sau hạn ưu đãi chốt nhanh (${fmtDateTime(fastClose.quoteExpiresAt)}) nên căn không bị khoá; VinStay hoàn ${vnd(deposit.amount)}đ trong 24 giờ làm việc. Bạn có thể chọn lại cách cọc ở trên.`
+                        : "Khoản cọc đã được huỷ và hoàn lại (căn vừa được khách khác cọc trước, chủ nhà không giữ cam kết hoặc bất khả kháng). VinStay hoàn tiền theo Điều 328 BLDS trong 24 giờ làm việc; nếu lỗi do chủ nhà, bạn được nhận thêm khoản phạt bằng tiền cọc."}
                     </p>
                     <Link href="/?view=all" className="btn btn-primary btn-sm">
                       Tìm căn khác
@@ -316,8 +338,12 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
                       <dt className="muted">Tiền thuê kỳ 1 ({contract.paymentCycle} tháng)</dt>
                       <dd style={{ textAlign: "right", fontWeight: 600 }}>{vnd(contract.firstPaymentDue.rent)}đ</dd>
 
-                      <dt className="muted">Phần cọc bảo đảm còn thiếu</dt>
-                      <dd style={{ textAlign: "right", fontWeight: 600 }}>{vnd(contract.firstPaymentDue.depositTopUp)}đ</dd>
+                      {contract.firstPaymentDue.depositTopUp > 0 && (
+                        <>
+                          <dt className="muted">Phần cọc bảo đảm còn thiếu</dt>
+                          <dd style={{ textAlign: "right", fontWeight: 600 }}>{vnd(contract.firstPaymentDue.depositTopUp)}đ</dd>
+                        </>
+                      )}
 
                       <dt style={{ borderTop: "1px solid var(--line)", paddingTop: 8, fontWeight: 700 }}>Tổng thanh toán đợt đầu</dt>
                       <dd style={{ borderTop: "1px solid var(--line)", paddingTop: 8, textAlign: "right", fontWeight: 700, color: "var(--primary, #0f4c81)" }}>
@@ -548,8 +574,8 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
                     <div>
                       <b>Hợp đồng thuê {contract.contractNumber}</b>
                       <p className="muted small">
-                        {contract.months} tháng · {vnd(contract.monthlyRent)}đ/tháng · cọc bảo đảm {vnd(contract.securityDeposit)}đ (gồm{" "}
-                        {vnd(contract.convertedHolding)}đ cọc giữ chỗ)
+                        {contract.months} tháng · {vnd(contract.monthlyRent)}đ/tháng · cọc bảo đảm {vnd(contract.securityDeposit)}đ (đã nhận{" "}
+                        {vnd(contract.convertedHolding)}đ khi chốt cọc)
                       </p>
                     </div>
                     {contract.pdf.ready ? (

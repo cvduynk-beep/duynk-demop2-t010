@@ -3,6 +3,7 @@ import { invalidateApiPattern } from "@/lib/query/useApiQuery";
 import { tenantApi, errorText, type CatalogPayload, type UnitFilter } from "./api";
 import type {
   DepositTermsDoc,
+  FastCloseQuotes,
   TenantBooking,
   TenantContract,
   TenantHandover,
@@ -67,6 +68,13 @@ export const tenantQueries = {
           key: "tenant:favorites:anon",
           fetch: async () => ({ ok: true, status: 200, data: [] }),
         },
+
+  /** Báo giá chốt nhanh — không cache dài: giá sàn/ủy quyền của chủ nhà có thể đổi. */
+  fastClose: (ref: string): ApiQueryDef<FastCloseQuotes> => ({
+    key: `tenant:fast-close:${ref.toUpperCase()}`,
+    fetch: () => tenantApi.fastCloseQuotes(ref),
+    errorText: (res) => errorText(res, "Không tải được báo giá chốt nhanh."),
+  }),
 
   depositTerms: (unitCode?: string): ApiQueryDef<DepositTermsDoc> => ({
     key: `tenant:terms:${unitCode ? unitCode.toUpperCase() : "default"}`,

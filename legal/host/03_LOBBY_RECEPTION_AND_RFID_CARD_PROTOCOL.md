@@ -98,7 +98,7 @@ Field Host giữ vai trò là **"Chuyên Gia Thổ Địa (Local Guide)"**, đ�
 │            dẫn xem tiếp trong 5 phút (tăng gấp đôi cơ hội tìm đúng căn phù hợp).                 │
 │                                                                                                  │
 │ [BƯỚC 5] Hỗ Trợ Chốt Cọc VietQR Hoặc Gửi Hồ Sơ Căn Hộ Số:                                        │
-│          • Nếu khách ưng ý: Hướng dẫn quét VietQR động 2.000.000 VNĐ khóa căn 24h.               │
+│          • Nếu khách ưng ý: Hướng dẫn quét VietQR động tiền cọc bảo đảm, khóa căn.              │
 │          • Nếu khách cần suy nghĩ: Tiễn khách văn minh, tuyệt đối KHÔNG ÉP CỌC; hệ thống tự động  │
 │            đẩy "Hồ sơ Căn hộ Số" vào Zalo khách để khách về nhà nghiên cứu thêm cùng người thân. │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -126,7 +126,7 @@ Field Host giữ vai trò là **"Chuyên Gia Thổ Địa (Local Guide)"**, đ�
 Nền tảng triệt tiêu nguy cơ cắt cầu giao dịch ngoài sàn bằng cơ cấu pháp lý chặt chẽ và chính sách kinh tế công bằng:
 
 1. **Lá chắn từ Hợp đồng Ký gửi Quản lý Độc quyền (Exclusive Mandate):**
-   - Chủ nhà đã ký hợp đồng độc quyền với VinStay AI. Mọi khoản cọc giữ chỗ 2 triệu bắt buộc phải nộp qua mã VietQR động gạch nợ trực tiếp vào tài khoản định danh nền tảng để khóa căn trên toàn mạng lưới.
+   - Chủ nhà đã ký hợp đồng độc quyền với VinStay AI. Mọi khoản cọc chốt căn bắt buộc phải nộp qua mã VietQR động gạch nợ trực tiếp vào tài khoản định danh nền tảng để khóa căn trên toàn mạng lưới.
    - Chủ nhà tuyệt đối từ chối giao dịch ngầm ngoài sàn để bảo toàn quyền lợi Hộ chiếu bàn giao 10 hạng mục và tránh chế tài bồi thường vi phạm thỏa thuận độc quyền (01 tháng tiền thuê).
 2. **Chính sách Khóa Quyền Hoa Hồng 30 Ngày (Attribution Lock):**
    - Ngay khi Host hoàn thành phiên dẫn, hệ thống tự động gắn mã Host với khách thuê trong vòng **30 ngày**.

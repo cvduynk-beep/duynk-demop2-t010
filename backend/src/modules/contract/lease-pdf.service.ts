@@ -188,7 +188,9 @@ export class LeasePdfService implements OnModuleInit {
       const rent = Number(contract.monthlyRentPrice);
       const cycle = contract.paymentCycleMonths;
       const secDeposit = Number(contract.securityDepositAmount);
-      const depositTopUp = Math.max(0, secDeposit - 2000000);
+      // Khoản khách đã chuyển khi chốt căn (cọc v2 = toàn bộ cọc bảo đảm ⇒ 0 thu bù; HĐ cũ từ cọc 2tr ⇒ thu phần chênh).
+      const converted = Number(contract.convertedHoldingAmount ?? contract.holdingDeposit?.amount ?? 0);
+      const depositTopUp = Math.max(0, secDeposit - converted);
       const firstRent = rent * cycle;
       const totalFirst = firstRent + depositTopUp;
 
@@ -231,7 +233,7 @@ export class LeasePdfService implements OnModuleInit {
           monthlyRentPrice: rent,
           paymentCycleMonths: cycle,
           securityDepositAmount: secDeposit,
-          convertedHoldingAmount: 2000000,
+          convertedHoldingAmount: converted,
           depositTopUp,
           firstRentAmount: firstRent,
           totalFirstPayment: totalFirst,
@@ -239,7 +241,7 @@ export class LeasePdfService implements OnModuleInit {
         },
         deposit: {
           depositCode: contract.holdingDeposit.depositCode,
-          amount: 2000000,
+          amount: Number(contract.holdingDeposit.amount),
           transferContent: contract.holdingDeposit.transferContent || '',
           paidAt: contract.holdingDeposit.paidAt
             ? new Date(contract.holdingDeposit.paidAt).toLocaleDateString('vi-VN')
@@ -510,10 +512,14 @@ export class LeasePdfService implements OnModuleInit {
         `- Tổng tiền cọc bảo đảm tài sản & nội thất: ${data.terms.securityDepositAmount.toLocaleString('vi-VN')} VNĐ.`,
       );
       doc.text(
-        `- Khoản cọc giữ chỗ 2.000.000 VNĐ đã thanh toán được chuyển đổi 100% thành một phần Tiền cọc bảo đảm tài sản; số tiền cọc bảo đảm còn thiếu cần nộp bổ sung: ${data.terms.depositTopUp.toLocaleString('vi-VN')} VNĐ.`,
+        `- Khoản ${data.terms.convertedHoldingAmount.toLocaleString('vi-VN')} VNĐ Bên B đã chuyển khi chốt căn được chuyển đổi 100% thành Tiền cọc bảo đảm tài sản; ${
+          data.terms.depositTopUp > 0
+            ? `số tiền cọc bảo đảm còn thiếu cần nộp bổ sung: ${data.terms.depositTopUp.toLocaleString('vi-VN')} VNĐ.`
+            : 'Bên B không phải nộp bổ sung tiền cọc.'
+        }`,
       );
       doc.text(
-        '- Tuyệt đối không khấu trừ khoản cọc giữ chỗ 2.000.000 VNĐ vào tiền thuê tháng đầu tiên.',
+        '- Tuyệt đối không khấu trừ Tiền cọc bảo đảm vào tiền thuê tháng đầu tiên.',
       );
       doc.text('- Thanh toán kỳ đầu:');
       doc.text(

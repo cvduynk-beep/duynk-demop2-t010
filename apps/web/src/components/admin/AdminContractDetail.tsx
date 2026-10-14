@@ -82,7 +82,7 @@ function DetailBody({ d }: { d: RegistryDetail }) {
             <KeyValue items={d.facts.map((f) => ({ label: f.label, value: f.value }))} />
             {d.kind === "holding" && (
               <p className={styles.infoBox} style={{ marginTop: 12 }}>
-                Khi ký HĐ thuê chính thức, 100% khoản cọc giữ chỗ chuyển đổi thành một phần của Tiền cọc bảo đảm tài sản — tuyệt đối KHÔNG khấu trừ vào
+                Khi ký HĐ thuê chính thức, 100% khoản cọc chốt căn chuyển đổi thành Tiền cọc bảo đảm tài sản — tuyệt đối KHÔNG khấu trừ vào
                 tiền thuê tháng đầu tiên.
               </p>
             )}
@@ -157,12 +157,12 @@ function DetailBody({ d }: { d: RegistryDetail }) {
 
           {d.kind === "holding" && d.status === "PAID_HOLDING" && (
             <div className={`${styles.actionSection} ${styles.actionDue}`}>
-              <div className={styles.actionTitle}>Huỷ cọc giữ chỗ (Admin)</div>
+              <div className={styles.actionTitle}>Huỷ cọc chốt căn (Admin)</div>
               <p className={styles.actionDesc}>
                 Chủ nhà không giữ cam kết (phạt cọc) hoặc bất khả kháng (hoàn 100%) theo Điều 328 BLDS. Hệ thống ghi nhận yêu cầu, Ops quyết phương án xử lý tiền.
               </p>
               <button type="button" className="btn btn-danger btn-block" onClick={() => setModal("void")}>
-                Huỷ cọc giữ chỗ...
+                Huỷ cọc chốt căn...
               </button>
             </div>
           )}
@@ -319,7 +319,7 @@ function VoidHoldModal({ open, d, onClose }: { open: boolean; d: RegistryDetail;
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const amount = d.amount ?? 2_000_000;
+  const amount = d.amount ?? 0;
 
   const submit = async () => {
     const n = note.trim();
@@ -339,7 +339,7 @@ function VoidHoldModal({ open, d, onClose }: { open: boolean; d: RegistryDetail;
     <Modal
       open={open}
       onClose={onClose}
-      title="Huỷ cọc giữ chỗ (Điều 328 BLDS)"
+      title="Huỷ cọc chốt căn (Điều 328 BLDS)"
       footer={
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", width: "100%" }}>
           <button type="button" className="btn btn-secondary" onClick={onClose}>

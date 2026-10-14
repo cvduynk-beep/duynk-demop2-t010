@@ -66,7 +66,7 @@ describe("formulaLines — cách tính như bản mock", () => {
 
 describe("DEAL_STATUS", () => {
   it("dùng đúng nhãn như bản mock", () => {
-    expect(DEAL_STATUS.PAID_HOLDING.label).toBe("Đã cọc giữ chỗ");
+    expect(DEAL_STATUS.PAID_HOLDING.label).toBe("Đã cọc chốt căn");
     expect(DEAL_STATUS.CONVERTED_TO_CONTRACT.label).toBe("Đã ký hợp đồng thuê");
   });
 });

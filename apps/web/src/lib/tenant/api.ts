@@ -3,6 +3,8 @@ import type {
   CreateBookingDto,
   DepositTermsDoc,
   EkycScanResult,
+  FastCloseCycle,
+  FastCloseQuotes,
   SignLeaseDto,
   SubmitEkycDto,
   TenantBooking,
@@ -35,6 +37,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   already_rated: "Lịch hẹn này đã được đánh giá.",
   terms_version_stale: "Phiên bản điều khoản cọc đã được cập nhật. Vui lòng kiểm tra lại.",
   unit_already_held: "Căn hộ vừa được khách khác đặt cọc thành công (First-to-Pay Wins).",
+  fast_close_unavailable: "Căn này hiện không áp dụng ưu đãi chốt nhanh. Vui lòng chọn cọc thường.",
   vietqr_not_configured: "Thanh toán VietQR chưa được cấu hình nhận và đối soát giao dịch. Vui lòng liên hệ hỗ trợ.",
   no_kyc: "Cần xác minh CCCD (eKYC) trước khi ký hợp đồng thuê.",
   lease_already_signed: "Lịch hẹn này đã có hợp đồng thuê.",
@@ -194,9 +197,18 @@ export const tenantApi = {
     return api.get<DepositTermsDoc>(`/legal/deposit-terms${unitCode ? `?unitCode=${encodeURIComponent(unitCode)}` : ""}`);
   },
 
-  // A15: Chấp thuận điều khoản cọc & lấy thông tin VietQR
-  acceptDeposit: (ref: string, termsVersion: string): Promise<ApiResponse<TenantBooking>> => {
-    return api.post<TenantBooking>(`/bookings/${encodeURIComponent(ref)}/deposit`, { acceptTerms: true, termsVersion });
+  // A14b: Báo giá chốt nhanh (chỉ chủ lịch hẹn, khi đang chốt cọc)
+  fastCloseQuotes: (ref: string): Promise<ApiResponse<FastCloseQuotes>> => {
+    return api.get<FastCloseQuotes>(`/bookings/${encodeURIComponent(ref)}/fast-close`);
+  },
+
+  // A15: Chấp thuận điều khoản cọc & lấy thông tin VietQR. Chưa có tiền về thì gọi lại để đổi lựa chọn (báo giá lại).
+  acceptDeposit: (ref: string, termsVersion: string, fastCloseCycle?: FastCloseCycle | null): Promise<ApiResponse<TenantBooking>> => {
+    return api.post<TenantBooking>(`/bookings/${encodeURIComponent(ref)}/deposit`, {
+      acceptTerms: true,
+      termsVersion,
+      ...(fastCloseCycle ? { fastCloseCycle } : {}),
+    });
   },
 
   // DEMO (xoá khi có webhook thật): giả lập ngân hàng báo có cọc

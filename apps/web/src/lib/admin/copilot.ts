@@ -61,7 +61,7 @@ export function answerFromFacts(question: string, f: CopilotFacts): CopilotReply
 
   if (has(q, ["hôm nay", "sáng giờ", "chốt được", "vừa chốt", "đã chốt", "hợp đồng mới", "ký hợp đồng"])) {
     const todays = f.deals.rows.filter((r) => vnDay(r.receivedAt) === f.today && r.status !== "REFUNDED");
-    if (!todays.length) return { text: `Dạ hôm nay (${day(f.today)}) chưa có khoản cọc giữ chỗ nào báo có anh nhé. Trong ${period} có ${nf.format(f.deals.summary.closedDeals)} căn chốt.`, actions: [REPORTS_LINK] };
+    if (!todays.length) return { text: `Dạ hôm nay (${day(f.today)}) chưa có khoản cọc nào báo có anh nhé. Trong ${period} có ${nf.format(f.deals.summary.closedDeals)} căn chốt.`, actions: [REPORTS_LINK] };
     const list = todays.slice(0, 3).map((r) => `${r.unitCode} (${money(r.monthlyRent)}/tháng${r.hostName ? `, ${r.hostName}` : ""})`).join("; ");
     return { text: `Dạ hôm nay đã có **${nf.format(todays.length)} căn chốt cọc**: ${list}.`, actions: [REPORTS_LINK] };
   }

@@ -7,7 +7,7 @@ import {
 import { ContractStatus, DepositStatus, UnitStatus, ViewingStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PhoneService } from '../auth/phone/phone.service';
-import { holdingDepositAmount } from '../deposit/deposit-amount';
+import { evaluateMoveIn } from './move-in';
 import { DepositService } from '../deposit/deposit.service';
 import { BookingAccessService } from '../tenant/booking-access.service';
 import { statusToWeb, toTenantBooking, toTenantContract } from '../tenant/tenant.mappers';
@@ -18,15 +18,15 @@ import { LeasePdfService } from './lease-pdf.service';
 /** Cách ký ghi vào `signatures.method`: chữ ký tay trên canvas + OTP mô phỏng (chưa có nhà cung cấp OTP ký số thật). */
 export const LEASE_SIGN_METHOD = 'CANVAS_SIMULATED_OTP';
 const MAX_LEASE_MONTHS = 36;
-const MAX_START_DAYS = 30;
 const PAYMENT_CYCLES = [1, 3, 6];
 
 /**
  * Ký Hợp đồng thuê chính thức (`POST /contracts/lease/sign`).
  *
  * THẬT: chỉ chủ lịch; lịch đang giữ chỗ còn hạn; đã có eKYC; kiểm điều khoản thuê; trong một transaction tạo
- * `contracts` (ACTIVE), chuyển 100% cọc giữ chỗ 2.000.000đ thành một phần Tiền cọc bảo đảm (KHÔNG trừ tiền thuê tháng
- * đầu — `holding_deposits.payment_status = CONVERTED_TO_CONTRACT`, `escrow_transactions` HOLD_CONVERTED), căn → RENTED,
+ * `contracts` (ACTIVE), chuyển 100% khoản đã chuyển (cọc v2 = Tiền cọc bảo đảm, không thu bù; cọc cũ 2tr ⇒ thu phần chênh)
+ * thành Tiền cọc bảo đảm (KHÔNG trừ tiền thuê tháng đầu — `holding_deposits.payment_status = CONVERTED_TO_CONTRACT`,
+ * `escrow_transactions` HOLD_CONVERTED); chốt nhanh ⇒ giá thuê và chu kỳ đã chốt; ngày bắt đầu theo Smart Move-in; căn → RENTED,
  * lịch → LEASED, audit LEASE_ESTABLISHED; sau đó sinh PDF thật (SHA-256 của file) và tạo `signed_documents` + `signatures`.
  *
  * MÔ PHỎNG (giữ có chủ đích): bước OTP ký số (`otp_verified_at` = lúc ký, method `CANVAS_SIMULATED_OTP`) và dấu thời
@@ -86,15 +86,20 @@ export class LeaseSigningService {
     if (!PAYMENT_CYCLES.includes(dto.paymentCycle)) {
       throw new UnprocessableEntityException({ message: 'Kỳ thanh toán chỉ chấp nhận 1, 3 hoặc 6 tháng/lần.', code: 'lease_terms_invalid' });
     }
-    const startDate = new Date(`${dto.startDate}T00:00:00.000Z`);
-    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const maxStart = new Date(today.getTime() + MAX_START_DAYS * 86_400_000);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dto.startDate) || isNaN(startDate.getTime()) || startDate < today || startDate > maxStart) {
+    // Chốt nhanh: chu kỳ đã cam kết lúc chốt cọc là điều kiện của giá đã giảm ⇒ HĐ bắt buộc đúng chu kỳ đó.
+    if (deposit.fastCloseCycle && dto.paymentCycle !== deposit.fastCloseCycle) {
       throw new UnprocessableEntityException({
-        message: `Ngày bắt đầu hợp đồng phải trong vòng ${MAX_START_DAYS} ngày kể từ hôm nay.`,
+        message: `Bạn đã chốt nhanh với kỳ thanh toán ${deposit.fastCloseCycle} tháng/lần; hợp đồng phải theo đúng kỳ này.`,
         code: 'lease_terms_invalid',
+        errors: { paymentCycle: deposit.fastCloseCycle },
       });
     }
+    // `dto.startDate` = ngày dọn vào khách chọn; HĐ & tiền thuê bắt đầu từ ngày tính tiền theo Smart Move-in (move-in.ts).
+    const moveIn = evaluateMoveIn(deposit.paidAt ?? now, dto.startDate);
+    if (!moveIn.ok) {
+      throw new UnprocessableEntityException({ message: moveIn.message, code: 'lease_terms_invalid', errors: { startDate: moveIn.message, window: moveIn.window } });
+    }
+    const startDate = new Date(`${moveIn.billingStartDate}T00:00:00.000Z`);
     if (!dto.signatureSvg?.trim()) {
       throw new UnprocessableEntityException({ message: 'Thiếu chữ ký tay của khách thuê.', code: 'signature_required' });
     }
@@ -102,10 +107,15 @@ export class LeaseSigningService {
     const endDate = new Date(startDate);
     endDate.setUTCMonth(endDate.getUTCMonth() + dto.months);
     endDate.setUTCDate(endDate.getUTCDate() - 1);
-    const monthlyRent = Number(unit.baseRentPrice);
-    const converted = holdingDepositAmount(unit);
-    // Tiền cọc bảo đảm tài sản & nội thất: theo căn (Admin/Chủ nhà đặt) hoặc bằng 1 tháng thuê; luôn ≥ khoản cọc giữ chỗ.
-    const securityDeposit = Math.max(unit.securityDeposit != null ? Number(unit.securityDeposit) : monthlyRent, converted);
+    // Chốt nhanh ⇒ giá đã chốt lúc cọc (≥ giá sàn); không thì giá chào hiện tại.
+    const monthlyRent = deposit.quotedMonthlyRent != null ? Number(deposit.quotedMonthlyRent) : Number(unit.baseRentPrice);
+    const converted = Number(deposit.amount);
+    // Cọc v2: khoản đã chuyển CHÍNH LÀ Tiền cọc bảo đảm (không thu bù). Cọc giữ chỗ cũ (điều khoản HOLD-*, 2tr) vẫn
+    // lấy cọc bảo đảm theo căn và thu phần chênh ở kỳ đầu.
+    const legacyHold = (deposit.termsVersion ?? '').startsWith('HOLD-');
+    const securityDeposit = legacyHold
+      ? Math.max(unit.securityDeposit != null ? Number(unit.securityDeposit) : Number(unit.baseRentPrice), converted)
+      : converted;
 
     const contract = await this.prisma.$transaction(async (tx) => {
       const contractNumber = await this.nextContractNumber(tx, unit.unitCode, now.getFullYear());
@@ -153,7 +163,17 @@ export class LeaseSigningService {
           actionType: 'LEASE_ESTABLISHED',
           entityName: 'Contract',
           entityId: created.id,
-          newValue: { contractNumber, unitCode: unit.unitCode, leaseTermMonths: dto.months, securityDeposit },
+          newValue: {
+            contractNumber,
+            unitCode: unit.unitCode,
+            leaseTermMonths: dto.months,
+            securityDeposit,
+            monthlyRent,
+            paymentCycle: dto.paymentCycle,
+            fastCloseCycle: deposit.fastCloseCycle ?? null,
+            moveInDate: moveIn.moveInDate,
+            billingStartDate: moveIn.billingStartDate,
+          },
           ipAddress: ctx.ipAddress?.slice(0, 45),
           userAgent: ctx.userAgent,
         },

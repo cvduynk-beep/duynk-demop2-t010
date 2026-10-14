@@ -5,7 +5,7 @@
 ## 1. Tổng Quan Sản Phẩm (Product Overview)
 
 ### 1.1. Mục Tiêu Cốt Lõi
-Số hóa và minh bạch hóa toàn bộ chặng đầu của vòng đời thuê BĐS tại các đại đô thị Vinhomes, trọng tâm thử nghiệm tại **Vinhomes Ocean Park (Gia Lâm, Hà Nội)** (**Tìm kiếm $\rightarrow$ Khớp căn All-in Cost $\rightarrow$ Đặt lịch xem phòng $\rightarrow$ Đón tiếp tại sảnh $\rightarrow$ Cọc giữ chỗ 24h & Ký thỏa thuận điện tử**). Hệ thống ứng dụng AI để tự động hóa 70% các tác vụ lặp lại, loại trừ 100% tin ảo, tối ưu chi phí vận hành nhân sự và đảm bảo an ninh nội khu.
+Số hóa và minh bạch hóa toàn bộ chặng đầu của vòng đời thuê BĐS tại các đại đô thị Vinhomes, trọng tâm thử nghiệm tại **Vinhomes Ocean Park (Gia Lâm, Hà Nội)** (**Tìm kiếm $\rightarrow$ Khớp căn All-in Cost $\rightarrow$ Đặt lịch xem phòng $\rightarrow$ Đón tiếp tại sảnh $\rightarrow$ Cọc chốt căn bằng Tiền cọc bảo đảm & Ký hợp đồng điện tử**). Hệ thống ứng dụng AI để tự động hóa 70% các tác vụ lặp lại, loại trừ 100% tin ảo, tối ưu chi phí vận hành nhân sự và đảm bảo an ninh nội khu.
 
 ### 1.2. Đối Tượng Người Dùng Chính (Target Personas)
 1. **Khách thuê (Tenant / End Users):** Sinh viên VinUni, nhân sự văn phòng TechnoPark, chuyên gia và gia đình trẻ đối mặt với 5 rào cản lớn:
@@ -41,8 +41,8 @@ Số hóa và minh bạch hóa toàn bộ chặng đầu của vòng đời thu�
    * *Field Host đón sảnh chuyên nghiệp:* Có sẵn thẻ cư dân thang máy, đưa khách lên phòng trong 60 giây.
    * *Cấp mã mở cửa qua app tại cửa phòng:* Host bấm mở phòng tức thì, không dùng hộp sắt lockbox cồng kềnh; khách thoải mái trải nghiệm không gian không bị ép cọc gấp.
 4. **Rủi ro lừa tiền cọc & Hợp đồng bất lợi (Deposit Scams & Legal Exposure):**
-   * *Cọc giữ chỗ 24h qua VietQR động (2.000.000 VNĐ):* Gạch nợ tự động vào tài khoản định danh nền tảng, khóa căn `holding` 24h chống tranh căn.
-   * *Chuẩn hóa Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit):* Cọc 2 triệu chuyển 100% thành một phần của cọc bảo đảm khi ký hợp đồng chính thức, giữ nguyên suốt kỳ thuê để bảo vệ quyền lợi hai bên, TUYỆT ĐỐI KHÔNG khấu trừ vào tiền thuê tháng đầu tiên.
+   * *Cọc chốt căn qua VietQR động (= Tiền cọc bảo đảm của căn (mặc định 1 tháng thuê)):* Gạch nợ tự động vào tài khoản định danh nền tảng, khóa căn `holding` (mặc định 48h, Admin cài đặt) chống tranh căn.
+   * *Chuẩn hóa Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit):* Tiền cọc đã chuyển khi chốt căn chuyển 100% thành cọc bảo đảm khi ký hợp đồng chính thức (không nộp bù), giữ nguyên suốt kỳ thuê để bảo vệ quyền lợi hai bên, TUYỆT ĐỐI KHÔNG khấu trừ vào tiền thuê tháng đầu tiên.
    * *AI OCR CCCD & Ký số OTP bảo mật AES-256:* Bóc tách CCCD gắn chip tự động điền Thỏa thuận cọc số tuân thủ Nghị định 13/2023/NĐ-CP, không để lộ lọt ảnh CCCD cho môi giới.
 5. **"Bị bỏ rơi" khi ở & Tranh chấp trả cọc (Post-Move Abandonment & Unfair Deductions):**
    * *Hộ chiếu bàn giao số (Digital Handover Passport):* Lưu trữ ảnh kiểm định có Timestamp + Geofence của 10 hạng mục nội thất lúc nhận nhà làm chứng cứ đối soát pháp lý khi thanh lý (loại trừ cấn trừ hao mòn tự nhiên, bảo vệ 100% tiền cọc chính đáng của khách).
@@ -52,7 +52,7 @@ Số hóa và minh bạch hóa toàn bộ chặng đầu của vòng đời thu�
 1. **Giải quyết Trống phòng kéo dài & Thiệt hại tài chính kép (Pre-Leasing Vacancy):**
    * *AI Matchmaker theo All-in Cost:* Khớp nhu cầu khách thuê trong 30 giây, rút ngắn chu kỳ tìm khách từ 30 ngày xuống dưới 7 ngày.
    * *Dynamic Deal & Badge "Căn hời phân khu":* Nhận diện căn có giá tốt ($\ge 10\%$), ưu tiên hiển thị Top đầu, tăng gấp 3 lần lượt xem mà chủ nhà không bị ép dìm giá.
-   * *Khóa căn giữ chỗ 24h qua VietQR động (2.000.000 VNĐ):* Khóa trạng thái `holding` 24h, tạo áp lực khan hiếm, thúc đẩy chốt deal tức thì.
+   * *Khóa căn qua VietQR động bằng Tiền cọc bảo đảm của căn (mặc định 1 tháng thuê):* Khóa trạng thái `holding` (mặc định 48h), tạo áp lực khan hiếm, thúc đẩy chốt deal tức thì.
    * *3 Khung giá tham chiếu & Bảng tính Thiệt hại trống phòng (3-Tier Pricing & Vacancy Bleed Simulator):* Khi chủ nhà ký gửi, AI phân tích dữ liệu phân khu đưa ra 3 khung giá trực quan: (1) **Giá Cạnh Tranh** (chốt < 5 ngày, gắn nhãn Căn hời), (2) **Giá Thị Trường** (chuẩn 7–14 ngày), (3) **Giá Cao Hơn** (kèm nhãn cảnh báo **`[Không khuyến nghị]`**, nguy cơ trống phòng > 30–45 ngày). Khi chủ nhà chọn hoặc nhập mức giá thuộc Khung 3, hệ thống tự động kích hoạt **Bảng tính Vacancy Bleed** phân tích chi tiết: tiền thuê mất trắng + phí quản lý BQL Vinhomes (11k/m²) + số tháng cần cho thuê liên tục để bù lỗ chênh lệch, giúp chủ nhà tự nguyện đưa ra quyết định tài chính tối ưu mà không bị môi giới ép giá cảm tính.
    * *Vòng lặp tự cân bằng thị trường & Nút kích cầu Flash Deal 1-chạm:* Nếu chủ nhà vẫn giữ giá cao, căn hộ tự động chịu sàng lọc tự nhiên từ bộ lọc All-in Cost. Sau 7 ngày, AI gửi Zalo Market Digest (báo cáo số khách tìm phân khu vs. số lượt xem căn thực tế). Sau 10–14 ngày chưa chốt, Landlord Portal bật nút 1-chạm *"Flash Deal"* điều chỉnh về mức giá cạnh tranh để kích hoạt lại Badge Căn hời và tự động bắn thông báo Zalo ZNS tới danh sách khách chờ (Waitlist) chốt cọc trong 24–48h.
 2. **Giải quyết Cực hình đi xa 20–30km & Môi giới làm phiền (Distance & Broker Chaos):**
@@ -61,7 +61,7 @@ Số hóa và minh bạch hóa toàn bộ chặng đầu của vòng đời thu�
    * *Listing Verified 100% & Bảo vệ thông tin chủ nhà:* Định danh [Tòa - Tầng - Căn] kèm ảnh timestamp; mã hóa SĐT cá nhân chủ nhà; watermark ảnh chống môi giới copy phá giá.
 3. **Giải quyết Tranh chấp hư hao nội thất & Rủi ro tiền cọc (Asset & Deposit Disputes):**
    * *Hộ chiếu bàn giao số (Digital Handover Passport):* Chụp ảnh kiểm định 10 hạng mục nội thất nhúng Timestamp + Geofence; phân định rõ hao mòn tự nhiên và hư hại bất cẩn làm cơ sở pháp lý đối soát.
-   * *Chuẩn hóa Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit):* Cọc 2M chuyển thành một phần của cọc bảo đảm, giữ nguyên suốt kỳ hạn thuê, TUYỆT ĐỐI KHÔNG khấu trừ vào tiền thuê tháng đầu tiên, làm lá chắn bảo vệ tài sản và bù đắp nợ cước.
+   * *Chuẩn hóa Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit):* Tiền cọc chốt căn chuyển 100% thành cọc bảo đảm (không nộp bù), giữ nguyên suốt kỳ hạn thuê, TUYỆT ĐỐI KHÔNG khấu trừ vào tiền thuê tháng đầu tiên, làm lá chắn bảo vệ tài sản và bù đắp nợ cước.
    * *Ký số Thỏa thuận cọc & AI OCR CCCD:* Bóc tách CCCD 2 mặt, sinh hợp đồng cọc số ký OTP bảo mật AES-256 theo Nghị định 13/2023/NĐ-CP, ràng buộc pháp lý chặt chẽ.
 4. **Giải quyết Khủng hoảng bảo trì vặt, BQL phạt & Bùng tiền dịch vụ (Operations & Rules):**
    * *Danh bạ Kỹ thuật Ngoài & Vận hành Tinh gọn (Asset-Light Handyman Referral):* VinStay AI & Field Host tuyệt đối không ôm khâu sửa chữa, không làm tổng thầu bảo trì; chỉ giới thiệu danh bạ thợ uy tín tại Ocean Park; khách và thợ tự thỏa thuận chi phí và chịu trách nhiệm trực tiếp, giải phóng chủ nhà khỏi cảnh réo đêm mà VinStay AI không gánh rủi ro vận hành.
@@ -86,7 +86,7 @@ Số hóa và minh bạch hóa toàn bộ chặng đầu của vòng đời thu�
    * *Thẻ cư dân thang máy RFID chuẩn mực:* 100% Host được trang bị thẻ cư dân phân khu Sapphire, lên phòng trong 60 giây.
 4. **Nguy cơ bị "cắt cầu" giao dịch & Mất trắng công sức (Platform Leakage / Disintermediation):**
    * *Mã hóa liên lạc 2 chiều:* Ẩn số điện thoại cá nhân giữa khách và chủ nhà trên toàn hệ thống.
-   * *VietQR cọc 2 triệu tại sảnh & Cơ chế Attribution Lock:* Khóa cứng mã định danh của Field Host dẫn khách; đảm bảo hoa hồng chốt cọc được chi trả tự động vào ví Host ngay khi deal thành công.
+   * *VietQR cọc chốt căn tại sảnh & Cơ chế Attribution Lock:* Khóa cứng mã định danh của Field Host dẫn khách; đảm bảo hoa hồng chốt cọc được chi trả tự động vào ví Host ngay khi deal thành công.
 5. **Bẫy OpEx cố định & Kiểm soát chất lượng CTV (Fixed OpEx Trap & Quality Standardization):**
    * *Cấu hình Biến phí Động trên Trang Quản Trị (Admin Configurable Commission & Incentives):* Ban quản trị chủ động điều chỉnh mức thù lao lượt dẫn (Ticket Fee), tỷ lệ hoa hồng chốt cọc (Success Commission) và các gói thưởng nóng kích cầu theo từng giai đoạn thị trường/mùa vụ linh hoạt mà không cần can thiệp mã nguồn.
    * *Mobile Dashboard 1-chạm & Sổ tay phân khu số:* Tra cứu All-in Cost, diện tích, quy chế BQL chuẩn xác tức thì.
@@ -100,7 +100,7 @@ Số hóa và minh bạch hóa toàn bộ chặng đầu của vòng đời thu�
    * *Quy chuẩn "Ngừng niêm yết / Lưu trữ căn hộ (Delist & Archive Unit)" thay vì nút "Xóa" cứng:* Đáp ứng chuẩn PropTech cao cấp và an toàn dữ liệu 100%. Áp dụng cơ chế Pre-flight validation (chặn delist khi đang `holding` cọc 2Tr, đang `rented` có HĐ thuê, hoặc đang có ca xem active), yêu cầu chọn lý do (Exit mandate, lấy lại nhà, đã bán, bảo trì lớn, dọn dẹp data), ghi chú và Type-to-Confirm ("DELIST"). Căn hộ được chuyển vào kho lưu trữ hồ sơ, ẩn 100% khỏi Trang chủ & AI Matchmaker nhưng bảo lưu vĩnh viễn dữ liệu kiểm định, hợp đồng và audit trail, cho phép Admin khôi phục niêm yết (Relist) tức thì khi cần.
 2. **Nguy cơ bị "cắt cầu" giao dịch & Thất thoát nguồn thu (Platform Leakage / Disintermediation):**
    * *Ràng buộc pháp lý từ Hợp đồng Quản lý Độc quyền:* Điều khoản cam kết mọi giao dịch thuê trong thời hạn ủy quyền phải thực hiện qua VinStay AI.
-   * *Mã hóa liên lạc 2 chiều & VietQR cọc tại sảnh:* Ẩn SĐT cá nhân; cọc 2 triệu chuyển vào tài khoản định danh nền tảng để khóa căn `holding` 24h và tự động sinh Thỏa thuận cọc số.
+   * *Mã hóa liên lạc 2 chiều & VietQR cọc tại sảnh:* Ẩn SĐT cá nhân; tiền cọc (bằng Tiền cọc bảo đảm của căn) chuyển vào tài khoản định danh nền tảng để khóa căn `holding` (mặc định 48h); khách chấp thuận điều khoản cọc bằng ô tick trước khi quét VietQR.
    * *Ràng buộc quyền lợi Hộ chiếu bàn giao số:* Quyền lợi sử dụng bộ ảnh đối soát 10 hạng mục nội thất chỉ áp dụng cho giao dịch hợp lệ trên nền tảng, loại bỏ 100% động cơ ký ngoài.
 3. **Bẫy chi phí cố định (Fixed OpEx Trap) & Tối ưu hóa dòng tiền:**
    * *Mô hình Vận hành Siêu tinh gọn (Ultra Asset-Light):* 100% Field Host hoạt động theo cơ chế biến phí (Ticket Fee + Hoa hồng chốt cọc) cấu hình linh hoạt từ Admin Portal; nền tảng không gánh nặng lương cứng.
@@ -158,7 +158,7 @@ Nhằm kiểm soát rủi ro bot càn quét, tấn công vét cạn API token (T
      * Biểu phí quản lý BQL phân khu Sapphire (~8.8k/m2) và Zenpark/Pavilion;
      * Nội quy nuôi thú cưng (chó/mèo) theo quy chế BQL;
      * Định nghĩa 4 cấu phần All-in Cost trọn gói;
-     * Quy trình cọc 2 triệu qua VietQR động khóa căn 48h;
+     * Quy trình cọc chốt căn (Tiền cọc bảo đảm của căn) qua VietQR động khóa căn 48h;
      * Cơ chế đón tiếp thực địa bằng thẻ cư dân thang máy của Field Host.
    * *Hiệu quả:* Tiết kiệm 100% token cho hơn 50% câu hỏi thông thường, thời gian phản hồi tức thì dưới 10ms.
 
@@ -168,7 +168,7 @@ Nhằm kiểm soát rủi ro bot càn quét, tấn công vét cạn API token (T
 
 ### 1.9. Cơ Chế Khách Vãng Lai Trải Nghiệm Khung Chat (Zero-Friction Guest Experience & Just-in-Time OTP)
 * **Triết lý "Aha! Moment" trong 5 giây:** Khách vãng lai vừa vào trang chủ có thể chat ngay hoặc bấm gợi ý, hệ thống nhả ngay Băng chuyền ngang (Mini Horizontal Carousel) hiển thị ảnh thật, căn hời và All-in Cost trọn gói trực tiếp trong khung chat mà không đòi hỏi đăng nhập trước.
-* **Xác thực đúng lúc (Just-in-Time Authentication):** Chỉ khi khách thực hiện hành vi có ràng buộc trách nhiệm cao (Bấm *[Đặt lịch xem phòng]* với Field Host hoặc *[Quét VietQR 2 triệu]* để khóa căn), hệ thống mới yêu cầu nhập số điện thoại xác thực OTP. Lúc này khách đã ưng căn nên sẵn sàng cung cấp thông tin, đảm bảo tỷ lệ chuyển đổi cao nhất đồng thời triệt tiêu 100% tình trạng khách ảo "bỏ bom" Field Host tại sảnh.
+* **Xác thực đúng lúc (Just-in-Time Authentication):** Chỉ khi khách thực hiện hành vi có ràng buộc trách nhiệm cao (Bấm *[Đặt lịch xem phòng]* với Field Host hoặc *[Quét VietQR tiền cọc]* để khóa căn), hệ thống mới yêu cầu nhập số điện thoại xác thực OTP. Lúc này khách đã ưng căn nên sẵn sàng cung cấp thông tin, đảm bảo tỷ lệ chuyển đổi cao nhất đồng thời triệt tiêu 100% tình trạng khách ảo "bỏ bom" Field Host tại sảnh.
 
 ### 1.10. Quy Chuẩn Vận Hành Về Giá: "Giá Niêm Yết Cố Định" & "Chu Kỳ Thanh Toán Tiêu Chuẩn"
 
@@ -213,7 +213,7 @@ Nhằm kiểm soát rủi ro bot càn quét, tấn công vét cạn API token (T
               │
               ▼
    [ 5. Chốt Cọc 24h & AI OCR CCCD ]
-   • Khách ưng ý -> Sinh mã VietQR động cọc 2.000.000 VNĐ
+   • Khách ưng ý -> Sinh mã VietQR động cọc = Tiền cọc bảo đảm
    • Webhook xác nhận -> Chuyển căn sang 'holding' (khóa 24h)
    • AI OCR bóc tách CCCD 2 mặt -> Tự động điền Thỏa thuận cọc điện tử
    • Ký xác nhận OTP qua Zalo/SMS
@@ -252,20 +252,26 @@ Nhằm kiểm soát rủi ro bot càn quét, tấn công vét cạn API token (T
    * *Với căn dùng khóa thông minh (có mã số):* Host dẫn khách tới trước cửa phòng $\rightarrow$ Bấm nút **`[Xác nhận xem phòng]`** trên app $\rightarrow$ Hệ thống gửi mã mở cửa về điện thoại của Host để bấm mở khóa (đồng thời gửi thông báo Zalo cho chủ nhà ghi nhận lịch sử mở cửa). Tuyệt đối không dùng Lockbox treo cửa vi phạm BQL.
    * *Với căn dùng chìa khóa cơ:* Host nhận và sử dụng chìa khóa cơ do nhân sự quản lý thực địa / quầy phân khu The Sapphire quản lý.
 
-### 3.4. Giai đoạn 4: Chốt Cọc Giữ Chỗ 24h & Ký Thỏa Thuận Điện Tử
-1. Khách xem xong và đồng ý giữ chỗ: Field Host bấm **[Khách Chốt]** trên Mobile App.
-2. Web App sinh ngay mã **VietQR động** với số tiền cọc quy định **2.000.000 VNĐ**, nội dung chuyển khoản: `COC [Mã căn] [SĐT khách]`.
+### 3.4. Giai đoạn 4: Chốt Cọc Bằng Tiền Cọc Bảo Đảm & Ký Hợp Đồng Điện Tử (Cọc v2 — 2026-10-14)
+1. Khách xem xong và đồng ý thuê: Field Host bấm **[Khách Chốt]** trên Mobile App; khách tick chấp thuận điều khoản cọc (`DEP-2026.10-v2`) trên ứng dụng của mình.
+2. Web App sinh ngay mã **VietQR động** với số tiền = **Tiền Cọc Bảo Đảm của căn** (`units.security_deposit`, chủ nhà đặt từ nửa tháng đến 3 tháng thuê, mặc định 1 tháng; không còn khoản cọc giữ chỗ cố định 2.000.000 VNĐ), nội dung chuyển khoản: `COC [Mã căn] [Mã lịch hẹn]`. Số tiền do server tính; webhook chỉ gạch nợ khi số tiền khớp đúng khoản cọc.
+   * **Ưu đãi Chốt nhanh** (chỉ khi chủ nhà ủy quyền Chốt nhanh & Giá sàn An toàn): khách chọn chu kỳ trả trước 1/3/6 tháng ⇒ giá thuê giảm 3,5%/5,5%/10% (làm tròn 50.000đ, không thấp hơn Giá sàn — Giá sàn không bao giờ trả ra API công khai) và tiền cọc giảm ~5% (tối thiểu 200.000đ, tối đa 8%). Ưu đãi chỉ giữ khi tiền về trong **24 giờ**; về muộn ⇒ hoàn tiền, không khóa căn. Chưa có tiền về thì khách đổi lựa chọn được (báo giá lại trên cùng khoản cọc). Không áp phụ phí thuê ngắn hạn.
 3. Khi tiền về tài khoản định danh, Webhook kích hoạt:
-   * Chuyển trạng thái căn sang `holding` (khóa căn trong 24h trên toàn hệ thống).
+   * Chuyển trạng thái căn sang `holding` (khóa căn theo thời hạn Admin cài đặt, mặc định 48h, trên toàn hệ thống).
    * Kích hoạt quy trình hủy các lịch xem còn lại của căn này (xem mục 3.5).
 4. **AI OCR CCCD & Ký thỏa thuận:**
    * Khách chụp 2 mặt ảnh CCCD tải lên Web App.
    * AI Vision trích xuất các trường: Họ tên, Số CCCD, Ngày cấp, Nơi thường trú trong $\le 5$ giây.
-   * Tự động điền thông tin vào **Thỏa thuận Đặt cọc Giữ chỗ Căn hộ (24h)**.
+   * Tự động điền thông tin vào **Hợp đồng thuê căn hộ**.
    * Khách xác thực ký điện tử bằng mã OTP gửi về Zalo/SMS.
 5. **Chuyển đổi thành Tiền Cọc Bảo Đảm Nội Thất (Security Deposit):**
-   * Khi ký Hợp đồng thuê chính thức trong vòng 24 giờ, khoản 2.000.000 VNĐ này được chuyển đổi 100% thành một phần của **Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)** của Hợp đồng.
+   * Khi ký Hợp đồng thuê chính thức trong thời hạn giữ căn, toàn bộ khoản cọc đã chuyển được chuyển đổi 100% thành **Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)** của Hợp đồng, không nộp bù; Hợp đồng chốt nhanh bắt buộc đúng chu kỳ và giá đã chốt.
+   * Không ký trong thời hạn vì lý do cá nhân ⇒ mất cọc, chia 50% chủ nhà / 50% nền tảng; chủ nhà vi phạm ⇒ hoàn 100% + phạt bằng tiền cọc; bất khả kháng / thua First-to-Pay ⇒ hoàn 100%.
    * Khoản tiền cọc này được giữ nguyên vẹn suốt thời hạn thuê làm tài sản bảo chứng niềm tin, ràng buộc trách nhiệm giữ gìn nội thất của khách thuê; và được hoàn trả lại 100% khi thanh lý hợp đồng sau khi đối soát hiện trạng.
+6. **Bộ Chọn Ngày Dọn Vào Thông Minh & Khung Chờ Dọn Vào Tiêu Chuẩn (Smart Move-in Window Protocol):**
+   * **Ngày dọn vào sớm nhất:** Tối thiểu T0 + 2 ngày (đệm 48h để Ban Quản lý Vinhomes duyệt thủ tục cư dân, kích hoạt thẻ thang máy, đăng ký biển số xe và Field Host kiểm định 10 hạng mục nội thất).
+   * **Khung chờ dọn vào miễn phí:** Miễn phí bảo lưu thời gian chờ dọn vào tối đa **07 ngày** kể từ ngày đặt cọc thành công để khách thu xếp việc chuyển dọn nhà cũ.
+   * **Nguyên tắc bảo vệ Chủ nhà:** Trường hợp khách chọn ngày dọn vào sau 07 ngày (tối đa 30 ngày), Hợp đồng thuê và tiền thuê nhà bắt buộc bắt đầu tính từ **ngày thứ 08** kể từ ngày đặt cọc; khách có quyền nhận bàn giao mã cửa và dọn vào lưu trú bất kỳ lúc nào từ ngày này; triệt tiêu hoàn toàn rủi ro giam căn trống kéo dài (Pre-leasing vacancy loss).
 
 ### 3.5. Giai đoạn 5: Cơ Chế Giữ Nhiệt Rổ Hàng, Xử Lý Căn HOT & AI Conflict Resolver
 
@@ -276,12 +282,12 @@ Nhằm kiểm soát rủi ro bot càn quét, tấn công vét cạn API token (T
    * **Tạo hiệu ứng tâm lý khan hiếm (FOMO):** Khách đang đứng xem trực tiếp tại phòng nếu thấy căn hộ vẫn đang "nóng" trên sàn sẽ bị thúc đẩy chốt cọc nhanh hơn để không bị người khác lấy mất.
    * **Thu thập tệp khách dự phòng (Waitlist F2 — Zero CAC):** Nếu khách thứ hai ưng căn này, hệ thống cho phép bấm nút `[Đặt lịch xem dự phòng]` hoặc `[Nhận thông báo khi căn chưa chốt]`. Nếu khách đầu không thuê, sàn có ngay tệp khách F2 sẵn sàng thế chân ngay lập tức mà không mất chi phí tiếp thị mới.
 3. **Quy tắc duy nhất để Khóa căn (`HOLDING`):**
-   * Căn hộ **CHỈ ĐƯỢC CHUYỂN SANG TRẠNG THÁI `HOLDING`** (khóa 48h) tại thời điểm Webhook cổng thanh toán ghi nhận thành công **tiền cọc giữ chỗ 2.000.000 VNĐ qua VietQR động**. Tuyệt đối không khóa căn khi chỉ mới có lịch hẹn xem miệng.
+   * Căn hộ **CHỈ ĐƯỢC CHUYỂN SANG TRẠNG THÁI `HOLDING`** (khóa 48h) tại thời điểm Webhook cổng thanh toán ghi nhận thành công **tiền cọc chốt căn qua VietQR động**. Tuyệt đối không khóa căn khi chỉ mới có lịch hẹn xem miệng.
 
 #### 3.5.2. Cơ Chế Mở Lại Trạng Thái Thường (AVAILABLE) — Grace-Period 30 Phút
 Sau khi xem phòng, căn hộ được hoàn trả trạng thái `AVAILABLE` theo 2 luồng khép kín:
 * **Luồng 1 — Kích hoạt thủ công từ Field Host (Manual Trigger):** Ngay khi kết thúc ca xem, Host bấm 1 trong 2 nút trên Host App:
-  * `[Khách chốt cọc]`: Mở màn hình tạo mã VietQR cọc 2.000.000 VNĐ giữ căn.
+  * `[Khách chốt cọc]`: Mở màn hình tạo mã VietQR cọc (= Tiền cọc bảo đảm của căn) giữ căn.
   * `[Khách chưa chốt / Phân vân]`: Hệ thống lập tức gỡ nhãn `viewing`, chuyển căn sang `AVAILABLE` ("Sẵn sàng đón khách mới") ngay lập tức.
 * **Luồng 2 — Dự phòng tự động (Auto-Expire SLA 75 Phút):** Nếu Field Host quên bấm cập nhật trạng thái trên app:
   * Thời gian ca xem nhà tiêu chuẩn là **45 phút**.
@@ -289,11 +295,11 @@ Sau khi xem phòng, căn hộ được hoàn trả trạng thái `AVAILABLE` the
   * Đồng thời, AI Engine tự động gửi tin nhắn Zalo ZNS đến các khách đang nằm trong danh sách chờ (Waitlist): *"Căn hộ [Mã căn] hiện vẫn còn trống, bạn có muốn đặt lịch xem ngay hôm nay?"*
 
 #### 3.5.3. Nguyên Tắc Tối Thượng "First-to-Pay Wins" & Xử Lý Cọc Trực Tuyến Khi Đang Có Khách Xem
-Tình huống thực tế: Khách A đang cùng Field Host đứng xem phòng tại căn hộ, trong khi Khách B ở xa lướt web thấy căn giá hời nên quét VietQR cọc 2.000.000 VNĐ trực tuyến mà không cần xem phòng:
+Tình huống thực tế: Khách A đang cùng Field Host đứng xem phòng tại căn hộ, trong khi Khách B ở xa lướt web thấy căn giá hời nên quét VietQR cọc chốt căn trực tuyến mà không cần xem phòng:
 1. **Nguyên tắc "First-to-Pay Wins" (Ai xuống tiền cọc trước, người đó giữ căn):**
    * Tiền cọc gạch nợ thành công qua tài khoản định danh nền tảng là căn cứ pháp lý duy nhất để khóa căn sang `HOLDING`. Hệ thống lập tức khóa căn cho Khách B.
 2. **Kích hoạt tức thì AI Conflict Resolver:**
-   * **Bắn thông báo đẩy tức thì cho Field Host:** App của Host tại phòng lập tức rung chuông và thông báo: *"Căn hộ [Mã căn] vừa được một khách hàng khác cọc giữ chỗ trực tuyến qua VietQR lúc [Giờ]."*
+   * **Bắn thông báo đẩy tức thì cho Field Host:** App của Host tại phòng lập tức rung chuông và thông báo: *"Căn hộ [Mã căn] vừa được một khách hàng khác đặt cọc trực tuyến qua VietQR lúc [Giờ]."*
    * **AI tự động gợi ý 2 căn thay thế tương đồng $\ge 90\%$:** Hệ thống tự động truy vấn và hiển thị trên màn hình của Host 2 căn hộ khả dụng cùng layout, cùng phân khu, có mức giá All-in và độ mới nội thất tương đương.
    * **Cấp quyền truy cập JIT căn mới:** Hệ thống tự động cấp quyền/mã cửa tạm thời của 2 căn mới để Host dẫn Khách A sang xem tiếp trong vòng 3 phút đi bộ.
 3. **Kịch bản thực chiến biến nguy thành cơ hội chốt Sale kép:**
@@ -320,7 +326,7 @@ Tình huống thực tế: Khách A đang cùng Field Host đứng xem phòng t�
 | Khớp căn thông minh (Matchmaker) | **R** | **I** | **A** | **I** |
 | Đặt lịch & Xác thực OTP | **R** | **I** | **R** | **I** |
 | Đón sảnh, quẹt thang máy, mở phòng | **I** | **R** | **C** (Consulted) | **I** |
-| Sinh mã VietQR cọc 2 triệu | **R** | **A** | **R** (Thanh toán) | **I** |
+| Sinh mã VietQR cọc chốt căn | **R** | **A** | **R** (Thanh toán) | **I** |
 | Khóa căn 24h & Hủy lịch trùng | **R** | **I** | **I** | **I** |
 | Bóc tách CCCD & Điền Thỏa thuận cọc | **R** | **S** (Support) | **R** (Upload & Ký OTP) | **I** |
 
@@ -366,12 +372,12 @@ Thiết kế trên PostgreSQL / Supabase gồm 4 bảng quan hệ chuẩn:
 * `status` (VARCHAR(20)): `pending`, `confirmed`, `completed`, `no_show`, `cancelled`.
 * `cancel_reason` (VARCHAR(255), Nullable): Lý do hủy (vd: `auto_cancelled_due_to_deposit`).
 
-### Bảng 4: `holding_deposits` (Thỏa thuận cọc giữ chỗ 24h)
+### Bảng 4: `holding_deposits` (Khoản cọc chốt căn)
 * `id` (UUID, PK): Mã định danh thỏa thuận cọc.
 * `viewing_id` (UUID, FK $\rightarrow$ `viewings.id`): Liên kết lịch hẹn tương ứng.
 * `unit_id` (UUID, FK $\rightarrow$ `units.id`): Căn hộ được cọc.
 * `tenant_id_card_data` (JSONB): Thông tin OCR bóc tách (họ tên, CCCD, ngày cấp, nơi thường trú).
-* `deposit_amount` (DECIMAL(12,2)): Số tiền cọc quy định (Mặc định: 2.000.000 VNĐ).
+* `deposit_amount` (DECIMAL(12,2)): Số tiền cọc do server tính = Tiền cọc bảo đảm của căn (chốt nhanh: số đã giảm). Cột thực tế trong `backend/prisma/schema.prisma`: `amount`, cùng `base_amount`, `fast_close_cycle`, `quoted_monthly_rent`, `quote_expires_at` (cọc v2).
 * `vietqr_payment_code` (VARCHAR(100)): Mã giao dịch VietQR động.
 * `payment_status` (VARCHAR(20)): `pending`, `paid`, `expired`, `refunded`.
 * `signed_agreement_url` (VARCHAR(255), Nullable): Link file PDF thỏa thuận cọc.
@@ -398,7 +404,7 @@ Thiết kế trên PostgreSQL / Supabase gồm 4 bảng quan hệ chuẩn:
   * **AC 2.2.2:** Khi dẫn khách lên trước cửa phòng, Host bấm [Xác nhận xem phòng] $\rightarrow$ App hiển thị mã khóa điện tử mở cửa (hoặc ghi chú chìa khóa cơ) và gửi thông báo xác nhận mở cửa cho chủ nhà.
 
 ### Module 3: Chốt Cọc Giữ Chỗ & Ký Thỏa Thuận Số Hóa
-* **User Story 3.1:** Là khách thuê đồng ý giữ phòng, tôi muốn quét mã VietQR cọc 2.000.000 VNĐ để khóa phòng ngay lập tức trong 24 giờ.
+* **User Story 3.1:** Là khách thuê đồng ý giữ phòng, tôi muốn quét mã VietQR chuyển Tiền cọc bảo đảm của căn để khóa phòng ngay lập tức trong thời hạn giữ căn (mặc định 48 giờ).
   * **AC 3.1.1:** Field Host bấm [Khách chốt] $\rightarrow$ Sinh mã VietQR động với cú pháp `COC [Mã căn] [SĐT khách]`.
   * **AC 3.1.2:** Webhook nhận tiền thành công trong $\le 10$ giây $\rightarrow$ Trạng thái căn chuyển sang `holding`, tự động hủy các lịch hẹn xem sau của căn này.
 * **User Story 3.2:** Là khách đã cọc, tôi muốn chụp ảnh CCCD để AI tự động điền Thỏa thuận cọc và ký duyệt qua OTP.
@@ -428,7 +434,7 @@ Thiết kế trên PostgreSQL / Supabase gồm 4 bảng quan hệ chuẩn:
 | **Khách trễ hẹn quá 15 phút (No-show)** | Lãng phí ca trực của Field Host, gián đoạn lịch căn hộ và làm giảm hiệu suất mạng lưới điều phối. | Quá 15 phút sau giờ hẹn mà khách không bấm nút `[Tôi đã có mặt tại sảnh]` trên Zalo, hệ thống tự động kích hoạt Bot gửi tin nhắn tương tác: `[Gia hạn 15 phút]` hoặc `[Hủy lịch hẹn]`. Nếu sau 5 phút khách không phản hồi, ca trực tự động giải phóng (`cancelled_no_show`) để Host nhận khách khác, đồng thời gắn cờ uy tín SĐT khách thuê. |
 | **Xung đột căn (Double Booking khi có cọc)** | Căn hộ được khách trước quét VietQR cọc `holding` trước giờ hẹn của lượt xem sau. | Kích hoạt Trigger hủy tự động; Zalo Bot lập tức gửi thông báo xin lỗi kèm gợi ý 3 căn có All-in Cost tương đương cùng phân khu và link chọn lại lịch 1-chạm (không cần xác thực lại OTP). |
 | **Lỗi mã khóa điện tử / Thất lạc chìa cơ tại cửa** | Khách và Field Host đã lên tới trước cửa nhưng không mở được cửa phòng, gây bức xúc và mất uy tín. | Field Host bấm nút `[Hỗ trợ khẩn cấp]` trên app:<br>• **Với khóa điện tử:** Kích hoạt cuộc gọi thoại bảo mật (Masked Call) kết nối trực tiếp Host tới Chủ nhà để xin mã khẩn cấp hoặc mở từ xa.<br>• **Với chìa khóa cơ:** Hệ thống tự động báo Area Lead phân khu mang chìa khóa cơ sơ cua tới hỗ trợ tại chỗ trong vòng $\le 5$ phút. |
-| **Chủ nhà yêu cầu hủy ủy quyền khi đang có cọc / lịch xem** | Xung đột quyền lợi giữa Chủ nhà, Nền tảng và Khách thuê đang đặt cọc hoặc đang trên đường tới xem phòng. | • **Nếu căn đang có cọc `holding` (2 triệu):** Hệ thống từ chối hủy ủy quyền, yêu cầu giữ nguyên trạng thái cho tới khi hết 24h giữ chỗ hoặc ký HĐ chính thức.<br>• **Nếu căn đang có lịch xem trong ngày:** Hệ thống yêu cầu Host hoàn tất các ca xem phòng đã hẹn, sau đó mới kích hoạt đồng hồ đếm ngược 15 ngày thoát ủy quyền (`mandate_termination_countdown`). |
+| **Chủ nhà yêu cầu hủy ủy quyền khi đang có cọc / lịch xem** | Xung đột quyền lợi giữa Chủ nhà, Nền tảng và Khách thuê đang đặt cọc hoặc đang trên đường tới xem phòng. | • **Nếu căn đang có cọc `holding`:** Hệ thống từ chối hủy ủy quyền, yêu cầu giữ nguyên trạng thái cho tới khi hết thời hạn giữ căn hoặc ký HĐ chính thức.<br>• **Nếu căn đang có lịch xem trong ngày:** Hệ thống yêu cầu Host hoàn tất các ca xem phòng đã hẹn, sau đó mới kích hoạt đồng hồ đếm ngược 15 ngày thoát ủy quyền (`mandate_termination_countdown`). |
 | **Ảnh chụp CCCD bị mờ / lóa sáng / nghiêng góc** | AI OCR bóc tách sai lệch thông tin pháp lý trên Thỏa thuận cọc điện tử. | Nếu độ tin cậy AI OCR $< 85\%$, app tự động chuyển sang form điền tay với các trường nghi ngờ tô viền đỏ nổi bật (Họ tên, CCCD, Ngày cấp), cho phép Host và khách đối chiếu trực tiếp thẻ cứng để sửa nhanh trước khi ký OTP. |
 | **Webhook ngân hàng bị trễ (VietQR đã chuyển nhưng chưa nảy trạng thái)** | Khách đã bị trừ tiền nhưng trạng thái căn chưa chuyển sang `holding`, nguy cơ bị khách khác cọc mất căn. | Mobile Dashboard của Field Host có nút `[Xác nhận đã thấy UNC]`. Host chụp ảnh biên lai giao dịch thành công của khách tải lên app; hệ thống tạm khóa căn (`temporary_holding`) trong 30 phút để kiểm tra thủ công, bảo vệ quyền lợi khách thuê. |
 | **Chủ nhà cố tình nhập khống giá siêu cao (ví dụ: Studio chào 500 triệu/tháng)** | Méo mó dữ liệu thống kê AI, làm sai lệch bảng giá thị trường và lãng phí công sức điều phối của Field Host. | • **Chặn cấp 1:** Form Ký gửi chặn chuyển bước nếu giá vượt trần layout (Studio > 18tr, trần tuyệt đối > 80tr).<br>• **Chặn cấp 2:** DTO Backend ném lỗi `BadRequestException`.<br>• **Chặn cấp 3:** AI định giá chỉ huấn luyện trên căn đã chốt/kiểm định (loại trừ outlier bằng IQR).<br>• **Chặn cấp 4:** Nếu cố tình spam, khóa vĩnh viễn SĐT/CCCD theo Điều 2 Khoản 5 Hợp đồng Ký gửi Độc quyền. |
@@ -466,7 +472,7 @@ Hệ thống chỉ số thành công của VinStay AI được xây dựng theo 
 * **KR 2.4 (Fast & Secure Escrow):** Tốc độ khóa phòng giữ chỗ qua VietQR động **$\le 10$ giây**; AI OCR bóc tách CCCD gắn chip và sinh Thỏa thuận cọc điện tử **$\le 5$ giây** với độ chính xác **$\ge 95\%$**.
 
 #### Objective 3 (Nền tảng & Vận hành): Vận hành tinh gọn Asset-Light, triệt tiêu rò rỉ giao dịch và tối ưu hiệu suất điều phối.
-* **KR 3.1 (Zero Disintermediation):** **Tỷ lệ cắt cầu giao dịch ngoài nền tảng (Platform Leakage) = 0%** nhờ ràng buộc Hợp đồng Ký gửi Độc quyền (thoát ủy quyền 15 ngày kèm nhà trống) và gạch nợ tự động cọc giữ chỗ 2 triệu qua VietQR định danh nền tảng.
+* **KR 3.1 (Zero Disintermediation):** **Tỷ lệ cắt cầu giao dịch ngoài nền tảng (Platform Leakage) = 0%** nhờ ràng buộc Hợp đồng Ký gửi Độc quyền (thoát ủy quyền 15 ngày kèm nhà trống) và gạch nợ tự động cọc chốt căn qua VietQR định danh nền tảng.
 * **KR 3.2 (Dispatch SLA):** **100% ticket xem phòng được tiếp nhận trong vòng $\le 3$ phút** qua thuật toán Auto-Dispatch 3 tầng; tỷ lệ Field Host hoàn thành ca xem phòng đúng giờ đạt **$\ge 95\%$**.
 * **KR 3.3 (Asset-Light Hardware & Zero OpEx Trap):** **Chi phí đầu tư phần cứng (Hardware CapEx) = 0 VNĐ** (tận dụng thẻ thang máy sẵn có của Field Host, mã khóa điện tử sẵn có hoặc chìa cơ phân khu; không lắp hộp lockbox, không can thiệp IoT khóa thông minh); 100% thù lao dẫn khách và hoa hồng chốt cọc là **biến phí linh hoạt** được cấu hình và kiểm soát theo thời gian thực trên Admin Portal.
 * **KR 3.4 (Asset-Light Maintenance):** **100% sự cố hỏng hóc phát sinh được xử lý qua Danh bạ Kỹ thuật ngoài uy tín**; VinStay AI và Field Host giữ vai trò giới thiệu tinh gọn, không ôm bộ máy sửa chữa cồng kềnh, không chịu rủi ro pháp lý hay gánh nặng lương thợ cố định.

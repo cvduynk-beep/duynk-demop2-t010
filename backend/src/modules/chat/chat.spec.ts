@@ -119,10 +119,13 @@ describe('chat-knowledge (FAQ 0 đồng)', () => {
 
   it('thay biến; dòng thiếu giá trị bị bỏ thay vì đoán', () => {
     const doc = kb.get('holding_deposit')!;
-    const full = renderTopic(doc, { holding_deposit: '2.000.000đ', hold_hours: '48', hold_hours_min: '12', hold_hours_max: '72' });
-    expect(full).toContain('2.000.000đ');
+    const full = renderTopic(doc, { hold_hours: '48', hold_hours_min: '12', hold_hours_max: '72' });
+    expect(full).toContain('48 giờ');
+    // Cọc v2: số tiền theo từng căn ⇒ tri thức nói quy tắc (= Tiền cọc bảo đảm), không còn con số cố định.
+    expect(full).toContain('Tiền cọc bảo đảm');
+    expect(full).not.toMatch(/2\.000\.000/);
     expect(full).not.toMatch(/\{[a-z_]+\}/);
-    const partial = renderTopic(doc, { holding_deposit: '2.000.000đ' });
+    const partial = renderTopic(doc, { hold_hours: '48' });
     expect(partial).not.toMatch(/\{[a-z_]+\}/);
     expect(partial.split('\n').length).toBeLessThan(full.split('\n').length);
   });

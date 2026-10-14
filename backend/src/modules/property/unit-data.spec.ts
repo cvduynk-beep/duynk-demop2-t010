@@ -1,7 +1,7 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { SPEC_POOL, generateInventory, seedUnitInventory } from './unit-inventory-seed';
 import { backfillUnitInventory } from './unit-inventory-backfill';
-import { holdingDepositAmount } from '../deposit/deposit-amount';
+import { securityDepositAmount } from '../deposit/deposit-amount';
 import { buildDepositTerms } from '../deposit/deposit-terms';
 import { ConsignmentMetaStore } from '../landlord/consignment-meta.store';
 import { LandlordAccessService } from '../landlord/landlord-access.service';
@@ -242,10 +242,12 @@ describe('P1-5/P1-6/P1-7 — mapper API đọc căn', () => {
     expect(toTenantUnit(unit({ securityDeposit: '13000000.00', highlights: ['View hồ'] }))).toMatchObject({ securityDeposit: 13_000_000, highlights: ['View hồ'] });
   });
 
-  it('P1-7: holdingDeposit = holdingDepositAmount() (không đổi 2.000.000); điều khoản dùng cùng hàm', () => {
-    expect(toTenantUnit(unit()).holdingDeposit).toBe(holdingDepositAmount());
-    expect(holdingDepositAmount()).toBe(2_000_000);
-    expect(buildDepositTerms(48).amount).toBe(holdingDepositAmount());
+  it('P1-7 (cọc v2): số tiền chốt căn = Tiền cọc bảo đảm của căn (chưa đặt ⇒ 1 tháng thuê); điều khoản dùng cùng số', () => {
+    expect(toTenantUnit(unit({ securityDeposit: null })).holdingDeposit).toBe(6_500_000);
+    expect(toTenantUnit(unit({ securityDeposit: '13000000.00' })).holdingDeposit).toBe(13_000_000);
+    expect(securityDepositAmount({ securityDeposit: null, baseRentPrice: '6500000.00' })).toBe(6_500_000);
+    expect(buildDepositTerms(48, 13_000_000).amount).toBe(13_000_000);
+    expect(buildDepositTerms(48, 13_000_000).items.find((i) => i.id === 'amount')!.text).toContain('13.000.000 VNĐ');
   });
 });
 

@@ -6,7 +6,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuthSessionService } from '../auth/session/auth-session.service';
 import { SessionCookieService } from '../auth/session/session-cookies.service';
 import { GuestLimiter } from '../assistant/guest-limiter';
-import { holdingDepositAmount } from '../deposit/deposit-amount';
 import { MatchmakerRequestDto } from '../matchmaker/dto/matchmaker-request.dto';
 import { MatchmakerService } from '../matchmaker/matchmaker.service';
 import { emptyCriteria, isGreeting, isOffTopic, parseMessage } from './chat-criteria';
@@ -254,7 +253,8 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(`[CHAT] Gemini lỗi: ${err instanceof GeminiError ? err.message : 'unknown'}`);
       return fallback(kind === 'timeout' ? 'llm_timeout' : 'llm_error');
     }
-    const checked = checkExplanation(raw, criteria, recs, [holdingDepositAmount()]);
+    // Cọc v2: tiền cọc theo từng căn (≈ 1 tháng thuê) ⇒ chỉ cho nhắc đúng giá thuê các căn gợi ý (đã nằm trong allowedMoney).
+    const checked = checkExplanation(raw, criteria, recs);
     if ('why' in checked) {
       this.logger.warn(`[CHAT] Bỏ lời giải thích của LLM: ${checked.why}`);
       return fallback('llm_rejected');
@@ -297,7 +297,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
     const fees = await this.feeValues();
     const holdHours = fees?.get(HOLD_HOURS_KEY);
     const values: FaqValues = {
-      holding_deposit: `${vnd(holdingDepositAmount())}đ`,
+      holding_deposit: 'Tiền cọc bảo đảm của căn (chủ nhà quy định, mặc định bằng 1 tháng tiền thuê)',
       // Cùng nguồn với deposit/hold-policy: fee_configs.hold_hours_default → 48, kẹp [12, 72].
       hold_hours: fees ? String(clampHoldHours(holdHours ?? HOLD_HOURS_DEFAULT)) : undefined,
       hold_hours_min: String(HOLD_HOURS_MIN),

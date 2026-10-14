@@ -85,16 +85,16 @@ Field Host có nghĩa vụ thực hiện đúng 5 quy chuẩn tiếp đón văn 
 ## ĐIỀU 5. CƠ CHẾ CHỐT CỌC VIETQR ĐỘNG & BẢO VỆ DÒNG TIỀN NỀN TẢNG
 1. **Thao tác bấm chốt cọc trên ứng dụng:**
    - Khi khách thuê ưng ý căn hộ, Field Host mở Host Mobile PWA và bấm nút **"Khách Chốt Cọc"**.
-   - Hệ thống lập tức sinh mã **VietQR động 2.000.000 VNĐ** (chứa mã căn và SĐT khách thuê) hiển thị trực tiếp trên màn hình.
+   - Khách tick điều khoản cọc trên ứng dụng của mình; hệ thống sinh mã **VietQR động** với số tiền bằng Tiền cọc bảo đảm của căn (chứa mã căn và mã lịch hẹn). Host không nhập số tiền.
    - **1.1. Kích hoạt Ưu đãi Chốt Nhanh trong Biên độ Giá Sàn (Fast-Close Authorization):**
-     * Trường hợp căn hộ được Chủ nhà bật tùy chọn *"Ủy quyền AI Chốt Nhanh & Giá Sàn An Toàn"*, ứng dụng Host tự động hiển thị mức giá chiết khấu cho phép khi khách cam kết thanh toán trước từ 06 đến 12 tháng hoặc cam kết cọc trong vòng 24 giờ.
+     * Trường hợp căn hộ được Chủ nhà bật tùy chọn *"Ủy quyền AI Chốt Nhanh & Giá Sàn An Toàn"*, ứng dụng Host tự động hiển thị mức giá chiết khấu cho phép khi khách cam kết trả trước theo chu kỳ 01/03/06 tháng (giảm 3,5%/5,5%/10% giá thuê, không thấp hơn Giá sàn, và khoảng 5% tiền cọc) **và** cọc về trong vòng 24 giờ.
      * Field Host được chủ động kích hoạt mức giá ưu đãi này để chốt cọc khách ngay tại phòng mà không cần gọi xin phép chủ nhà.
      * **Kỷ luật bảo vệ Giá Sàn:** Field Host tuyệt đối không được tự ý thương lượng hoặc chốt mức giá thấp hơn Giá sàn ủy quyền hiển thị trên ứng dụng. Hệ thống tự động khóa và từ chối tạo mã VietQR nếu phát hiện mức giá vượt ra ngoài biên độ ủy quyền.
 2. **Quy định thanh toán độc quyền qua VietQR động:**
    - Field Host hướng dẫn khách quét mã QR để chuyển khoản trực tiếp vào **Tài khoản Ký quỹ 3 bên bảo chứng ngân hàng** của VinStay AI.
    - **ĐIỀU CẤM KỶ LUẬT TUYỆT ĐỐI:** Field Host tuyệt đối **KHÔNG ĐƯỢC THU TIỀN MẶT**, không nhận chuyển khoản vào tài khoản cá nhân của Host dưới bất kỳ hình thức nào. Vi phạm quy định này sẽ bị chấm dứt hợp đồng ngay lập tức và chuyển hồ sơ cơ quan pháp luật xử lý hành vi lạm dụng tín nhiệm chiếm đoạt tài sản.
 3. **Quyền lợi bảo vệ công sức chốt cọc (Attribution Lock):**
-   - Ngay khi tiền cọc 2.000.000 VNĐ gạch nợ thành công vào tài khoản ký quỹ qua Webhook, hệ thống tự động khóa mã Host ID của người dẫn phòng gắn liền với giao dịch thành công đó, bảo đảm **100% quyền lợi hoa hồng chốt cọc** cho Host, không bị người khác tranh giành công sức.
+   - Ngay khi tiền cọc gạch nợ thành công vào tài khoản ký quỹ qua Webhook, hệ thống tự động khóa mã Host ID của người dẫn phòng gắn liền với giao dịch thành công đó, bảo đảm **100% quyền lợi hoa hồng chốt cọc** cho Host, không bị người khác tranh giành công sức.
 
 ---
 
