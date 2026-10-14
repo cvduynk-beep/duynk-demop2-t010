@@ -178,7 +178,14 @@ export function DepositTermsBox({ refCode, unitCode, currentCycle, onSuccess, on
         <span>{terms.consentLabel}</span>
       </label>
 
-      <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!consent || submitting} onClick={handleAccept}>
+      <button
+        type="button"
+        className="btn btn-primary btn-lg btn-block"
+        // Nhãn có số tiền ⇒ cho xuống dòng ở màn hẹp thay vì bị cắt chữ.
+        style={{ whiteSpace: "normal", height: "auto", minHeight: 48, lineHeight: 1.3 }}
+        disabled={!consent || submitting}
+        onClick={handleAccept}
+      >
         <Check size={18} /> {submitting ? "Đang xử lý..." : `Đồng ý và lấy mã VietQR (${vnd(amount)}đ)`}
       </button>
       {onCancel && (
