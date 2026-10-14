@@ -197,7 +197,6 @@ export interface SignLeaseDto {
   startDate: string; /* YYYY-MM-DD = ngày dọn vào, T0+2 … T0+30 (T0 = ngày cọc về) */
   months: number; // min_lease_months của căn .. 36
   paymentCycle: 1 | 3 | 6;
-  signatureSvg: string; // chữ ký tay (SVG / data URL)
 }
 
 export interface TenantContract {

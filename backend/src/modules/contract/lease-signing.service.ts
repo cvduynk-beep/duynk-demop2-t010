@@ -15,8 +15,11 @@ import { TenantBooking, TenantContract } from '../tenant/tenant.types';
 import { SignLeaseDto } from './dto/contract.dto';
 import { LeasePdfService } from './lease-pdf.service';
 
-/** Cách ký ghi vào `signatures.method`: chữ ký tay trên canvas + OTP mô phỏng (chưa có nhà cung cấp OTP ký số thật). */
-export const LEASE_SIGN_METHOD = 'CANVAS_SIMULATED_OTP';
+/**
+ * Cách xác lập ghi vào `signatures.method`: khách tick đồng ý trên app bằng tài khoản có SĐT đã xác thực OTP và CCCD
+ * đã eKYC (đã bỏ ký tay trên canvas + OTP ký số mô phỏng — quyết định 2026-10-14).
+ */
+export const LEASE_SIGN_METHOD = 'APP_CONSENT';
 const MAX_LEASE_MONTHS = 36;
 const PAYMENT_CYCLES = [1, 3, 6];
 
@@ -29,8 +32,8 @@ const PAYMENT_CYCLES = [1, 3, 6];
  * `escrow_transactions` HOLD_CONVERTED); chốt nhanh ⇒ giá thuê và chu kỳ đã chốt; ngày bắt đầu theo Smart Move-in; căn → RENTED,
  * lịch → LEASED, audit LEASE_ESTABLISHED; sau đó sinh PDF thật (SHA-256 của file) và tạo `signed_documents` + `signatures`.
  *
- * MÔ PHỎNG (giữ có chủ đích): bước OTP ký số (`otp_verified_at` = lúc ký, method `CANVAS_SIMULATED_OTP`) và dấu thời
- * gian TSA (`tsa_token` = `SIMULATED-TSA-…`) — chưa tích hợp nhà cung cấp ký số / TSA RFC 3161 thật.
+ * KHÔNG ký số (quyết định 2026-10-14): không chữ ký tay, không OTP ký số, không dấu thời gian TSA. Bằng chứng xác lập =
+ * bản ghi `signatures` method `APP_CONSENT` (IP, user agent, thời điểm) + SHA-256 của PDF + audit LEASE_ESTABLISHED.
  */
 @Injectable()
 export class LeaseSigningService {
@@ -100,9 +103,6 @@ export class LeaseSigningService {
       throw new UnprocessableEntityException({ message: moveIn.message, code: 'lease_terms_invalid', errors: { startDate: moveIn.message, window: moveIn.window } });
     }
     const startDate = new Date(`${moveIn.billingStartDate}T00:00:00.000Z`);
-    if (!dto.signatureSvg?.trim()) {
-      throw new UnprocessableEntityException({ message: 'Thiếu chữ ký tay của khách thuê.', code: 'signature_required' });
-    }
 
     const endDate = new Date(startDate);
     endDate.setUTCMonth(endDate.getUTCMonth() + dto.months);
@@ -181,7 +181,7 @@ export class LeaseSigningService {
       return created;
     });
 
-    await this.sealDocument(contract.id, viewing.tenantId, dto.signatureSvg, ctx, now);
+    await this.sealDocument(contract.id, viewing.tenantId, ctx, now);
     this.logger.log(`[LEASE] Đã ký hợp đồng ${contract.contractNumber} cho lịch ${viewing.bookingRefCode}`);
 
     const reloaded = await this.bookingAccess.loadOwned(dto.bookingRef, user);
@@ -199,10 +199,10 @@ export class LeaseSigningService {
   }
 
   /**
-   * PDF + SHA-256 thật (LeasePdfService), rồi gắn dấu TSA mô phỏng và chữ ký của khách. PDF lỗi không huỷ hợp đồng đã ký:
+   * PDF + SHA-256 thật (LeasePdfService), rồi ghi bản ghi đồng ý của khách. PDF lỗi không huỷ hợp đồng đã ký:
    * `pdf.ready=false`, FE bấm thử lại qua `GET /me/contracts/:id/pdf` (LeasePdfService.ensure là idempotent).
    */
-  private async sealDocument(contractId: string, tenantId: string, signatureSvg: string, ctx: { ipAddress?: string; userAgent?: string }, now: Date) {
+  private async sealDocument(contractId: string, tenantId: string, ctx: { ipAddress?: string; userAgent?: string }, now: Date) {
     const pdf = await this.leasePdf.ensure(contractId).catch((err: Error) => {
       this.logger.error(`Sinh PDF hợp đồng ${contractId} lỗi: ${err.message}`);
       return { ready: false as const };
@@ -210,24 +210,18 @@ export class LeaseSigningService {
     if (!pdf.ready) return;
     const contract = await this.prisma.contract.findUnique({ where: { id: contractId }, select: { documentId: true } });
     if (!contract?.documentId) return;
-    await this.prisma.$transaction([
-      this.prisma.signedDocument.update({
-        where: { id: contract.documentId },
-        data: { tsaToken: `SIMULATED-TSA-${now.getTime()}`, tsaTime: now },
-      }),
-      this.prisma.signature.create({
-        data: {
-          documentId: contract.documentId,
-          signerId: tenantId,
-          signerRole: 'tenant',
-          method: LEASE_SIGN_METHOD,
-          signatureSvg: signatureSvg.slice(0, 200_000),
-          otpVerifiedAt: now,
-          ipAddress: ctx.ipAddress?.slice(0, 45),
-          userAgent: ctx.userAgent,
-        },
-      }),
-    ]);
+    await this.prisma.signature.create({
+      data: {
+        documentId: contract.documentId,
+        signerId: tenantId,
+        signerRole: 'tenant',
+        method: LEASE_SIGN_METHOD,
+        // Cột NOT NULL: thời điểm khách xác nhận trên tài khoản đã xác thực SĐT (OTP lúc đặt lịch), không có OTP riêng khi ký.
+        otpVerifiedAt: now,
+        ipAddress: ctx.ipAddress?.slice(0, 45),
+        userAgent: ctx.userAgent,
+      },
+    });
   }
 
   private async nextContractNumber(tx: any, unitCode: string, year: number): Promise<string> {

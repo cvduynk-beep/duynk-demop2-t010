@@ -12,7 +12,7 @@ import { BookingAccessService } from '../tenant/booking-access.service';
 import { DepositService } from '../deposit/deposit.service';
 import { PhoneService } from '../auth/phone/phone.service';
 import { EKYC_CONSENT_VERSION } from '../identity/ekyc.simulator';
-import { LeaseSigningService, LEASE_SIGN_METHOD } from './lease-signing.service';
+import { LeaseSigningService } from './lease-signing.service';
 import { DepositStatus, UnitStatus, ViewingStatus } from '@prisma/client';
 
 const TENANT_ID = '00000000-0000-4000-8000-000000000001';
@@ -307,7 +307,6 @@ describe('eKYC (mô phỏng OCR) → ký Hợp đồng thuê (POST /contracts/le
     startDate: vnDay(3), // trong khung miễn phí (T0+2 … T0+7)
     months: 12,
     paymentCycle: 1 as const,
-    signatureSvg: '<svg><path d="M0 0L10 10"/></svg>',
     ...over,
   });
 
@@ -471,15 +470,16 @@ describe('eKYC (mô phỏng OCR) → ký Hợp đồng thuê (POST /contracts/le
     expect(fixture.savedAudits.find((a: any) => a.actionType === 'LEASE_ESTABLISHED').newValue).toMatchObject({ fastCloseCycle: 3, monthlyRent: 6_150_000 });
   });
 
-  it('PDF thật (bắt đầu %PDF-, có số HĐ, SHA-256 thật), Signature của khách + TSA mô phỏng; người khác tải → 404', async () => {
+  it('PDF thật (bắt đầu %PDF-, có số HĐ, SHA-256 thật), bản ghi đồng ý của khách, không ký số/TSA; người khác tải → 404', async () => {
     await verify();
     const { contract } = await leaseSigning.sign(ME, lease());
     expect(fixture.savedDocuments).toHaveLength(1);
     const doc = fixture.savedDocuments[0];
     expect(doc.sha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(doc.tsaToken).toMatch(/^SIMULATED-TSA-/);
+    expect(doc.tsaToken ?? null).toBeNull();
     expect(fixture.savedSignatures).toHaveLength(1);
-    expect(fixture.savedSignatures[0]).toMatchObject({ signerId: TENANT_ID, signerRole: 'tenant', method: LEASE_SIGN_METHOD, documentId: doc.id });
+    expect(fixture.savedSignatures[0]).toMatchObject({ signerId: TENANT_ID, signerRole: 'tenant', method: 'APP_CONSENT', documentId: doc.id });
+    expect(fixture.savedSignatures[0].signatureSvg ?? null).toBeNull();
 
     const { buffer } = await leasePdfService.getPdfStream(contract.id, TENANT_ID, 'tenant');
     expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
@@ -496,8 +496,9 @@ describe('eKYC (mô phỏng OCR) → ký Hợp đồng thuê (POST /contracts/le
     expect(fixture.savedContracts).toHaveLength(1);
   });
 
-  it('thiếu chữ ký tay → 422 signature_required', async () => {
+  it('không cần chữ ký tay: ký được khi chỉ gửi điều khoản thuê', async () => {
     await verify();
-    await expect(leaseSigning.sign(ME, lease({ signatureSvg: '  ' }))).rejects.toMatchObject({ response: { code: 'signature_required' } });
+    const { contract } = await leaseSigning.sign(ME, lease());
+    expect(contract.contractNumber).toMatch(/^VSA-LEASE-/);
   });
 });

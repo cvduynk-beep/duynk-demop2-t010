@@ -47,8 +47,8 @@ const STEPS = [
   },
   {
     step: 6,
-    title: "AI OCR CCCD & Ký số",
-    tagline: "AI đọc chip CCCD 5s, ký hợp đồng thuê số bảo mật AES-256",
+    title: "AI OCR CCCD & Hợp đồng",
+    tagline: "AI đọc chip CCCD 5s, xác nhận hợp đồng thuê trên app, mã hóa AES-256",
     tip: "Khoản cọc chuyển 100% thành cọc bảo đảm tài sản suốt kỳ thuê, không nộp bù.",
     time: "OTP Zalo",
     Icon: FileSignature,

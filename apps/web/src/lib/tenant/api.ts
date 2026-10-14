@@ -41,7 +41,6 @@ export const ERROR_MESSAGES: Record<string, string> = {
   vietqr_not_configured: "Thanh toán VietQR chưa được cấu hình nhận và đối soát giao dịch. Vui lòng liên hệ hỗ trợ.",
   no_kyc: "Cần xác minh CCCD (eKYC) trước khi ký hợp đồng thuê.",
   lease_already_signed: "Lịch hẹn này đã có hợp đồng thuê.",
-  signature_required: "Vui lòng ký tay vào ô chữ ký trước khi xác nhận.",
   floor_rent_invalid: "Giá sàn phải từ 3.000.000đ và thấp hơn giá chào thuê.",
   rent_above_ceiling: "Giá thuê vượt trần cho loại căn này.",
   hold_expired: "Thời hạn giữ chỗ của căn hộ đã hết hiệu lực.",

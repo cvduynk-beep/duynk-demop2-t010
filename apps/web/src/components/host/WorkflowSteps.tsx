@@ -400,7 +400,7 @@ export function AwaitLeaseStep({ v, now }: StepProps) {
         <div>
           <b>{hoursLeft == null ? "Đang chờ khách làm hợp đồng thuê" : `Còn ${hoursLeft} giờ để khách làm hợp đồng thuê`}</b>
           <p className="small">
-            Khách tự thực hiện eKYC (xác minh CCCD 2 mặt) và ký số hợp đồng thuê trên app của khách. Hết hạn mà chưa ký thì khách mất cọc và căn tự mở lại.
+            Khách tự thực hiện eKYC (xác minh CCCD 2 mặt) và xác nhận hợp đồng thuê trên app của khách. Hết hạn mà chưa xác nhận thì khách mất cọc và căn tự mở lại.
           </p>
         </div>
       </div>

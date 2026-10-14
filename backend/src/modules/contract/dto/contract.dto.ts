@@ -41,10 +41,4 @@ export class SignLeaseDto {
   @ApiProperty({ example: 1, enum: [1, 3, 6] })
   @IsIn([1, 3, 6])
   paymentCycle: 1 | 3 | 6;
-
-  @ApiProperty({ description: 'Chữ ký tay trên canvas (SVG hoặc data URL)' })
-  @IsNotEmpty()
-  @IsString()
-  @MaxLength(200_000)
-  signatureSvg: string;
 }

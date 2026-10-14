@@ -128,6 +128,6 @@ export function buildTimeline(b: TenantBooking): TimelineStep[] {
     { key: "view", label: "Xem phòng", hint: "Host mở cửa bằng mã trong app", at: b.viewingAt, done: !!b.viewingAt },
     { key: "deposit", label: "Cọc giữ căn", hint: b.deposit ? `VietQR ${vnd(b.deposit.amount)}đ` : "VietQR tiền cọc bảo đảm", at: b.deposit?.paidAt, done: !!b.deposit?.paidAt },
     { key: "kyc", label: "Xác minh CCCD (eKYC)", hint: "Khi làm hợp đồng thuê", at: b.kyc?.verifiedAt, done: !!b.kyc },
-    { key: "lease", label: "Ký hợp đồng thuê", hint: "Hợp đồng ký số", done: !!b.contractId || b.status === "leased" },
+    { key: "lease", label: "Ký hợp đồng thuê", hint: "Xác nhận hợp đồng trên app", done: !!b.contractId || b.status === "leased" },
   ];
 }

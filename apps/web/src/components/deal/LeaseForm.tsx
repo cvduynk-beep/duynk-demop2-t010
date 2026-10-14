@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { FileSignature, FileText, BookOpen, ShieldCheck, Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
-import { SignaturePad } from "@/components/ui/SignaturePad";
 import { PAYMENT_CYCLES, type PaymentCycle } from "@/lib/pricing/cost";
 import { fmtDate, vnd } from "@/lib/format";
 import { HOUSE_RULES } from "@/lib/legal/house-rules";
@@ -25,8 +24,8 @@ interface LeaseFormProps {
 const MAX_LEASE_MONTHS = 36;
 
 /**
- * Ký Hợp đồng thuê chính thức: gửi `POST /contracts/lease/sign` (bản ghi Contract/SignedDocument thật, PDF + SHA-256
- * thật). Chỉ nghi thức ký (OTP ký số, dấu thời gian TSA) là mô phỏng ở backend.
+ * Xác lập Hợp đồng thuê chính thức: gửi `POST /contracts/lease/sign` (bản ghi Contract/SignedDocument thật, PDF + SHA-256
+ * thật). Không ký số / ký tay (bỏ 2026-10-14): khách đã eKYC tick đồng ý là đủ, backend lưu bản ghi đồng ý.
  * Tài khoản nhận hoàn cọc và người cùng cư trú chưa có chỗ lưu trong DB (chờ migration) nên không thu ở đây.
  */
 export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
@@ -41,8 +40,6 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
   const [months, setMonths] = useState(() => (monthOptions.includes(12) ? 12 : monthOptions[0]));
   // Chốt nhanh ⇒ kỳ thanh toán đã cam kết, không đổi được (backend trả 422 nếu lệch).
   const [paymentCycle, setPaymentCycle] = useState<PaymentCycle>(fastClose?.cycle ?? 1);
-  const [signature, setSignature] = useState<string | null>(null);
-  const [hasInk, setHasInk] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [consentElectronicSign, setConsentElectronicSign] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -66,12 +63,8 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
 
   const handleSubmit = async () => {
     setError(null);
-    if (!hasInk || !signature) {
-      setError("Vui lòng ký tay vào ô chữ ký trước khi xác nhận.");
-      return;
-    }
     setBusy(true);
-    const res = await tenantApi.signLease({ bookingRef: booking.ref, startDate: moveInDate, months, paymentCycle, signatureSvg: signature });
+    const res = await tenantApi.signLease({ bookingRef: booking.ref, startDate: moveInDate, months, paymentCycle });
     setBusy(false);
     if (!res.ok) {
       setError(errorText(res, "Ký hợp đồng thuê thất bại."));
@@ -85,10 +78,10 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       <header style={{ marginBottom: 16 }}>
         <h3 style={{ fontSize: 18, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
           <FileSignature size={20} style={{ color: "var(--lagoon)" }} />
-          Hợp đồng thuê căn hộ (Ký số)
+          Hợp đồng thuê căn hộ
         </h3>
         <p className="muted small" style={{ margin: 0 }}>
-          Kiểm tra thông tin thuê, đọc điều khoản và ký hợp đồng điện tử.
+          Kiểm tra thông tin thuê, đọc điều khoản và xác nhận hợp đồng.
         </p>
       </header>
 
@@ -226,7 +219,7 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
         </button>
       </div>
 
-      {/* 7. Định danh & ký tay */}
+      {/* 7. Định danh eKYC */}
       <div
         style={{
           background: "var(--paper-2)",
@@ -238,7 +231,7 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, color: "var(--kelp)" }}>
           <ShieldCheck size={20} />
-          <b style={{ fontSize: 14 }}>Chứng thực danh tính eKYC &amp; Ký số điện tử</b>
+          <b style={{ fontSize: 14 }}>Chứng thực danh tính eKYC</b>
         </div>
         <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--ink)", display: "flex", flexDirection: "column", gap: 4 }}>
           <div>
@@ -251,11 +244,8 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
             Số điện thoại xác thực OTP: <b>{booking.contact.phoneMasked}</b>
           </div>
           <div className="muted xs" style={{ marginTop: 4 }}>
-            Hợp đồng được ký điện tử theo Luật Giao dịch điện tử 2023. Dữ liệu CCCD được mã hóa AES-256 theo Nghị định 13/2023/NĐ-CP.
+            Hợp đồng được xác lập dưới dạng văn bản điện tử theo Luật Giao dịch điện tử 2023. Dữ liệu CCCD được mã hóa AES-256 theo Nghị định 13/2023/NĐ-CP.
           </div>
-        </div>
-        <div style={{ marginTop: 12 }}>
-          <SignaturePad onChange={setHasInk} onCapture={setSignature} label="Ký tên của bạn vào đây" />
         </div>
       </div>
 
@@ -269,10 +259,10 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       <button
         type="button"
         className="btn btn-primary btn-lg btn-block"
-        disabled={!consentElectronicSign || !hasInk || busy || !booking.kyc}
+        disabled={!consentElectronicSign || busy || !booking.kyc}
         onClick={handleSubmit}
       >
-        {busy ? <Loader2 size={18} className={styles.spin} /> : null} Xác nhận ký kết hợp đồng thuê căn hộ
+        {busy ? <Loader2 size={18} className={styles.spin} /> : null} Xác nhận hợp đồng thuê căn hộ
       </button>
 
 {/* MODAL CHI TIẾT ĐIỀU KHOẢN HỢP ĐỒNG */}
