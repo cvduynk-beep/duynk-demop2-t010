@@ -110,7 +110,7 @@ export function EarningsView() {
             columns={columns}
             rows={deals}
             rowHref={(d) => d.href ?? ""}
-            empty={<div className={styles.empty}><Wallet size={26} /><b>Chưa có deal</b><p className="muted small">Khi khách bạn dẫn chuyển cọc giữ chỗ, hoa hồng sẽ cộng vào đây.</p></div>}
+            empty={<div className={styles.empty}><Wallet size={26} /><b>Chưa có deal</b><p className="muted small">Khi khách bạn dẫn chuyển cọc chốt căn, hoa hồng sẽ cộng vào đây.</p></div>}
           />
         </Section>
       </div>

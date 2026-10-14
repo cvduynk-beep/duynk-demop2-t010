@@ -174,7 +174,7 @@ function HoldHoursSection({ u }: { u: InventoryDetail }) {
   };
 
   return (
-    <Section title="Thời hạn giữ chỗ căn hộ" description={`Căn khoá trạng thái giữ chỗ sau khi khách chuyển cọc 2.000.000đ. Mặc định ${u.defaultHoldHours} giờ.`}>
+    <Section title="Thời hạn giữ chỗ căn hộ" description={`Căn khoá trạng thái giữ chỗ sau khi khách chuyển Tiền cọc bảo đảm. Mặc định ${u.defaultHoldHours} giờ.`}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 540 }}>
         <div>
           <span className="small muted">Mức áp dụng hiện tại: </span>

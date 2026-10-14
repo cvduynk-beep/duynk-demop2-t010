@@ -12,7 +12,6 @@ const policy = (over: Partial<HoldPolicy> = {}): HoldPolicy => ({
   version: "default",
   updatedAt: null,
   updatedBy: null,
-  holdingDepositAmount: 2_000_000,
   history: [],
   ...over,
 });

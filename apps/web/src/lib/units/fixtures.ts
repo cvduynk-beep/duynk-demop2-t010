@@ -29,7 +29,7 @@ const base = (patch: Partial<TenantUnit> & Pick<TenantUnit, "code" | "building" 
   holdHours: 48,
   activeViewingAt: null,
   securityDeposit: patch.rent,
-  holdingDeposit: 2_000_000,
+  holdingDeposit: patch.rent, // cọc v2: khoản cọc khi chốt căn = Tiền cọc bảo đảm
   highlights: [],
   inventory: [],
   ...patch,

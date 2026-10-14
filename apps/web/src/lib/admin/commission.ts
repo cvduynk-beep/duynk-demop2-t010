@@ -23,7 +23,7 @@ export interface FeeField {
 
 export const FEE_FIELDS: FeeField[] = [
   { key: "host_base_viewing_fee", title: "Thù lao dẫn khách theo lượt", help: "Trả cho mỗi ca xem phòng Host hoàn tất.", unit: "đ", min: 30_000, max: 100_000, step: 5_000, required: true },
-  { key: "host_deal_commission", title: "Hoa hồng chốt cọc thành công", help: "Trả khi khách chuyển cọc giữ chỗ 2.000.000đ.", unit: "đ", min: 200_000, max: 1_000_000, step: 10_000, required: true },
+  { key: "host_deal_commission", title: "Hoa hồng chốt cọc thành công", help: "Trả khi khách chuyển cọc chốt căn thành công.", unit: "đ", min: 200_000, max: 1_000_000, step: 10_000, required: true },
   { key: "host_rating_multiplier_5star", title: "Hệ số thưởng đánh giá sao", help: "Nhân với hoa hồng cho Host từ 4,8 sao trở lên.", unit: "×", min: 1.1, max: 1.5, step: 0.05 },
   { key: "host_campaign_bonus", title: "Gói thưởng nóng theo chiến dịch", help: "Cộng thêm mỗi deal, tối đa 3 deal/tuần. Đặt 0 để tắt.", unit: "đ", min: 0, max: 1_000_000, step: 10_000 },
 ];

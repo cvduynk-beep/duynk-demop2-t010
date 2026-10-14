@@ -11,7 +11,7 @@ const num = (v: number) => String(v).replace(".", ",");
 
 /** Trạng thái cọc của một deal, cùng nhãn với luồng đặt lịch của khách. */
 export const DEAL_STATUS: Record<string, { label: string; badge: string }> = {
-  PAID_HOLDING: { label: "Đã cọc giữ chỗ", badge: "badge-kelp" },
+  PAID_HOLDING: { label: "Đã cọc chốt căn", badge: "badge-kelp" },
   CONVERTED_TO_CONTRACT: { label: "Đã ký hợp đồng thuê", badge: "badge-kelp" },
   REFUNDED: { label: "Đã hoàn cọc", badge: "badge-neutral" },
   FORFEITED: { label: "Khách bỏ cọc", badge: "badge-neutral" },

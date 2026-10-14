@@ -131,7 +131,7 @@ export function AccountProfile() {
           </p>
         ) : (
           <p>
-            <StatusBadge tone="neutral">Chưa xác minh — sẽ làm sau khi đặt cọc giữ chỗ</StatusBadge>
+            <StatusBadge tone="neutral">Chưa xác minh — sẽ làm sau khi đặt cọc chốt căn</StatusBadge>
           </p>
         )}
       </Section>

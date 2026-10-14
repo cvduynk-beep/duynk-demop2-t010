@@ -26,7 +26,7 @@ export interface Notice {
 }
 
 const CLOSE_REASON: Record<string, string> = {
-  auto_cancelled_due_to_deposit: "căn vừa được một khách khác hoàn tất cọc giữ chỗ (First-to-Pay Wins)",
+  auto_cancelled_due_to_deposit: "căn vừa được một khách khác hoàn tất đặt cọc (First-to-Pay Wins)",
   hold_expired: "hết thời hạn giữ chỗ",
 };
 
@@ -87,7 +87,7 @@ export function bookingZaloThread(b: TenantBooking): Notice[] {
   if (b.status === "leased") {
     push("leased", endedAt, {
       title: "Hợp đồng thuê đã ký số",
-      body: "Hợp đồng thuê đã có hiệu lực. Khoản cọc giữ chỗ được chuyển 100% thành Tiền cọc bảo đảm tài sản. Field Host sẽ hẹn bàn giao và lập Hộ chiếu số 10 hạng mục.",
+      body: "Hợp đồng thuê đã có hiệu lực. Khoản cọc đã chuyển khi chốt căn được tính 100% vào Tiền cọc bảo đảm tài sản. Field Host sẽ hẹn bàn giao và lập Hộ chiếu số 10 hạng mục.",
       tone: "success",
     });
   }

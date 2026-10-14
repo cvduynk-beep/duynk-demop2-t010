@@ -8,7 +8,7 @@ export const CONTRACT_KIND_META: Record<ContractKind, { label: string; short: st
   },
   holding: {
     label: "Thoả thuận cọc giữ căn",
-    short: "Cọc giữ chỗ",
+    short: "Cọc chốt căn",
   },
   lease: {
     label: "Hợp đồng thuê căn hộ",

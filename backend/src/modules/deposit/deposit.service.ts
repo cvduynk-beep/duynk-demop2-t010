@@ -133,7 +133,7 @@ export class DepositService {
 
     if (dto.acceptTerms !== true) {
       throw new BadRequestException({
-        message: 'Bạn phải đồng ý với điều khoản đặt cọc giữ chỗ.',
+        message: 'Bạn phải đồng ý với điều khoản đặt cọc.',
         code: 'invalid_request',
       });
     }

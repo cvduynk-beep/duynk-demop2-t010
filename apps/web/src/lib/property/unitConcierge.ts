@@ -262,7 +262,7 @@ export function answerUnitQuestion(unit: Unit, question: string): ConciergeAnswe
     q.includes("cccd")
   ) {
     return {
-      text: `📑 Quy trình thuê phòng tại VinStay AI:\n1. Field Host dẫn xem phòng thực tế miễn phí.\n2. Cọc giữ chỗ 2.000.000đ qua VietQR động khóa căn 48h.\n3. Ký Hợp đồng điện tử minh bạch qua hệ thống (AI OCR CCCD tự động).\n4. Field Host hỗ trợ làm thủ tục đăng ký tạm trú công an và khai báo cư dân BQL Vinhomes từ A-Z!`,
+      text: `📑 Quy trình thuê phòng tại VinStay AI:\n1. Field Host dẫn xem phòng thực tế miễn phí.\n2. Chuyển Tiền cọc bảo đảm của căn (thường 1 tháng thuê) qua VietQR động, khóa căn 48h.\n3. Ký Hợp đồng điện tử minh bạch qua hệ thống (AI OCR CCCD tự động).\n4. Field Host hỗ trợ làm thủ tục đăng ký tạm trú công an và khai báo cư dân BQL Vinhomes từ A-Z!`,
       suggestBooking: true,
     };
   }
@@ -327,7 +327,7 @@ export function answerUnitQuestion(unit: Unit, question: string): ConciergeAnswe
   // 12. Cọc giữ căn / 2 triệu / VietQR
   if (q.includes("cọc") || q.includes("giữ chỗ") || q.includes("vietqr") || q.includes("2 triệu") || q.includes("2.000.000")) {
     return {
-      text: `🛡️ Khi xem ưng ý, bạn quét mã VietQR động 2.000.000đ để khóa giữ chỗ căn hộ độc quyền trong 48 giờ.\nKhoản 2 triệu này khi ký Hợp đồng thuê chính thức sẽ chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản (không trừ vào tiền thuê tháng đầu) và hoàn lại khi hết hạn thuê!`,
+      text: `🛡️ Khi xem ưng ý, bạn quét mã VietQR động chuyển Tiền cọc bảo đảm của căn (thường bằng 1 tháng thuê) để khóa căn độc quyền trong 48 giờ.\nKhi ký Hợp đồng thuê chính thức, khoản này chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản (không nộp bù, không trừ vào tiền thuê tháng đầu) và hoàn lại khi hết hạn thuê!`,
       suggestBooking: true,
     };
   }

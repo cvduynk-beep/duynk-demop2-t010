@@ -58,7 +58,7 @@ describe("UnitConcierge - Quản gia AI bảo vệ chi phí & phạm vi", () => 
   it("phản hồi đúng chính sách cọc 2 triệu VietQR và quy trình Field Host đón sảnh", () => {
     const res = answerUnitQuestion(sampleUnit, "Quy trình cọc 2 triệu giữ chỗ thế nào?");
     expect(res).not.toBeNull();
-    expect(res?.text).toContain("2.000.000đ");
+    expect(res?.text).toContain("Tiền cọc bảo đảm");
     expect(res?.text).toContain("VietQR");
   });
 

@@ -5,10 +5,11 @@ import { FileSignature, FileText, BookOpen, ShieldCheck, Loader2 } from "lucide-
 import { Modal } from "@/components/ui/Modal";
 import { SignaturePad } from "@/components/ui/SignaturePad";
 import { PAYMENT_CYCLES, type PaymentCycle } from "@/lib/pricing/cost";
-import { vnd } from "@/lib/format";
+import { fmtDate, vnd } from "@/lib/format";
 import { HOUSE_RULES } from "@/lib/legal/house-rules";
 import type { UnitWithExtras } from "@/lib/tenant/adapters";
 import { errorText, tenantApi } from "@/lib/tenant/api";
+import { billingStart, moveInWindow } from "@/lib/tenant/moveIn";
 import type { TenantBooking } from "@/lib/tenant/types";
 import { zoneById } from "@/lib/units";
 import styles from "./Deal.module.css";
@@ -20,11 +21,8 @@ interface LeaseFormProps {
   onSigned?: (booking: TenantBooking) => void;
 }
 
-/** Giới hạn do backend kiểm (`LeaseSigningService`): thời hạn minMonths..36, ngày bắt đầu trong 30 ngày tới. */
+/** Giới hạn do backend kiểm (`LeaseSigningService`): thời hạn minMonths..36, ngày dọn vào theo Smart Move-in (T0+2 … T0+30). */
 const MAX_LEASE_MONTHS = 36;
-const MAX_START_DAYS = 30;
-const DAY_MS = 86_400_000;
-const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 /**
  * Ký Hợp đồng thuê chính thức: gửi `POST /contracts/lease/sign` (bản ghi Contract/SignedDocument thật, PDF + SHA-256
@@ -35,9 +33,14 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
   const minMonths = Math.max(1, unit.minMonths || 1);
   const monthOptions = [...new Set([minMonths, 6, 12, 24, MAX_LEASE_MONTHS])].filter((m) => m >= minMonths && m <= MAX_LEASE_MONTHS).sort((a, b) => a - b);
 
-  const [startDate, setStartDate] = useState(() => isoDay(now + 2 * DAY_MS));
+  const deposit = booking.deposit;
+  const fastClose = deposit?.fastClose;
+  // T0 = ngày cọc về; chưa có (không nên xảy ra ở bước ký) ⇒ lấy hôm nay, backend vẫn kiểm lại.
+  const moveIn = moveInWindow(deposit?.paidAt ? Date.parse(deposit.paidAt) : now);
+  const [moveInDate, setMoveInDate] = useState(moveIn.earliest);
   const [months, setMonths] = useState(() => (monthOptions.includes(12) ? 12 : monthOptions[0]));
-  const [paymentCycle, setPaymentCycle] = useState<PaymentCycle>(1);
+  // Chốt nhanh ⇒ kỳ thanh toán đã cam kết, không đổi được (backend trả 422 nếu lệch).
+  const [paymentCycle, setPaymentCycle] = useState<PaymentCycle>(fastClose?.cycle ?? 1);
   const [signature, setSignature] = useState<string | null>(null);
   const [hasInk, setHasInk] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -48,11 +51,17 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
   const tenantName = booking.contact.name;
   const zoneName = unit.zoneName || zoneById(unit.zoneId)?.name || "Ocean Park";
 
+  const billingDate = billingStart(moveIn, moveInDate);
+  const lateMoveIn = billingDate !== moveInDate;
+
   // Dự toán tài chính (số liệu thật của căn; backend tính lại khi lập hợp đồng)
-  const holdingPaid = booking.deposit?.amount ?? unit.holdingDeposit;
-  const securityDeposit = Math.max(unit.securityDeposit, holdingPaid);
-  const rentAmount = unit.rent * paymentCycle;
-  const topUpDeposit = Math.max(0, securityDeposit - holdingPaid);
+  const monthlyRent = fastClose?.monthlyRent ?? unit.rent;
+  const depositPaid = deposit?.amount ?? unit.holdingDeposit;
+  // Cọc v2: khoản đã chuyển CHÍNH LÀ Tiền cọc bảo đảm (không thu bù). Cọc giữ chỗ cũ (điều khoản HOLD-*) ⇒ bù phần chênh.
+  const legacyHold = !!deposit?.termsVersion?.startsWith("HOLD-");
+  const securityDeposit = legacyHold ? Math.max(unit.securityDeposit, depositPaid) : depositPaid;
+  const rentAmount = monthlyRent * paymentCycle;
+  const topUpDeposit = Math.max(0, securityDeposit - depositPaid);
   const totalFirstPayment = rentAmount + topUpDeposit;
 
   const handleSubmit = async () => {
@@ -62,7 +71,7 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       return;
     }
     setBusy(true);
-    const res = await tenantApi.signLease({ bookingRef: booking.ref, startDate, months, paymentCycle, signatureSvg: signature });
+    const res = await tenantApi.signLease({ bookingRef: booking.ref, startDate: moveInDate, months, paymentCycle, signatureSvg: signature });
     setBusy(false);
     if (!res.ok) {
       setError(errorText(res, "Ký hợp đồng thuê thất bại."));
@@ -88,15 +97,19 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       {/* 1. Khối Thời hạn */}
       <div className={styles.leaseGrid}>
         <label className="field">
-          <span className="label">Ngày bắt đầu thuê</span>
+          <span className="label">Ngày dọn vào</span>
           <input
             className="input"
             type="date"
-            min={isoDay(now)}
-            max={isoDay(now + MAX_START_DAYS * DAY_MS)}
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            min={moveIn.earliest}
+            max={moveIn.latest}
+            value={moveInDate}
+            onChange={(e) => setMoveInDate(e.target.value)}
           />
+          <span className="muted xs">
+            Từ {fmtDate(moveIn.earliest)} đến {fmtDate(moveIn.latest)}. Miễn phí chờ tới {fmtDate(moveIn.freeUntil)}
+            {lateMoveIn ? <b> — dọn vào muộn hơn nên tiền thuê tính từ {fmtDate(billingDate)}.</b> : "."}
+          </span>
         </label>
 
         <label className="field">
@@ -115,10 +128,22 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       {/* 2. Khối Kỳ thanh toán */}
       <div className={styles.formSection}>
         <div className={styles.formSectionTitle}>Kỳ thanh toán tiền thuê</div>
+        {fastClose && (
+          <p className="muted xs" style={{ margin: "0 0 6px" }}>
+            Bạn đã chốt nhanh {fastClose.cycle} tháng/kỳ với giá {vnd(fastClose.monthlyRent)}đ/tháng — kỳ thanh toán giữ đúng cam kết.
+          </p>
+        )}
         <div className={styles.radioRow}>
           {PAYMENT_CYCLES.map((cycle) => (
             <label key={cycle} className="radio" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
-              <input type="radio" name="paymentCycle" value={cycle} checked={paymentCycle === cycle} onChange={() => setPaymentCycle(cycle)} />
+              <input
+                type="radio"
+                name="paymentCycle"
+                value={cycle}
+                checked={paymentCycle === cycle}
+                disabled={!!fastClose && fastClose.cycle !== cycle}
+                onChange={() => setPaymentCycle(cycle)}
+              />
               <span>Thanh toán {cycle} tháng/lần (Điều 3.2 HĐ thuê)</span>
             </label>
           ))}
@@ -132,7 +157,9 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
         </div>
 
         <div className={styles.breakdownRow}>
-          <span className="muted">Tiền thuê kỳ 1 ({paymentCycle} tháng):</span>
+          <span className="muted">
+            Tiền thuê kỳ 1 ({paymentCycle} tháng × {vnd(monthlyRent)}đ, tính từ {fmtDate(billingDate)}):
+          </span>
           <b>{vnd(rentAmount)}đ</b>
         </div>
 
@@ -143,15 +170,17 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
 
         <div className={styles.breakdownRow} style={{ color: "var(--ok)", fontSize: 12.5 }}>
           <span>
-            ↳ Đã cọc giữ chỗ ({vnd(holdingPaid)}đ chuyển 100% vào cọc bảo đảm, <b>không khấu trừ vào tiền thuê tháng đầu</b>):
+            ↳ Đã chuyển khi chốt cọc ({vnd(depositPaid)}đ chuyển 100% vào cọc bảo đảm, <b>không khấu trừ vào tiền thuê tháng đầu</b>):
           </span>
-          <b>-{vnd(holdingPaid)}đ</b>
+          <b>-{vnd(depositPaid)}đ</b>
         </div>
 
-        <div className={styles.breakdownRow}>
-          <span className="muted">Phần cọc bảo đảm còn thiếu:</span>
-          <b>{vnd(topUpDeposit)}đ</b>
-        </div>
+        {topUpDeposit > 0 && (
+          <div className={styles.breakdownRow}>
+            <span className="muted">Phần cọc bảo đảm còn thiếu:</span>
+            <b>{vnd(topUpDeposit)}đ</b>
+          </div>
+        )}
 
         <div className={styles.breakdownTotal}>
           <span>Tổng thanh toán kỳ đầu trước khi nhận nhà:</span>
@@ -263,14 +292,14 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
           <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: "var(--r)", border: "1px solid var(--line)" }}>
             <h4 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>1. Giá thuê &amp; Kỳ hạn thanh toán</h4>
             <p className="muted small" style={{ margin: 0 }}>
-              Tiền thuê cố định <b>{vnd(unit.rent)}đ/tháng</b> trong suốt kỳ hạn {months} tháng. Thanh toán {paymentCycle} tháng/lần qua VietQR với cú pháp gạch nợ tự động <code>VSA {unit.code} THANH TOAN TIEN THUE KY [kỳ]</code>.
+              Tiền thuê cố định <b>{vnd(monthlyRent)}đ/tháng</b> trong suốt kỳ hạn {months} tháng. Thanh toán {paymentCycle} tháng/lần qua VietQR với cú pháp gạch nợ tự động <code>VSA {unit.code} THANH TOAN TIEN THUE KY [kỳ]</code>.
             </p>
           </div>
 
           <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: "var(--r)", border: "1px solid var(--line)" }}>
             <h4 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>2. Tiền cọc bảo đảm tài sản (Security Deposit)</h4>
             <p className="muted small" style={{ margin: 0 }}>
-              Tiền cọc bảo đảm là <b>{vnd(securityDeposit)}đ</b> (đã bao gồm {vnd(holdingPaid)}đ cọc giữ chỗ chuyển đổi 100%). Khoản cọc được giữ nguyên suốt kỳ thuê để bảo vệ nội thất và dự phòng nợ cước; <b>tuyệt đối không khấu trừ vào tiền thuê tháng đầu tiên</b> và được hoàn lại khi thanh lý hợp đồng.
+              Tiền cọc bảo đảm là <b>{vnd(securityDeposit)}đ</b> (đã bao gồm {vnd(depositPaid)}đ chuyển khi chốt cọc, chuyển đổi 100%). Khoản cọc được giữ nguyên suốt kỳ thuê để bảo vệ nội thất và dự phòng nợ cước; <b>tuyệt đối không khấu trừ vào tiền thuê tháng đầu tiên</b> và được hoàn lại khi thanh lý hợp đồng.
             </p>
           </div>
 

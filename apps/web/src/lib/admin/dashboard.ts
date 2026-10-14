@@ -243,7 +243,7 @@ const ACTION_LABEL: Record<string, string> = {
   DISPATCH_REASSIGNED: "Admin giao lại ca xem",
   DISPATCH_ESCALATED: "Leo thang điều phối",
   DEPOSIT_TERMS_ACCEPTED: "Khách đồng ý điều khoản cọc",
-  DEPOSIT_PAID: "Cọc giữ chỗ đã gạch nợ",
+  DEPOSIT_PAID: "Cọc chốt căn đã gạch nợ",
   DEPOSIT_LOST_RACE: "Cọc đến sau — căn đã có người cọc trước",
   DEPOSIT_AMOUNT_MISMATCH: "Chuyển khoản sai số tiền cọc",
   DEPOSIT_UNMATCHED: "Giao dịch VietQR không khớp",

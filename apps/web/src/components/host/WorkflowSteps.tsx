@@ -50,7 +50,7 @@ function StepHead({ icon, title, hint }: { icon: React.ReactNode; title: string;
 const DEPOSIT_TEXT: Record<string, string> = {
   PENDING_PAYMENT: "Khách đã đồng ý điều khoản, đang chờ quét VietQR",
   UNC_PENDING_REVIEW: "Đang đối soát chuyển khoản",
-  PAID_HOLDING: "Đã nhận cọc 2.000.000đ — căn đang được giữ",
+  PAID_HOLDING: "Đã nhận cọc — căn đang được giữ",
   QR_EXPIRED: "Mã VietQR đã hết hạn, khách cần tạo lại",
   CONVERTED_TO_CONTRACT: "Cọc đã chuyển thành tiền cọc bảo đảm",
   REFUNDED: "Cọc đã hoàn",
@@ -367,12 +367,12 @@ export function AwaitDepositStep({ v }: StepProps) {
         <LoaderCircle size={22} className={styles.spin} />
         <div>
           <b>{dep ? (DEPOSIT_TEXT[dep.status] ?? dep.status) : "Đang chờ khách quét VietQR trên thiết bị của họ"}</b>
-          <p className="small">Khoản cọc 2.000.000đ vào tài khoản định danh nền tảng. Bạn không cần (và không thể) xác nhận thanh toán thay khách.</p>
+          <p className="small">Khách chuyển Tiền cọc bảo đảm của căn vào tài khoản định danh nền tảng. Bạn không cần (và không thể) xác nhận thanh toán thay khách.</p>
         </div>
       </div>
 
       <p className="muted small">
-        Khoản 2.000.000đ chuyển 100% thành một phần của Tiền cọc bảo đảm tài sản khi ký hợp đồng chính thức, tuyệt đối không trừ vào tiền thuê tháng đầu.
+        Khoản cọc này chuyển 100% thành Tiền cọc bảo đảm tài sản khi ký hợp đồng chính thức, tuyệt đối không trừ vào tiền thuê tháng đầu.
       </p>
 
       <button type="button" className="btn btn-quiet btn-block" onClick={() => setDecline(true)}>
@@ -392,8 +392,8 @@ export function AwaitLeaseStep({ v, now }: StepProps) {
     <section className={`card ${styles.step}`}>
       <StepHead
         icon={<FileText size={22} />}
-        title="Đã cọc giữ chỗ"
-        hint={`Khách đã thanh toán cọc giữ chỗ 2.000.000đ qua VietQR (lịch ${v.ref}).`}
+        title="Đã cọc chốt căn"
+        hint={`Khách đã thanh toán tiền cọc qua VietQR (lịch ${v.ref}).`}
       />
       <div className={styles.presence} role="status">
         <Clock size={20} />

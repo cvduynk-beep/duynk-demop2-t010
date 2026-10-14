@@ -25,7 +25,7 @@ export function AdminContracts({ initialKind }: AdminContractsProps) {
   const query = useContractRegistry();
   return (
     <div className={styles.page}>
-      <PageHeader title="Hợp đồng" description="Sổ hợp đồng uỷ quyền, cọc giữ chỗ, thuê căn hộ và đối tác Field Host trên nền tảng." />
+      <PageHeader title="Hợp đồng" description="Sổ hợp đồng uỷ quyền, cọc chốt căn, thuê căn hộ và đối tác Field Host trên nền tảng." />
       <ContractsSubnav />
       <AdminQuery query={query} title="Không tải được sổ hợp đồng" height={480}>
         {(rows) => <RegistryBody rows={rows} initialKind={initialKind} />}
@@ -211,7 +211,7 @@ function RegistryBody({ rows: allRows, initialKind }: { rows: RegistryRow[]; ini
             setStatusFilter("all");
           }}
         >
-          Cọc giữ chỗ <span className={styles.tabCount}>{tabCounts.holding}</span>
+          Cọc chốt căn <span className={styles.tabCount}>{tabCounts.holding}</span>
         </button>
         <button
           type="button"

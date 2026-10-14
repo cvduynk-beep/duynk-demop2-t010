@@ -22,7 +22,6 @@ export interface HoldPolicy {
   version: string;
   updatedAt: string | null;
   updatedBy: { id: string; name: string | null } | null;
-  holdingDepositAmount: number;
   history: HoldPolicyChange[];
   /** Chỉ có ở response PUT: false = giá trị không đổi, server không ghi gì. */
   changed?: boolean;

@@ -82,20 +82,20 @@ describe("W5 màn thẩm định: giá & cọc", () => {
     expect(validateExtras({ ...draft, pricing: { ...draft.pricing, reason: "x".repeat(301) } }, detail)?.field).toBe("pricing.reason");
   });
 
-  it("F2: biên giá/cọc cùng backend — rent ∈ [3tr,200tr], cọc ∈ [2tr, 3×rent], số nguyên", () => {
+  it("F2: biên giá/cọc cùng backend — rent ∈ [3tr,200tr], cọc ∈ [½×rent, 3×rent], số nguyên", () => {
     const { detail, draft } = setup();
     const f = (rent: string, securityDeposit: string) => validateExtras({ ...draft, pricing: { rent, securityDeposit, reason: "x" } }, detail)?.field;
     expect(f("2999999", "3000000")).toBe("pricing.rent");
     expect(f("6500000", "0")).toBe("pricing.securityDeposit");
-    expect(f("6500000", "1999999")).toBe("pricing.securityDeposit");
+    expect(f("6500000", "3249999")).toBe("pricing.securityDeposit");
     expect(f("6500000", "19500001")).toBe("pricing.securityDeposit");
     expect(f("6500000", "1e15")).toBe("pricing.securityDeposit");
     expect(f("6500000", "NaN")).toBe("pricing.securityDeposit");
     expect(f("6500000.5", "6500000")).toBe("pricing.rent");
     expect(f("6500000", "6500000.5")).toBe("pricing.securityDeposit");
-    expect(f("6500000", "2000000")).toBeUndefined();
+    expect(f("6500000", "3250000")).toBeUndefined();
     expect(f("6500000", "19500000")).toBeUndefined();
-    expect(validateExtras({ ...draft, pricing: { rent: "6500000", securityDeposit: "1000000", reason: "x" } }, detail)?.message).toMatch(/2\.000\.000/);
+    expect(validateExtras({ ...draft, pricing: { rent: "6500000", securityDeposit: "1000000", reason: "x" } }, detail)?.message).toMatch(/nửa tháng/);
   });
 
   it("facts: miền giá trị cùng backend", () => {

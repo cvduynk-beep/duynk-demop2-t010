@@ -256,7 +256,7 @@ export function MobileAppExperience({ initialTab = "explore" }: { initialTab?: M
               </div>
               <div className={styles.portalInfo}>
                 <strong>Cổng Chủ Nhà (Ký gửi căn hộ)</strong>
-                <span>Quản lý rổ hàng độc quyền, nhận cọc 2 triệu qua VietQR</span>
+                <span>Quản lý rổ hàng độc quyền, nhận cọc bảo đảm qua VietQR</span>
               </div>
               <ChevronRight size={18} className="muted" />
             </Link>

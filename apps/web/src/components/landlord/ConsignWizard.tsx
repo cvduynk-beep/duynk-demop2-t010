@@ -439,8 +439,9 @@ function Wizard({
       return;
     }
     const currentDeposit = deposit || rent;
-    if (currentDeposit < 2_000_000 || currentDeposit > 3 * rent) {
-      setErr("Tiền cọc đề xuất phải từ 2.000.000đ đến 3 lần giá thuê.");
+    // Cọc v2: khách chuyển thẳng khoản này khi chốt căn ⇒ từ nửa tháng đến 3 tháng thuê (cùng biên kiểm định của backend).
+    if (currentDeposit < Math.ceil(rent / 2) || currentDeposit > 3 * rent) {
+      setErr("Tiền cọc đề xuất phải từ nửa tháng đến 3 tháng tiền thuê.");
       return;
     }
 
@@ -657,7 +658,7 @@ function Wizard({
     <div className={`${styles.page} ${styles.wizard}`}>
       <PageHeader
         title="Ký gửi căn hộ mới"
-        description="Cho thuê thần tốc — Khách chuyển cọc VietQR 2.000.000đ giữ chỗ ngay — Chủ nhà ở nhà 100%, không đi lại 20–30km mở cửa."
+        description="Cho thuê thần tốc — Khách chuyển Tiền cọc bảo đảm qua VietQR để khoá căn ngay — Chủ nhà ở nhà 100%, không đi lại 20–30km mở cửa."
       />
 
       <ol className={styles.steps} aria-label="Các bước">
@@ -1228,7 +1229,7 @@ function Wizard({
                     <span className={styles.netAmount}>{vnd(netIncome)}đ/tháng</span>
                   </div>
                   <p className="xs muted" style={{ margin: 0 }}>
-                    💡 <b>Bảo đảm an toàn tài chính:</b> Khách cọc 2.000.000đ giữ chỗ qua VietQR động sẽ chuyển 100% thành Tiền Cọc
+                    💡 <b>Bảo đảm an toàn tài chính:</b> Khách chuyển ngay Tiền cọc bảo đảm qua VietQR động khi chốt căn; khoản này chuyển 100% thành Tiền Cọc
                     Bảo Đảm Tài Sản khi ký HĐ, <b>tuyệt đối không khấu trừ</b> vào tiền thuê tháng đầu tiên.
                   </p>
                   <p className="xs muted" style={{ margin: "4px 0 0", color: "#64748b" }}>
@@ -1592,7 +1593,7 @@ function Wizard({
                 <div className={styles.roadmapStep}>
                   <div className={styles.roadmapStepNumber}>4</div>
                   <div className={styles.roadmapStepTitle}>Khớp khách & Dẫn xem</div>
-                  <div className={styles.roadmapStepDesc}>AI khớp khách All-in, Host dẫn xem mở cửa sảnh. Khách cọc 2tr khóa căn ngay.</div>
+                  <div className={styles.roadmapStepDesc}>AI khớp khách All-in, Host dẫn xem mở cửa sảnh. Khách chuyển cọc bảo đảm khóa căn ngay.</div>
                 </div>
               </div>
             </div>
@@ -1611,7 +1612,7 @@ function Wizard({
               </li>
               <li>
                 <ShieldCheck size={16} /> <b>First-to-Pay Wins & Giữ trọn tiền cọc:</b> Khóa căn độc quyền dựa trên tiền cọc thực
-                tế 2.000.000đ qua VietQR động. Khoản cọc này chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản, tuyệt đối không trừ
+                tế (bằng Tiền cọc bảo đảm của căn) qua VietQR động. Khoản cọc này chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản, tuyệt đối không trừ
                 vào tiền thuê tháng đầu.
               </li>
               <li>

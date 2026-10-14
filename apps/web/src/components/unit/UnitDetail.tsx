@@ -248,8 +248,8 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
                 <dd>{vnd(unit.securityDeposit)}đ, giữ nguyên suốt kỳ thuê và hoàn lại khi trả nhà</dd>
               </div>
               <div>
-                <dt>Cọc giữ chỗ</dt>
-                <dd>{vnd(unit.holdingDeposit)}đ, Căn được giữ riêng cho bạn {holdHours} giờ kể từ khi ngân hàng báo có, chuyển 100% vào tiền cọc bảo đảm, không trừ vào tiền thuê tháng đầu</dd>
+                <dt>Cọc khi chốt căn</dt>
+                <dd>Chuyển ngay {vnd(unit.holdingDeposit)}đ (chính là tiền cọc bảo đảm) qua VietQR. Căn được giữ riêng cho bạn {holdHours} giờ kể từ khi ngân hàng báo có; khi ký hợp đồng, khoản này chuyển 100% vào tiền cọc bảo đảm, không nộp bù, không trừ vào tiền thuê tháng đầu</dd>
               </div>
               <div>
                 <dt>Nếu không ký hợp đồng</dt>
@@ -319,7 +319,7 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
                     <Check size={15} /> Xem phòng miễn phí, Host đón tại sảnh
                   </li>
                   <li>
-                    <Check size={15} /> Chỉ cọc 2.000.000đ khi bạn ưng ý
+                    <Check size={15} /> Chỉ đặt cọc khi bạn đã xem và ưng ý
                   </li>
                   <li>
                     <Check size={15} /> Mã cửa chỉ hiện đúng lúc đứng trước phòng

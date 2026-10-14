@@ -195,7 +195,7 @@ function HoldPolicyForm({ policy }: { policy: HoldPolicy }) {
           }
         >
           <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
-            <li>Chỉ áp dụng cho khoản cọc giữ chỗ tạo <b>sau</b> khi lưu, ở các căn không có thời gian riêng.</li>
+            <li>Chỉ áp dụng cho khoản cọc tạo <b>sau</b> khi lưu, ở các căn không có thời gian riêng.</li>
             <li>Cọc đang chờ thanh toán và căn đang được giữ <b>giữ nguyên</b> số giờ đã chốt trong điều khoản khách đã đồng ý.</li>
             <li>Lý do: “{reason.trim().replace(/\s+/g, " ")}”</li>
           </ul>
@@ -236,7 +236,7 @@ export function AdminSettings() {
 
       <Section
         title="Thời gian giữ chỗ toàn sàn"
-        description="Số giờ căn được khoá sau khi ngân hàng báo có cọc giữ chỗ, áp dụng cho căn không đặt thời gian riêng (chỉnh riêng từng căn ở Kho căn)."
+        description="Số giờ căn được khoá sau khi ngân hàng báo có tiền cọc, áp dụng cho căn không đặt thời gian riêng (chỉnh riêng từng căn ở Kho căn)."
       >
         {policy.state.status === "loading" && <div className="skeleton" style={{ height: 220, borderRadius: 16 }} aria-busy="true" aria-label="Đang tải chính sách giữ chỗ" />}
         {policy.state.status === "error" && (
@@ -265,7 +265,7 @@ export function AdminSettings() {
                   label: "Cập nhật lần cuối",
                   value: p.updatedAt ? `${fmtDateTime(p.updatedAt)} · ${p.updatedBy?.name ?? "Không rõ"}` : "Chưa có",
                 },
-                { label: "Tiền cọc giữ chỗ", value: `${vnd(p.holdingDepositAmount)}đ (cố định, không chỉnh được)` },
+                { label: "Tiền cọc khi chốt căn", value: "Bằng Tiền cọc bảo đảm của từng căn (chủ nhà đặt, mặc định 1 tháng thuê)" },
               ]}
             />
             {/* Không đặt key theo version: sau 409 form giữ số admin vừa nhập + thông báo, chỉ `version` mới đổi theo server. */}
