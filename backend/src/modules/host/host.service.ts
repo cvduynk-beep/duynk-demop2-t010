@@ -4,6 +4,7 @@ import { hostConflict } from '../host-viewings/host-viewings.errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { authError } from '../auth/auth.errors';
 import { toHostRoleCodes } from '../auth/host-roles';
+import { zoneScopeView } from '../field-hosts/host-scope';
 import { PhoneService } from '../auth/phone/phone.service';
 import { decryptPhoneForDisplay } from '../auth/phone/phone-display';
 import { CAMPAIGN_MAX_DEALS_PER_WEEK, isoWeekPeriod, RATING_BONUS_MIN_AVG } from '../admin/admin-payout.service';
@@ -29,6 +30,8 @@ export class HostService {
       phone: decryptPhoneForDisplay(this.phones, host.profile.phoneEnc),
       isPhoneVerified: host.profile.isPhoneVerified,
       assignedZone: host.assignedZone,
+      // Phạm vi nhận ca pool + xem (Sổ tay phân khu lọc theo đây). `zones` null = tất cả phân khu.
+      ...zoneScopeView(host),
       roles: toHostRoleCodes(host.roles),
       dutyStatus: host.dutyStatus,
       rating: Number(host.rating),

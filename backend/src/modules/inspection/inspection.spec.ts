@@ -63,6 +63,19 @@ describe('Inspection — đọc & nhận ca', () => {
     expect(board.done.map((c) => c.id)).toEqual([done.mandate.id]);
   });
 
+  it('phạm vi phân khu: Open Pool chỉ hiện/nhận được với Inspector phủ phân khu của căn (chính / thêm / tất cả)', async () => {
+    const other = w.addInspector('other', { zone: 'The Zenpark' });
+    const extra = w.addInspector('extra', { zone: 'The Zenpark', managed: [ZONE] });
+    const all = w.addInspector('all', { zone: 'The Zenpark', scope: 'ALL' });
+    const c = w.addCase({});
+    expect((await w.query.board(w.actor(other))).open).toHaveLength(0);
+    expect(await codeOf(w.query.detail(w.actor(other), c.mandate.id))).toBe('inspection_not_found');
+    expect(await codeOf(w.flow.claim(w.actor(other), c.mandate.id))).toBe('inspection_not_found');
+    expect((await w.query.board(w.actor(extra))).open.map((x) => x.id)).toEqual([c.mandate.id]);
+    expect((await w.query.board(w.actor(all))).open.map((x) => x.id)).toEqual([c.mandate.id]);
+    expect(await codeOf(w.flow.claim(w.actor(all), c.mandate.id))).toBe('OK');
+  });
+
   it('P1-4: accept 2 lần cùng người ⇒ lần 2 vẫn 200, không ghi audit lần 2', async () => {
     const a = w.addInspector('a');
     const c = w.addCase({ hostId: a.id });

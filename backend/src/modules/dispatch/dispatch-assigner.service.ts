@@ -27,13 +27,57 @@ export class DispatchAssignerService {
     tx: Db,
     args: { zoneName: string; slot: Date; excludeHostIds?: string[]; excludeViewingId?: string },
   ): Promise<{ id: string } | null> {
+    const candidates = await this.candidates(tx, args);
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return { id: candidates[0].id };
+    return { id: (await this.byLoad(tx, candidates, args.slot))[0].id };
+  }
+
+  /**
+   * Hết SLA mà phân khu của căn không còn Sale rảnh (quyết định 2026-10-14): Sale rảnh ở phân khu GẦN NHẤT.
+   * Khoảng cách = từ sảnh tòa của căn tới tâm (trung bình toạ độ sảnh) các tòa thuộc phân khu chính của Sale.
+   * Cùng khoảng cách ⇒ chia đều việc như `pickHost`. Không ai đủ điều kiện ⇒ null.
+   */
+  async pickNearestHost(
+    tx: Db,
+    args: { lat: number; lng: number; slot: Date; excludeHostIds?: string[]; excludeViewingId?: string },
+  ): Promise<{ id: string; zone: string; distanceM: number } | null> {
+    const candidates = await this.candidates(tx, args);
+    if (candidates.length === 0) return null;
+    const buildings = await tx.building.findMany({ select: { zoneName: true, lobbyLatitude: true, lobbyLongitude: true } });
+    const centroid = new Map<string, { lat: number; lng: number }>();
+    for (const zone of new Set(buildings.map((b) => b.zoneName))) {
+      const pts = buildings.filter((b) => b.zoneName === zone);
+      centroid.set(zone, {
+        lat: pts.reduce((a, b) => a + Number(b.lobbyLatitude), 0) / pts.length,
+        lng: pts.reduce((a, b) => a + Number(b.lobbyLongitude), 0) / pts.length,
+      });
+    }
+    const placed = candidates
+      .map((c) => {
+        const zone = [...centroid.keys()].find((z) => c.assignedZone.includes(z));
+        const at = zone ? centroid.get(zone)! : null;
+        return { c, zone: zone ?? c.assignedZone, distanceM: at ? haversineM(args.lat, args.lng, at.lat, at.lng) : Number.POSITIVE_INFINITY };
+      })
+      .filter((x) => Number.isFinite(x.distanceM));
+    if (placed.length === 0) return null;
+    const nearest = Math.min(...placed.map((x) => x.distanceM));
+    // Coi các phân khu chênh < 50 m là "bằng nhau" (sai số toạ độ) ⇒ chia đều việc giữa họ.
+    const tied = placed.filter((x) => x.distanceM - nearest < 50);
+    const firstId = tied.length === 1 ? tied[0].c.id : (await this.byLoad(tx, tied.map((x) => x.c), args.slot))[0].id;
+    const chosen = tied.find((x) => x.c.id === firstId)!;
+    return { id: chosen.c.id, zone: chosen.zone, distanceM: Math.round(chosen.distanceM) };
+  }
+
+  /** Điều kiện chung của người được giao (01-CONTRACTS §4); `zoneName` có ⇒ chỉ phân khu chính chứa tên đó. */
+  private candidates(tx: Db, args: { zoneName?: string; slot: Date; excludeHostIds?: string[]; excludeViewingId?: string }) {
     const gapMs = MIN_GAP_MIN * 60 * 1000;
-    const candidates = await tx.fieldHost.findMany({
+    return tx.fieldHost.findMany({
       where: {
         roles: { has: HostRole.SALE },
         dutyStatus: HostDutyStatus.ONLINE_AVAILABLE,
         profile: { isActive: true, isPhoneVerified: true },
-        assignedZone: { contains: args.zoneName },
+        ...(args.zoneName ? { assignedZone: { contains: args.zoneName } } : {}),
         ...(args.excludeHostIds?.length ? { id: { notIn: args.excludeHostIds } } : {}),
         tickets: {
           none: {
@@ -46,12 +90,13 @@ export class DispatchAssignerService {
           },
         },
       },
-      select: { id: true, rating: true, createdAt: true },
+      select: { id: true, rating: true, createdAt: true, assignedZone: true },
     });
-    if (candidates.length === 0) return null;
-    if (candidates.length === 1) return { id: candidates[0].id };
+  }
 
-    const day = vnDayRange(args.slot);
+  /** Chia đều việc: ít ca trong ngày hơn → rating cao hơn → vào hệ thống sớm hơn. */
+  private async byLoad<T extends { id: string; rating: unknown; createdAt: Date }>(tx: Db, candidates: T[], slot: Date): Promise<T[]> {
+    const day = vnDayRange(slot);
     const loads = await tx.dispatchTicket.groupBy({
       by: ['hostId'],
       where: {
@@ -62,13 +107,12 @@ export class DispatchAssignerService {
       _count: { _all: true },
     });
     const load = new Map(loads.map((l) => [l.hostId as string, l._count._all]));
-    const sorted = [...candidates].sort(
+    return [...candidates].sort(
       (a, b) =>
         (load.get(a.id) ?? 0) - (load.get(b.id) ?? 0) ||
         Number(b.rating) - Number(a.rating) ||
         a.createdAt.getTime() - b.createdAt.getTime(),
     );
-    return { id: sorted[0].id };
   }
 
   /** Tạo ticket OFFERED cho một ca: tier 1 nếu có Sale phù hợp, ngược lại `hostId null, tier 2` (đi thẳng ZONE_POOL). */
@@ -92,4 +136,12 @@ export class DispatchAssignerService {
       },
     });
   }
+}
+
+/** Khoảng cách mặt cầu (mét) giữa hai toạ độ. */
+export function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6_371_000;
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const a = Math.sin(rad(lat2 - lat1) / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lng2 - lng1) / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }

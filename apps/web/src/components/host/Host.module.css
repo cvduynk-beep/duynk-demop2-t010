@@ -199,7 +199,10 @@
   gap: 12px;
   min-width: 0;
 }
-.thumb {
+.thumb,
+/* UnitPhoto gắn sẵn `.frame { width/height: 100% }` (VerifiedPhoto.module.css) cùng độ ưu tiên; tuỳ thứ tự nạp CSS mà ảnh
+   chiếm cả thẻ ticket và ép chữ thành cột hẹp ở màn nhỏ ⇒ ghim kích thước bằng selector mạnh hơn. */
+.ticketUnit .thumb {
   flex: none;
   width: 48px;
   height: 48px;
@@ -586,4 +589,14 @@
 .zoneCheckOff {
   flex: none;
   color: var(--line-strong);
+}
+
+/* Nút đang gửi (nhận ca / nhận ticket) */
+.spin {
+  animation: host-spin 0.9s linear infinite;
+}
+@keyframes host-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

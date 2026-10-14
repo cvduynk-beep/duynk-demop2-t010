@@ -3,6 +3,7 @@ import { fakeConfig } from '../../auth/testing/fake-config';
 import { DispatchAssignerService } from '../../dispatch/dispatch-assigner.service';
 import { DoorCodeService } from '../../door/door-code.service';
 import { HostActorService } from '../host-actor.service';
+import { DispatchSlaService } from '../../dispatch/dispatch-sla.service';
 import { HostBoardService } from '../host-board.service';
 import { ViewingFlowService } from '../viewing-flow.service';
 import { FakeDb } from './fake-db';
@@ -21,19 +22,24 @@ export function buildWorld() {
   const assigner = new DispatchAssignerService(prisma);
   const doors = new DoorCodeService(prisma, phones);
   const flow = new ViewingFlowService(prisma, phones, assigner, doors);
+  const sla = new DispatchSlaService(prisma as any, assigner);
+  // Admin hệ thống: audit của tác vụ tự động (giao lại ca quá SLA) cần một hồ sơ thật.
+  db.profiles.push({ id: 'admin-system', roleCode: 'ops_admin', fullName: 'Admin' });
   const board = new HostBoardService(prisma, phones);
   const actors = new HostActorService(prisma);
 
   let n = 0;
   const w = {
-    db, prisma, phones, assigner, doors, flow, board, actors,
+    db, prisma, phones, assigner, doors, flow, board, actors, sla,
 
-    addHost(name: string, o: { zone?: string; roles?: string[]; duty?: string; active?: boolean; verified?: boolean; rating?: number } = {}) {
+    addHost(name: string, o: { zone?: string; scope?: 'ALL' | 'SELECTED'; managed?: string[]; roles?: string[]; duty?: string; active?: boolean; verified?: boolean; rating?: number } = {}) {
       n += 1;
       const host = {
         id: `host-${name}`,
         profileId: `prof-${name}`,
         assignedZone: o.zone ?? 'The Sapphire 1',
+        zoneScope: o.scope ?? 'SELECTED',
+        managedZones: o.managed ?? [],
         roles: o.roles ?? ['SALE'],
         dutyStatus: o.duty ?? 'ONLINE_AVAILABLE',
         rating: o.rating ?? 5,
@@ -44,8 +50,12 @@ export function buildWorld() {
       return host;
     },
 
-    addUnit(code: string, o: { lock?: 'ELECTRONIC_PIN' | 'PHYSICAL_KEY'; ref?: string | null; zone?: string } = {}) {
+    addUnit(code: string, o: { lock?: 'ELECTRONIC_PIN' | 'PHYSICAL_KEY'; ref?: string | null; zone?: string; lat?: number; lng?: number } = {}) {
       const lock = o.lock ?? 'ELECTRONIC_PIN';
+      const zoneName = o.zone ?? 'The Sapphire 1';
+      if (!db.buildings.some((b) => b.zoneName === zoneName)) {
+        db.buildings.push({ zoneName, lobbyLatitude: o.lat ?? 20.99, lobbyLongitude: o.lng ?? 105.94 });
+      }
       const unit = {
         id: `unit-${code}`,
         unitCode: code,
@@ -53,7 +63,7 @@ export function buildWorld() {
         layoutType: 'ONE_BED_PLUS',
         baseRentPrice: 6_500_000,
         doorLockType: lock,
-        building: { buildingCode: 'S1.02', zoneName: o.zone ?? 'The Sapphire 1' },
+        building: { buildingCode: 'S1.02', zoneName, ...db.buildings.find((b) => b.zoneName === zoneName) },
         media: [{ url: '/units/a.jpg', order: 0 }],
       };
       db.units.push(unit);

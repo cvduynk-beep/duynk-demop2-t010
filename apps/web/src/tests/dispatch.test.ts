@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mem = new Map<string, string>();
 vi.stubGlobal("window", {
@@ -29,9 +29,14 @@ import { getMockState, resetMockState, setMockState } from "@/lib/mock/store";
 import { unitById } from "@/lib/mock/units";
 import type { Booking } from "@/lib/mock/types";
 
+// Các ca dùng giờ hẹn cố định (slotFuture) ⇒ phải cố định cả "bây giờ", nếu không test đổi kết quả theo ngày chạy.
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-10T02:00:00.000Z") });
   mem.clear();
   resetMockState();
+});
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("Dispatch & Booking Gate - SPEC-P02 §7 & SPEC-P03 §7", () => {

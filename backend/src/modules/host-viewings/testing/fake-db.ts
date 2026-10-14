@@ -44,6 +44,8 @@ export class FakeDb {
   doorKeys: Row[] = [];
   audits: Row[] = [];
   deposits: Row[] = [];
+  /** Tòa (zoneName + toạ độ sảnh) cho chọn Sale phân khu gần nhất. */
+  buildings: Row[] = [];
   private seq = 0;
   private lock: Promise<unknown> = Promise.resolve();
 
@@ -150,6 +152,17 @@ export class FakeDb {
         const by = new Map<string, number>();
         hit.forEach((t) => by.set(t.hostId, (by.get(t.hostId) ?? 0) + 1));
         return [...by].map(([hostId, n]) => ({ hostId, _count: { _all: n } }));
+      },
+    },
+    building: {
+      findMany: async () => this.buildings.map((b) => ({ ...b })),
+    },
+    profile: {
+      // Chỉ phục vụ "Admin hệ thống" của audit tự động.
+      findFirst: async ({ where }: Row = {}) => {
+        const code = where?.role?.code;
+        const p = this.profiles.find((x) => !code || x.roleCode === code);
+        return p ? { id: p.id } : null;
       },
     },
     viewing: {

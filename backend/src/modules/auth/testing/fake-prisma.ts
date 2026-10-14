@@ -16,6 +16,7 @@ const matches = (row: Row, where: Row = {}, relation?: Relations): boolean =>
       if ('has' in expected) return Array.isArray(row[key]) && row[key].includes(expected.has);
       if ('hasEvery' in expected) return Array.isArray(row[key]) && expected.hasEvery.every((v: unknown) => row[key].includes(v));
       if ('in' in expected) return expected.in.includes(row[key]);
+      if ('equals' in expected && Array.isArray(expected.equals)) return JSON.stringify(row[key] ?? []) === JSON.stringify(expected.equals);
       // Bộ lọc theo quan hệ (vd. fieldHost.where.profile = { isActive }).
       const related = relation?.(row, key);
       if (related !== undefined) return related !== null && matches(related, expected);
@@ -131,7 +132,7 @@ export function createFakePrisma() {
   // Mặc định khớp @default trong schema.prisma (roles = [SALE], duty OFF_DUTY).
   const fieldHost: FakeTable = new FakeTable(
     ['id', 'profileId'],
-    () => ({ roles: ['SALE'], dutyStatus: 'OFF_DUTY', rating: 5, assignedZone: 'The Sapphire 1' }),
+    () => ({ roles: ['SALE'], dutyStatus: 'OFF_DUTY', rating: 5, assignedZone: 'The Sapphire 1', zoneScope: 'SELECTED', managedZones: [] }),
     (row, include) => ({
       ...row,
       ...(include?.profile ? { profile: profile.rows.find((p) => p.id === row.profileId) } : {}),

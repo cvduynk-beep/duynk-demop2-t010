@@ -2,12 +2,13 @@ import { api, type ApiResponse } from "@/lib/apiClient";
 import { useApiQuery, invalidateApiPattern, type Query } from "@/lib/query/useApiQuery";
 import type { HostRoleCode } from "@/lib/auth/portals";
 import { knownErrorMessage } from "@/components/auth/authApi";
+import type { ZoneScope, ZoneScopeFields } from "@/lib/host/zoneScope";
 
 /** Kiểu theo contract planning/14_2026-10-04_Sale-Auth/specs/01-CONTRACTS.md §4.3. */
 export type HostDuty = "ONLINE_AVAILABLE" | "BUSY_VIEWING" | "OFF_DUTY";
 export type TicketStatusKey = "OFFERED" | "ACCEPTED" | "CHECKED" | "COMPLETED" | "EXPIRED" | "ESCALATED" | "CANCELLED";
 
-export interface HostAdminView {
+export interface HostAdminView extends ZoneScopeFields {
   id: string;
   profileId: string;
   email: string | null;
@@ -20,6 +21,8 @@ export interface HostAdminView {
   rating: number;
   isActive: boolean;
   hasPassword: boolean;
+  /** Gửi lại khi lưu phạm vi; lệch ⇒ 409 `zone_scope_conflict`. */
+  zoneScopeVersion: string;
   lastLoginAt: string | null;
   createdAt: string;
   stats: HostStats;
@@ -67,6 +70,14 @@ export interface UpdateHostInput {
   isActive?: boolean;
 }
 
+/** `PUT /admin/field-hosts/:id/zone-scope` — phạm vi nhận ca pool + xem. */
+export interface UpdateZoneScopeInput {
+  zoneScope: ZoneScope;
+  /** Phân khu THÊM ngoài phân khu chính. */
+  managedZones: string[];
+  version: string;
+}
+
 const BASE = "/admin/field-hosts";
 
 /** Dựng query string bộ lọc; tham số rỗng/`undefined` bị bỏ. */
@@ -87,6 +98,8 @@ export const adminHostsApi = {
   create: (dto: CreateHostInput) => api.post<HostAdminDetail>(BASE, dto),
   update: (id: string, dto: UpdateHostInput) => api.patch<HostAdminDetail>(`${BASE}/${encodeURIComponent(id)}`, dto),
   deactivate: (id: string) => api.delete<HostAdminDetail>(`${BASE}/${encodeURIComponent(id)}`),
+  updateZoneScope: (id: string, dto: UpdateZoneScopeInput) =>
+    api.put<HostAdminDetail & { changed: boolean }>(`${BASE}/${encodeURIComponent(id)}/zone-scope`, dto),
 };
 
 /** Sau mọi thay đổi: bỏ cache danh sách/hồ sơ Host để màn đang mở tải lại. */

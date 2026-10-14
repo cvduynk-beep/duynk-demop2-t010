@@ -61,7 +61,7 @@ export class InspectionQueryService {
       const stage = stageOf(m);
       const due = new Date(meta.inspectDueAt ?? 0).getTime();
       if (stage === 'awaiting_host') {
-        const tier = awaitingTier(meta, m.signedAt, actor.hostId, now);
+        const tier = awaitingTier(meta, m.signedAt, actor, m.unit.building.zoneName, now);
         if (tier === 'assigned') mine.push({ due, m, meta });
         else if (tier === 'open') open.push({ due, m, meta });
       } else if (stage === 'inspecting' && meta.hostId === actor.hostId) {
@@ -92,7 +92,7 @@ export class InspectionQueryService {
 
     const stage = consignmentStage(m);
     let tier: 'assigned' | 'open' | null = null;
-    if (stage === 'awaiting_host') tier = awaitingTier(meta, m.signedAt, actor.hostId, now);
+    if (stage === 'awaiting_host') tier = awaitingTier(meta, m.signedAt, actor, m.unit.building.zoneName, now);
     else if (OWNER_STAGES.includes(stage) && meta.hostId === actor.hostId) tier = 'assigned';
     if (!tier) throw inspectionNotFound();
     return this.toDetail(m, meta, actor, tier, now);

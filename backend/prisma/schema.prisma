@@ -420,6 +420,11 @@ enum HostRole {
   INSPECTOR
 }
 
+enum HostZoneScope {
+  ALL
+  SELECTED
+}
+
 enum HostDutyStatus {
   ONLINE_AVAILABLE
   BUSY_VIEWING
@@ -429,7 +434,10 @@ enum HostDutyStatus {
 model FieldHost {
   id               String         @id @default(uuid()) @db.Uuid
   profileId        String         @unique @map("profile_id") @db.Uuid
-  assignedZone     String         @map("assigned_zone") @db.VarChar(50)
+  assignedZone     String         @map("assigned_zone") @db.VarChar(50) // phân khu chính: tự giao ca, "Host phụ trách"
+  /// Phạm vi nhận ca pool + xem (Admin gán): SELECTED = phân khu chính + managedZones; ALL = mọi phân khu (kể cả tạo sau).
+  zoneScope        HostZoneScope  @default(SELECTED) @map("zone_scope")
+  managedZones     String[]       @default([]) @map("managed_zones")
   roles            HostRole[]     @default([SALE]) // Admin sửa qua PATCH /admin/field-hosts/:id → AuditLog HOST_ROLES_UPDATE
   rfidCardNumber   String?        @map("rfid_card_number") @db.VarChar(50)
   dutyStatus       HostDutyStatus @default(OFF_DUTY) @map("duty_status")
