@@ -35,15 +35,15 @@ Hợp đồng được thiết kế nhằm giải phóng Chủ nhà 100% khỏi 
 
 ---
 
-## ĐIỀU 3. CƠ CHẾ KHÓA CĂN GIỮ CHỖ 24H (HOLDING DEPOSIT ENGINE)
+## ĐIỀU 3. CƠ CHẾ KHÓA CĂN BẰNG TIỀN CỌC BẢO ĐẢM (HOLDING DEPOSIT ENGINE — CỌC v2, BẢN NHÁP CẦN PHÁP CHẾ RÀ SOÁT)
 1. **Kích hoạt trạng thái Giữ chỗ (`holding`):**
-   - Khi có khách thuê ưng ý và chuyển khoản thành công khoản Cọc giữ chỗ **2.000.000 VNĐ** (Hai triệu đồng) qua mã **VietQR động**, hệ thống VinStay AI lập tức chuyển trạng thái căn hộ sang `holding` trong đúng **24 giờ**.
+   - Khi có khách thuê ưng ý và chuyển khoản thành công **Tiền Cọc Bảo Đảm Tài Sản** của căn (do Chủ nhà đặt, mặc định 01 tháng tiền thuê) qua mã **VietQR động**, hệ thống VinStay AI lập tức chuyển trạng thái căn hộ sang `holding` trong thời hạn giữ căn do Admin cài đặt (**mặc định 48 giờ**, 12–72 giờ).
 2. **Khóa giỏ hàng toàn mạng lưới:**
-   - Trong suốt thời gian 24 giờ giữ chỗ, căn hộ tạm ẩn trên bảng tìm kiếm công khai, ngừng toàn bộ lịch đặt hẹn mới từ các khách hàng khác, tạo áp lực chốt sớm và loại trừ tình trạng khách do dự so đo nhiều nơi.
+   - Trong suốt thời gian giữ căn, căn hộ tạm ẩn trên bảng tìm kiếm công khai, ngừng toàn bộ lịch đặt hẹn mới từ các khách hàng khác, tạo áp lực chốt sớm và loại trừ tình trạng khách do dự so đo nhiều nơi.
 3. **Chuyển hóa thành Tiền Cọc Bảo Đảm Tài Sản:**
-   - Khi hai bên tiến hành ký Hợp đồng Thuê chính thức, số tiền 2.000.000 VNĐ này được chuyển đổi **100% thành một phần của Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)** và giữ nguyên trong tài khoản ký quỹ suốt kỳ hạn thuê. Tuyệt đối **KHÔNG** khấu trừ vào tiền thuê tháng đầu tiên, bảo toàn tối đa quyền lợi dự phòng tài chính cho Chủ nhà.
+   - Khi hai bên tiến hành ký Hợp đồng Thuê chính thức, số tiền cọc này được chuyển đổi **100% thành Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)**, khách không phải nộp bù, và giữ nguyên trong tài khoản ký quỹ suốt kỳ hạn thuê. Tuyệt đối **KHÔNG** khấu trừ vào tiền thuê tháng đầu tiên, bảo toàn tối đa quyền lợi dự phòng tài chính cho Chủ nhà.
 4. **Xử lý vi phạm hủy cọc:**
-   - Nếu quá thời hạn 24 giờ mà khách thuê từ chối ký Hợp đồng vì lý do chủ quan của khách, số tiền cọc 2.000.000 VNĐ được xử lý bồi thường theo đúng thỏa thuận giữ chỗ, bảo vệ quyền lợi tổn thất thời gian chờ của Chủ nhà.
+   - Nếu quá thời hạn giữ căn mà khách thuê từ chối ký Hợp đồng vì lý do chủ quan của khách, khách mất toàn bộ tiền cọc, chia **50% cho Chủ nhà** (bù tổn thất thời gian chờ) và 50% cho Nền tảng. Nếu Chủ nhà vi phạm cam kết, Chủ nhà hoàn 100% cọc cho khách và chịu phạt một khoản bằng tiền cọc (Khoản 2 Điều 328 BLDS 2015).
 
 ---
 

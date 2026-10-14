@@ -5,4 +5,4 @@ sources: [AGENTS.md]
 verified_at: 2026-10-07
 verified_sha: none
 ---
-- Cọc giữ chỗ {holding_deposit} khóa căn trong {hold_hours} giờ (Admin cài trong khoảng {hold_hours_min} đến {hold_hours_max} giờ).
+- Cọc chốt căn {holding_deposit} khóa căn trong {hold_hours} giờ (Admin cài trong khoảng {hold_hours_min} đến {hold_hours_max} giờ).

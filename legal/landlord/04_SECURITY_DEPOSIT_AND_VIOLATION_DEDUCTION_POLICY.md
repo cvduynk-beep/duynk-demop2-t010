@@ -15,8 +15,8 @@ Quy chế nhằm giải quyết triệt để **Nỗi đau số 3 và Nỗi đau
 ## ĐIỀU 1. ĐỊNH NGHĨA & QUY TẮC VÀNG VỀ TIỀN CỌC BẢO ĐẢM
 1. **Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit):** Là khoản tiền tương đương từ **01 đến 02 tháng tiền thuê căn hộ** do Khách thuê nộp vào Tài khoản Ký quỹ 3 bên bảo chứng ngân hàng trước khi nhận bàn giao căn hộ, nhằm bảo đảm thực hiện nghĩa vụ giữ gìn tài sản nội thất, tuân thủ nội quy BQL và thanh toán đầy đủ các loại cước phí sinh hoạt.
 2. **Quy Tắc Chuyển Đổi 100% Cọc Giữ Chỗ (Holding to Security Conversion):**
-   - Khoản tiền **2.000.000 VNĐ** (Hai triệu đồng) mà Khách thuê đã chuyển khoản qua VietQR động để khóa căn giữ chỗ 24h, khi hai bên tiến hành ký Hợp đồng Thuê chính thức sẽ được **chuyển đổi 100% thành một phần của Tiền Cọc Bảo Đảm Tài Sản & Nội Thất**.
-   - **QUY TẮC BẤT DI BẤT DỊCH (ABSOLUTE RULE):** Khoản tiền cọc 2.000.000 VNĐ này tuyệt đối **KHÔNG ĐƯỢC KHẤU TRỪ VÀO TIỀN THUÊ THÁNG ĐẦU TIÊN**. Số tiền này được giữ nguyên vẹn trong tài khoản ký quỹ suốt toàn bộ thời hạn thuê để bảo vệ quyền lợi tài chính dự phòng cho Chủ nhà.
+   - Khi chốt căn, Khách thuê chuyển ngay **Tiền Cọc Bảo Đảm Tài Sản** của căn (Chủ nhà đặt từ nửa tháng đến 03 tháng tiền thuê, mặc định 01 tháng) qua VietQR động để khóa căn; khi hai bên ký Hợp đồng Thuê chính thức, khoản này được **chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản & Nội Thất**, không nộp bù. *(Bản nháp cọc v2 2026-10-14 — cần pháp chế rà soát.)*
+   - **QUY TẮC BẤT DI BẤT DỊCH (ABSOLUTE RULE):** Khoản tiền cọc này tuyệt đối **KHÔNG ĐƯỢC KHẤU TRỪ VÀO TIỀN THUÊ THÁNG ĐẦU TIÊN**. Số tiền này được giữ nguyên vẹn trong tài khoản ký quỹ suốt toàn bộ thời hạn thuê để bảo vệ quyền lợi tài chính dự phòng cho Chủ nhà.
 3. **Tài Khoản Ký Quỹ Độc Lập 3 Bên (Tripartite Bank Escrow):** Toàn bộ Tiền Cọc Bảo Đảm Tài Sản được phong tỏa an toàn tại Ngân hàng đối tác liên kết (MB Bank / Techcombank) dưới sự giám sát công nghệ của VinStay AI theo quy định tại Nghị định 52/2024/NĐ-CP. Tuyệt đối không giữ trên tài khoản cá nhân của môi giới hay nhân sự vận hành.
 
 ---

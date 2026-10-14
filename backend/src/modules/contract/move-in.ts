@@ -1,5 +1,5 @@
 /**
- * Smart Move-in Window Protocol (legal/02 Điều 2.6 · legal/06 Điều 2; quyết định 2026-10-14) — hàm thuần, ngày lịch giờ VN.
+ * Smart Move-in Window Protocol (legal/02 Điều 2.5 · legal/06 Điều 2.4; quyết định 2026-10-14) — hàm thuần, ngày lịch giờ VN.
  * T0 = ngày cọc về (paid_at). Ngày dọn vào: sớm nhất T0+2 (BQL duyệt cư dân, thẻ thang máy, Field Host kiểm định),
  * muộn nhất T0+30. Miễn phí chờ tới T0+7 (ngày thứ 08 tính cả T0); chọn muộn hơn ⇒ Hợp đồng & tiền thuê bắt đầu từ T0+7,
  * khách được nhận mã cửa từ ngày đó.

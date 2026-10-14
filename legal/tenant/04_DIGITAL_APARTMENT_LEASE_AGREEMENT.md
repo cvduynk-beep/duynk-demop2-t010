@@ -13,7 +13,7 @@
 * Căn cứ **Luật Kinh doanh Bất động sản số 29/2023/QH15**;
 * Căn cứ **Luật Giao dịch Điện tử số 20/2023/QH15** (Có hiệu lực từ 01/07/2024 về giá trị pháp lý của chữ ký số điện tử xác thực OTP);
 * Căn cứ **Nghị định số 13/2023/NĐ-CP** về Bảo vệ dữ liệu cá nhân;
-* Căn cứ Thỏa thuận đặt cọc giữ chỗ số VSA-HOLD-[MÃ CĂN] đã ký kết;
+* Căn cứ Thỏa thuận đặt cọc chốt căn số VSA-HOLD-[MÃ CĂN] (điều khoản `DEP-2026.10-v2`) đã chấp thuận;
 * Căn cứ ý chí tự nguyện, bình đẳng và trung thực của Các Bên.
 
 Hôm nay, ngày [NGÀY] tháng [THÁNG] năm 2026, thông qua Nền tảng Giao dịch Điện tử VinStay AI, Các Bên gồm có:
@@ -76,12 +76,12 @@ Hai Bên cùng thống nhất giao kết Hợp đồng Thuê Căn hộ Chung cư
 > [!IMPORTANT]
 > **ĐIỀU KHOẢN VÀNG BẢO VỆ TÀI SẢN — KHÔNG KHẤU TRỪ VÀO TIỀN THUÊ THÁNG ĐẦU:**
 
-1. **Mức Tiền Cọc Bảo Đảm Tài Sản & Nội Thất:** **[...] VNĐ** (Tương đương [01 hoặc 02] tháng tiền thuê cơ bản).
-2. **Chuyển đổi 100% từ tiền cọc giữ chỗ 24h:**
-   * Khoản cọc **2.000.000 VNĐ** mà Bên B đã nộp theo Thỏa thuận cọc số VSA-HOLD-[MÃ CĂN] được **chuyển đổi 100% thành một phần của Tiền Cọc Bảo Đảm Tài Sản & Nội Thất**.
-   * **TUYỆT ĐỐI KHÔNG KHẤU TRỪ 2.000.000 VNĐ này vào tiền thuê nhà tháng đầu tiên.**
-3. **Thanh toán phần cọc bảo đảm còn thiếu:**
-   * Bên B có nghĩa vụ nộp nốt phần tiền cọc bảo đảm còn lại là **[...] VNĐ** vào Tài khoản Ký quỹ Phong tỏa Ngân hàng trước thời điểm nhận bàn giao căn hộ.
+1. **Mức Tiền Cọc Bảo Đảm Tài Sản & Nội Thất:** **[...] VNĐ** (bằng đúng số tiền đặt cọc Bên B đã chuyển khi chốt căn; mặc định 01 tháng tiền thuê cơ bản).
+2. **Chuyển đổi 100% từ tiền đặt cọc:**
+   * Khoản tiền đặt cọc mà Bên B đã nộp theo Thỏa thuận cọc số VSA-HOLD-[MÃ CĂN] được **chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản & Nội Thất**.
+   * **TUYỆT ĐỐI KHÔNG KHẤU TRỪ khoản cọc này vào tiền thuê nhà tháng đầu tiên.**
+3. **Không nộp bù cọc:**
+   * Bên B không phải nộp thêm khoản cọc nào trước khi nhận bàn giao căn hộ. *(Riêng khoản cọc giữ chỗ 2.000.000 VNĐ theo điều khoản cũ `HOLD-2026.10-v1`: nộp nốt phần còn lại **[...] VNĐ** vào Tài khoản Ký quỹ.)*
 4. **Cơ chế lưu giữ & Hoàn trả cọc:**
    * Toàn bộ Tiền Cọc Bảo Đảm Tài Sản được phong tỏa an toàn tại Tài khoản Ký quỹ 3 Bên mở tại Ngân hàng đối tác suốt kỳ hạn thuê.
    * Bên A và VinStay AI có nghĩa vụ **hoàn trả lại 100% số tiền cọc này cho Bên B trong vòng 03 (ba) ngày làm việc** kể từ ngày hai bên hoàn tất thủ tục bàn giao trả nhà, đối soát công tơ điện nước EVN và không phát sinh hư hỏng bất cẩn.

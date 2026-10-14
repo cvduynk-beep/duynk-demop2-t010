@@ -76,12 +76,12 @@ export function buildDepositTerms(holdHours: number = HOLD_HOURS_DEFAULT, amount
       {
         id: 'fast_close',
         text: 'Chốt nhanh (chỉ khi chủ nhà ủy quyền): Bên B cam kết chu kỳ thanh toán 1/3/6 tháng để được giảm giá thuê (không thấp hơn giá sàn chủ nhà đặt) và giảm khoảng 5% tiền cọc; ưu đãi chỉ giữ khi tiền cọc về trong 24 giờ, quá hạn hệ thống hoàn lại khoản đã chuyển và Bên B đặt cọc lại theo giá thường. Hợp đồng thuê bắt buộc đúng chu kỳ và giá đã chốt.',
-        source: 'AGENTS.md Chủ nhà #1 (Giá sàn an toàn) · legal/02 Điều 2.5',
+        source: 'AGENTS.md Chủ nhà #1 (Giá sàn an toàn) · legal/02 Điều 2.6',
       },
       {
         id: 'move_in',
         text: 'Ngày dọn vào sớm nhất là 02 ngày sau khi cọc về (BQL duyệt cư dân, thẻ thang máy, Field Host kiểm định). Miễn phí chờ dọn vào tối đa 07 ngày kể từ khi cọc về; chọn ngày sau đó (tối đa 30 ngày) thì Hợp đồng và tiền thuê bắt đầu tính từ ngày thứ 08.',
-        source: 'legal/02 Điều 2.6 · legal/06 Điều 2 (Smart Move-in Window Protocol)',
+        source: 'legal/02 Điều 2.5 · legal/06 Điều 2.4 (Smart Move-in Window Protocol)',
       },
       {
         id: 'forfeit',

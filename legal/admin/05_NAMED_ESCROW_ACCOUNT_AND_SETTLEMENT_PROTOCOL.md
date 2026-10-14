@@ -9,8 +9,8 @@
 Văn bản này quy định quy chế quản trị tài khoản định danh nền tảng, cơ chế ký quỹ độc lập bảo vệ tiền cọc của khách hàng, quy trình đối soát tự động hóa công tơ điện nước EVN và cơ chế giải tỏa tiền cọc thần tốc trên **Trang Quản Trị Hệ Thống (Admin Portal)** của nền tảng **VinStay AI** tại **Vinhomes Ocean Park (Gia Lâm, Hà Nội)**.
 
 Tôn chỉ an toàn tài chính:
-1. **Cô lập dòng tiền tuyệt đối (Fund Isolation):** Toàn bộ tiền cọc giữ chỗ 24h và Tiền Cọc Bảo Đảm Tài Sản (Security Deposit) bắt buộc phải được lưu ký tại **Tài Khoản Ký Quỹ Định Danh Độc Lập** tại Ngân hàng Thương mại đối tác; tuyệt đối không hòa lẫn hoặc sử dụng vào dòng tiền hoạt động (OpEx) của công ty.
-2. **Bảo vệ toàn vẹn tài sản Chủ nhà:** Tiền cọc 2 triệu ban đầu được chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản giữ nguyên suốt kỳ hạn thuê (không khấu trừ vào tiền thuê tháng đầu), dự phòng tuyệt đối cho các hư hại nội thất và nợ tiền điện nước EVN.
+1. **Cô lập dòng tiền tuyệt đối (Fund Isolation):** Toàn bộ tiền cọc chốt căn và Tiền Cọc Bảo Đảm Tài Sản (Security Deposit) bắt buộc phải được lưu ký tại **Tài Khoản Ký Quỹ Định Danh Độc Lập** tại Ngân hàng Thương mại đối tác; tuyệt đối không hòa lẫn hoặc sử dụng vào dòng tiền hoạt động (OpEx) của công ty.
+2. **Bảo vệ toàn vẹn tài sản Chủ nhà:** Tiền cọc chốt căn (bằng Tiền cọc bảo đảm của căn) được chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản giữ nguyên suốt kỳ hạn thuê (không khấu trừ vào tiền thuê tháng đầu), dự phòng tuyệt đối cho các hư hại nội thất và nợ tiền điện nước EVN.
 3. **Giải tỏa thần tốc & Phê duyệt thụ động (Smart Release & Passive Approval):** Hoàn trả cọc trong vòng **60 giây** sau khi đối soát xong; tự động hoàn cọc sau 7 ngày nếu chủ nhà không phản hồi, chấm dứt triệt để nạn chiếm dụng tiền cọc bất hợp lý.
 
 ---
@@ -29,7 +29,7 @@ Hệ thống tài chính của VinStay AI được kết nối trực tiếp v�
 │   ┌──────────────────────────────────────────────────────────────────────────────────────────┐   │
 │   │ TÀI KHOẢN KÝ QUỸ ĐỊNH DANH ĐỘC LẬP (NAMED ESCROW TRUST ACCOUNT)                         │   │
 │   │ Tên tài khoản: VINSTAY AI - TAI KHOAN KY QUY BAO DAM                                     │   │
-│   │ • Lưu ký 100% Cọc giữ chỗ 24h (2.000.000 VNĐ) & Tiền Cọc Bảo Đảm Tài Sản (1-2 tháng).   │   │
+│   │ • Lưu ký 100% Cọc chốt căn = Tiền Cọc Bảo Đảm Tài Sản (mặc định 1 tháng thuê).         │   │
 │   │ • ĐÓNG BĂNG VỐN: Công ty KHÔNG CÓ QUYỀN rút vốn để chi tiêu vận hành hay đầu tư.        │   │
 │   │ • Chỉ được giải tỏa tự động theo kết quả biên bản Check-out và Smart Release.           │   │
 │   └──────────────────────────────────────────────────────────────────────────────────────────┘   │
@@ -46,12 +46,12 @@ Hệ thống tài chính của VinStay AI được kết nối trực tiếp v�
 
 ---
 
-## ĐIỀU 2. CƠ CHẾ GẠCH NỢ TỨC THÌ QUA VIETQR ĐỘNG 2.000.000 VNĐ
+## ĐIỀU 2. CƠ CHẾ GẠCH NỢ TỨC THÌ QUA VIETQR ĐỘNG (CỌC v2 — BẢN NHÁP CẦN PHÁP CHẾ RÀ SOÁT)
 Nhằm loại trừ sai sót chuyển nhầm nội dung và bảo đảm căn hộ được khóa ngay lập tức:
 
 1. **Sinh mã VietQR động chuẩn NAPAS 247:**
-   - Khi khách bấm `[Khóa căn giữ chỗ 24h]`, hệ thống tự động sinh mã VietQR động chứa:
-     * Số tiền cố định: **`2,000,000 VNĐ`**.
+   - Khi khách tick chấp thuận điều khoản cọc, hệ thống tự động sinh mã VietQR động chứa:
+     * Số tiền do hệ thống tính: **Tiền Cọc Bảo Đảm của căn** (mặc định 01 tháng tiền thuê; Chốt nhanh là số đã giảm).
      * Nội dung chuyển khoản mã hóa độc nhất: **`VINSTAY [UNIT_CODE] [BOOKING_ID]`** (ví dụ: `VINSTAY S1081205 BK9821`).
 2. **Gạch nợ tức thời qua Webhook ngân hàng:**
    - Ngay khi khách hoàn tất chuyển khoản từ bất kỳ ứng dụng ngân hàng nào tại Việt Nam:
@@ -64,11 +64,11 @@ Nhằm loại trừ sai sót chuyển nhầm nội dung và bảo đảm căn h�
 ## ĐIỀU 3. QUẢN TRỊ TIỀN CỌC BẢO ĐẢM TÀI SẢN & NỘI THẤT (SECURITY DEPOSIT)
 Nhằm hiện thực hóa giải pháp bảo vệ quyền lợi tài sản cho Chủ nhà:
 
-1. **Chuyển đổi cọc 2 triệu giữ chỗ (Mandatory Conversion):**
-   - Khi ký Hợp đồng thuê căn hộ chính thức: Khoản tiền cọc 2.000.000 VNĐ ban đầu được **chuyển đổi 100% thành một phần của Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)**.
+1. **Chuyển đổi cọc chốt căn (Mandatory Conversion):**
+   - Khi ký Hợp đồng thuê căn hộ chính thức: Khoản tiền cọc đã nhận được **chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)**.
    - **ĐIỀU KHOẢN BẢO VỆ CỐT LÕI: TUYỆT ĐỐI KHÔNG KHẤU TRỪ VÀO TIỀN THUÊ THÁNG ĐẦU TIÊN.** Khoản tiền này được giữ nguyên suốt kỳ hạn thuê trong tài khoản ký quỹ để bảo đảm bồi thường hư hao tài sản và nợ cước dịch vụ phát sinh.
-2. **Bổ sung đủ Tiền cọc bảo đảm theo hợp đồng:**
-   - Khách thuê nộp bổ sung phần tiền cọc bảo đảm còn lại (tương đương 01 tháng tiền thuê) trước ngày nhận bàn giao căn hộ (Check-in).
+2. **Không nộp bổ sung khi ký hợp đồng:**
+   - Tiền cọc chốt căn đã bằng Tiền cọc bảo đảm của căn nên khách không nộp bù khi nhận bàn giao (Check-in). Riêng khoản cọc giữ chỗ 2.000.000 VNĐ theo điều khoản cũ `HOLD-2026.10-v1` thì nộp bù phần còn thiếu.
 3. **Cơ chế Bù cọc trong 03 ngày khi có khấu trừ:**
    - Nếu trong quá trình thuê phát sinh vi phạm nội quy BQL hoặc làm hỏng thiết bị và bị khấu trừ cọc $\rightarrow$ Khách thuê có nghĩa vụ nộp bù đủ mức cọc ban đầu trong vòng **03 ngày làm việc** kể từ ngày nhận thông báo.
 
@@ -125,7 +125,7 @@ Admin Portal cam kết tốc độ giải tỏa cọc nhanh nhất thị trườ
 ---
 
 ## ĐIỀU 7. HIỆU LỰC THI HÀNH
-1. Quy chế này có hiệu lực bắt buộc áp dụng đối với toàn bộ các giao dịch ký gửi, đặt cọc giữ chỗ và quản lý tiền cọc bảo đảm tài sản của VinStay AI tại khu đô thị Vinhomes Ocean Park.
+1. Quy chế này có hiệu lực bắt buộc áp dụng đối với toàn bộ các giao dịch ký gửi, đặt cọc chốt căn và quản lý tiền cọc bảo đảm tài sản của VinStay AI tại khu đô thị Vinhomes Ocean Park.
 2. Mọi hành vi tự ý rút vốn hoặc can thiệp trái phép vào Tài khoản Ký Quỹ Độc Lập sẽ bị xử lý kỷ luật nghiêm khắc và truy cứu trách nhiệm hình sự theo pháp luật hiện hành.
 
 ---

@@ -45,17 +45,16 @@ sequenceDiagram
     participant Platform as 🤖 Hệ Thống VinStay AI
     actor Landlord as 🏠 Chủ Nhà
 
-    %% GIAI ĐOẠN CỌC GIỮ CHỖ
-    Note over Tenant, Escrow: GIAI ĐOẠN 1: ĐẶT CỌC GIỮ CHỖ (24 GIỜ)
-    Tenant->>Escrow: Quét mã thanh toán chuyển 2.000.000 đ
-    Escrow-->>Platform: Phản hồi tự động -> Khóa căn GIỮ CHỖ (24h)
+    %% GIAI ĐOẠN CỌC CHỐT CĂN
+    Note over Tenant, Escrow: GIAI ĐOẠN 1: ĐẶT CỌC CHỐT CĂN (GIỮ CĂN MẶC ĐỊNH 48 GIỜ)
+    Tenant->>Escrow: Quét mã thanh toán chuyển Tiền cọc bảo đảm (Ví dụ: 8.000.000 đ)
+    Escrow-->>Platform: Phản hồi tự động -> Khóa căn GIỮ CHỖ (mặc định 48h)
     Platform->>Landlord: Gửi thông báo căn hộ đã được giữ chỗ
 
     %% GIAI ĐOẠN KÝ HỢP ĐỒNG
     Note over Tenant, Landlord: GIAI ĐOẠN 2: CHUYỂN ĐỔI THÀNH CỌC BẢO ĐẢM TÀI SẢN
     Tenant->>Landlord: Ký Hợp đồng thuê chính thức (Xác thực OTP)
-    Note over Tenant, Escrow: 2 triệu cọc giữ chỗ CHUYỂN 100% THÀNH CỌC BẢO ĐẢM NỘI THẤT
-    Tenant->>Escrow: Nộp phần cọc bảo đảm còn thiếu (Ví dụ: 6.000.000 đ)
+    Note over Tenant, Escrow: Tiền cọc đã chuyển CHUYỂN 100% THÀNH CỌC BẢO ĐẢM NỘI THẤT (không nộp bù)
     Tenant->>Landlord: Thanh toán tiền thuê nhà tháng đầu tiên
     Note over Escrow: Toàn bộ tiền cọc (8.000.000 đ) PHONG TỎA suốt thời hạn thuê
 
@@ -68,13 +67,13 @@ sequenceDiagram
     Escrow-->>Tenant: Hoàn trả 100% cọc (hoặc trừ chi phí bồi thường nếu có)
 ```
 
-### 3.1. Chuyển đổi toàn bộ tiền đặt cọc giữ chỗ 24 giờ
-* Khoản tiền cọc giữ chỗ ban đầu là **2.000.000 VNĐ (Hai triệu đồng)** được chuyển thẳng vào Tài khoản ký quỹ phong tỏa tại ngân hàng.
-* Khi Các Bên tiến hành ký kết Hợp đồng thuê căn hộ chính thức, khoản tiền này được **chuyển đổi 100% thành một phần của Tiền đặt cọc bảo đảm tài sản và trang thiết bị nội thất**.
+### 3.1. Chuyển đổi toàn bộ tiền đặt cọc chốt căn
+* *(Bản nháp cọc v2 2026-10-14 — cần pháp chế rà soát.)* Khoản tiền đặt cọc khi chốt căn bằng **Tiền Cọc Bảo Đảm Tài Sản** của căn (mặc định 01 tháng tiền thuê; Chốt nhanh là số đã giảm) được chuyển thẳng vào Tài khoản ký quỹ phong tỏa tại ngân hàng.
+* Khi Các Bên tiến hành ký kết Hợp đồng thuê căn hộ chính thức, khoản tiền này được **chuyển đổi 100% thành Tiền đặt cọc bảo đảm tài sản và trang thiết bị nội thất**.
 * **Quy tắc bắt buộc:** Khoản tiền này **TUYỆT ĐỐI KHÔNG ĐƯỢC KHẤU TRỪ vào tiền thuê nhà tháng đầu tiên**, mà phải được lưu giữ nguyên vẹn trong quỹ ký quỹ suốt toàn bộ thời gian thuê.
 
-### 3.2. Nộp bổ sung phần tiền cọc bảo đảm còn lại
-* Trước thời điểm chính thức nhận bàn giao căn hộ, Khách thuê có nghĩa vụ nộp đủ phần tiền đặt cọc bảo đảm còn thiếu (thông thường tương đương 01 tháng tiền thuê trừ đi 2 triệu đồng đã cọc giữ chỗ) trực tiếp vào Tài khoản ký quỹ ngân hàng.
+### 3.2. Không nộp bổ sung tiền cọc
+* Vì tiền đặt cọc đã bằng Tiền Cọc Bảo Đảm Tài Sản, Khách thuê không phải nộp bù trước khi nhận bàn giao. Riêng khoản cọc giữ chỗ 2.000.000 VNĐ theo điều khoản cũ `HOLD-2026.10-v1` thì nộp đủ phần còn thiếu vào Tài khoản ký quỹ ngân hàng.
 * Toàn bộ Tiền đặt cọc bảo đảm tài sản được ngân hàng phong tỏa tuyệt đối an toàn trong suốt thời gian có hiệu lực của hợp đồng thuê.
 
 ---

@@ -48,10 +48,11 @@ Bên A đồng ý ủy quyền độc quyền cho Bên B thực hiện việc qu
 6. **Cơ chế Biên độ Giá Sàn Ủy Quyền & Chiết khấu Chốt Nhanh (Fast-Close Floor Price Corridor):**
    * Trường hợp Bên A kích hoạt tùy chọn Ủy quyền Chốt Nhanh trên hệ thống VinStay AI, Bên A xác lập một mức **Giá sàn tối thiểu (Floor Price)**: [...] VNĐ/tháng *(không thấp hơn 3.000.000 VNĐ/tháng và không cao hơn Giá chào thuê cơ bản)*.
    * Bên A ủy quyền trước cho Bên B (VinStay AI) toàn quyền tự động kích hoạt chính sách ưu đãi chiết khấu nằm trong biên độ từ Giá sàn đến Giá chào thuê nhằm chốt cọc nhanh khi khách thuê đáp ứng các điều kiện sau:
-     * (i) Khách thuê cam kết thanh toán trước từ 06 đến 12 tháng tiền thuê căn hộ;
-     * (ii) Khách thuê thực hiện chuyển tiền đặt cọc giữ chỗ 2.000.000 VNĐ qua VietQR động trong vòng 24 giờ kể từ thời điểm kết thúc ca xem phòng thực địa.
+     * (i) Khách thuê cam kết trả trước tiền thuê theo chu kỳ 01, 03 hoặc 06 tháng/kỳ — giá thuê giảm lần lượt 3,5% / 5,5% / 10% (làm tròn 50.000 VNĐ, không thấp hơn Giá sàn) và tiền cọc giảm khoảng 5% (tối thiểu 200.000 VNĐ, tối đa 8%);
+     * (ii) **Và** tiền đặt cọc (Tiền Cọc Bảo Đảm của căn, đã giảm) về tài khoản ký quỹ trong vòng 24 giờ kể từ lúc khách chấp thuận điều khoản; về muộn hơn thì ưu đãi hết hiệu lực, căn không bị khóa và khách được hoàn tiền.
+   * *(Bản nháp cọc v2 2026-10-14 — cần pháp chế rà soát.)*
    * **Bảo đảm trần sàn tối thiểu & Bảo mật thông tin:** Bên B cam kết tuyệt đối không bao giờ chốt giá hợp đồng thuê thấp hơn mức Giá sàn do Bên A đã cài đặt. Đồng thời, thông số Giá sàn được hệ thống mã hóa bảo mật 100%, không hiển thị công khai trên giao diện niêm yết tìm kiếm nhằm bảo vệ tối đa giá trị tài sản cho Bên A.
-7. **Mức tiền đặt cọc giữ chỗ & cọc bảo đảm nội thất:** Xác định linh hoạt theo thông số dữ liệu đầu vào của căn hộ (căn cứ theo giá thuê và giá trị gói trang thiết bị nội thất thực tế được hai bên thống nhất trên hệ thống).
+7. **Mức tiền đặt cọc = Tiền cọc bảo đảm nội thất:** Bên A xác lập Tiền Cọc Bảo Đảm Tài Sản của căn trong biên độ chính sách cọc của Bên B (từ nửa tháng đến 03 tháng tiền thuê; không xác lập thì mặc định 01 tháng tiền thuê). Khách thuê chuyển đúng khoản này khi chốt căn.
 
 ---
 
@@ -105,12 +106,12 @@ Bên A đồng ý ủy quyền độc quyền cho Bên B thực hiện việc qu
 
 ---
 
-### ĐIỀU 5: CƠ CHẾ TIỀN ĐẶT CỌC GIỮ CHỖ LINH HOẠT & BẢO ĐẢM TÀI SẢN NỘI THẤT
-1. **Tiền đặt cọc giữ chỗ qua mã thanh toán tự động & Thời hạn giữ chỗ linh hoạt:**
-   * Khi khách thuê đồng ý thuê căn hộ, Bên B hướng dẫn khách chuyển khoản số tiền đặt cọc giữ chỗ (mặc định 2.000.000 VNĐ hoặc theo mức thiết lập của căn hộ) qua mã VietQR động vào tài khoản ký quỹ chuyên dụng phong tỏa tại ngân hàng.
-   * Ngay khi tài khoản nhận được tiền, hệ thống sẽ tự động khóa căn hộ ở trạng thái giữ chỗ trong thời hạn được xác lập cho căn hộ (mặc định 24 giờ hoặc được thiết lập linh hoạt từ 12 giờ đến 72 giờ trên Trang Quản trị Admin căn cứ theo đặc thù sản phẩm) trên toàn mạng lưới để chuẩn bị ký hợp đồng chính thức.
+### ĐIỀU 5: CƠ CHẾ TIỀN ĐẶT CỌC CHỐT CĂN BẰNG TIỀN CỌC BẢO ĐẢM TÀI SẢN NỘI THẤT
+1. **Tiền đặt cọc qua mã thanh toán tự động & Thời hạn giữ căn linh hoạt:**
+   * Khi khách thuê đồng ý thuê căn hộ, Bên B hướng dẫn khách chuyển khoản số tiền đặt cọc bằng Tiền Cọc Bảo Đảm Tài Sản của căn (mặc định 01 tháng tiền thuê) qua mã VietQR động vào tài khoản ký quỹ chuyên dụng phong tỏa tại ngân hàng.
+   * Ngay khi tài khoản nhận được tiền, hệ thống sẽ tự động khóa căn hộ ở trạng thái giữ chỗ trong thời hạn được xác lập cho căn hộ (mặc định 48 giờ hoặc được thiết lập linh hoạt từ 12 giờ đến 72 giờ trên Trang Quản trị Admin căn cứ theo đặc thù sản phẩm) trên toàn mạng lưới để chuẩn bị ký hợp đồng chính thức.
 2. **Chuyển đổi 100% thành Tiền đặt cọc bảo đảm tài sản và nội thất:**
-   * Khi khách thuê ký Hợp đồng thuê căn hộ chính thức, toàn bộ số tiền đặt cọc giữ chỗ thực tế nêu trên được **chuyển đổi 100% thành một phần của Tiền đặt cọc bảo đảm tài sản và nội thất** (mức cọc bảo đảm tổng thể thông thường tương đương từ 01 đến 02 tháng tiền thuê) và được giữ nguyên suốt thời hạn thuê.
+   * Khi khách thuê ký Hợp đồng thuê căn hộ chính thức, toàn bộ số tiền đặt cọc nêu trên được **chuyển đổi 100% thành Tiền đặt cọc bảo đảm tài sản và nội thất** (khách không phải nộp bù) và được giữ nguyên suốt thời hạn thuê.
    * **Nguyên tắc bắt buộc:** Khoản tiền này **TUYỆT ĐỐI KHÔNG ĐƯỢC KHẤU TRỪ vào tiền thuê nhà tháng đầu tiên**, nhằm duy trì nguồn tài chính bảo đảm khắc phục hư hại tài sản và dự phòng nợ cước dịch vụ phát sinh của khách thuê cho Bên A.
 3. **Hồ sơ bàn giao hiện trạng số hóa, giải tỏa tiền cọc & Bảo đảm 0% nợ đọng:**
    * Bên B chịu trách nhiệm thiết lập Hồ sơ bàn giao hiện trạng số hóa 10 hạng mục nội thất có gắn tọa độ vị trí và dấu thời gian điện tử làm chứng cứ pháp lý duy nhất để đối soát bảo vệ quyền lợi tài sản cho Bên A.

@@ -9,7 +9,7 @@
 * Căn cứ **Luật Nhà ở số 27/2023/QH15** (Hiệu lực từ 01/08/2024, đặc biệt Khoản 2 Điều 164 về việc Hợp đồng thuê nhà ở không bắt buộc phải công chứng);
 * Căn cứ **Luật Kinh doanh Bất động sản số 29/2023/QH15**;
 * Căn cứ **Luật Giao dịch Điện tử số 20/2023/QH15**;
-* Căn cứ Thỏa thuận đặt cọc giữ chỗ số VSA-HOLD-[MÃ CĂN] đã ký kết;
+* Căn cứ Thỏa thuận đặt cọc chốt căn số VSA-HOLD-[MÃ CĂN] (điều khoản `DEP-2026.10-v2`) đã chấp thuận;
 * Căn cứ ý chí tự nguyện, bình đẳng và trung thực của Các Bên.
 
 Hôm nay, ngày [NGÀY] tháng [THÁNG] năm 2026, tại [ĐỊA ĐIỂM KÝ KẾT / ĐỊA CHỈ DỰ ÁN], Chúng tôi gồm có:
@@ -54,6 +54,9 @@ Hai Bên cùng thống nhất ký kết Hợp đồng Thuê Căn hộ Chung cư 
 1. **Thời hạn thuê:** **[...] tháng** (Bắt đầu từ ngày [NGÀY BẮT ĐẦU] đến hết ngày [NGÀY KẾT THÚC]).
 2. **Thời điểm bàn giao nhà:** Ngày [NGÀY BÀN GIAO], sau khi Bên B đã thanh toán đầy đủ Tiền thuê kỳ đầu tiên và Tiền Cọc Bảo Đảm Tài Sản theo quy định tại Điều 3 Hợp đồng này.
 3. **Gia hạn hợp đồng:** Nếu Bên B có nhu cầu tiếp tục thuê sau khi hết hạn, Bên B phải thông báo cho Bên A trước ít nhất **30 (ba mươi) ngày**.
+4. **Nguyên tắc xác định Ngày bắt đầu tính tiền thuê & Ngày dọn vào thực tế (Smart Move-in Protocol):**
+   * **Ngày bắt đầu tính tiền thuê (Billing Start Date):** Căn cứ theo đăng ký của Bên B trên hệ thống VinStay AI và quy chuẩn Khung chờ dọn vào tiêu chuẩn (Smart Move-in Window Protocol). Trường hợp Bên B đăng ký dọn vào trong khung 07 ngày kể từ khi đặt cọc, Ngày bắt đầu tính tiền thuê trùng với Ngày bàn giao nhận nhà thực tế. Trường hợp Bên B đăng ký dọn vào sau 07 ngày (tối đa không quá 30 ngày), Ngày bắt đầu tính tiền thuê được xác lập từ **ngày thứ 08** kể từ ngày tiền đặt cọc về tài khoản ký quỹ (T0).
+   * **Quyền tiếp nhận căn hộ:** Bên B có quyền nhận bàn giao mã mở cửa điện tử, thẻ cư dân thang máy và dọn vào lưu trú bất kỳ lúc nào kể từ Ngày bắt đầu tính tiền thuê đã xác lập.
 
 ---
 
@@ -89,13 +92,13 @@ Hai Bên cùng thống nhất ký kết Hợp đồng Thuê Căn hộ Chung cư 
 > [!IMPORTANT]
 > **ĐIỀU KHOẢN BẢO VỆ TÀI SẢN CHỦ NHÀ — KHÔNG KHẤU TRỪ VÀO TIỀN THUÊ:**
 
-1. **Tổng mức Tiền Cọc Bảo Đảm Tài Sản:** **[...] VNĐ** (Tương đương [01 hoặc 02] tháng tiền thuê cơ bản).
-2. **Chuyển đổi 100% từ tiền cọc giữ chỗ:**
-   * Khoản tiền cọc giữ chỗ **[...] VNĐ** Bên B đã chuyển khoản qua VietQR theo Thỏa thuận số VSA-HOLD-[MÃ CĂN] (căn cứ theo mức thiết lập đầu vào của căn hộ trên hệ thống) được **chuyển đổi 100% thành một phần của Tiền Cọc Bảo Đảm Tài Sản & Nội Thất**.
-   * **TUYỆT ĐỐI KHÔNG KHẤU TRỪ số tiền cọc giữ chỗ này vào tiền thuê nhà tháng đầu tiên.**
+1. **Tổng mức Tiền Cọc Bảo Đảm Tài Sản:** **[...] VNĐ** (bằng đúng số tiền đặt cọc Bên B đã chuyển khi chốt căn; mặc định 01 tháng tiền thuê cơ bản, hoặc số tiền đã giảm nếu Bên B chọn Chốt nhanh).
+2. **Chuyển đổi 100% từ tiền đặt cọc:**
+   * Khoản tiền đặt cọc **[...] VNĐ** Bên B đã chuyển khoản qua VietQR theo Thỏa thuận số VSA-HOLD-[MÃ CĂN] được **chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản & Nội Thất**.
+   * **TUYỆT ĐỐI KHÔNG KHẤU TRỪ số tiền đặt cọc này vào tiền thuê nhà tháng đầu tiên.**
 
-3. **Thanh toán phần cọc còn lại:**
-   * Bên B thanh toán nốt số tiền cọc bảo đảm còn thiếu là: **[...] VNĐ** đồng thời với tiền thuê tháng đầu tiên trước khi nhận bàn giao chìa khóa/mã mở cửa căn hộ.
+3. **Không nộp bù cọc:**
+   * Vì tiền đặt cọc đã bằng Tiền Cọc Bảo Đảm Tài Sản, Bên B không phải thanh toán thêm khoản cọc nào; kỳ đầu chỉ gồm tiền thuê theo chu kỳ đã chọn, thanh toán trước khi nhận bàn giao chìa khóa/mã mở cửa căn hộ. *(Khoản cọc giữ chỗ theo điều khoản cũ `HOLD-2026.10-v1` thì nộp bù phần còn thiếu: **[...] VNĐ**.)*
 4. **Mục đích và hoàn trả tiền cọc:**
    * Tiền cọc bảo đảm nhằm bảo vệ toàn vẹn tài sản nội thất, bù đắp các chi phí sửa chữa hỏng hóc bất cẩn (nếu có), và dự phòng nợ tiền điện nước/phí phạt của BQL.
    * Bên A có trách nhiệm hoàn trả lại 100% số tiền cọc này cho Bên B trong vòng **03 (ba) ngày làm việc** kể từ ngày hai bên hoàn tất biên bản thanh lý và đối soát dứt điểm hóa đơn điện nước EVN.

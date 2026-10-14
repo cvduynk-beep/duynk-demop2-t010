@@ -55,7 +55,7 @@ Mô-đun AI Vision OCR chỉ tiến hành bóc tách đúng **04 trường thôn
 
 ## 4. GIỚI HẠN MỤC ĐÍCH XỬ LÝ DỮ LIỆU (PURPOSE LIMITATION)
 VinStay AI chỉ sử dụng thông tin CCCD của Khách thuê cho đúng **02 mục đích hợp pháp duy nhất**:
-1. **Mục đích 1:** Tự động điền thông tin nhân thân vào Thỏa thuận đặt cọc giữ chỗ và Hợp đồng thuê căn hộ số hóa, bảo đảm tính xác thực của chủ thể ký kết hợp đồng theo Luật Giao dịch Điện tử 2023.
+1. **Mục đích 1:** Tự động điền thông tin nhân thân vào Thỏa thuận đặt cọc chốt căn và Hợp đồng thuê căn hộ số hóa, bảo đảm tính xác thực của chủ thể ký kết hợp đồng theo Luật Giao dịch Điện tử 2023.
 2. **Mục đích 2:** Hỗ trợ Chủ nhà và Khách thuê thực hiện thủ tục khai báo **Đăng ký tạm trú trực tuyến** trên Cổng Dịch vụ công Quản lý Cư trú của Bộ Công an theo đúng quy định tại Luật Cư trú 2020.
 
 ---
