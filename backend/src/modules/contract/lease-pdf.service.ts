@@ -512,7 +512,11 @@ export class LeasePdfService implements OnModuleInit {
         `- Tổng tiền cọc bảo đảm tài sản & nội thất: ${data.terms.securityDepositAmount.toLocaleString('vi-VN')} VNĐ.`,
       );
       doc.text(
-        `- Khoản ${data.terms.convertedHoldingAmount.toLocaleString('vi-VN')} VNĐ Bên B đã chuyển khi chốt căn được chuyển đổi 100% thành Tiền cọc bảo đảm tài sản; số tiền cọc bảo đảm còn thiếu cần nộp bổ sung: ${data.terms.depositTopUp.toLocaleString('vi-VN')} VNĐ.`,
+        `- Khoản ${data.terms.convertedHoldingAmount.toLocaleString('vi-VN')} VNĐ Bên B đã chuyển khi chốt căn được chuyển đổi 100% thành Tiền cọc bảo đảm tài sản; ${
+          data.terms.depositTopUp > 0
+            ? `số tiền cọc bảo đảm còn thiếu cần nộp bổ sung: ${data.terms.depositTopUp.toLocaleString('vi-VN')} VNĐ.`
+            : 'Bên B không phải nộp bổ sung tiền cọc.'
+        }`,
       );
       doc.text(
         '- Tuyệt đối không khấu trừ Tiền cọc bảo đảm vào tiền thuê tháng đầu tiên.',

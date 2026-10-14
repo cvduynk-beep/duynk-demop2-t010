@@ -310,7 +310,8 @@ export class DepositService {
     const outcome = await this.markPaid({
       depositCode: deposit.depositCode,
       amount: Number(deposit.amount),
-      bankRefNumber: `DEMO-${deposit.depositCode}`,
+      // Mỗi lần báo giá có vietqrRef mới ⇒ mã giao dịch demo không trùng sau khi khoản cọc được dùng lại (hoàn vì quá hạn chốt nhanh).
+      bankRefNumber: `DEMO-${deposit.depositCode}-${deposit.vietqrRef}`,
       actor: 'bank',
       actorId: user.id,
     });

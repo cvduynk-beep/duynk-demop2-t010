@@ -634,4 +634,16 @@ describe('Deposit & VietQR Backend Tests (SPEC-P03 §8: Cases 1–11)', () => {
     expect(fixture.savedDeposits).toHaveLength(1);
     expect(dep).toMatchObject({ paymentStatus: DepositStatus.PENDING_PAYMENT, amount: 6_500_000, fastCloseCycle: null });
   });
+
+  it('21. demo-pay sau khi khoản cọc chốt nhanh bị hoàn vì quá hạn ⇒ báo giá lại có mã giao dịch demo mới (không bị "duplicate")', async () => {
+    process.env.DEMO_TOOLS = 'true';
+    fixture.allowFastClose(6_000_000);
+    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 1 });
+    const dep = fixture.savedDeposits[0];
+    dep.quoteExpiresAt = new Date(Date.now() - 60_000);
+    expect(await depositService.demoPay('VS-88888', { id: TENANT_ID })).toEqual({ outcome: 'refunded' });
+    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 1 });
+    expect(await depositService.demoPay('VS-88888', { id: TENANT_ID })).toEqual({ outcome: 'paid' });
+    expect(new Set(fixture.savedEscrow.map((e) => e.bankRefNumber)).size).toBe(fixture.savedEscrow.length);
+  });
 });

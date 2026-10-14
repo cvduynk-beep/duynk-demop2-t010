@@ -142,8 +142,9 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
   const holdHours = deposit?.holdHours ?? unit.holdHours;
   const outcome = deposit?.outcome;
   const fastClose = deposit?.fastClose;
-  // Chốt nhanh mà tiền về sau hạn báo giá ⇒ backend đã hoàn, căn không khoá; khách chọn lại được.
-  const quoteMissed = outcome === "refunded" && !!fastClose && !!deposit?.paidAt && Date.parse(deposit.paidAt) > Date.parse(fastClose.quoteExpiresAt);
+  // Chốt nhanh mà tiền về sau hạn báo giá ⇒ backend đã hoàn (không ghi paidAt vì căn chưa từng khoá), lịch vẫn closing;
+  // khách chọn lại được. Hoàn vì lý do khác (thua First-to-Pay, Admin huỷ) thì lịch không còn closing.
+  const quoteMissed = outcome === "refunded" && !!fastClose && booking.status === "closing";
   const awaitingHost = booking.status === "pending" && !host;
 
   return (
@@ -208,7 +209,7 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
             )}
 
             {/* 2. closing & đã đồng ý điều khoản: VietQR động do backend phát */}
-            {booking.status === "closing" && deposit && !deposit.paidAt && !changingDeposit && (
+            {booking.status === "closing" && deposit && outcome === "awaiting_payment" && !changingDeposit && (
               <div className={styles.qr} style={{ padding: "16px 0", borderTop: "1px solid var(--line)" }}>
                 <VietQR
                   amount={deposit.amount}
