@@ -35,6 +35,7 @@ describe('/me (Nest thật + Prisma giả)', () => {
   beforeEach(async () => {
     prisma = createFakePrisma();
     prisma.viewing = { findMany: jest.fn(async () => []) };
+    prisma.feeConfig = { findUnique: jest.fn(async () => null) }; // chưa cài mặc định ⇒ 48 giờ
     prisma.contract = { findMany: jest.fn(async () => []) };
     // Bảng `favorite_units` + `units` giả tối thiểu: đủ để kiểm tra việc lưu tách theo người dùng.
     const unitRow = {
@@ -92,7 +93,11 @@ describe('/me (Nest thật + Prisma giả)', () => {
     })
     class TestAppModule {}
 
-    const moduleRef = await Test.createTestingModule({ imports: [TestAppModule] }).compile();
+    // Một số module (deposit/tenant qua ContractModule) tự import PrismaModule thật ⇒ ép mọi nơi dùng Prisma giả.
+    const moduleRef = await Test.createTestingModule({ imports: [TestAppModule] })
+      .overrideProvider(PrismaService)
+      .useValue(prisma)
+      .compile();
     app = moduleRef.createNestApplication();
     app.useLogger(false);
     app.use(cookieParser());
@@ -155,14 +160,42 @@ describe('/me (Nest thật + Prisma giả)', () => {
     expect(contracts.body.data).toEqual([]);
   });
 
-  it('PATCH /me/profile chỉ đổi họ tên; email/SĐT trong body bị bỏ qua', async () => {
+  it('PATCH /me/profile: chỉ đổi họ tên của chính người gọi', async () => {
+    const agent = await agentOf('b@example.com', USER_B, 'tenant');
+    const res = await agent.patch('/api/v1/me/profile').send({ fullName: '  Tên   Mới  ' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.fullName).toBe('Tên Mới');
+    expect(prisma.profile.rows.find((r: any) => r.id === USER_B)).toMatchObject({ fullName: 'Tên Mới', email: 'b@example.com' });
+    expect(prisma.profile.rows.find((r: any) => r.id === USER_A).fullName).toBe('Người A');
+  });
+
+  it('PATCH /me/profile gửi email/SĐT ⇒ 400 field_not_editable theo từng field, KHÔNG đổi gì (kể cả họ tên đi kèm)', async () => {
     const agent = await agentOf('b@example.com', USER_B, 'tenant');
     const res = await agent.patch('/api/v1/me/profile').send({ fullName: 'Tên Mới', email: 'hacker@example.com', phone: '0900000000' });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ code: 'field_not_editable', errors: { email: expect.any(String), phone: expect.any(String) } });
+    expect(prisma.profile.rows.find((r: any) => r.id === USER_B)).toMatchObject({ fullName: 'Người B', email: 'b@example.com' });
+    expect((await agent.patch('/api/v1/me/profile').send({ phone: '0900000000' })).body.errors).toEqual({ phone: expect.any(String) });
+  });
+
+  it.each([[''], ['   '], ['A'], ['x'.repeat(101)]])('PATCH /me/profile họ tên %p ⇒ 400 profile_invalid kèm errors.fullName', async (fullName) => {
+    const agent = await agentOf('b@example.com', USER_B, 'tenant');
+    const res = await agent.patch('/api/v1/me/profile').send({ fullName });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ code: 'profile_invalid', errors: { fullName: expect.any(String) } });
+    expect(prisma.profile.rows.find((r: any) => r.id === USER_B).fullName).toBe('Người B');
+  });
+
+  it('PATCH /me/profile không thể đổi vai/cổng/trạng thái (trường lạ bị loại, không lọt vào DB)', async () => {
+    const agent = await agentOf('b@example.com', USER_B, 'tenant');
+    const before = { ...prisma.profile.rows.find((r: any) => r.id === USER_B) };
+    await agent.patch('/api/v1/me/profile').send({ fullName: 'Tên Mới', roleId: 'x', roleCode: 'ops_admin', portal: 'admin', isPhoneVerified: true, isActive: false }).expect(200);
     const row = prisma.profile.rows.find((r: any) => r.id === USER_B);
-    expect(row).toMatchObject({ fullName: 'Tên Mới', email: 'b@example.com' });
-    expect(prisma.profile.rows.find((r: any) => r.id === USER_A).fullName).toBe('Người A');
+    expect({ ...row, fullName: before.fullName, updatedAt: before.updatedAt }).toEqual(before); // chỉ fullName đổi
+    expect(row).not.toHaveProperty('roleCode');
+    expect(row).not.toHaveProperty('portal');
   });
 
   it('yêu thích lưu theo tài khoản, nhận mã căn, idempotent và tách riêng từng người', async () => {
@@ -186,5 +219,28 @@ describe('/me (Nest thật + Prisma giả)', () => {
     const res = await a.put('/api/v1/me/favorites/VHOP-KHONG-CO');
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('unit_not_found');
+  });
+
+  it('bỏ lưu là idempotent: mục chưa lưu / căn không còn tồn tại ⇒ 200 saved:false', async () => {
+    const a = await agentOf('a@example.com', USER_A, 'tenant');
+    expect((await a.delete('/api/v1/me/favorites/VHOP-S1.02-0803').expect(200)).body.data).toMatchObject({ saved: false });
+    expect((await a.delete('/api/v1/me/favorites/VHOP-KHONG-CO').expect(200)).body.data).toMatchObject({ saved: false });
+  });
+
+  it('A bỏ lưu không xoá được mục của B (chỉ xoá dòng của chính người gọi)', async () => {
+    const a = await agentOf('a@example.com', USER_A, 'tenant');
+    const b = await agentOf('b@example.com', USER_B, 'tenant');
+    await b.put('/api/v1/me/favorites/VHOP-S1.02-0803').expect(200);
+    await a.delete('/api/v1/me/favorites/VHOP-S1.02-0803').expect(200);
+    expect((await b.get('/api/v1/me/favorites')).body.data.map((u: any) => u.code)).toEqual(['VHOP-S1.02-0803']);
+  });
+
+  it('favorites chỉ dành cho cổng tenant: phiên landlord ⇒ 403', async () => {
+    const passwordHash = await hashPassword('Matkhau-123');
+    seedProfile(prisma as any, { id: '00000000-0000-4000-8000-0000000000c3', email: 'l@example.com', roleCode: 'landlord', fullName: 'Chủ nhà', passwordHash });
+    const l = await agentOf('l@example.com', '00000000-0000-4000-8000-0000000000c3', 'landlord');
+    expect((await l.get('/api/v1/me/favorites')).status).toBe(403);
+    expect((await l.put('/api/v1/me/favorites/VHOP-S1.02-0803')).status).toBe(403);
+    expect((await l.get('/api/v1/me/profile')).status).toBe(200); // hồ sơ vẫn dùng chung mọi cổng
   });
 });

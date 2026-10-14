@@ -45,6 +45,11 @@ export interface TenantUnit {
   marketAvg: number;
   managementFee: number;
   parkingFeeEstimate: number;
+  /** Biểu phí gửi xe thực tế tại tòa (Field Host xác minh); null ⇒ khách dùng đơn giá chung. */
+  motorbikeFee: number | null;
+  carFee: number | null;
+  /** Ghi chú phí khác / tiện ích nội khu. */
+  feeNote: string | null;
   utilityCostEstimate: number;
   status: 'available' | 'holding' | 'rented';
   lock: 'smart' | 'physical';
@@ -58,6 +63,7 @@ export interface TenantUnit {
   /** Cọc bảo đảm: `units.securityDeposit ?? baseRentPrice`. */
   securityDeposit: number;
   /** Cọc giữ chỗ backend đang thu (`holdingDepositAmount()`). */
+  /** Cọc v2: số tiền khách chuyển để chốt căn = Tiền cọc bảo đảm của căn (VNĐ). Tên giữ nguyên để không đổi API. */
   holdingDeposit: number;
   highlights: string[];
   /** Chỉ ở chi tiết căn; list = []. có conditionPct (độ mới %), KHÔNG có compensation/photoIds (B6). */
@@ -112,6 +118,8 @@ export interface TenantBooking {
     holdHours?: number;
     expiresAt?: string;
     outcome: 'awaiting_payment' | 'active' | 'expired' | 'converted' | 'refunded' | 'forfeited';
+    /** Chốt nhanh đã cam kết: chu kỳ, cọc trước giảm, giá thuê đã chốt, hạn chuyển cọc (24h). */
+    fastClose?: { cycle: number; baseAmount: number; monthlyRent: number; quoteExpiresAt: string | null };
     vietqr: {
       bankId: string;
       bankName?: string;
@@ -150,6 +158,8 @@ export interface EkycScanResult {
   confidence: Record<'fullName' | 'idNumber' | 'dob' | 'issuedDate' | 'address', number>;
   lowConfidenceKeys: string[];
   faceMatch: number;
+  /** true = kết quả OCR mô phỏng (chưa tích hợp nhà cung cấp eKYC thật). */
+  simulated?: boolean;
 }
 
 export interface SubmitEkycDto {

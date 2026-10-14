@@ -1,11 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { requestContext } from '../auth/auth.controller';
 import { AuthenticatedUser } from '../auth/session/authenticated-user';
-import { CreateFieldHostDto, ListFieldHostsQueryDto, UpdateFieldHostDto } from './dto/field-hosts.dto';
+import { CreateFieldHostDto, ListFieldHostsQueryDto, UpdateFieldHostDto, UpdateZoneScopeDto } from './dto/field-hosts.dto';
 import { FieldHostsService } from './field-hosts.service';
 
 /** Admin quản lý Field Host (Sale / Thẩm định). Khoá vai ở mức class: không route nào công khai. */
@@ -56,6 +56,22 @@ export class FieldHostsController {
     @Req() req: Request,
   ) {
     return this.hosts.update(id, dto, actor, requestContext(req));
+  }
+
+  @Put(':id/zone-scope')
+  @ApiOperation({
+    summary: 'Gán phạm vi phân khu cho Host: `all` (mọi phân khu, kể cả tạo sau) hoặc `selected` (phân khu chính + danh sách)',
+    description:
+      'Phạm vi = nơi Host thấy và nhận ca ở pool (xem phòng ZONE_POOL, thẩm định Open Pool) + Sổ tay phân khu. ' +
+      'Tự giao ca vẫn theo phân khu chính. Gửi `version` từ GET; lệch ⇒ 409 `zone_scope_conflict`. Audit `HOST_ZONE_SCOPE_UPDATE`.',
+  })
+  updateZoneScope(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateZoneScopeDto,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    return this.hosts.updateZoneScope(id, dto, actor, requestContext(req));
   }
 
   @Delete(':id')

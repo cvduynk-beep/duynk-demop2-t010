@@ -1,4 +1,6 @@
-import { holdingDepositAmount } from './deposit-amount';
+import { securityDepositAmount } from './deposit-amount';
+import { FAST_CLOSE_QUOTE_HOURS, fastCloseQuote, fastCloseQuotes, isFastCloseCycle, type FastCloseSource } from './fast-close';
+import { readConsignmentMeta } from '../landlord/landlord.mappers';
 import {
   Injectable,
   BadRequestException,
@@ -13,6 +15,7 @@ import { AuditService } from '../audit/audit.service';
 import { PhoneService } from '../auth/phone/phone.service';
 import { BookingAccessService } from '../tenant/booking-access.service';
 import { buildDepositTerms, DEPOSIT_TERMS_VERSION } from './deposit-terms';
+import { resolveHoldHours } from './hold-policy';
 import { getVietQrConfig, isDemoToolsEnabled, isVietQrWebhookConfigured } from './vietqr';
 import { CreateDepositDto, UploadHostReceiptDto } from './dto/deposit.dto';
 import { toTenantBooking, statusToWeb } from '../tenant/tenant.mappers';
@@ -49,31 +52,20 @@ export class DepositService {
     return admin.id;
   }
 
-  /**
-   * Giờ giữ chỗ theo luật B4: `unit.holdHoursOverride` → `FeeConfig.hold_hours_default` (Admin cài) → 48, kẹp [12, 72].
-   * Mọi nơi tính giờ giữ chỗ (biên bản, tạo cọc, báo có) PHẢI dùng hàm này để không lệch nhau và lệch catalog.
-   */
-  private async resolveHoldHours(override?: number | null, client: any = this.prisma): Promise<number> {
-    let hours: number | null = override ?? null;
-    if (hours == null) {
-      const cfg = await client.feeConfig?.findUnique({ where: { configKey: 'hold_hours_default' } });
-      hours = cfg ? Number(cfg.paramValue) : 48;
-    }
-    return Math.min(72, Math.max(12, Math.round(hours)));
-  }
-
   /** A14 (công khai): biên bản điều khoản cọc khách đọc trước khi tick. Có `unitCode` thì dùng giờ giữ chỗ của căn đó. */
   async getPublicDepositTerms(unitCode?: string): Promise<DepositTermsDoc> {
     let override: number | null = null;
+    let amount = 0;
     if (unitCode) {
       const unit = await this.prisma.unit.findFirst({
         where: { unitCode: { equals: unitCode.trim(), mode: 'insensitive' } },
-        select: { holdHoursOverride: true },
+        select: { holdHoursOverride: true, securityDeposit: true, baseRentPrice: true },
       });
       if (!unit) throw new NotFoundException({ message: 'Không tìm thấy căn hộ.', code: 'unit_not_found' });
       override = unit.holdHoursOverride;
+      amount = securityDepositAmount(unit);
     }
-    return buildDepositTerms(await this.resolveHoldHours(override));
+    return buildDepositTerms(await resolveHoldHours(this.prisma, { override }), amount);
   }
 
   async getDepositTerms(ref: string, user: { id: string }): Promise<DepositTermsDoc> {
@@ -82,7 +74,37 @@ export class DepositService {
       where: { id: viewing.unitId },
     });
 
-    return buildDepositTerms(await this.resolveHoldHours(unit?.holdHoursOverride));
+    return buildDepositTerms(await resolveHoldHours(this.prisma, { override: unit?.holdHoursOverride }), securityDepositAmount(unit));
+  }
+
+  /**
+   * Nguồn chốt nhanh của căn: giá chào, Tiền cọc bảo đảm, giá sàn (meta hồ sơ ký gửi mới nhất; chủ nhà không ủy quyền ⇒
+   * `floorRent` null). Giá sàn KHÔNG bao giờ trả ra API — chỉ dùng để kẹp giá đã giảm.
+   */
+  private async fastCloseSource(db: any, unit: { id: string; baseRentPrice: unknown; securityDeposit?: unknown }): Promise<FastCloseSource> {
+    const mandate = await db.exclusiveMandate.findFirst({ where: { unitId: unit.id }, orderBy: { createdAt: 'desc' }, select: { doorAccessConfig: true } });
+    const form = readConsignmentMeta(mandate?.doorAccessConfig)?.form;
+    const floor = form?.allowFastClose && form.floorRent ? Number(form.floorRent) : null;
+    return { rent: Math.round(Number(unit.baseRentPrice)), deposit: securityDepositAmount(unit), floorRent: floor };
+  }
+
+  /**
+   * Báo giá chốt nhanh cho CHÍNH chủ lịch hẹn ở bước chốt cọc (không công khai trên trang căn ⇒ không suy ngược được
+   * giá sàn từ catalog). Không đủ điều kiện ⇒ `eligible: false`, `quotes: []`.
+   */
+  async getFastCloseQuotes(ref: string, user: { id: string }) {
+    const viewing = await this.bookingAccess.loadOwned(ref, user);
+    const unit = await this.prisma.unit.findUnique({ where: { id: viewing.unitId } });
+    if (!unit) throw new NotFoundException({ message: 'Không tìm thấy căn hộ.', code: 'unit_not_found' });
+    const src = await this.fastCloseSource(this.prisma, unit);
+    const quotes = viewing.status === ViewingStatus.CLOSING ? fastCloseQuotes(src) : [];
+    return {
+      eligible: quotes.length > 0,
+      quoteHours: FAST_CLOSE_QUOTE_HOURS,
+      rent: src.rent,
+      deposit: src.deposit,
+      quotes: quotes.map(({ cycle, rent, rentDiscount, rentDiscountPct, deposit, depositDiscount }) => ({ cycle, rent, rentDiscount, rentDiscountPct, deposit, depositDiscount })),
+    };
   }
 
   async createDeposit(
@@ -111,7 +133,7 @@ export class DepositService {
 
     if (dto.acceptTerms !== true) {
       throw new BadRequestException({
-        message: 'Bạn phải đồng ý với điều khoản đặt cọc giữ chỗ.',
+        message: 'Bạn phải đồng ý với điều khoản đặt cọc.',
         code: 'invalid_request',
       });
     }
@@ -123,13 +145,35 @@ export class DepositService {
       });
     }
 
-    // Check existing deposit
+    const rawCycle = dto.fastCloseCycle;
+    if (rawCycle != null && !isFastCloseCycle(rawCycle)) {
+      throw new BadRequestException({
+        message: 'Chu kỳ chốt nhanh phải là 1, 3 hoặc 6 tháng.',
+        code: 'invalid_request',
+        errors: { fastCloseCycle: 'Chu kỳ chốt nhanh phải là 1, 3 hoặc 6 tháng.' },
+      });
+    }
+    const cycle: 1 | 3 | 6 | null = isFastCloseCycle(rawCycle) ? rawCycle : null;
+
+    // Check existing deposit (viewing_id UNIQUE ⇒ một khoản cọc / lịch; chưa có tiền về thì được báo giá lại trên chính dòng đó)
     const existingDeposit = await this.prisma.holdingDeposit.findUnique({
       where: { viewingId: viewing.id },
     });
+    const now0 = new Date();
+    const quoteAlive = (d: any) => !d.fastCloseCycle || !d.quoteExpiresAt || new Date(d.quoteExpiresAt) > now0;
+    const reusable = (d: any) =>
+      d.paymentStatus === DepositStatus.QR_EXPIRED ||
+      d.paymentStatus === DepositStatus.PENDING_PAYMENT ||
+      (d.paymentStatus === DepositStatus.REFUNDED && d.fastCloseCycle != null); // hoàn vì quá hạn chốt nhanh
+
+    // Chụp giá trị cũ TRƯỚC khi ghi (audit cũ/mới của lần báo giá lại).
+    const before = existingDeposit
+      ? { amount: Number(existingDeposit.amount), fastCloseCycle: existingDeposit.fastCloseCycle ?? null, paymentStatus: existingDeposit.paymentStatus }
+      : undefined;
 
     if (existingDeposit) {
-      if (existingDeposit.paymentStatus === DepositStatus.PENDING_PAYMENT) {
+      const sameChoice = (existingDeposit.fastCloseCycle ?? null) === cycle && existingDeposit.termsVersion === DEPOSIT_TERMS_VERSION;
+      if (existingDeposit.paymentStatus === DepositStatus.PENDING_PAYMENT && sameChoice && quoteAlive(existingDeposit)) {
         // Idempotent: return existing without changing termsAcceptedAt
         const reloaded = await this.bookingAccess.loadOwned(ref, user);
         let rawPhone: string | undefined;
@@ -138,12 +182,15 @@ export class DepositService {
             rawPhone = this.phones.decrypt(viewing.contactPhoneEnc);
           } catch {}
         }
-        return toTenantBooking(reloaded, { rawPhone, holdHours: existingDeposit.holdHours ?? 48 });
+        const holdHours = await resolveHoldHours(this.prisma, { snapshot: existingDeposit.holdHours, override: reloaded.unit?.holdHoursOverride });
+        return toTenantBooking(reloaded, { rawPhone, holdHours });
       }
-      throw new ConflictException({
-        message: 'Giao dịch cọc đã được xử lý hoặc không ở trạng thái chờ thanh toán.',
-        code: 'bad_status',
-      });
+      if (!reusable(existingDeposit)) {
+        throw new ConflictException({
+          message: 'Giao dịch cọc đã được xử lý hoặc không ở trạng thái chờ thanh toán.',
+          code: 'bad_status',
+        });
+      }
     }
 
     return await this.prisma.$transaction(async (tx) => {
@@ -173,40 +220,60 @@ export class DepositService {
       }
 
       const depositCode = `DEP-${ref}`;
-      const amount = holdingDepositAmount(); // Constant: CẤM accept from client!
+      // Số tiền do SERVER tính (CẤM nhận từ client): Tiền cọc bảo đảm của căn; chốt nhanh ⇒ đã giảm theo fast-close.ts.
+      const baseAmount = securityDepositAmount(unit);
+      if (baseAmount <= 0) {
+        throw new ConflictException({ message: 'Căn chưa có Tiền cọc bảo đảm hợp lệ, vui lòng liên hệ hỗ trợ.', code: 'deposit_unavailable' });
+      }
+      const quote = cycle ? fastCloseQuote(await this.fastCloseSource(tx, unit), cycle) : null;
+      if (cycle && !quote) {
+        throw new ConflictException({ message: 'Căn này chưa được chủ nhà ủy quyền chốt nhanh.', code: 'fast_close_unavailable' });
+      }
+      const amount = quote ? quote.deposit : baseAmount;
       const randNum = Math.floor(1000 + Math.random() * 9000);
       const randHex = Math.random().toString(16).substring(2, 6).toUpperCase();
       const vietqrRef = `VQ-${randNum}-${randHex}`;
       const transferContent = `COC ${unit.unitCode} ${ref}`;
       const now = new Date();
-      const holdHours = await this.resolveHoldHours(unit.holdHoursOverride, tx);
+      // Chốt số giờ vào cọc ngay lúc khách tick điều khoản: Admin đổi mặc định sau đó không làm đổi cọc này.
+      const holdHours = await resolveHoldHours(tx, { override: unit.holdHoursOverride });
 
-      const deposit = await tx.holdingDeposit.create({
-        data: {
-          depositCode,
-          viewingId: viewing.id,
-          unitId: unit.id,
-          attributedHostId,
-          amount,
-          vietqrRef,
-          transferContent,
-          paymentStatus: DepositStatus.PENDING_PAYMENT,
-          termsAcceptedAt: now,
-          termsVersion: DEPOSIT_TERMS_VERSION,
-          holdHours,
-        },
-      });
+      const terms = {
+        attributedHostId,
+        amount,
+        baseAmount: quote ? baseAmount : null,
+        fastCloseCycle: quote ? quote.cycle : null,
+        quotedMonthlyRent: quote ? quote.rent : null,
+        quoteExpiresAt: quote ? new Date(now.getTime() + FAST_CLOSE_QUOTE_HOURS * 3_600_000) : null,
+        vietqrRef,
+        transferContent,
+        paymentStatus: DepositStatus.PENDING_PAYMENT,
+        termsAcceptedAt: now,
+        termsVersion: DEPOSIT_TERMS_VERSION,
+        holdHours,
+      };
+      // Báo giá lại (chưa có tiền về): ghi đè đúng dòng cũ — chỉ khi trạng thái vẫn là trạng thái đã đọc (chống đua).
+      const deposit = existingDeposit
+        ? await (async () => {
+            const res = await tx.holdingDeposit.updateMany({ where: { id: existingDeposit.id, paymentStatus: existingDeposit.paymentStatus }, data: terms });
+            if (res.count !== 1) throw new ConflictException({ message: 'Giao dịch cọc vừa thay đổi, vui lòng tải lại.', code: 'bad_status' });
+            return { ...existingDeposit, ...terms };
+          })()
+        : await tx.holdingDeposit.create({ data: { depositCode, viewingId: viewing.id, unitId: unit.id, ...terms } });
 
       await tx.auditLog.create({
         data: {
           actorId: user.id,
           actorRole: 'tenant',
-          actionType: 'DEPOSIT_TERMS_ACCEPTED',
+          actionType: existingDeposit ? 'DEPOSIT_REQUOTED' : 'DEPOSIT_TERMS_ACCEPTED',
           entityName: 'HoldingDeposit',
           entityId: deposit.id,
+          oldValue: before,
           newValue: {
             termsVersion: DEPOSIT_TERMS_VERSION,
             holdHours,
+            amount,
+            ...(quote ? { fastClose: { cycle: quote.cycle, baseAmount, monthlyRent: quote.rent, quoteExpiresAt: terms.quoteExpiresAt?.toISOString() } } : {}),
           },
           ipAddress: reqContext?.ip || '127.0.0.1',
           userAgent: reqContext?.userAgent || 'VinStay PWA / Web Client',
@@ -242,8 +309,9 @@ export class DepositService {
     }
     const outcome = await this.markPaid({
       depositCode: deposit.depositCode,
-      amount: holdingDepositAmount(),
-      bankRefNumber: `DEMO-${deposit.depositCode}`,
+      amount: Number(deposit.amount),
+      // Mỗi lần báo giá có vietqrRef mới ⇒ mã giao dịch demo không trùng sau khi khoản cọc được dùng lại (hoàn vì quá hạn chốt nhanh).
+      bankRefNumber: `DEMO-${deposit.depositCode}-${deposit.vietqrRef}`,
       actor: 'bank',
       actorId: user.id,
     });
@@ -308,8 +376,9 @@ export class DepositService {
 
       const effectiveActorId = deposit.viewing?.tenantId || input.actorId || (await this.systemActorId(tx));
 
-      // 3. Amount check (must be exactly 2.000.000)
-      if (Number(input.amount) !== holdingDepositAmount()) {
+      // 3. Amount check: phải đúng số tiền đã chốt trên khoản cọc này (cọc v2 / chốt nhanh / cọc cũ 2tr)
+      const expected = Number(deposit.amount);
+      if (Number(input.amount) !== expected) {
         await tx.auditLog.create({
           data: {
             actorId: effectiveActorId,
@@ -318,13 +387,36 @@ export class DepositService {
             entityName: 'HoldingDeposit',
             entityId: deposit.id,
             newValue: {
-              expected: holdingDepositAmount(),
+              expected,
               received: input.amount,
               bankRefNumber: input.bankRefNumber,
             },
           },
         });
         return 'ignored';
+      }
+
+      // 3b. Chốt nhanh quá 24 giờ: ưu đãi đã hết ⇒ không giữ căn với giá đã giảm; hoàn đúng khoản vừa nhận.
+      const receivedAt = input.paidAt || new Date();
+      if (deposit.fastCloseCycle && deposit.quoteExpiresAt && receivedAt > new Date(deposit.quoteExpiresAt)) {
+        await tx.holdingDeposit.update({ where: { id: deposit.id }, data: { paymentStatus: DepositStatus.REFUNDED } });
+        await tx.escrowTransaction.create({
+          data: { depositId: deposit.id, transType: 'INBOUND_DEPOSIT', amount: expected, bankRefNumber: input.bankRefNumber, executedAt: receivedAt },
+        });
+        await tx.escrowTransaction.create({
+          data: { depositId: deposit.id, transType: 'REFUND', amount: expected, bankRefNumber: `${input.bankRefNumber}-R`, executedAt: receivedAt },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorId: effectiveActorId,
+            actorRole: input.actor,
+            actionType: 'DEPOSIT_QUOTE_EXPIRED_REFUND',
+            entityName: 'HoldingDeposit',
+            entityId: deposit.id,
+            newValue: { bankRefNumber: input.bankRefNumber, quoteExpiresAt: new Date(deposit.quoteExpiresAt).toISOString(), receivedAt: receivedAt.toISOString() },
+          },
+        });
+        return 'refunded';
       }
 
       // 4. Lazy expire
@@ -348,7 +440,7 @@ export class DepositService {
           data: {
             depositId: deposit.id,
             transType: 'INBOUND_DEPOSIT',
-            amount: holdingDepositAmount(),
+            amount: expected,
             bankRefNumber: input.bankRefNumber,
             executedAt: execTime,
           },
@@ -358,7 +450,7 @@ export class DepositService {
           data: {
             depositId: deposit.id,
             transType: 'REFUND',
-            amount: holdingDepositAmount(),
+            amount: expected,
             bankRefNumber: `${input.bankRefNumber}-R`,
             executedAt: execTime,
           },
@@ -383,7 +475,8 @@ export class DepositService {
 
       // 6. Won race (paid)
       const paidAt = input.paidAt || new Date();
-      const holdHours = await this.resolveHoldHours(deposit.unit?.holdHoursOverride ?? deposit.holdHours, tx);
+      // Giờ đã chốt trong cọc (điều khoản khách đã tick) trước, rồi mới tới giờ riêng của căn / mặc định — cùng thứ tự với duyệt UNC.
+      const holdHours = await resolveHoldHours(tx, { snapshot: deposit.holdHours, override: deposit.unit?.holdHoursOverride });
       const expiresAt = new Date(paidAt.getTime() + holdHours * 3600 * 1000);
 
       await tx.holdingDeposit.update({
@@ -405,7 +498,7 @@ export class DepositService {
         data: {
           depositId: deposit.id,
           transType: 'INBOUND_DEPOSIT',
-          amount: holdingDepositAmount(),
+          amount: expected,
           bankRefNumber: input.bankRefNumber,
           executedAt: paidAt,
         },

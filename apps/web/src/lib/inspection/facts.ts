@@ -20,8 +20,8 @@ import type {
 export const RENT_MIN = 3_000_000; // cùng ngưỡng chủ nhà khi ký gửi và validator backend
 export const RENT_MAX = 200_000_000;
 export const REASON_MAX = 300;
-/** Sàn cọc bảo đảm = cọc giữ chỗ backend đang thu (`holdingDepositAmount()`): cọc giữ chỗ chuyển 100% vào cọc bảo đảm. */
-export const DEPOSIT_MIN = 2_000_000;
+/** Cọc v2: khách chuyển thẳng Tiền cọc bảo đảm khi chốt căn ⇒ từ nửa tháng đến 3 tháng thuê (cùng validator backend). */
+export const DEPOSIT_MIN_RENTS = 0.5;
 export const DEPOSIT_MAX_RENTS = 3;
 
 type Source = Pick<InspectionDetail, "areaM2" | "layoutKind" | "floor" | "askRent" | "suggestedDeposit" | "declared">;
@@ -112,8 +112,8 @@ export function validateExtras(draft: InspectionDraft, detail: Pick<InspectionDe
     return err("pricing.rent", "Giá thuê phải là số nguyên từ 3.000.000đ đến 200.000.000đ.");
   }
   const dep = Number(p.securityDeposit);
-  if (p.securityDeposit.trim() === "" || !Number.isInteger(dep) || dep < DEPOSIT_MIN || dep > DEPOSIT_MAX_RENTS * rent) {
-    return err("pricing.securityDeposit", "Tiền cọc bảo đảm phải là số nguyên từ 2.000.000đ (cọc giữ chỗ) đến 3 lần giá thuê.");
+  if (p.securityDeposit.trim() === "" || !Number.isInteger(dep) || dep < Math.ceil(DEPOSIT_MIN_RENTS * rent) || dep > DEPOSIT_MAX_RENTS * rent) {
+    return err("pricing.securityDeposit", "Tiền cọc bảo đảm phải là số nguyên từ nửa tháng đến 3 tháng tiền thuê.");
   }
   const reason = p.reason.trim();
   if (pricingChanged(p, detail)) {

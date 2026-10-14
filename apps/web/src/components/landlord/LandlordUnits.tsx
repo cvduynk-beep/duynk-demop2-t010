@@ -135,16 +135,6 @@ export function LandlordUnits() {
                   header: "Trạng thái",
                   render: (c) => <StatusBadge tone={CONSIGN_STATUS_META[c.status].tone}>{CONSIGN_STATUS_META[c.status].label}</StatusBadge>,
                 },
-                {
-                  key: "action",
-                  header: "",
-                  render: (c) =>
-                    c.status === "draft" ? (
-                      <Link href={`/landlord/consign?draft=${c.id}`} className="btn btn-primary btn-sm" onClick={(e) => e.stopPropagation()}>
-                        Ký ủy quyền
-                      </Link>
-                    ) : null,
-                },
               ]}
               rows={[...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
               rowHref={(c) => `/landlord/consignments/${c.id}`}

@@ -15,6 +15,7 @@ import type {
 } from "./types";
 import { detectListingTextViolation, listingTextMessage } from "@/lib/units/listing-text";
 import { blankFacts, blankListing, blankPricing, toExtrasDto, validateExtras } from "./facts";
+import { blankLivingFees, toLivingFeesDto, validateLivingFees } from "./livingFees";
 
 /**
  * Hàm THUẦN của cổng thẩm định (hồ sơ 16, SPEC-P03 §1) — không import mock, không DOM, test được trong Node.
@@ -140,7 +141,7 @@ export function blankLine(item: { code: string; group: InventoryGroup; name: str
 }
 
 /** Quy tắc khởi tạo checklist theo loại hồ sơ và nội thất căn hộ. */
-export function blankDraft(detail: Pick<InspectionDetail, "catalog" | "areaM2" | "furnished" | "layoutKind" | "floor" | "askRent" | "suggestedDeposit" | "declared">): InspectionDraft {
+export function blankDraft(detail: Pick<InspectionDetail, "catalog" | "areaM2" | "furnished" | "layoutKind" | "floor" | "askRent" | "suggestedDeposit" | "declared" | "feeDefaults">): InspectionDraft {
   const inventory = detail.catalog.map((item) => {
     const n = Number(item.code);
     if (n >= 25 && n <= 29) return blankLine(item, true); // sàn, tường, điện, cửa, thẻ: căn nào cũng có
@@ -169,6 +170,7 @@ export function blankDraft(detail: Pick<InspectionDetail, "catalog" | "areaM2" |
     facts: blankFacts(detail),
     pricing: blankPricing(detail),
     listing: blankListing(detail),
+    livingFees: blankLivingFees(detail),
   };
 }
 
@@ -300,7 +302,7 @@ export function validateDraftFull(
   draft: InspectionDraft,
   detail: Pick<InspectionDetail, "areaM2" | "doorKind" | "doorCodeOnFile" | "limits" | "askRent" | "suggestedDeposit">,
 ): DraftError | null {
-  return validateDraft(draft, detail) ?? validateExtras(draft, detail);
+  return validateDraft(draft, detail) ?? validateLivingFees(draft) ?? validateExtras(draft, detail);
 }
 
 /** `field` của backend/validateDraft → id phần tử cần cuộn tới (hàng dòng thì bỏ phần thuộc tính). */
@@ -340,15 +342,16 @@ export function toSubmitDto(draft: InspectionDraft): SubmitInspectionDto {
     functions: { ...draft.functions },
     netAreaM2: Number(draft.netAreaM2),
     furnishing: draft.furnishing,
-    listingPhotoIds: draft.recommendation === "approve" ? [...draft.listingPhotoIds] : [],
+    // Không duyệt vẫn gửi đủ ảnh niêm yết + facts/pricing/listing: Admin duyệt niêm yết từ chính phiếu này.
+    listingPhotoIds: [...draft.listingPhotoIds],
     recommendation: draft.recommendation,
   };
   const note = draft.note.trim();
   if (note) dto.note = note;
   const pin = draft.doorPin.trim();
-  if (draft.recommendation === "approve" && pin) dto.doorPin = pin;
-  // Không đạt: không gửi facts/pricing/listing (backend bỏ qua pricing; phiếu chỉ cần lý do).
-  if (draft.recommendation === "approve") Object.assign(dto, toExtrasDto(draft));
+  if (pin) dto.doorPin = pin;
+  Object.assign(dto, toExtrasDto(draft));
+  dto.livingFees = toLivingFeesDto(draft);
   return dto;
 }
 

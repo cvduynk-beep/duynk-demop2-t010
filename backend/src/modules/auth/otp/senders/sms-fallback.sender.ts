@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { OtpChannelSender } from './otp-channel';
+import { OtpMessage } from './otp-sender';
 
-/** SMS dự phòng khi Zalo lỗi. Chưa chọn nhà cung cấp (vd. eSMS.vn) nên luôn throw. */
+/** SMS dự phòng khi Zalo lỗi (dùng bên trong `ZaloOtpSender`). Chưa chọn nhà cung cấp (vd. eSMS.vn) nên luôn throw. */
 @Injectable()
-export class SmsFallbackSender implements OtpChannelSender {
-  async send(_phone: string, _code: string): Promise<void> {
+export class SmsFallbackSender {
+  async send(_message: OtpMessage): Promise<void> {
     throw new Error('SmsFallbackSender not implemented: no SMS provider configured yet.');
   }
 }

@@ -2,368 +2,374 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Building2, CalendarPlus, Check, LockKeyhole, MessageCircle, Minus, Plus, Share2, ShieldCheck, Users } from "lucide-react";
+import { Bath, BedDouble, Bot, Building2, CalendarPlus, Check, Compass, Layers, LockKeyhole, Minus, Plus, Ruler, Share2, ShieldCheck, Sofa, Star } from "lucide-react";
 import { BookingSheet } from "@/components/booking/BookingSheet";
 import { toast } from "@/components/ui/Toast";
-import { allInCost, DEFAULT_HOUSEHOLD, isBargain, RATES, savingsPct, type Household } from "@/lib/pricing/cost";
+import { allInCost, DEFAULT_HOUSEHOLD, isBargain, RATES, savingsPct, type Household, unitRates } from "@/lib/pricing/cost";
 import { vnd, vndShort } from "@/lib/format";
 import { HOUSE_RULES } from "@/lib/legal/house-rules";
-import { ITEM_LABEL, unitAddress, zoneById } from "@/lib/units";
+import { useChat } from "@/lib/chat/store";
 import type { UnitWithExtras } from "@/lib/tenant/adapters";
+import { similarUnits, useCatalog } from "@/lib/tenant/catalog";
+import { FURNISHING_LABEL, ITEM_LABEL, PASSPORT_ITEMS, unitAddress, zoneById } from "@/lib/units";
+import { getBuildingPerks } from "@/lib/property/livingIntelligence";
 import { AllInBar } from "./AllInBar";
 import { FavoriteButton } from "./FavoriteButton";
 import { Gallery } from "./Gallery";
+import { LivingExperience } from "./LivingExperience";
 import { LocationMap } from "./LocationMap";
 import { UnitBadges } from "./UnitBadges";
-import { similarUnits, useCatalog } from "@/lib/tenant/catalog";
 import { UnitCard } from "./UnitCard";
-import { DepositTerms, UnitHighlights, UnitInventorySection, UnitStatsGrid } from "./UnitSections";
-import { useRouter } from "next/navigation";
-import { refreshSession, useSession } from "@/lib/auth/client";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-
-const BUILDING_PERKS = ["Bảo vệ 24/7", "Thang máy quẹt thẻ cư dân", "Hầm gửi xe máy và ô tô", "Công viên và biển hồ nội khu", "Hồ bơi, phòng gym (tuỳ toà)", "Vinmart và phố đi bộ dưới chân toà"];
+import { UnitConciergeDrawer } from "./UnitConciergeDrawer";
+import styles from "./UnitDetail.module.css";
 
 function Stepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-      <span className="text-sm font-medium text-foreground">{label}</span>
-      <div className="flex items-center gap-3">
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 rounded-full shadow-sm"
-          disabled={value <= min}
-          onClick={() => onChange(value - 1)}
-          aria-label={`Giảm ${label.toLowerCase()}`}
-        >
-          <Minus size={14} />
-        </Button>
-        <span className="w-4 text-center font-medium font-mono text-sm">{value}</span>
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 rounded-full shadow-sm"
-          disabled={value >= max}
-          onClick={() => onChange(value + 1)}
-          aria-label={`Tăng ${label.toLowerCase()}`}
-        >
-          <Plus size={14} />
-        </Button>
+    <div className={styles.step}>
+      <span>{label}</span>
+      <div>
+        <button type="button" className="icon-btn" aria-label={`Giảm ${label.toLowerCase()}`} disabled={value <= min} onClick={() => onChange(value - 1)}>
+          <Minus size={15} />
+        </button>
+        <b className="num">{value}</b>
+        <button type="button" className="icon-btn" aria-label={`Tăng ${label.toLowerCase()}`} disabled={value >= max} onClick={() => onChange(value + 1)}>
+          <Plus size={15} />
+        </button>
       </div>
     </div>
   );
 }
 
-/** `embedded` = nhúng trong màn Preview của chat: bỏ breadcrumb, "Hỏi AI", căn tương tự, một cột; đặt lịch giữ nguyên modal tại chỗ. */
-export function UnitDetail({ unit, autoOpenBooking, embedded = false }: { unit: UnitWithExtras; autoOpenBooking: boolean; embedded?: boolean }) {
-  const { user, ready } = useSession();
-  const router = useRouter();
-  const zone = zoneById(unit.zoneId);
-  const zoneName = unit.zoneName || zone?.name || "Phân khu chưa cập nhật";
+export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; autoOpenBooking: boolean }) {
+  const chat = useChat();
+  const catalog = useCatalog();
+  const zoneName = unit.zoneName || zoneById(unit.zoneId)?.name || "Ocean Park 1";
+  // Trạng thái căn đến thẳng từ backend (DB): available / holding / rented.
   const status = unit.baseStatus;
-  const [hh, setHh] = useState<Household>(DEFAULT_HOUSEHOLD);
-  const isTenant = user?.portal === "tenant";
-  const [manualBooking, setManualBooking] = useState(false);
-  const [dismissAutoBooking, setDismissAutoBooking] = useState(false);
-  const booking = manualBooking || (autoOpenBooking && ready && isTenant && !dismissAutoBooking);
-  const loginHref = `/login?next=${encodeURIComponent(`/units/${unit.code || unit.id}?book=1`)}`;
-
+  const [hh, setHh] = useState<Household>(chat.criteria.household ?? DEFAULT_HOUSEHOLD);
+  const [booking, setBooking] = useState(autoOpenBooking);
+  const [conciergeOpen, setConciergeOpen] = useState(false);
+  const buildingPerks = getBuildingPerks(unit.building, unit.zoneId);
   const cost = allInCost(unit, hh);
   const sv = savingsPct(unit);
   const bookable = status === "available";
-  const holdHours = unit.holdHours ?? 48;
-  const catalog = useCatalog(!embedded && status !== "available");
+  const holdHours = unit.holdHours;
+  const mgmtPerM2 = unit.managementFee && unit.areaM2 > 0 ? Math.round(unit.managementFee / unit.areaM2) : RATES.mgmtPerM2;
+  const rates = unitRates(unit);
   const similar = similarUnits(catalog.units, unit, 3);
 
-  const handleOpenBooking = async () => {
-    const session = ready ? { user } : await refreshSession();
-    if (session.user?.portal !== "tenant") {
-      // Nhúng trong chat: đăng nhập ở tab mới để không mất hội thoại.
-      if (embedded) window.open(loginHref, "_blank", "noopener");
-      else router.push(loginHref);
-      return;
-    }
-    setManualBooking(true);
-  };
-
   const share = async () => {
-    const url = embedded ? `${window.location.origin}/units/${unit.code || unit.id}` : window.location.href;
+    const url = window.location.href;
     try {
       if (navigator.share) await navigator.share({ title: unitAddress(unit), url });
       else {
         await navigator.clipboard.writeText(url);
         toast("Đã sao chép liên kết căn hộ", "success");
       }
-    } catch {}
+    } catch {
+      /* người dùng đóng hộp thoại chia sẻ */
+    }
   };
 
+  const stats = [
+    { icon: Ruler, label: "Diện tích", value: `${unit.areaM2} m²` },
+    { icon: BedDouble, label: "Phòng ngủ", value: unit.layoutLabel },
+    { icon: Bath, label: "Vệ sinh", value: `${unit.bathrooms} WC` },
+    ...(unit.directionRaw ? [{ icon: Compass, label: "Hướng", value: unit.directionRaw }] : []),
+    { icon: Layers, label: "Tầng", value: `Tầng ${unit.floor}` },
+    { icon: Sofa, label: "Nội thất", value: FURNISHING_LABEL[unit.furnishing] },
+  ];
+
   return (
-    <div className={embedded ? "w-full px-4 md:px-6 py-4 flex flex-col gap-8 pb-28" : "max-w-7xl mx-auto w-full px-4 md:px-8 py-6 md:py-10 flex flex-col gap-8 pb-32 md:pb-12"}>
-      {!embedded && <nav className="text-sm font-medium text-muted-foreground flex items-center flex-wrap gap-2" aria-label="Đường dẫn">
-        <Link href="/" className="hover:text-foreground transition-colors">Trang chủ</Link>
-        <span>/</span>
-        <Link href="/units" className="hover:text-foreground transition-colors">Tìm căn</Link>
-        <span>/</span>
-        <span className="text-foreground">{zoneName}</span>
-      </nav>}
+    <div className={`wrap ${styles.page}`}>
+      <nav className={`small muted ${styles.crumbs}`} aria-label="Đường dẫn">
+        <Link href="/">Trang chủ</Link> / <span>{zoneName}</span>
+      </nav>
 
       <Gallery unit={unit} />
 
-      <div className={embedded ? "flex flex-col gap-10 relative items-start" : "flex flex-col lg:flex-row gap-12 relative items-start"}>
-        <div className="flex-1 flex flex-col gap-12 min-w-0 w-full">
-          {/* Header */}
-          <header className="flex flex-col gap-4 border-b border-border pb-8">
-            <div className="flex flex-wrap items-center gap-2">
+      <div className={styles.grid}>
+        <div className={styles.main}>
+          <header className={styles.head}>
+            <div className={styles.badges}>
               <UnitBadges unit={unit} />
-              <Badge variant="default" className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20 shadow-none font-medium gap-1">
-                <ShieldCheck size={14} /> Đã xác minh
-              </Badge>
+              <span className="badge badge-kelp">
+                <ShieldCheck size={12} /> Đã xác minh
+              </span>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
-              <div className="space-y-2">
-                <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground leading-tight">
-                  {unitAddress(unit)}
-                </h1>
-                <p className="text-base text-muted-foreground font-medium">
-                  {zoneName} · {unit.view} · mã {unit.code}
+            <div className={styles.titleRow}>
+              <div>
+                <h1 className={styles.h1}>{unitAddress(unit)}</h1>
+                <p className="muted">
+                  {zoneName}
+                  {unit.view && unit.view !== "Chưa cập nhật" ? ` · ${unit.view}` : ""} · mã {unit.code}
                 </p>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <FavoriteButton unitId={unit.id} variant="plain" className="h-10 w-10 rounded-full bg-muted/50 hover:bg-muted" />
-                <Button variant="outline" size="icon" className="h-10 w-10 rounded-full shadow-sm" aria-label="Chia sẻ căn hộ" onClick={share}>
-                  <Share2 size={18} />
-                </Button>
+              <div className={styles.headActions}>
+                <FavoriteButton unitCode={unit.code} variant="plain" />
+                <button type="button" className="icon-btn" aria-label="Chia sẻ căn hộ" onClick={share}>
+                  <Share2 size={20} />
+                </button>
               </div>
             </div>
-            <UnitHighlights highlights={unit.highlights} />
           </header>
 
-          {/* Stats Grid */}
-          <UnitStatsGrid unit={unit} />
+          <ul className={styles.stats}>
+            {stats.map(({ icon: Icon, label, value }) => (
+              <li key={label}>
+                <Icon size={18} />
+                <span className="muted xs">{label}</span>
+                <b>{value}</b>
+              </li>
+            ))}
+          </ul>
 
-          {/* All-in Cost Configurator */}
-          <section className="space-y-6" aria-labelledby="allin">
-            <h2 id="allin" className="text-2xl font-bold tracking-tight text-foreground">Chi phí mỗi tháng (All-in Cost)</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-card border border-border p-6 rounded-3xl shadow-sm">
-              <div className="flex flex-col gap-6">
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-4xl font-black font-mono tracking-tight text-foreground">{vnd(cost.total)}</span>
-                  <span className="text-base font-medium text-muted-foreground">đ/tháng</span>
+          <section className={styles.block}>
+            <h2>Trải nghiệm sống &amp; Kết nối thực tế</h2>
+            <LivingExperience unit={unit} criteria={chat.criteria} />
+          </section>
+
+          <section className={styles.block} aria-labelledby="allin">
+            <h2 id="allin">Minh bạch chi phí sinh hoạt (Xác thực thực địa)</h2>
+            <div className={styles.cost}>
+              <div>
+                <div className={styles.costTotal}>
+                  <span className={`num ${styles.costNum}`}>{vnd(unit.rent)}</span>
+                  <span className="muted">đ/tháng (tiền thuê)</span>
                 </div>
-                <div className="bg-muted/30 p-4 rounded-xl">
-                  <AllInBar cost={cost} variant="table" />
-                </div>
+                <p className="muted small" style={{ marginBottom: 12 }}>
+                  Tiền thuê cố định thanh toán cho Chủ nhà. Các khoản phí quản lý, xe, điện nước khách nộp trực tiếp cho BQL và EVN (Sale/Host hỗ trợ hướng dẫn đăng ký tại Lễ tân sảnh tầng 1 lúc nhận nhà).
+                </p>
+                <AllInBar cost={cost} variant="table" />
                 {isBargain(unit) && (
-                  <div className="bg-amber-500/10 text-amber-700 dark:text-amber-400 p-4 rounded-xl border border-amber-500/20 text-sm font-medium">
+                  <p className={`small ${styles.deal}`}>
                     Giá thuê {vndShort(unit.rent)} thấp hơn giá trung bình toà {vndShort(unit.marketAvg)} cùng layout: rẻ hơn {sv}%.
-                  </div>
+                  </p>
                 )}
               </div>
-
-              <div className="flex flex-col">
-                <div className="bg-muted/20 p-5 rounded-2xl border border-border/50 h-full flex flex-col">
-                  <h3 className="text-base font-semibold mb-4 text-foreground">Tính theo hộ của bạn</h3>
-                  <div className="flex flex-col gap-1 mb-6 flex-1">
-                    <Stepper label="Số người ở" value={hh.persons} min={1} max={6} onChange={(n) => setHh({ ...hh, persons: n })} />
-                    <Stepper label="Xe máy" value={hh.motorbikes} min={0} max={4} onChange={(n) => setHh({ ...hh, motorbikes: n })} />
-                    <Stepper label="Ô tô" value={hh.cars} min={0} max={2} onChange={(n) => setHh({ ...hh, cars: n })} />
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed mt-auto pt-4 border-t border-border/50">
-                    Phí quản lý theo hồ sơ căn: {vnd(cost.mgmt)}đ/tháng · xe máy {vndShort(RATES.motorbike)} · ô tô {vndShort(RATES.car)} · điện nước {vndShort(RATES.utilityPerPerson)}/người.
-                  </p>
-                </div>
+              <div className={styles.steppers}>
+                <p className="label">Dự toán theo nhu cầu sinh hoạt của bạn</p>
+                <Stepper label="Số người ở" value={hh.persons} min={1} max={6} onChange={(n) => setHh({ ...hh, persons: n })} />
+                <Stepper label="Xe máy" value={hh.motorbikes} min={0} max={4} onChange={(n) => setHh({ ...hh, motorbikes: n })} />
+                <Stepper label="Ô tô" value={hh.cars} min={0} max={2} onChange={(n) => setHh({ ...hh, cars: n })} />
+                <p className="muted xs">
+                  Biểu phí căn {unit.code}: Phí quản lý {vnd(mgmtPerM2)}đ/m² · xe máy {vndShort(rates.motorbike)}/xe · ô tô {vndShort(rates.car)}/xe · điện nước EVN tính theo công tơ thực tế.
+                  {unit.motorbikeFee != null && " Biểu phí đã được Field Host xác minh tại tòa."}
+                </p>
+                {unit.feeNote && <p className="muted xs">Phí khác / tiện ích: {unit.feeNote}</p>}
               </div>
             </div>
           </section>
 
-          {/* Amenities & Perks */}
-          <section className="space-y-6">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">Nội thất và tiện nghi</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
-              {unit.items.map((i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="bg-emerald-500/10 rounded-full p-1 text-emerald-600">
-                    <Check size={14} strokeWidth={2.5} />
-                  </div>
-                  <span className="text-foreground font-medium">{ITEM_LABEL[i]}</span>
-                </div>
+          <section className={styles.block}>
+            <div>
+              <h2>Nội thất và trang thiết bị thực tế</h2>
+              <p className="muted xs">
+                Dữ liệu đối chiếu từ Biên bản thẩm định của Field Host nội khu · Hiện trạng {FURNISHING_LABEL[unit.furnishing]}
+              </p>
+            </div>
+
+            {unit.inventory.length > 0 ? (
+              <ul className={styles.items}>
+                {unit.inventory.map((item) => (
+                  <li key={item.code}>
+                    <Check size={16} />
+                    <span>
+                      {item.name}
+                      {item.qty > 1 ? ` ×${item.qty}` : ""}
+                    </span>
+                    {typeof item.conditionPct === "number" && (
+                      <b className="muted xs" style={{ marginLeft: 4 }}>({item.conditionPct}% mới)</b>
+                    )}
+                  </li>
+                ))}
+                {unit.petFriendly && (
+                  <li>
+                    <Check size={16} /> Cho nuôi thú cưng nhỏ
+                  </li>
+                )}
+              </ul>
+            ) : (
+              <ul className={styles.items}>
+                {unit.items.map((i) => (
+                  <li key={i}>
+                    <Check size={16} /> {ITEM_LABEL[i]}
+                  </li>
+                ))}
+                {unit.petFriendly && (
+                  <li>
+                    <Check size={16} /> Cho nuôi thú cưng nhỏ
+                  </li>
+                )}
+              </ul>
+            )}
+
+            <h3>Tiện ích toà nhà {unit.building}</h3>
+            <ul className={`${styles.items} ${styles.perks}`}>
+              {buildingPerks.map((p) => (
+                <li key={p}>
+                  <Building2 size={15} /> {p}
+                </li>
               ))}
-              {unit.petFriendly && (
-                <div className="flex items-center gap-3">
-                  <div className="bg-emerald-500/10 rounded-full p-1 text-emerald-600">
-                    <Check size={14} strokeWidth={2.5} />
-                  </div>
-                  <span className="text-foreground font-medium">Cho nuôi thú cưng nhỏ</span>
-                </div>
-              )}
-            </div>
+            </ul>
+          </section>
 
-            <Separator className="my-8" />
-
-            <h3 className="text-xl font-bold tracking-tight text-foreground">Tiện ích toà nhà</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 mt-4">
-              {BUILDING_PERKS.map((p) => (
-                <div key={p} className="flex items-center gap-3">
-                  <div className="bg-muted rounded-full p-1.5 text-foreground/70">
-                    <Building2 size={14} />
-                  </div>
-                  <span className="text-foreground font-medium">{p}</span>
-                </div>
+          <section className={styles.block}>
+            <h2>Hộ chiếu bàn giao số</h2>
+            <p className="muted">
+              Lúc nhận nhà, Field Host và bạn cùng chụp ảnh có dấu thời gian cho 10 hạng mục dưới đây. Đây là căn cứ đối soát khi trả phòng: hao mòn tự nhiên không bị trừ cọc.
+            </p>
+            <ul className={styles.passport}>
+              {PASSPORT_ITEMS.map((p, i) => (
+                <li key={p}>
+                  <span className="num">{i + 1}</span> {p}
+                </li>
               ))}
-            </div>
+            </ul>
           </section>
 
-          {/* Nội thất chi tiết (đọc từ units + unit_inventory_items) */}
-          <UnitInventorySection inventory={unit.inventory} />
-
-          {/* Map Location */}
-          <section className="space-y-6">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">Vị trí trong Ocean Park 1</h2>
-            <div className="rounded-3xl overflow-hidden border border-border bg-card">
-              <LocationMap zoneId={unit.zoneId} building={unit.building} />
-            </div>
+          <section className={styles.block}>
+            <h2>Vị trí trong Ocean Park 1</h2>
+            <LocationMap zoneId={unit.zoneId} building={unit.building} />
+            <a className="link small" href="https://www.google.com/maps/search/?api=1&query=Vinhomes+Ocean+Park+Gia+Lam" target="_blank" rel="noreferrer">
+              Mở Google Maps
+            </a>
           </section>
 
-          {/* Rental Terms */}
-          <section className="space-y-6">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">Điều khoản thuê</h2>
-            <dl className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-muted/20 p-6 rounded-3xl border border-border/50">
-              <div className="flex flex-col gap-1.5">
-                <dt className="font-semibold text-foreground">Kỳ hạn tối thiểu</dt>
-                <dd className="text-muted-foreground text-sm leading-relaxed">{unit.minMonths} tháng</dd>
+          <section className={styles.block}>
+            <h2>Điều khoản thuê</h2>
+            <dl className={styles.terms}>
+              <div>
+                <dt>Kỳ hạn tối thiểu</dt>
+                <dd>{unit.minMonths} tháng</dd>
               </div>
-              <DepositTerms unit={unit} holdHours={holdHours} />
-              <div className="flex flex-col gap-1.5">
-                <dt className="font-semibold text-foreground">Nếu không ký hợp đồng</dt>
-                <dd className="text-muted-foreground text-sm leading-relaxed">Không ký trong {holdHours} giờ vì lý do cá nhân thì xử lý cọc theo Điều 328 BLDS (50% bù chủ nhà, 50% phí vận hành). Nếu chủ nhà bẻ cọc đền gấp đôi, bất khả kháng hoàn 100% trong 24 giờ làm việc</dd>
+              <div>
+                <dt>Tiền cọc bảo đảm</dt>
+                <dd>{vnd(unit.securityDeposit)}đ, giữ nguyên suốt kỳ thuê và hoàn lại khi trả nhà</dd>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <dt className="font-semibold text-foreground">Nội quy BQL</dt>
-                <dd className="text-muted-foreground text-sm leading-relaxed">Yên tĩnh sau 22:00 · vi phạm bị BQL phạt sẽ trừ vào cọc bảo đảm · đăng ký tạm trú khi vào ở</dd>
+              <div>
+                <dt>Cọc khi chốt căn</dt>
+                <dd>Chuyển ngay {vnd(unit.holdingDeposit)}đ (chính là tiền cọc bảo đảm) qua VietQR. Căn được giữ riêng cho bạn {holdHours} giờ kể từ khi ngân hàng báo có; khi ký hợp đồng, khoản này chuyển 100% vào tiền cọc bảo đảm, không nộp bù, không trừ vào tiền thuê tháng đầu</dd>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <dt className="font-semibold text-foreground">Sửa chữa</dt>
-                <dd className="text-muted-foreground text-sm leading-relaxed">VinStay chỉ giới thiệu danh bạ thợ ngoài uy tín, bạn và thợ tự thoả thuận giá</dd>
+              <div>
+                <dt>Nếu không ký hợp đồng</dt>
+                <dd>Không ký trong {holdHours} giờ vì lý do cá nhân thì xử lý cọc theo Điều 328 BLDS (50% bù chủ nhà, 50% phí vận hành). Nếu chủ nhà bẻ cọc đền gấp đôi, bất khả kháng hoàn 100% trong 24 giờ làm việc</dd>
+              </div>
+              <div>
+                <dt>Nội quy BQL</dt>
+                <dd>Yên tĩnh sau 22:00 · vi phạm bị BQL phạt sẽ trừ vào cọc bảo đảm · đăng ký tạm trú khi vào ở</dd>
+              </div>
+              <div>
+                <dt>Sửa chữa</dt>
+                <dd>VinStay chỉ giới thiệu danh bạ thợ ngoài uy tín, bạn và thợ tự thoả thuận giá</dd>
               </div>
             </dl>
           </section>
 
-          {/* House Rules */}
-          <section className="space-y-6">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">Nội quy căn hộ</h2>
-            <dl className="flex flex-col gap-6">
+          <section className={styles.block}>
+            <h2>Nội quy căn hộ</h2>
+            <dl className={styles.terms}>
               {HOUSE_RULES.map((rule) => (
-                <div key={rule.id} className="flex flex-col gap-1.5 pb-6 border-b border-border/50 last:border-0">
-                  <dt className="font-semibold text-foreground text-lg">{rule.title}</dt>
-                  <dd className="text-muted-foreground text-base leading-relaxed">{rule.body}</dd>
+                <div key={rule.id}>
+                  <dt>{rule.title}</dt>
+                  <dd>{rule.body}</dd>
                 </div>
               ))}
             </dl>
           </section>
 
-          {/* Field Host Info */}
-          <section className="flex flex-col sm:flex-row items-start gap-6 bg-emerald-500/5 border border-emerald-500/20 p-8 rounded-3xl mt-4">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
-              <Users size={24} />
-            </div>
-            <div className="flex flex-col gap-2">
-              <h2 className="text-xl font-bold text-foreground">Field Host nội khu {zone?.short || zoneName} đón bạn tại sảnh</h2>
-              <p className="text-muted-foreground leading-relaxed max-w-2xl">
-                Host có thẻ cư dân thang máy, được điều phối tự động và nhận lịch trong ≤ 3 phút; sau khi đặt lịch bạn sẽ thấy tên Host phụ trách. Số điện thoại chủ nhà được ẩn; mọi liên lạc đi qua Zalo VinStay.
+          <section className={`${styles.block} ${styles.hostCard}`}>
+            <span className={styles.hostAvatar}>
+              <Star size={18} />
+            </span>
+            <div>
+              <h2>Field Host nội khu {zoneName} dẫn xem</h2>
+              <p className="muted">
+                Có thẻ cư dân thang máy · nhận lịch trong ≤ 3 phút. Tên và đánh giá của Host phụ trách hiện trong lịch hẹn ngay khi
+                Host xác nhận. Số điện thoại chủ nhà được ẩn; mọi liên lạc đi qua Zalo VinStay.
               </p>
             </div>
           </section>
         </div>
 
-        {/* Sidebar Sticky Booking Card */}
-        <aside className={embedded ? "w-full shrink-0" : "w-full lg:w-[380px] shrink-0 sticky top-24"} aria-label="Đặt lịch xem phòng">
-          <Card className="flex flex-col p-6 gap-6 bg-card border-border shadow-xl rounded-3xl">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-baseline gap-2 flex-wrap pb-4 border-b border-border/50">
-                <span className="text-3xl font-black font-mono tracking-tight text-foreground">{vnd(cost.total)}</span>
-                <span className="text-sm font-medium text-muted-foreground">đ/tháng · All-in</span>
-              </div>
-              <p className="text-sm font-medium text-muted-foreground leading-relaxed pt-2">
-                Thuê {vndShort(unit.rent)} + phí {vndShort(cost.total - unit.rent)} cho {hh.persons} người, {hh.motorbikes} xe máy
-                {hh.cars ? `, ${hh.cars} ô tô` : ""}.
-              </p>
+        <aside className={styles.side} aria-label="Đặt lịch xem phòng">
+          <div className={`card ${styles.book}`}>
+            <div className={styles.bookPrice}>
+              <span className={`num ${styles.bookNum}`}>{vnd(unit.rent)}</span>
+              <span className="muted small">đ/tháng (thuê)</span>
             </div>
+            <p className="muted small">
+              Thanh toán cho Chủ nhà theo hợp đồng (chưa bao gồm phí quản lý &amp; dịch vụ).
+            </p>
 
             {bookable ? (
-              <div className="flex flex-col gap-4">
-                <Button size="lg" className="w-full h-14 rounded-xl text-base shadow-md font-semibold" onClick={handleOpenBooking}>
-                  <CalendarPlus size={20} className="mr-2" /> Đặt lịch xem phòng
-                </Button>
-                {!embedded && (
-                  <Button variant="outline" size="lg" className="w-full h-12 rounded-xl text-sm font-medium" render={<Link href="/" />}>
-                    <MessageCircle size={18} className="mr-2" /> Hỏi AI thêm về căn này
-                  </Button>
-                )}
-
-                <Separator className="my-2" />
-
-                <ul className="flex flex-col gap-3">
-                  <li className="flex items-start gap-3">
-                    <Check size={16} className="text-emerald-500 mt-0.5 shrink-0" strokeWidth={3} />
-                    <span className="text-sm text-muted-foreground font-medium">Xem phòng miễn phí, Host đón tại sảnh</span>
+              <>
+                <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => setBooking(true)}>
+                  <CalendarPlus size={19} /> Đặt lịch xem phòng
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-quiet btn-block"
+                  onClick={() => setConciergeOpen(true)}
+                >
+                  <Bot size={17} /> Hỏi Quản gia Vinny về căn này
+                </button>
+                <ul className={styles.promises}>
+                  <li>
+                    <Check size={15} /> Xem phòng miễn phí, Host đón tại sảnh
                   </li>
-                  <li className="flex items-start gap-3">
-                    <Check size={16} className="text-emerald-500 mt-0.5 shrink-0" strokeWidth={3} />
-                    <span className="text-sm text-muted-foreground font-medium">Chỉ cọc {vnd(unit.holdingDeposit)}đ khi bạn ưng ý</span>
+                  <li>
+                    <Check size={15} /> Chỉ đặt cọc khi bạn đã xem và ưng ý
                   </li>
-                  <li className="flex items-start gap-3">
-                    <Check size={16} className="text-emerald-500 mt-0.5 shrink-0" strokeWidth={3} />
-                    <span className="text-sm text-muted-foreground font-medium">Mã cửa chỉ hiện đúng lúc đứng trước phòng</span>
+                  <li>
+                    <Check size={15} /> Mã cửa chỉ hiện đúng lúc đứng trước phòng
                   </li>
                 </ul>
-              </div>
+              </>
             ) : (
-              <div className="flex flex-col items-center text-center gap-4 py-4 bg-muted/30 rounded-2xl border border-border/50">
-                <div className="w-12 h-12 rounded-full bg-destructive/10 text-destructive flex items-center justify-center">
-                  <LockKeyhole size={24} />
-                </div>
-                <div className="space-y-2 px-4">
-                  <strong className="text-foreground font-semibold block">
-                    {status === "holding" ? `Căn đang được giữ chỗ (${holdHours} giờ)` : "Căn đã cho thuê"}
-                  </strong>
-                  <p className="text-sm text-muted-foreground leading-relaxed">Không nhận thêm lịch xem. Xem các căn tương đương bên dưới hoặc hỏi VinStay AI để được gợi ý.</p>
+              <div className={styles.taken}>
+                <LockKeyhole size={20} />
+                <div>
+                  <b>{status === "holding" ? `Căn đang được giữ chỗ (${holdHours} giờ)` : "Căn đã cho thuê"}</b>
+                  <p className="muted small">Không nhận thêm lịch xem. Xem các căn tương đương bên dưới hoặc hỏi VinStay AI để được gợi ý.</p>
                 </div>
               </div>
             )}
-          </Card>
+          </div>
         </aside>
       </div>
 
-      {!embedded && similar.length > 0 && (
-        <section className="mt-8 pt-12 border-t border-border" aria-label="Căn tương tự">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground mb-8">Căn tương tự cùng layout</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {similar.length > 0 && (
+        <section className={styles.similar} aria-label="Căn tương tự">
+          <h2>Căn tương tự cùng layout</h2>
+          <div className={styles.similarGrid}>
             {similar.map((u) => (
-              <UnitCard key={u.id} unit={u} cost={allInCost(u, hh)} />
+              <UnitCard key={u.code} unit={u} cost={allInCost(u, hh)} />
             ))}
           </div>
         </section>
       )}
 
       {bookable && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-md border-t border-border shadow-2xl z-40 flex items-center justify-between gap-4">
-          <div className="flex flex-col">
-            <div className="flex items-baseline gap-1">
-              <strong className="font-mono text-xl font-bold text-foreground">{vnd(cost.total)}đ</strong>
-            </div>
-            <span className="text-xs font-medium text-muted-foreground">/tháng · All-in</span>
+        <div className={`${styles.bar} no-print`}>
+          <div>
+            <b className="num">{vnd(unit.rent)}đ</b>
+            <span className="muted xs"> /tháng (thuê) · Chưa bao gồm phí quản lý</span>
           </div>
-          <Button size="lg" className="flex-1 rounded-xl shadow-md font-semibold" onClick={handleOpenBooking}>
+          <button type="button" className="btn btn-primary" onClick={() => setBooking(true)}>
             Đặt lịch xem
-          </Button>
+          </button>
         </div>
       )}
 
-      <BookingSheet unit={unit} newTab={embedded} open={booking} onClose={() => { setManualBooking(false); setDismissAutoBooking(true); }} />
+      <BookingSheet unit={unit} open={booking} onClose={() => setBooking(false)} />
+      <UnitConciergeDrawer
+        unit={unit}
+        open={conciergeOpen}
+        onOpen={() => setConciergeOpen(true)}
+        onClose={() => setConciergeOpen(false)}
+        onBook={() => setBooking(true)}
+      />
     </div>
   );
 }

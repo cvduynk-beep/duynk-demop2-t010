@@ -51,16 +51,29 @@ describe('Inspection — đọc & nhận ca', () => {
     expect(boardA.mine[0].landlordName).toBe('Nguyễn Thị Mai');
   });
 
-  it('board: không có hostId ⇒ Open Pool ngay; bản nháp chưa ký không hiện; done = ca tôi đã nộp', async () => {
+  it('board: không có hostId ⇒ Open Pool ngay; hồ sơ nháp cũ (trước khi bỏ nháp) không hiện; done = ca tôi đã nộp', async () => {
     const a = w.addInspector('a');
     const noHost = w.addCase({});
-    w.addCase({ stage: 'draft' });
+    w.addCase({ stage: 'draft' as any });
     const done = w.addCase({ stage: 'approved', hostId: a.id });
     (w.metaOf(done.mandate) as any).decidedBy = a.id;
     (w.metaOf(done.mandate) as any).decidedAt = '2026-10-05T00:00:00.000Z';
     const board = await w.query.board(w.actor(a));
     expect(board.open.map((c) => c.id)).toEqual([noHost.mandate.id]);
     expect(board.done.map((c) => c.id)).toEqual([done.mandate.id]);
+  });
+
+  it('phạm vi phân khu: Open Pool chỉ hiện/nhận được với Inspector phủ phân khu của căn (chính / thêm / tất cả)', async () => {
+    const other = w.addInspector('other', { zone: 'The Zenpark' });
+    const extra = w.addInspector('extra', { zone: 'The Zenpark', managed: [ZONE] });
+    const all = w.addInspector('all', { zone: 'The Zenpark', scope: 'ALL' });
+    const c = w.addCase({});
+    expect((await w.query.board(w.actor(other))).open).toHaveLength(0);
+    expect(await codeOf(w.query.detail(w.actor(other), c.mandate.id))).toBe('inspection_not_found');
+    expect(await codeOf(w.flow.claim(w.actor(other), c.mandate.id))).toBe('inspection_not_found');
+    expect((await w.query.board(w.actor(extra))).open.map((x) => x.id)).toEqual([c.mandate.id]);
+    expect((await w.query.board(w.actor(all))).open.map((x) => x.id)).toEqual([c.mandate.id]);
+    expect(await codeOf(w.flow.claim(w.actor(all), c.mandate.id))).toBe('OK');
   });
 
   it('P1-4: accept 2 lần cùng người ⇒ lần 2 vẫn 200, không ghi audit lần 2', async () => {
@@ -259,17 +272,18 @@ describe('Inspection — nộp phiếu & tự niêm yết (E8)', () => {
     expect(w.db.media).toHaveLength(0);
   });
 
-  it('P1-13: reject không note ⇒ report_invalid note; có note ⇒ TERMINATED, unit UNLISTED, 0 media, ảnh giữ', async () => {
+  it('P1-13: reject không note ⇒ report_invalid note; có note ⇒ reviewing (chờ Admin), ủy quyền GIỮ, unit UNLISTED, 0 media, ảnh giữ', async () => {
     const { c, photos } = setup();
     const bad: any = await bodyOf(w.flow.submit(w.actor(a), c.mandate.id, validInput(photos, { recommendation: 'reject' })));
     expect(bad).toMatchObject({ code: 'report_invalid', field: 'note' });
     const out = await w.flow.submit(w.actor(a), c.mandate.id, validInput(photos, { recommendation: 'reject', note: '  Căn khác hẳn hình  ' }));
-    expect(out).toMatchObject({ stage: 'rejected', listedAt: null });
-    expect(w.mandateRow(c.mandate).status).toBe('TERMINATED');
+    expect(out).toMatchObject({ stage: 'reviewing', listedAt: null });
+    expect(w.mandateRow(c.mandate).status).toBe('PENDING_INSPECTION');
     expect(w.unitRow(c.unit)).toMatchObject({ status: 'UNLISTED', isVerified: false });
     expect(w.db.media).toHaveLength(0);
     const meta = w.metaOf(c.mandate);
-    expect(meta).toMatchObject({ stage: 'rejected', decisionNote: 'Căn khác hẳn hình' });
+    expect(meta).toMatchObject({ stage: 'reviewing', report: { recommendation: 'reject', note: 'Căn khác hẳn hình' } });
+    expect(meta.decidedAt).toBeUndefined();
     expect(meta.inspection?.photos).toHaveLength(photos.length);
   });
 

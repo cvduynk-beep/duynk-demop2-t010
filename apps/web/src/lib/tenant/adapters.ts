@@ -32,6 +32,9 @@ export function toUnit(dto: TenantUnit): UnitWithExtras {
     areaM2: dto.areaM2,
     managementFee: dto.managementFee,
     parkingFeeEstimate: dto.parkingFeeEstimate,
+    motorbikeFee: dto.motorbikeFee ?? undefined,
+    carFee: dto.carFee ?? undefined,
+    feeNote: dto.feeNote ?? undefined,
     utilityCostEstimate: dto.utilityCostEstimate,
     direction: dto.direction ?? "Chưa cập nhật",
     view: dto.view ?? "Chưa cập nhật",
@@ -193,7 +196,7 @@ export function buildTimeline(b: TenantBookingView | TenantBooking): TimelineSte
     },
     {
       key: "holding",
-      label: "Khóa căn giữ chỗ (2.000.000đ)",
+      label: "Khóa căn bằng tiền cọc",
       at: b.deposit?.paidAt,
       hint: "Chuyển cọc qua VietQR động, khoá căn độc quyền",
       done: currentRank >= 7,

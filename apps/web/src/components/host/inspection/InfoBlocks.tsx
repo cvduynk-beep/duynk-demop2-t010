@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, Lock } from "lucide-react";
+import { Check, KeyRound, Lock } from "lucide-react";
 import { KeyValue } from "@/components/ui/KeyValue";
+import { Section } from "@/components/ui/Section";
 import { FACT_LABEL, factChanged, factOriginalText, type FactKey } from "@/lib/inspection/facts";
 import { DIRECTIONS } from "@/lib/units/facts";
 import { vnd } from "@/lib/format";
@@ -23,11 +24,10 @@ const mmss = (ms: number) => {
 const lockText = (locks: InspectionDetail["locks"]) =>
   locks.includes("smart") && locks.includes("physical") ? "Khoá điện tử + chìa cơ" : locks.includes("physical") ? "Khoá cơ (chìa khoá)" : "Khoá điện tử (có mã số)";
 
-/** Khối 1 — thông tin chủ nhà kê khai + ảnh tham khảo của chủ nhà. */
+/** Cột phụ — thông tin chủ nhà kê khai (như bản mock). Ảnh chủ nhà gửi nằm ở mục 7 Ảnh niêm yết. */
 export function LandlordInfoBlock({ detail }: { detail: InspectionDetail }) {
   return (
-    <div className={consign.formCard}>
-      <h3 className={consign.formCardTitle}>1. Thông tin chủ nhà kê khai</h3>
+    <Section title="Thông tin chủ kê khai">
       <KeyValue
         items={[
           { label: "Căn hộ", value: `${detail.building} · Tầng ${detail.floor} · Căn ${detail.door ?? "—"}` },
@@ -39,36 +39,18 @@ export function LandlordInfoBlock({ detail }: { detail: InspectionDetail }) {
           ...(detail.leaseTerm ? [{ label: "Thời gian thuê", value: LEASE_TERM_LABEL[detail.leaseTerm] }] : []),
           { label: "Nội thất", value: detail.furnished === false ? "Không nội thất" : "Có nội thất" },
           ...(detail.furnished !== false && detail.declared?.inventoryCodes
-            ? [{ label: "Món chủ nhà khai", value: `${detail.declared.inventoryCodes.length} món — đã tick sẵn ở bảng kê (mục 5), hãy đối chiếu và sửa theo thực tế` }]
+            ? [{ label: "Món chủ nhà khai", value: `${detail.declared.inventoryCodes.length} món — đã tick sẵn ở bảng kê (mục 3)` }]
             : []),
           { label: "Loại khoá", value: lockText(detail.locks) },
+          ...(detail.landlordPhotos.length > 0 ? [{ label: "Ảnh chủ nhà gửi", value: `${detail.landlordPhotos.length} ảnh — đã đưa vào mục 7 Ảnh niêm yết` }] : []),
           ...(detail.note ? [{ label: "Ghi chú của chủ nhà", value: detail.note }] : []),
         ]}
       />
-      {detail.landlordPhotos.length > 0 && (
-        <div>
-          <p className="muted small" style={{ margin: "0 0 var(--s-2)" }}>
-            Ảnh tham khảo do chủ nhà gửi ({detail.landlordPhotos.length}) — không phải ảnh niêm yết.
-          </p>
-          <div className={styles.refGrid}>
-            {detail.landlordPhotos.map((p) => (
-              <a key={p.id} className={styles.refItem} href={p.url ?? undefined} target="_blank" rel="noopener noreferrer" aria-label={`Mở ảnh ${p.name}`}>
-                {p.url ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- link ký tạm thời của Supabase Storage
-                  <img src={p.url} alt={p.name} loading="lazy" />
-                ) : (
-                  <span className="muted xs">Không tải được</span>
-                )}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    </Section>
   );
 }
 
-/** Khối 2 — vào căn: lấy mã cửa (PIN tự ẩn sau 10′, chỉ giữ trong state, KHÔNG lưu trình duyệt). */
+/** Đầu phiếu — vào căn: lấy mã cửa (PIN tự ẩn sau 10′, chỉ giữ trong state, KHÔNG lưu trình duyệt). */
 export function DoorBlock({ detail }: { detail: InspectionDetail }) {
   const { busy, run } = useInspectionAction(detail.id);
   const now = useNow(1000);
@@ -88,7 +70,7 @@ export function DoorBlock({ detail }: { detail: InspectionDetail }) {
 
   return (
     <div className={consign.formCard}>
-      <h3 className={consign.formCardTitle}>2. Vào căn</h3>
+      <h3 className={consign.formCardTitle}>Vào căn</h3>
       <p className="muted small" style={{ margin: 0 }}>
         Quẹt thẻ cư dân lên tầng {detail.floor}, tới trước cửa căn rồi lấy mã. Mỗi lần lấy mã đều được ghi nhật ký cho chủ nhà.
       </p>
@@ -131,15 +113,15 @@ interface DeclaredProps {
   onChange: (patch: (d: InspectionDraft) => InspectionDraft) => void;
 }
 
-/** Khối 3 — đối chiếu 5 trường chủ nhà kê khai. */
+/** Mục 1 — đối chiếu 5 trường chủ nhà kê khai. */
 export function DeclaredBlock({ detail, draft, invalidField, onChange }: DeclaredProps) {
   const set = (f: DeclaredField, v: Partial<{ ok: boolean; actual: string }>) =>
     onChange((d) => ({ ...d, declared: { ...d.declared, [f]: { ...d.declared[f], ...v } } }));
   return (
     <div className={consign.formCard}>
-      <h3 className={consign.formCardTitle}>3. Đối chiếu thông tin chủ kê khai</h3>
+      <h3 className={consign.formCardTitle}>1. Đối chiếu thông tin chủ kê khai</h3>
       <p className="muted small" style={{ margin: 0 }}>
-        Kiểm tra 5 trường chủ nhà khai báo ban đầu. Sai lệch thì nhập giá trị thực tế.
+        Kiểm tra tính chính xác của 5 trường thông tin do chủ nhà khai báo ban đầu.
       </p>
       <div>
         {DECLARED_FIELDS.map((f, i) => {
@@ -154,7 +136,7 @@ export function DeclaredBlock({ detail, draft, invalidField, onChange }: Declare
                 </div>
                 <div className={consign.segmentedWrap}>
                   <button type="button" className={`${consign.segmentedBtn} ${check.ok ? consign.segmentedActive : ""}`} onClick={() => set(f, { ok: true })}>
-                    ✓ Khớp
+                    <Check size={14} strokeWidth={2.8} /> Khớp
                   </button>
                   <button type="button" className={`${consign.segmentedBtn} ${!check.ok ? consign.segmentedDanger : ""}`} onClick={() => set(f, { ok: false })}>
                     Sai lệch
@@ -166,7 +148,7 @@ export function DeclaredBlock({ detail, draft, invalidField, onChange }: Declare
                   type="text"
                   className="input"
                   maxLength={80}
-                  placeholder={`Giá trị thực tế của ${DECLARED_LABEL[f].toLowerCase()}…`}
+                  placeholder={`Nhập giá trị thực tế của ${DECLARED_LABEL[f].toLowerCase()}...`}
                   value={check.actual}
                   onChange={(e) => set(f, { actual: e.target.value })}
                   style={{ marginTop: "var(--s-1)" }}
@@ -180,17 +162,11 @@ export function DeclaredBlock({ detail, draft, invalidField, onChange }: Declare
   );
 }
 
-/** Khối 4 — số đo & phân loại: diện tích thông thuỷ, nội thất thực tế, 4 kiểm tra công năng. */
+/** Mục 2 — số đo & phân loại thực tế: diện tích thông thuỷ, nội thất thực tế + thông tin hiện trên tin đăng. */
 export function MeasureBlock({ detail, draft, invalidField, onChange }: DeclaredProps) {
-  const fns: { key: keyof InspectionDraft["functions"]; text: string }[] = [
-    { key: "ac", text: "Điều hòa làm lạnh tốt, không rò nước sau 5 phút khởi động" },
-    { key: "kitchen", text: "Bếp từ / hồng ngoại nhận nồi sau 15 giây, phím cảm ứng nhạy" },
-    { key: "waterHeater", text: "Bình nước nóng hoạt động, nút ELCB chống giật nhảy bình thường" },
-    { key: "drainage", text: "Hệ thống cấp thoát nước, vòi rửa, lavabo kín, không rò rỉ ngấm tường" },
-  ];
   return (
     <div className={consign.formCard}>
-      <h3 className={consign.formCardTitle}>4. Số đo, phân loại & công năng</h3>
+      <h3 className={consign.formCardTitle}>2. Số đo & Phân loại thực tế</h3>
       <label className={`field ${invalidField === "netAreaM2" ? styles.rowBad : ""}`} id="insp-netAreaM2">
         <span className="label">
           Diện tích thông thuỷ đo thực tế (m²) <b style={{ color: "var(--danger)" }}>*</b>
@@ -223,8 +199,28 @@ export function MeasureBlock({ detail, draft, invalidField, onChange }: Declared
         </div>
       </div>
 
+      <FactsFields detail={detail} draft={draft} invalidField={invalidField} onChange={onChange} />
+    </div>
+  );
+}
+
+const FUNCTIONS: { key: keyof InspectionDraft["functions"]; text: string }[] = [
+  { key: "ac", text: "Điều hòa làm lạnh tốt, không rò nước sau 5 phút khởi động" },
+  { key: "kitchen", text: "Bếp từ / hồng ngoại nhận nồi sau 15 giây, phím cảm ứng nhạy" },
+  { key: "waterHeater", text: "Bình nước nóng hoạt động, nút ELCB chống giật nhảy bình thường" },
+  { key: "drainage", text: "Hệ thống cấp thoát nước, vòi rửa, lavabo kín, không rò rỉ ngấm tường" },
+];
+
+/** Mục 5 — vận hành thử 4 nhóm thiết bị chính (Điều 5 khoản 3). */
+export function FunctionsBlock({ draft, onChange }: Pick<DeclaredProps, "draft" | "onChange">) {
+  return (
+    <div className={consign.formCard}>
+      <h3 className={consign.formCardTitle}>5. Kiểm tra công năng thiết bị</h3>
+      <p className="muted small" style={{ margin: 0 }}>
+        Quy trình vận hành thử các thiết bị điện máy chính theo quy chuẩn bàn giao.
+      </p>
       <div className={consign.fnList}>
-        {fns.map((f) => (
+        {FUNCTIONS.map((f) => (
           <label key={f.key} className={consign.fnItem}>
             <input type="checkbox" checked={draft.functions[f.key]} onChange={(e) => onChange((d) => ({ ...d, functions: { ...d.functions, [f.key]: e.target.checked } }))} />
             <span>{f.text}</span>
@@ -244,8 +240,8 @@ interface FactsProps {
 
 const LAYOUTS: InspectionDraft["facts"]["layout"][] = ["Studio", "1PN", "2PN", "3PN"];
 
-/** Khối "Thông tin thực tế" (hồ sơ 18): 5 ô điền sẵn từ chủ khai, Inspector sửa; ô đã sửa có nhãn "Đã sửa (chủ khai: …)". */
-export function FactsBlock({ detail, draft, invalidField, onChange }: FactsProps) {
+/** Thông tin thực tế (hồ sơ 18) nằm trong mục 2: 5 ô điền sẵn từ chủ khai, Inspector sửa; ô đã sửa có nhãn "Đã sửa (chủ khai: …)". */
+function FactsFields({ detail, draft, invalidField, onChange }: FactsProps) {
   const set = (patch: Partial<InspectionDraft["facts"]>) => onChange((d) => ({ ...d, facts: { ...d.facts, ...patch } }));
   const f = draft.facts;
   const mark = (key: FactKey) =>
@@ -256,10 +252,10 @@ export function FactsBlock({ detail, draft, invalidField, onChange }: FactsProps
     ) : null;
   const bad = (key: string) => (invalidField === `facts.${key}` || invalidField === "facts" ? styles.rowBad : "");
   return (
-    <div id="insp-facts" className={consign.formCard}>
-      <h3 className={consign.formCardTitle}>Thông tin thực tế</h3>
-      <p className="muted small" style={{ margin: 0 }}>
-        Thông tin này hiện công khai trên tin đăng. Điền sẵn từ chủ nhà kê khai — sửa nếu thực tế khác.
+    <div id="insp-facts" className={styles.factsSub}>
+      <span className="label">Thông tin hiển thị trên tin đăng</span>
+      <p className="muted xs" style={{ margin: 0 }}>
+        Điền sẵn từ chủ nhà kê khai — sửa nếu thực tế khác.
       </p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "var(--s-3)" }}>
         <label className={`field ${bad("areaM2")}`} id="insp-facts-area-m2">

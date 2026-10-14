@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { portalForRole } from '../auth.constants';
+import { Portal, portalForRole } from '../auth.constants';
 import { authError } from '../auth.errors';
 import { AuthenticatedUser } from './authenticated-user';
 import { toHostRoleCodes } from '../host-roles';
@@ -69,16 +69,22 @@ export class AuthSessionService {
     for (const [key, entry] of this.cache) if (entry.user.id === userId) this.cache.delete(key);
   }
 
-  /** null nếu token không hợp lệ/hết hạn; ném `account_suspended` nếu tài khoản bị khoá. */
-  async authenticate(accessToken: string): Promise<AuthenticatedUser | null> {
+  /**
+   * null nếu token không hợp lệ/hết hạn/sai cổng; ném `account_suspended` nếu tài khoản bị khoá.
+   * `expectedPortal` = cổng của cookie đã đọc ra token (`vs_access_<portal>`): claim `portal` phải trùng.
+   * Claim `portal` cũng phải trùng cổng của vai trò HIỆN TẠI trong DB (Admin đổi vai ⇒ phiên cũ hết hiệu lực).
+   */
+  async authenticate(accessToken: string, expectedPortal?: Portal): Promise<AuthenticatedUser | null> {
+    // Kiểm tra cục bộ (HMAC, không tốn mạng).
+    const claims = this.sessionTokens.verify(accessToken);
+    if (!claims) return null;
+    if (expectedPortal && claims.portal !== expectedPortal) return null;
+
     const key = createHash('sha256').update(accessToken).digest('hex');
     const hit = this.cache.get(key);
     if (hit && hit.expiresAt > Date.now()) return hit.user;
     this.cache.delete(key);
 
-    // Kiểm tra cục bộ (HMAC, không tốn mạng).
-    const claims = this.sessionTokens.verify(accessToken);
-    if (!claims) return null;
     const identity = { id: claims.sub, email: claims.email };
 
     const profile = await withRetry(() =>
@@ -90,6 +96,7 @@ export class AuthSessionService {
     // Token luôn gắn với một Profile đã tạo; Profile bị xoá thì token vô hiệu.
     if (!profile) return null;
     if (!profile.isActive) throw authError('account_suspended');
+    if (claims.portal !== portalForRole(profile.role?.code)) return null;
 
     const user = toAuthenticatedUser(identity, profile);
     if (this.cache.size >= CACHE_MAX_ENTRIES) this.cache.delete(this.cache.keys().next().value);

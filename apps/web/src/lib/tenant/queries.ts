@@ -1,15 +1,17 @@
 import type { ApiQueryDef } from "@/lib/query/useApiQuery";
 import { invalidateApiPattern } from "@/lib/query/useApiQuery";
-import { tenantApi, errorText, type UnitFilter } from "./api";
+import { tenantApi, errorText, type CatalogPayload, type UnitFilter } from "./api";
 import type {
   DepositTermsDoc,
+  FastCloseQuotes,
   TenantBooking,
   TenantContract,
+  TenantHandover,
   TenantUnit,
 } from "./types";
 
 export const tenantQueries = {
-  units: (filter?: UnitFilter): ApiQueryDef<TenantUnit[]> => {
+  units: (filter?: UnitFilter): ApiQueryDef<CatalogPayload> => {
     const key = `tenant:units:${filter?.zone || ""}:${filter?.layout || ""}:${filter?.maxRent || ""}:${filter?.q || ""}`;
     return {
       key,
@@ -48,6 +50,12 @@ export const tenantQueries = {
     errorText: (res) => errorText(res, "Không tải được danh sách hợp đồng."),
   }),
 
+  handovers: (contractId: string): ApiQueryDef<TenantHandover[]> => ({
+    key: `tenant:handovers:${contractId}`,
+    fetch: () => tenantApi.handovers(contractId),
+    errorText: (res) => errorText(res, "Không tải được hộ chiếu bàn giao."),
+  }),
+
   /** `signedIn=false` ⇒ không gọi API (khách vãng lai không có danh sách yêu thích), trả rỗng. */
   favorites: (signedIn: boolean): ApiQueryDef<TenantUnit[]> =>
     signedIn
@@ -60,6 +68,13 @@ export const tenantQueries = {
           key: "tenant:favorites:anon",
           fetch: async () => ({ ok: true, status: 200, data: [] }),
         },
+
+  /** Báo giá chốt nhanh — không cache dài: giá sàn/ủy quyền của chủ nhà có thể đổi. */
+  fastClose: (ref: string): ApiQueryDef<FastCloseQuotes> => ({
+    key: `tenant:fast-close:${ref.toUpperCase()}`,
+    fetch: () => tenantApi.fastCloseQuotes(ref),
+    errorText: (res) => errorText(res, "Không tải được báo giá chốt nhanh."),
+  }),
 
   depositTerms: (unitCode?: string): ApiQueryDef<DepositTermsDoc> => ({
     key: `tenant:terms:${unitCode ? unitCode.toUpperCase() : "default"}`,

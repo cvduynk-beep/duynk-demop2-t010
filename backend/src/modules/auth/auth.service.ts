@@ -7,6 +7,7 @@ import { PORTAL_HOME, Portal, PORTALS, loginPathForPortal } from './auth.constan
 import { AuthException, authError } from './auth.errors';
 import { GoogleIdentity } from './google/google.strategy';
 import { hostHome } from './host-roles';
+import { LoginLockoutService } from './login-lockout.service';
 import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from './password-hasher';
 import { AuthenticatedUser, AuthUserView } from './session/authenticated-user';
 import { AuthSessionService, PROFILE_INCLUDE, ProfileWithRole, toAuthenticatedUser } from './session/auth-session.service';
@@ -47,6 +48,7 @@ export class AuthService {
     private readonly audit: AuthAuditService,
     private readonly sessionTokens: SessionTokenService,
     config: ConfigService,
+    private readonly lockout: LoginLockoutService,
   ) {
     this.webUrl = (config.get<string>('WEB_APP_URL') || 'http://localhost:3000').replace(/\/+$/, '');
     this.apiPrefix = (config.get<string>('API_PREFIX') || 'api/v1').replace(/^\/+|\/+$/g, '');
@@ -56,6 +58,12 @@ export class AuthService {
 
   async login(dto: { email: string; password: string; portal: Portal }, ctx: RequestContext): Promise<LoginOutcome> {
     const email = dto.email.trim().toLowerCase();
+    try {
+      this.lockout.assertNotLocked(email);
+    } catch (err) {
+      await this.audit.record('login_failed', { ...ctx, metadata: { portal: dto.portal, method: 'password', reason: 'locked' } });
+      throw err;
+    }
     const profile = await this.prisma.profile.findUnique({
       where: { email },
       include: PROFILE_INCLUDE,
@@ -64,10 +72,14 @@ export class AuthService {
     // Luôn băm một lần dù email không tồn tại / chưa có mật khẩu: độ trễ không để lộ email nào có tài khoản.
     const passwordOk = await verifyPassword(dto.password, profile?.passwordHash ?? DUMMY_PASSWORD_HASH);
     if (!profile || !profile.passwordHash || !passwordOk) {
-      await this.audit.record('login_failed', { ...ctx, metadata: { portal: dto.portal, method: 'password' } });
-      // Tài khoản tạo bằng Google chưa có mật khẩu: chỉ dẫn người dùng sang Google thay vì báo sai mật khẩu.
-      throw authError(profile && !profile.passwordHash ? 'password_not_set' : 'invalid_credentials');
+      this.lockout.recordFailure(email);
+      // Lý do cụ thể chỉ nằm trong audit; response luôn là `invalid_credentials` (kể cả tài khoản Google chưa có mật khẩu)
+      // để không lộ email nào có tài khoản.
+      const reason = !profile ? 'unknown_email' : !profile.passwordHash ? 'password_not_set' : 'wrong_password';
+      await this.audit.record('login_failed', { ...ctx, metadata: { portal: dto.portal, method: 'password', reason } });
+      throw authError('invalid_credentials');
     }
+    this.lockout.reset(email);
     return this.completeLogin({ id: profile.id, email }, dto.portal, ctx, 'password');
   }
 
@@ -143,10 +155,13 @@ export class AuthService {
 
   // ------------------------------------------------------------------ Phiên
 
-  /** Phiên hiện tại cho FE/proxy. `clear` = cookie hiện có đã vô dụng (hết hạn / sai chữ ký / Profile bị xoá hoặc khoá). */
-  async resolveSession(accessToken?: string): Promise<{ user: AuthUserView | null; clear?: boolean }> {
+  /**
+   * Phiên của đúng cổng `portal` cho FE/proxy. `clear` = cookie của cổng đó đã vô dụng (hết hạn / sai chữ ký /
+   * sai cổng / Profile bị xoá hoặc khoá).
+   */
+  async resolveSession(accessToken: string | undefined, portal: Portal): Promise<{ user: AuthUserView | null; clear?: boolean }> {
     if (accessToken) {
-      const user = await this.safeAuthenticate(accessToken);
+      const user = await this.safeAuthenticate(accessToken, portal);
       if (user) return { user };
     }
     return { user: null, clear: Boolean(accessToken) };
@@ -163,7 +178,7 @@ export class AuthService {
   ): Promise<LoginOutcome> {
     const admitted = await this.admit(user, portal, ctx, method);
     return {
-      tokens: this.sessionTokens.sign(admitted.profile.id, user.email),
+      tokens: this.sessionTokens.sign(admitted.profile.id, user.email, portal, admitted.profile.role?.code),
       user: this.viewOfProfile(admitted.profile),
     };
   }
@@ -194,9 +209,9 @@ export class AuthService {
     return toAuthenticatedUser({ id: profile.id, email: profile.email }, profile);
   }
 
-  private async safeAuthenticate(accessToken: string): Promise<AuthenticatedUser | null> {
+  private async safeAuthenticate(accessToken: string, portal: Portal): Promise<AuthenticatedUser | null> {
     try {
-      return await this.sessions.authenticate(accessToken);
+      return await this.sessions.authenticate(accessToken, portal);
     } catch (err) {
       if (err instanceof AuthException) return null; // tài khoản bị khoá → coi như không có phiên
       throw err;

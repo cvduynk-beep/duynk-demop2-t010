@@ -279,12 +279,12 @@ export const CONTRACT_TEMPLATES: ContractTemplate[] = [
     id: "FH-01",
     group: "host",
     type: "contract",
-    file: "legal/08_FIELD_HOST_PARTNERSHIP_AND_VIEWING_PROTOCOL.md",
-    title: "HĐ đối tác Field Host & quy trình dẫn khách",
+    file: "legal/host/01_FIELD_HOST_PARTNERSHIP_AND_SLA_AGREEMENT.md",
+    title: "HĐ hợp tác Field Host & SLA 3 phút",
     parties: ["host", "platform"],
     binds: "partnership",
-    summary: "Đối tác thực địa 100% biến phí; nhận ticket trong 3 phút theo Auto-Dispatch 3 tầng, Attribution Lock bảo vệ hoa hồng.",
-    refCode: "VSA-HOST-[MÃ ĐỐI TÁC]-[NĂM]",
+    summary: "Đối tác thực địa 100% biến phí; nhận ticket trong 3 phút theo Auto-Dispatch 3 tầng.",
+    refCode: "VINSTAY-LEGAL-FH-01",
   },
   {
     id: "FH-02",
@@ -477,7 +477,7 @@ export const TEMPLATE_STEPS: TemplateStep[] = [
     actor: "landlord",
     step: "Đăng ký căn và ký uỷ quyền độc quyền bằng OTP",
     route: "/landlord/consign",
-    action: "signConsignment",
+    action: "submitConsignment",
     primary: "CORE-01",
     attached: ["LL-01", "LL-02", "CORE-00", "CORE-03"],
     produces: "mandate",
@@ -623,7 +623,8 @@ export function templatesForParty(role: TemplateParty): ContractTemplate[] {
   return CONTRACT_TEMPLATES.filter((t) => t.parties.includes(role) && t.type !== "sop");
 }
 
-export function contractsUsingTemplate(rows: ContractRow[], id: string): ContractRow[] {
+/** Văn bản (mock hoặc sổ thật) thuộc loại HĐ mà mẫu này ràng buộc hoặc được sinh ra ở bước dùng mẫu. */
+export function contractsUsingTemplate<T extends Pick<ContractRow, "kind">>(rows: T[], id: string): T[] {
   const t = templateById(id);
   const kinds = new Set<string>();
   if (t?.binds) {

@@ -1,357 +1,413 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import Link from "next/link";
-import { ArrowRight, BadgeCheck, CalendarClock, Coins, Footprints, LayoutDashboard, MessageCircle, Plus, ReceiptText } from "lucide-react";
-import { LogoMark } from "@/components/brand/Logo";
-import { vndShort } from "@/lib/format";
-import { emptyCriteria, parseQuery, searchUnits } from "@/lib/tenant/matchmaker";
-import { CLIENT_ERROR, streamChat, type AssistantEvent, type ChatTurn } from "@/lib/assistant/stream";
-import type { AssumedDefaults, SearchContext } from "@/lib/assistant/context";
-import { loginPrompt } from "@/lib/assistant/guest";
-import { nextPinned, type PinNote } from "@/lib/assistant/pin";
-import { closeSelection, criteriaHasFilters, previewPhase, selectUnit, type PreviewSelection } from "@/lib/assistant/preview";
-import type { UnitWithExtras } from "@/lib/tenant/adapters";
-import type { ChatMessage, CriteriaState } from "@/lib/mock/types";
+import { cloneElement, isValidElement, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { ArrowRight, BadgeCheck, CalendarClock, Plus, ReceiptText, Footprints, MapPin, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
+import { chatApi, chatErrorText, recommendQuery, type RankedCost } from "@/lib/chat/api";
+import { chatAppend, chatReset, chatSetConversation, chatSetCriteria, chatSetSearch, useChat } from "@/lib/chat/store";
+import type { CriteriaState } from "@/lib/chat/types";
+import { DEFAULT_HOUSEHOLD, type CostBreakdown } from "@/lib/pricing/cost";
+import { useApiQuery } from "@/lib/query/useApiQuery";
 import { useCatalog } from "@/lib/tenant/catalog";
-import { useSession } from "@/lib/auth/client";
-import { AssistantLauncher } from "./AssistantLauncher";
-import { useAssistantInternal } from "./AssistantProvider";
+import { emptyCriteria } from "@/lib/tenant/matchmaker";
+import { useRole, useSession } from "@/lib/auth/client";
+import { clientRandomIndex, useClientValue } from "@/lib/useClientValue";
+import { ButlerMascot, VINNY_GREETINGS, type MascotMood } from "@/components/mascot/ButlerMascot";
 import { Composer } from "./Composer";
+import { InlineChatUnits } from "./InlineChatUnits";
 import { Messages } from "./Messages";
-import { ResultsPanel } from "./ResultsPanel";
-import { UnitPreviewPanel } from "./UnitPreviewPanel";
-import { Button } from "@/components/ui/button";
+import { ResultsPanel, type RankedResult } from "./ResultsPanel";
 import styles from "./ChatExperience.module.css";
-import { useOptionalLandingPreferences } from "@/components/landing/LandingPreferences";
 
 const TRUST = [
-  { icon: BadgeCheck, text: "Căn lấy từ danh mục hệ thống" },
-  { icon: ReceiptText, text: "Hiển thị ước tính All-in Cost" },
-  { icon: Footprints, text: "Host xác nhận lịch xem" },
-  { icon: CalendarClock, text: "Theo dõi trạng thái lịch xem" },
+  { icon: BadgeCheck, text: "Ảnh thật, có mốc thời gian" },
+  { icon: ReceiptText, text: "All-in Cost, không phí ẩn" },
+  { icon: Footprints, text: "Host đón tại sảnh" },
+  { icon: CalendarClock, text: "Giữ căn qua VietQR" },
 ];
 
-/** 3 ý năng lực của trợ lý — chỉ hiển thị, không bấm (SPEC-P02 §1). */
-const CAPABILITIES = [
-  { icon: MessageCircle, vi: "Hiểu câu tự nhiên", en: "Understands natural requests" },
-  { icon: Coins, vi: "Tính sẵn All-in Cost", en: "All-in Cost included" },
-  { icon: LayoutDashboard, vi: "Lọc trên căn thật", en: "Filters live listings" },
-];
+/** URL yêu cầu mở thẳng danh mục căn (`?view=all`, `?catalog=1`, `?tab=results`). */
+function urlWantsResults(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("view") === "all" || params.get("catalog") === "1" || params.get("tab") === "results";
+}
 
-const statusOf = (unit: { baseStatus?: string }) => (unit.baseStatus ?? "available") as "available" | "holding" | "rented";
+const toCost = (c: RankedCost): CostBreakdown => ({
+  rent: c.baseRent,
+  mgmt: c.managementFee,
+  parking: c.parkingFee,
+  utility: c.utilityCost,
+  total: c.allInTotal,
+});
 
-/** Bộ lọc hội thoại chạy trên danh mục căn thật đã tải từ API. */
+/**
+ * Trang chủ khách thuê: ban đầu là hero + khung chat; khi bắt đầu tìm căn, chat thu về cột trái và mở màn kết quả.
+ * Mọi lượt chat đi qua `POST /api/v1/chat` (backend phân tích câu, AI Matchmaker xếp hạng, Gemini chỉ giải thích);
+ * tab kết quả dùng `POST /api/v1/matchmaker/recommend` — cùng một thuật toán xếp hạng, FE không tự xếp.
+ */
 export function ChatExperience({ below }: { below: ReactNode }) {
-  const prefs = useOptionalLandingPreferences();
-  const assistant = useAssistantInternal();
-  const en = prefs?.locale === "en";
-  const session = useSession();
-  const role = session.user?.portal ?? null;
-  const user = session.user;
-  const catalog = useCatalog();
-  const [criteria, setCriteria] = useState<CriteriaState>(() => emptyCriteria());
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [searched, setSearched] = useState(false);
-  /** Khách đã gửi tin đầu tiên (kể cả khi bot chưa có căn): chuyển sang bố cục workspace. */
-  const [started, setStarted] = useState(false);
+  const chat = useChat();
+  const role = useRole();
   const [thinking, setThinking] = useState<{ steps: string[] } | null>(null);
   const [freshId, setFreshId] = useState<string | null>(null);
   const [tab, setTab] = useState<"chat" | "results">("chat");
-  const [streaming, setStreaming] = useState(false);
-  /** Mã căn do trợ lý AI chọn (event `units`); null = kết quả tính từ bộ lọc `criteria`. */
-  const [pinned, setPinned] = useState<string[] | null>(null);
-  /** Tiêu chí bot đang nhớ (từ `criteria` của event `units` gần nhất), gửi kèm mỗi request. null = chưa có / khách đã chỉnh bộ lọc tay. */
-  const [searchContext, setSearchContext] = useState<SearchContext | null>(null);
-  /** Ghi chú trên danh sách preview ("search 0 căn nên đang giữ kết quả trước"); khách bấm đóng được. */
-  const [previewNote, setPreviewNote] = useState<PinNote>(null);
-  /** Căn bot nhắc trong câu trả lời (nhãn "Gợi ý #n", đứng đầu), tổng số căn khớp, giả định mặc định của lượt tìm gần nhất. */
-  const [suggested, setSuggested] = useState<string[]>([]);
-  const [matchedTotal, setMatchedTotal] = useState<number | null>(null);
-  const [assumed, setAssumed] = useState<AssumedDefaults | null>(null);
-  /** Đã gửi tin nhưng chưa có event `units`/kết thúc luồng: Preview hiện skeleton. */
-  const [pending, setPending] = useState(false);
-  /** Căn đang xem chi tiết ngay trong Preview (không đổi URL). */
-  const [selected, setSelected] = useState<PreviewSelection<UnitWithExtras> | null>(null);
-  const busy = useRef(false);
-  /** Danh mục mới nhất: onSend là hàm async giữ bản chụp `catalog` lúc bấm gửi, nếu danh mục đang tải lại (vd ngay sau đăng nhập) thì tập mã rỗng và căn bot gợi ý bị bỏ. */
-  const catalogCodesRef = useRef<string[]>([]);
-  useEffect(() => {
-    catalogCodesRef.current = catalog.units.map((u) => u.code);
-  }, [catalog.units]);
-  const results = useMemo(() => {
-    if (!pinned) return criteriaHasFilters(criteria) ? searchUnits(criteria, statusOf, catalog.units) : [];
-    // Danh mục đang tải lại ⇒ found rỗng tạm thời: ResultsPanel hiện "đang tải" (không phải màn trống) và pinned được giữ nguyên.
-    const found = searchUnits(emptyCriteria(), () => "available", catalog.units.filter((u) => pinned.includes(u.code)));
-    return found.sort((a, b) => pinned.indexOf(a.unit.code) - pinned.indexOf(b.unit.code));
-  }, [criteria, catalog.units, pinned]);
-  const first = role === "tenant" ? (user?.fullName?.split(" ").slice(-1)[0] ?? null) : null;
-  const greeting = en
-    ? `Hello${first ? ` ${first}` : ""}! I can help you find available apartments by budget, layout, and everyday needs. Tell me what you are looking for.`
-    : `Xin chào${first ? ` ${first}` : ""}! Mình giúp bạn lọc căn hộ đang có trong hệ thống theo ngân sách, loại căn và nhu cầu sinh hoạt. Nhập yêu cầu để bắt đầu.`;
-
-  function append(roleValue: "user" | "assistant", text: string, resultIds?: string[], nextCriteria?: CriteriaState, cta?: ChatMessage["cta"]) {
-    const message: ChatMessage = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, role: roleValue, text, at: new Date().toISOString(), resultIds, criteria: nextCriteria, cta };
-    setMessages((current) => [...current, message]);
-    return message.id;
-  }
-
-  /** Nhánh bộ lọc cũ (parseQuery + searchUnits) — dùng khi trợ lý AI không khả dụng cho lượt này. */
-  function runFilter(text: string) {
-    const parsed = parseQuery(text, criteria);
-    const nextCriteria = parsed.patch;
-    const hasFilters = criteriaHasFilters(nextCriteria);
-    setPending(false);
-    setSelected(closeSelection());
-
-    // Không có điều kiện / danh mục chưa sẵn sàng: KHÔNG đụng danh sách đang hiện (không xoá trắng preview).
-    if (!hasFilters) {
-      append("assistant", en ? "I can only filter by available listing data. Add a maximum budget or choose a filter below." : "Mình chỉ có thể lọc căn theo dữ liệu hiện có. Hãy nhập ngân sách tối đa hoặc chọn tiêu chí bằng các bộ lọc bên dưới.");
-      busy.current = false;
-      return;
-    }
-    if (catalog.error) {
-      append("assistant", en ? `Could not load listings from the system: ${catalog.error}` : `Không tải được danh mục căn từ hệ thống: ${catalog.error}`);
-      busy.current = false;
-      return;
-    }
-    if (catalog.loading) {
-      append("assistant", en ? "The apartment catalog is still loading. Please try again in a moment." : "Danh mục căn vẫn đang tải. Bạn thử gửi lại sau khi tải xong nhé.");
-      busy.current = false;
-      return;
-    }
-    const foundNow = searchUnits(nextCriteria, statusOf, catalog.units);
-    if (!foundNow.length && pinned?.length) {
-      // Bộ lọc nhanh 0 căn nhưng đã có danh sách: giữ danh sách cũ, không đổi sang bộ lọc rỗng.
-      append("assistant", en ? "No homes match the new condition, so I am keeping your previous results." : "Chưa có căn nào khớp thêm điều kiện mới — mình đang giữ danh sách trước đó.");
-      setPreviewNote("kept");
-      busy.current = false;
-      return;
-    }
-    setPinned(null);
-    setSuggested([]);
-    setMatchedTotal(null);
-    setAssumed(null);
-    setPreviewNote(null);
-    setCriteria(nextCriteria);
-
-    setThinking({ steps: en ? [`Reading ${catalog.available.length} available homes`, "Applying filters and estimating monthly costs"] : [`Đọc ${catalog.available.length} căn đang trống từ hệ thống`, "Áp dụng bộ lọc và tính All-in Cost"] });
-    const found = searchUnits(nextCriteria, statusOf, catalog.units);
-    const reply = found.length
-      ? en ? `Searched ${catalog.available.length} available homes and found ${found.length} matches${nextCriteria.budget ? ` within ${vndShort(nextCriteria.budget)}` : ""}. Results are ordered by relevance.` : `Đã lọc ${catalog.available.length} căn trống và tìm thấy ${found.length} căn phù hợp${nextCriteria.budget ? ` trong ngân sách ${vndShort(nextCriteria.budget)}` : ""}. Kết quả bên cạnh được xếp theo mức phù hợp.`
-      : en ? `Searched ${catalog.available.length} available homes but found no matches. Try removing a filter or increasing your budget.` : `Đã lọc ${catalog.available.length} căn trống nhưng hiện không có kết quả khớp. Hãy thử bỏ bớt điều kiện hoặc tăng ngân sách.`;
-    const id = append("assistant", reply, found.slice(0, 3).map((result) => result.unit.code), nextCriteria);
-    setFreshId(id);
-    setSearched(true);
+  // `/?view=all` (hoặc `catalog=1`, `tab=results`) mở thẳng tab kết quả — đọc URL ở trình duyệt, áp một lần khi render.
+  const wantsResults = useClientValue(urlWantsResults, false);
+  const [appliedUrlTab, setAppliedUrlTab] = useState(false);
+  if (wantsResults && !appliedUrlTab) {
+    setAppliedUrlTab(true);
     setTab("results");
-    setThinking(null);
-    busy.current = false;
   }
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  // Backend trả 401 LOGIN_REQUIRED khi khách vãng lai hết lượt (đếm ở server theo IP).
+  const [guestLocked, setGuestLocked] = useState(false);
+  const busy = useRef(false);
+  const workspace = chat.searched;
 
-  const noticeText = en ? "AI assistant is busy — using the quick filter" : "Trợ lý AI tạm bận — đang dùng bộ lọc nhanh";
+  const { units: catalog, available } = useCatalog();
+  const openCount = available.length;
+  const byCode = useMemo(() => new Map(catalog.map((u) => [u.code, u])), [catalog]);
 
-  async function onSend(text: string) {
-    if (busy.current) return;
+  const resultsQuery = useApiQuery(recommendQuery(chat.criteria), workspace);
+  const results = useMemo<RankedResult[]>(() => {
+    if (resultsQuery.state.status !== "ready") return [];
+    return resultsQuery.state.data.topRecommendations.flatMap((r) => {
+      const unit = byCode.get(r.unitCode);
+      return unit ? [{ unit, rank: r.rank, cost: toCost(r.allInCost), reasons: [r.aiExplanation] }] : [];
+    });
+  }, [resultsQuery.state, byCode]);
+
+  // Băng chuyền "Căn hời" ở hero: top theo thứ hạng matchmaker, chỉ căn được backend gắn cờ tiết kiệm ≥ 10%.
+  const heroQuery = useApiQuery(recommendQuery(emptyCriteria()), !workspace);
+  const initialBargainUnitIds = useMemo(
+    () =>
+      heroQuery.state.status === "ready"
+        ? heroQuery.state.data.topRecommendations
+            .filter((r) => r.comparison.isBargain)
+            .slice(0, 4)
+            .map((r) => r.unitCode)
+        : [],
+    [heroQuery.state],
+  );
+
+  const mascotMood: MascotMood = thinking
+    ? "thinking"
+    : freshId
+    ? "happy"
+    : isTyping
+    ? "listening"
+    : "idle";
+
+  const locked = role === null && guestLocked;
+  const { user } = useSession();
+  const first = role === "tenant" ? (user?.fullName?.split(" ").slice(-1)[0] ?? null) : null;
+  // Chọn ngẫu nhiên 1 trong các câu chào của Vinny khi vào trang (chỉ ở trình duyệt); bấm vào robot để xoay vòng.
+  const greetingStart = useClientValue(() => clientRandomIndex(VINNY_GREETINGS.length), 0);
+  const [greetingOffset, setGreetingOffset] = useState(0);
+  const greetingIdx = (greetingStart + greetingOffset) % VINNY_GREETINGS.length;
+
+  const activeGreeting = VINNY_GREETINGS[greetingIdx];
+  const greeting = first ? `Chào ${first}! ${activeGreeting}` : activeGreeting;
+
+  const onSend = async (text: string) => {
+    if (busy.current || locked) return;
     busy.current = true;
-    const history: ChatTurn[] = [
-      ...messages.filter((m) => m.text && !m.id.startsWith("notice-")).map((m): ChatTurn => ({ role: m.role, content: m.text.slice(0, 2000) })),
-      { role: "user", content: text.slice(0, 2000) } as ChatTurn,
-    ].slice(-20);
-    append("user", text);
-    // Giới hạn lượt của khách do SERVER chốt (401 LOGIN_REQUIRED theo phiên + IP); web không tự đếm để khỏi chặn nhầm người đã đăng nhập.
-    setStarted(true);
-    setPending(true);
-    setStreaming(true);
-    setThinking({ steps: en ? ["Asking the AI assistant", "Checking live listings"] : ["Đang hỏi trợ lý AI", "Tra cứu danh mục căn thật"] });
-
-    let replyId: string | null = null;
-    let acc = "";
-    let unitsEvent: Extract<AssistantEvent, { type: "units" }> | null = null;
-    let failure: string | null = null;
-    const ensureReply = () => {
-      if (replyId) return replyId;
-      replyId = append("assistant", "");
-      setThinking(null);
-      return replyId;
-    };
+    const base = chat.criteria;
+    const searchedBefore = chat.searched || chat.messages.some((m) => m.criteria);
     try {
-      for await (const event of streamChat(history, { locale: en ? "en" : "vi", searchContext })) {
-        if (event.type === "delta") {
-          acc += event.text;
-          const id = ensureReply();
-          const snapshot = acc;
-          setMessages((current) => current.map((m) => (m.id === id ? { ...m, text: snapshot } : m)));
-        } else if (event.type === "units") {
-          unitsEvent = event; // kể cả unitCodes rỗng (search 0 căn): nextPinned quyết định giữ danh sách cũ
-          if (event.criteria) setSearchContext(event.criteria);
-          setPending(false);
-        } else if (event.type === "error") {
-          failure = event.code;
-          break;
-        }
-      }
-    } catch {
-      failure = "NETWORK";
-    }
-    setStreaming(false);
-    setThinking(null);
-    setPending(false);
+      chatAppend({ role: "user", text });
+      setThinking({
+        steps: [
+          `Quét ${openCount} căn đang mở tại Ocean Park 1`,
+          "AI Matchmaker lọc theo All-in và xếp hạng",
+          "Trợ lý giải thích lựa chọn cho bạn",
+        ],
+      });
 
-    if (!acc && failure === CLIENT_ERROR.loginRequired) {
-      const prompt = loginPrompt(en);
-      append("assistant", prompt.text, undefined, undefined, prompt.cta);
+      const res = await chatApi.send(text, base, searchedBefore, chat.conversationId);
+      if (!res.ok) {
+        if (res.status === 401 || res.code === "LOGIN_REQUIRED") setGuestLocked(true);
+        setFreshId(chatAppend({ role: "assistant", text: chatErrorText(res) }));
+        return;
+      }
+      const data = res.data;
+      chatSetConversation(data.conversationId);
+
+      if (data.kind === "search" && data.criteria) {
+        const criteria: CriteriaState = { ...base, ...data.criteria };
+        chatSetCriteria(criteria);
+        setFreshId(
+          chatAppend({
+            role: "assistant",
+            text: data.reply,
+            // Đúng thứ hạng backend trả — không sắp lại.
+            resultIds: data.recommendations.map((r) => r.id),
+            criteria,
+            degraded: data.degraded,
+          }),
+        );
+        // Ở workspace thì chuyển sang tab kết quả; ở hero giữ nguyên để khách xem băng chuyền ngay trong khung chat.
+        if (workspace && data.recommendations.length) setTab("results");
+      } else {
+        setFreshId(chatAppend({ role: "assistant", text: data.reply, degraded: data.degraded }));
+      }
+    } finally {
+      setThinking(null);
       busy.current = false;
-      return;
     }
-    if (!acc) {
-      // Chưa có delta nào (mọi lỗi HTTP/mạng/timeout/event error, hoặc luồng rỗng): rơi về bộ lọc cũ cho lượt này (F3).
-      setMessages((current) => [...current, { id: `notice-${Date.now()}`, role: "assistant", text: noticeText, at: new Date().toISOString() }]);
-      runFilter(text);
-      return;
+  };
+
+  const handleViewAllUnits = () => {
+    chatSetSearch({ layouts: [], zones: [], buildings: [], items: [], household: { ...DEFAULT_HOUSEHOLD } });
+    setTab("results");
+    if (typeof window !== "undefined") {
+      try {
+        window.history.pushState(null, "", "/?view=all");
+      } catch {}
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
-    if (failure === "TOOL_FAILED") append("assistant", en ? "Something went wrong while looking that up. Please send it again." : "Có lỗi khi tra cứu dữ liệu. Bạn gửi lại giúp mình nhé.");
-    const known = catalogCodesRef.current;
-    const next = nextPinned(pinned, unitsEvent && replyId ? unitsEvent : null, known.length ? known : unitsEvent?.unitCodes);
-    setPreviewNote(next.note);
-    if (next.applied && replyId) {
-      const applied = next.applied;
-      const id = replyId;
-      setMessages((current) => current.map((m) => (m.id === id ? { ...m, resultIds: applied.pinned } : m)));
-      setPinned(applied.pinned);
-      setSuggested(applied.suggested);
-      if (unitsEvent && unitsEvent.mode === "search") {
-        setMatchedTotal(unitsEvent.matched ?? applied.pinned.length);
-        setAssumed(unitsEvent.assumed ?? null);
-      }
-      setSelected(closeSelection());
-      setSearched(applied.searched);
-      setTab(applied.tab);
+  };
+
+  useEffect(() => {
+    const handleEvent = () => {
+      handleViewAllUnits();
+    };
+    window.addEventListener("vinstay:view-all-units", handleEvent);
+
+    if (urlWantsResults()) {
+      chatSetSearch({ layouts: [], zones: [], buildings: [], items: [], household: { ...DEFAULT_HOUSEHOLD } });
     }
-    busy.current = false;
-  }
 
-  const onCriteria = (next: CriteriaState) => {
-    // Khách đổi sang bộ lọc tay ⇒ bỏ ghim của bot và tiêu chí bot nhớ (đây là đường duy nhất, cùng reset, được xoá danh sách).
-    setPinned(null);
-    setSuggested([]);
-    setMatchedTotal(null);
-    setAssumed(null);
-    setSearchContext(null);
-    setPreviewNote(null);
-    setCriteria(next);
-  };
-  const reset = () => {
-    setCriteria(emptyCriteria());
-    setPinned(null);
-    setSuggested([]);
-    setMatchedTotal(null);
-    setAssumed(null);
-    setSearchContext(null);
-    setPreviewNote(null);
-    setMessages([]);
-    setSearched(false);
-    setStarted(false);
-    setPending(false);
-    setSelected(closeSelection());
-    setTab("chat");
-  };
-  const onSelect = (unit: { code: string }, book: boolean) => {
-    const full = catalog.units.find((u) => u.code === unit.code);
-    if (full) setSelected(selectUnit(full, book));
-  };
-  const closeDetail = useCallback(() => setSelected(closeSelection()), []);
-  const phase = previewPhase({ started: started || searched, pending: pending && !pinned?.length, resultCount: results.length });
+    return () => {
+      window.removeEventListener("vinstay:view-all-units", handleEvent);
+    };
+  }, []);
 
-  if (!searched && !started) {
-    return <>
-      <section className={styles.hero} aria-labelledby="home-title">
-        <div className={styles.heroInner}>
-          <div className={styles.intro}>
-            <div className={styles.availability} aria-live="polite">
-              <span className={styles.liveDot} />
-              <strong>{catalog.loading ? (en ? "Syncing" : "Đang đồng bộ") : `${catalog.available.length} ${en ? "homes" : "căn"}`}</strong>
-              <span>{en ? "currently available in the catalog" : "đang mở trong danh mục hệ thống"}</span>
-            </div>
-            <h1 id="home-title" className={styles.title}>{en ? <>Find an Ocean Park home — <span>just describe what you need</span></> : <>Tìm căn hộ Ocean Park — <span>chỉ cần mô tả nhu cầu</span></>}</h1>
-            <p className={styles.description}>{en ? "The assistant filters real listings, calculates All-in Cost for you, and books viewings with a Host meeting you in the lobby." : "Trợ lý lọc căn thật, tính sẵn All-in Cost, đặt lịch có Host đón sảnh."}</p>
-          </div>
+  const renderedBelow = isValidElement(below)
+    ? cloneElement(below as ReactElement<{ onViewAll?: () => void }>, { onViewAll: handleViewAllUnits })
+    : below;
 
-          <section id="assistant" ref={assistant?.registerAssistant} className={styles.matchCard} aria-label={en ? "VinStay apartment search" : "Trợ lý tìm căn VinStay"}>
-            <header className={styles.matchHead}>
-              <div className={styles.matchBrand}>
-                <span className={styles.matchMark}><LogoMark size={22} inverse /></span>
-                <span className={styles.matchBrandText}>
-                  <strong>VinStay AI</strong>
-                  <span>{en ? "Home search assistant" : "Trợ lý tìm căn"}</span>
-                </span>
-              </div>
-              <span className={styles.sourceBadge}>
-                <span className={styles.sourceDot} />
-                {catalog.error ? (en ? "Retry needed" : "Cần thử lại") : catalog.loading ? (en ? "Syncing" : "Đang đồng bộ") : (en ? "Live catalog" : "Danh mục thật")}
+  const onCriteria = (c: CriteriaState) => chatSetCriteria(c);
+
+  if (!workspace) {
+    return (
+      <>
+        <section className={styles.hero}>
+          <div className={`wrap ${styles.heroInner}`}>
+            <div className={styles.heroTop}>
+              <span className={styles.liveBadge}>
+                <i className={styles.liveDot} /> <strong className="num">{openCount} căn</strong> đang mở tại Ocean Park 1
               </span>
-            </header>
-            <div className={styles.chatStage}>
-              <Messages greeting={greeting} messages={messages} thinking={thinking} freshId={freshId} onFreshDone={() => setFreshId(null)} />
+              <h1 className={styles.h1}>Căn hộ thật ở Ocean Park, tìm ra trong 30 giây</h1>
+              <p className={styles.lead}>Không tin ảo, không phí ẩn, không môi giới làm phiền — Host nội khu đón bạn tận sảnh.</p>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "2px" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    chatSetSearch(chat.criteria);
+                    setTab("results");
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    background: "rgba(255, 255, 255, 0.88)",
+                    backdropFilter: "blur(16px)",
+                    border: "1px solid rgba(255, 255, 255, 0.95)",
+                    borderRadius: "999px",
+                    padding: "10px 22px",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color: "#0a3d4a",
+                    boxShadow: "0 8px 24px -4px rgba(10, 61, 74, 0.16)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <MapPin size={16} /> Mở Bản đồ Kính mờ & Rổ hàng ({openCount} căn)
+                </button>
+              </div>
             </div>
-            <div className={styles.composer}>
-              <Composer variant="hero" criteria={criteria} onCriteria={onCriteria} onSend={onSend} busy={!!thinking || streaming} locked={false} guestNotice={false} showPrompts={messages.length === 0} locale={en ? "en" : "vi"} prefill={assistant?.prefill} />
+
+            <div className={styles.chatWrapper}>
+              {/* Linh vật Mascot đứng cố định tự nhiên ở góc trên bên phải khung chat, không đè lên chữ */}
+              <div className={styles.fixedHeroMascot}>
+                <ButlerMascot
+                  size="hero"
+                  mood={mascotMood}
+                  autoSpeak={!isTyping && !thinking}
+                />
+              </div>
+
+              <div className={styles.chatCard}>
+                <div className={styles.chatHead}>
+                  <ButlerMascot size="mini" mood={mascotMood} />
+                  <div className={styles.chatHeadText}>
+                    <strong>VinStay AI · Quản Gia Số</strong>
+                    <span>
+                      <i className={styles.liveDot} /> Đang trực tuyến · Sẵn sàng mở cửa & đón tận sảnh
+                    </span>
+                  </div>
+                </div>
+                <div className={styles.convo}>
+                  <Messages
+                    greeting={greeting}
+                    messages={chat.messages}
+                    thinking={thinking}
+                    freshId={freshId}
+                    onFreshDone={() => setFreshId(null)}
+                    onShowResults={handleViewAllUnits}
+                  />
+                </div>
+                <div className={styles.chatFoot}>
+                  <Composer
+                    variant="hero"
+                    criteria={chat.criteria}
+                    onCriteria={onCriteria}
+                    onSend={onSend}
+                    onTyping={setIsTyping}
+                    busy={!!thinking}
+                    locked={locked}
+                    guestNotice={false}
+                    showPrompts={chat.messages.length === 0}
+                  />
+                </div>
+              </div>
             </div>
-            <ul className={styles.capabilities} aria-label={en ? "What the assistant does" : "Trợ lý làm được gì"}>
-              {CAPABILITIES.map(({ icon: Icon, vi, en: enText }) => <li key={vi} className={styles.capability}><Icon size={15} /> {en ? enText : vi}</li>)}
+
+            {/* BĂNG CHUYỀN NẰM RIÊNG BÊN DƯỚI (PHƯƠNG ÁN 1) */}
+            <div className={styles.showcaseSection}>
+              <div className={styles.showcaseHead}>
+                <div className={styles.showcaseTitle}>
+                  <Sparkles size={15} />
+                  <span>Căn hời phân khu nổi bật hôm nay (Tiết kiệm ≥ 10%)</span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.showcaseAllBtn}
+                  onClick={handleViewAllUnits}
+                  aria-label="Xem toàn bộ rổ hàng"
+                >
+                  <span>Xem tất cả {openCount} căn</span>
+                  <ArrowRight size={13} />
+                </button>
+              </div>
+
+              <InlineChatUnits
+                unitIds={initialBargainUnitIds}
+                onShowResults={handleViewAllUnits}
+                title="Top deals mở thuê tại Ocean Park"
+              />
+            </div>
+
+            <ul className={styles.trust}>
+              {TRUST.map(({ icon: Icon, text }) => (
+                <li key={text}>
+                  <Icon size={18} /> {text}
+                </li>
+              ))}
             </ul>
-            <p className={styles.matchFoot}><Coins size={14} /> {en ? "Matches use current apartment data and estimated monthly costs." : "Kết quả dựa trên catalog căn hộ và ước tính chi phí hiện tại."}</p>
-          </section>
-
-          <nav className={styles.heroLinks} aria-label={en ? "More ways to browse" : "Lối khác"}>
-            <Link href="/units" className={styles.heroLink}>{en ? "Browse all homes" : "Xem tất cả căn"} <ArrowRight size={15} /></Link>
-            <Link href="/#for-owners" className={styles.heroLinkMuted}>{en ? "Own a home? List it with us" : "Chủ nhà? Ký gửi căn"} <ArrowRight size={15} /></Link>
-          </nav>
-        </div>
-
-        <ul className={styles.trustBar} aria-label="Cam kết VinStay">
-          {TRUST.map(({ icon: Icon, text }, index) => (
-            <li key={text} className={styles.trustItem}><Icon size={15} /> {en ? ["Apartments from the live catalog", "Estimated monthly cost", "Viewing requests in the system", "Viewing status you can follow"][index] : text}</li>
-          ))}
-        </ul>
-      </section>
-      <AssistantLauncher />
-      {below}
-    </>;
+          </div>
+        </section>
+        {renderedBelow}
+      </>
+    );
   }
 
   return (
-    <div className={styles.workspace}>
-      <div className="md:hidden flex p-2 border-b border-border bg-muted/30" role="tablist" aria-label={en ? "Switch between request and results" : "Chuyển giữa trò chuyện và kết quả"}>
-        <Button variant={tab === "chat" ? "default" : "ghost"} className="flex-1 rounded-full" onClick={() => setTab("chat")}>{en ? "Request" : "Yêu cầu"}</Button>
-        <Button variant={tab === "results" ? "default" : "ghost"} className="flex-1 rounded-full" onClick={() => setTab("results")}>{en ? "Results" : "Kết quả"} ({results.length})</Button>
+    <div className={`${styles.workspace} ${railCollapsed ? styles.workspaceCollapsed : ""} ${tab === "results" ? styles.showResults : styles.showChat}`}>
+      <div className={styles.tabs} role="tablist" aria-label="Chuyển giữa trò chuyện và kết quả">
+        <button type="button" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
+          Trò chuyện
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "results"} onClick={() => setTab("results")}>
+          Kết quả ({results.length})
+        </button>
       </div>
 
-      <div className="flex flex-1 min-h-0 relative">
-        <aside className={`${tab === "chat" ? "flex" : "hidden md:flex"} flex-col w-full md:w-[400px] border-r border-border bg-card z-10`}>
-          <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
-            <div>
-              <strong className="text-sm font-semibold block">VinStay AI</strong>
-              <span className="text-xs text-muted-foreground">· {en ? "searching live listings" : "lọc trên danh mục hiện có"}</span>
+      {railCollapsed && (
+        <button
+          type="button"
+          className={styles.openAiPill}
+          onClick={() => setRailCollapsed(false)}
+          aria-label="Mở Trợ lý VinStay AI"
+        >
+          <span className={styles.openAiOrb}>
+            <Sparkles size={16} />
+          </span>
+          <span className={styles.openAiLabel}>
+            <strong>Trợ lý VinStay AI</strong>
+            <span>Hỏi tiếp hoặc chỉnh yêu cầu ({results.length} căn khớp)</span>
+          </span>
+          <PanelLeftOpen size={16} />
+        </button>
+      )}
+
+      {!railCollapsed && (
+        <aside className={styles.rail} aria-label="Trò chuyện với VinStay AI">
+          <div className={styles.railHead}>
+            <div className={styles.railHeadBrand}>
+              <ButlerMascot size="mini" mood={mascotMood} />
+              <div>
+                <div className={styles.aiStatusTitle}>
+                  <strong>VinStay AI · Quản Gia</strong>
+                  <span className={styles.aiLiveDot} title="Đang trực tuyến" />
+                </div>
+                <span className={styles.aiStatusSub}>Trợ lý All-in Cost · Ocean Park 1</span>
+              </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={reset} className="text-xs">
-              <Plus size={14} className="mr-1.5" /> {en ? "New search" : "Làm mới bộ lọc"}
-            </Button>
+
+            <div className={styles.railHeadActions}>
+              <button
+                type="button"
+                className={styles.railActionBtn}
+                onClick={() => {
+                  chatReset();
+                  setGreetingOffset((prev) => prev + 1);
+                }}
+                title="Bắt đầu cuộc trò chuyện mới"
+              >
+                <Plus size={14} /> Mới
+              </button>
+              <button
+                type="button"
+                className={styles.railActionBtn}
+                onClick={() => setRailCollapsed(true)}
+                title="Thu gọn bảng trợ lý để mở rộng toàn màn hình"
+                aria-label="Thu gọn trợ lý"
+              >
+                <PanelLeftClose size={15} />
+              </button>
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
-            <Messages greeting={greeting} messages={messages} thinking={thinking} freshId={freshId} onFreshDone={() => setFreshId(null)} onShowResults={() => setTab("results")} />
+          <div className={styles.railMsgs}>
+            <Messages
+              greeting={greeting}
+              messages={chat.messages}
+              thinking={thinking}
+              freshId={freshId}
+              onFreshDone={() => setFreshId(null)}
+              onShowResults={() => setTab("results")}
+              hideInlineUnits={true}
+            />
           </div>
-          <div className="p-4 border-t border-border bg-background">
-            <Composer variant="rail" criteria={criteria} onCriteria={onCriteria} onSend={onSend} busy={!!thinking || streaming} locked={false} guestNotice={false} locale={en ? "en" : "vi"} />
+          <div className={styles.railFoot}>
+            <Composer variant="rail" criteria={chat.criteria} onCriteria={onCriteria} onSend={onSend} onTyping={setIsTyping} busy={!!thinking} locked={locked} guestNotice={false} />
           </div>
         </aside>
+      )}
 
-        <section className={`${tab === "results" ? "flex" : "hidden md:flex"} relative flex-1 flex-col min-w-0 bg-muted/10 overflow-hidden`}>
-          <div className="relative isolate z-0 flex-1 min-h-0 overflow-y-auto p-4 md:p-6 pb-24">
-          <ResultsPanel phase={phase} steps={thinking?.steps} onSelect={onSelect} results={results} criteria={criteria} onCriteria={onCriteria} searchContext={searchContext} suggested={suggested} matchedTotal={pinned ? matchedTotal : null} assumed={assumed} note={previewNote} onDismissNote={() => setPreviewNote(null)} units={catalog.units} totalOpen={catalog.available.length} loading={catalog.loading} error={catalog.error} onRetry={catalog.reload} />
-          </div>
-          {selected && <UnitPreviewPanel unit={selected.unit} book={selected.book} onClose={closeDetail} />}
-        </section>
-      </div>
+      <section className={styles.results} aria-label="Kết quả tìm căn">
+        <ResultsPanel
+          results={results}
+          criteria={chat.criteria}
+          onCriteria={onCriteria}
+          totalOpen={openCount}
+          loading={resultsQuery.state.status === "loading"}
+          error={resultsQuery.state.status === "error" ? resultsQuery.state.message : null}
+          onRetry={resultsQuery.reload}
+        />
+      </section>
     </div>
   );
 }

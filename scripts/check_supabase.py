@@ -1,6 +1,6 @@
 import psycopg2
 
-conn_str = "postgresql://postgres.cirikdxbhsnvdczjzndt:T!9vNeb4ghQ2q+u@aws-0-ap-south-1.pooler.supabase.com:5432/postgres"
+conn_str = "postgresql://postgres.uquluxbejeowquvcnuvf:efO5tAdANbA8LXoV@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres"
 
 def main():
     try:

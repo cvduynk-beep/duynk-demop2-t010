@@ -15,6 +15,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { HOST_ROLES, HostRoleCode } from '../../auth/host-roles';
+import { MANAGED_ZONES_MAX } from '../host-scope';
 
 // Profile.email là VarChar(100); field_hosts.assigned_zone là VarChar(50).
 const EMAIL_MAX = 100;
@@ -131,3 +132,28 @@ export class ListFieldHostsQueryDto {
   @IsIn(['true', 'false'])
   active?: 'true' | 'false';
 }
+
+/** `PUT /admin/field-hosts/:id/zone-scope` — phạm vi nhận ca pool + xem (quyết định 2026-10-14). */
+export class UpdateZoneScopeDto {
+  @ApiProperty({ enum: ['all', 'selected'], description: '`all` = mọi phân khu, kể cả phân khu tạo sau (wildcard)' })
+  @IsIn(['all', 'selected'])
+  zoneScope: 'all' | 'selected';
+
+  @ApiProperty({
+    type: [String],
+    example: ['The Sapphire 2'],
+    description: 'Phân khu THÊM ngoài phân khu chính (phân khu chính luôn nằm trong phạm vi). Với `all` vẫn được lưu để bật lại `selected`.',
+  })
+  @IsArray()
+  @ArrayMaxSize(MANAGED_ZONES_MAX)
+  @IsString({ each: true })
+  @MaxLength(ZONE_MAX, { each: true })
+  managedZones: string[];
+
+  @ApiProperty({ example: 'selected:', description: '`zoneScopeVersion` đọc từ `GET /admin/field-hosts/:id`; lệch ⇒ 409 `zone_scope_conflict`' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(4000)
+  version: string;
+}
+

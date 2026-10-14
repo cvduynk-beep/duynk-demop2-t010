@@ -1,239 +1,459 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { BadgeCheck, KeyRound, RefreshCw, Smartphone, Timer } from "lucide-react";
-import { allInCost } from "@/lib/pricing/cost";
+import { useState } from "react";
+import { AlertTriangle, BadgeCheck, Check, KeyRound, Smartphone, Timer, X } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { toast } from "@/components/ui/Toast";
-import { api } from "@/lib/apiClient";
-import { useApiQuery } from "@/lib/query/useApiQuery";
+import { CONSIGN_STATUS_META } from "@/components/consign/status";
+import { apiErrorText } from "@/lib/apiClient";
+import { fmtDate, vnd } from "@/lib/format";
+import { LAYOUT_LABEL } from "@/lib/landlord/labels";
+import {
+  consignmentHref,
+  invalidateInventory,
+  inventoryApi,
+  isInspectOverdue,
+  layoutKindOf,
+  lockLabel,
+  REJECT_NOTE_MIN,
+  TERMINATE_BLOCKED_LABEL,
+  UNIT_STATUS_LABEL,
+  unitStatusMeta,
+  unitTitle,
+  useConsignments,
+  useInventory,
+  type AdminConsignment,
+  type DoorLockApi,
+  type InventoryRow,
+  type UnitStatusApi,
+} from "@/lib/admin/inventory";
+import { useNow } from "@/lib/useNow";
+import { AdminQuery } from "./AdminQuery";
 import styles from "./Admin.module.css";
 
 type Tab = "units" | "requests" | "exit";
-type LockFilter = "all" | "ELECTRONIC_PIN" | "PHYSICAL_KEY";
-const EMPTY_INVENTORY: InventoryRow[] = [];
 
-interface InventoryRow {
-  id: string;
-  unitCode: string;
-  building: string;
-  zone: string;
-  layout: string;
-  carpetAreaM2: number;
-  baseRentPrice: number;
-  status: string;
-  landlordName: string | null;
-  floorNumber: number;
-  doorNumber: string | null;
-  doorLockType: LockFilter extends infer T ? Exclude<T, "all"> : never;
-  isVerified: boolean;
-  managementFee: number;
-  createdAt: string;
-  mandateStatus: string;
-  exitCountdownDays: number | null;
-  mandateId: string | null;
-  exitRequestedAt: string | null;
-  exitEffectiveAt: string | null;
-  canTerminate: boolean;
-  terminateBlockedReason: string | null;
-}
-
-const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
-const date = (value: string | null) => value ? new Intl.DateTimeFormat("vi-VN").format(new Date(value)) : "—";
-
-const UNIT_STATUS: Record<string, { label: string; badge: string }> = {
-  AVAILABLE: { label: "Còn trống", badge: "badge-kelp" },
-  HOLDING: { label: "Đang giữ căn", badge: "badge-amber-soft" },
-  RENTED: { label: "Đã cho thuê", badge: "badge-ink" },
-  UNLISTED: { label: "Chưa niêm yết", badge: "badge-plain" },
-  MAINTENANCE: { label: "Bảo trì", badge: "badge-coral-soft" },
-};
-
-const LAYOUT_LABEL: Record<string, string> = {
-  STUDIO: "Studio",
-  ONE_BED_PLUS: "1PN+",
-  TWO_BED_ONE_BATH: "2PN 1WC",
-  TWO_BED_TWO_BATH: "2PN 2WC",
-  THREE_BED: "3PN",
-};
+/** Hồ sơ còn cần Admin để mắt (chưa chốt). Hồ sơ đã chốt vẫn hiện ở cuối danh sách để tra cứu. */
+const OPEN_STAGES = new Set(["awaiting_host", "inspecting", "reviewing", "awaiting_landlord"]);
 
 export function AdminInventory({ initialTab }: { initialTab: Tab }) {
-  const inventory = useApiQuery({ key: "admin-exclusive-inventory", fetch: () => api.get<InventoryRow[]>("/admin/exclusive-inventory") });
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [zone, setZone] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [lock, setLock] = useState<LockFilter>("all");
-  const rows = inventory.state.status === "ready" ? inventory.state.data : EMPTY_INVENTORY;
-  const loading = inventory.state.status === "loading";
-  const error = inventory.state.status === "error" ? inventory.state.message : null;
-  const refreshing = inventory.state.status === "ready" && inventory.state.refreshing;
+  const inventory = useInventory();
+  const consignments = useConsignments();
 
-  function refresh() {
-    inventory.reload();
-  }
-
-  const zones = useMemo(() => [...new Set(rows.map((row) => row.zone))].sort(), [rows]);
-  const filtered = useMemo(() => rows.filter((row) =>
-    (zone === "all" || row.zone === zone) &&
-    (status === "all" || row.status === status) &&
-    (lock === "all" || row.doorLockType === lock),
-  ), [rows, zone, status, lock]);
-  const requests = rows.filter((row) => row.mandateStatus === "PENDING_INSPECTION");
-  const exiting = rows.filter((row) => row.mandateStatus === "EXIT_REQUESTED");
-
-  async function terminate(row: InventoryRow) {
-    if (!row.mandateId || !row.canTerminate) return;
-    const reason = window.prompt(`Lý do hoàn tất thoát uỷ quyền cho ${row.unitCode}:`);
-    if (!reason?.trim()) return;
-    const response = await api.post(`/admin/mandates/${encodeURIComponent(row.mandateId)}/terminate`, { reason: reason.trim() });
-    if (!response.ok) {
-      toast(response.message || "Không thể hoàn tất thoát uỷ quyền.");
-      return;
-    }
-    toast(`Đã cập nhật hồ sơ ${row.unitCode} từ dữ liệu máy chủ.`, "success");
-    refresh();
-  }
-
-  const columns: DataTableColumn<InventoryRow>[] = [
-    {
-      key: "unit",
-      header: "Căn hộ",
-      render: (row) => (
-        <>
-          <b>{row.building} · Tầng {row.floorNumber} · Căn {row.doorNumber || "—"}</b>
-          <span className="muted xs" style={{ display: "block" }}>
-            {row.unitCode}
-            {row.isVerified && <> · <BadgeCheck size={11} style={{ verticalAlign: -1 }} /> Đã thẩm định</>}
-          </span>
-        </>
-      ),
-    },
-    {
-      key: "zone",
-      header: "Phân khu · Chủ nhà",
-      render: (row) => (
-        <>
-          {row.zone}
-          <span className="muted xs" style={{ display: "block" }}>{row.landlordName || "Chưa có tên chủ nhà"}</span>
-        </>
-      ),
-    },
-    { key: "layout", header: "Loại", render: (row) => `${LAYOUT_LABEL[row.layout] ?? row.layout} · ${row.carpetAreaM2} m²` },
-    { key: "rent", header: "Giá thuê", align: "right", render: (row) => `${money(row.baseRentPrice)}đ` },
-    {
-      key: "allin",
-      header: "All-in/tháng",
-      align: "right",
-      render: (row) => (
-        <span title="Thuê + phí quản lý + gửi 1 xe máy + điện nước 1 người">
-          {money(allInCost({ rent: row.baseRentPrice, areaM2: row.carpetAreaM2, managementFee: row.managementFee || undefined }).total)}đ
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Trạng thái",
-      render: (row) => {
-        const s = UNIT_STATUS[row.status] ?? { label: row.status, badge: "badge-plain" };
-        return (
-          <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
-            <span className={`badge ${s.badge}`}>{s.label}</span>
-            {row.mandateStatus === "EXIT_REQUESTED" && (
-              <span className="badge badge-coral-soft">
-                <Timer size={12} /> Đang thoát{row.exitCountdownDays !== null ? ` · ${row.exitCountdownDays}d` : ""}
-              </span>
-            )}
-            {row.mandateStatus === "PENDING_INSPECTION" && <span className="badge badge-amber-soft">Chờ thẩm định</span>}
-          </span>
-        );
-      },
-    },
-    {
-      key: "lock",
-      header: "Khoá",
-      render: (row) => <span className="badge badge-plain">{row.doorLockType === "ELECTRONIC_PIN" ? <Smartphone size={12} /> : <KeyRound size={12} />} {row.doorLockType === "ELECTRONIC_PIN" ? "Điện tử" : "Chìa cơ"}</span>,
-    },
-  ];
-
-  const statusCount = (s: string) => rows.filter((row) => row.status === s).length;
+  const units = inventory.state.status === "ready" ? inventory.state.data : null;
+  const reqs = consignments.state.status === "ready" ? consignments.state.data : null;
+  const openReqs = reqs?.filter((c) => OPEN_STAGES.has(c.status)).length ?? 0;
+  const exiting = units?.filter((u) => u.mandateStatus === "EXIT_REQUESTED").length ?? 0;
 
   return (
     <div className={styles.page}>
-      <PageHeader
-        title="Căn hộ và ký gửi"
-        description="Rổ hàng, tình trạng căn và uỷ quyền được tải trực tiếp từ Supabase qua backend."
-        actions={<button type="button" className="btn btn-quiet btn-sm" onClick={() => void refresh()} disabled={refreshing}><RefreshCw size={15} /> Cập nhật</button>}
-      />
+      <PageHeader title="Căn hộ và ký gửi" description="Rổ hàng ký gửi độc quyền: chi phí kiểm định một lần khi tiếp nhận, không môi giới ngoài." />
 
       <div className={styles.tabs} role="tablist">
-        <button type="button" role="tab" aria-selected={tab === "units"} onClick={() => setTab("units")}>Rổ hàng ({rows.length})</button>
-        <button type="button" role="tab" aria-selected={tab === "requests"} onClick={() => setTab("requests")}>Chờ thẩm định ({requests.length})</button>
-        <button type="button" role="tab" aria-selected={tab === "exit"} onClick={() => setTab("exit")}>Thoát uỷ quyền ({exiting.length})</button>
+        <button type="button" role="tab" aria-selected={tab === "units"} onClick={() => setTab("units")}>
+          Rổ hàng{units ? ` (${units.length})` : ""}
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "requests"} onClick={() => setTab("requests")}>
+          Yêu cầu ký gửi {openReqs > 0 && <i>{openReqs}</i>}
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "exit"} onClick={() => setTab("exit")}>
+          Thoát uỷ quyền 15 ngày {exiting > 0 && <i>{exiting}</i>}
+        </button>
       </div>
 
-      {error && <div role="alert" className="card"><b>Không tải được rổ hàng</b><p className="small muted">{error}</p><button type="button" className="btn btn-quiet btn-sm" onClick={() => void refresh()}>Thử lại</button></div>}
-      {loading ? <div className="skeleton" style={{ height: 360 }} /> : !error && (
-        <>
-          {tab === "units" && (
-            <>
-              <div className={styles.pills} role="tablist" aria-label="Lọc nhanh theo trạng thái căn">
-                <button type="button" role="tab" aria-selected={status === "all"} className={`${styles.pill} ${status === "all" ? styles.pillActive : ""}`} onClick={() => setStatus("all")}>
-                  Tất cả ({rows.length})
-                </button>
-                {Object.entries(UNIT_STATUS).filter(([key]) => statusCount(key) > 0).map(([key, s]) => (
-                  <button key={key} type="button" role="tab" aria-selected={status === key} className={`${styles.pill} ${status === key ? styles.pillActive : ""}`} onClick={() => setStatus(key)}>
-                    {s.label} ({statusCount(key)})
-                  </button>
-                ))}
-              </div>
-              <div className={styles.tools}>
-                <select className="select" value={zone} onChange={(event) => setZone(event.target.value)} aria-label="Lọc theo phân khu">
-                  <option value="all">Mọi phân khu</option>{zones.map((item) => <option key={item} value={item}>{item}</option>)}
-                </select>
-                <select className="select" value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Lọc theo trạng thái căn">
-                  <option value="all">Mọi trạng thái</option>{Object.entries(UNIT_STATUS).map(([key, s]) => <option key={key} value={key}>{s.label}</option>)}
-                </select>
-                <select className="select" value={lock} onChange={(event) => setLock(event.target.value as LockFilter)} aria-label="Lọc theo loại khoá">
-                  <option value="all">Mọi loại khoá</option><option value="ELECTRONIC_PIN">Khoá điện tử</option><option value="PHYSICAL_KEY">Chìa cơ</option>
-                </select>
-                <span className="muted small">{filtered.length} căn</span>
-              </div>
-              <section className={`card ${styles.tableCard}`}>
-                <DataTable<InventoryRow> columns={columns} rows={filtered} rowHref={(row) => `/admin/inventory/${row.id}`} empty={<span className="muted">Không có căn nào khớp bộ lọc.</span>} />
-              </section>
-              <p className="muted xs">All-in/tháng = giá thuê + phí quản lý + gửi 1 xe máy + điện nước ước tính 1 người. Bấm vào một hàng để mở hồ sơ căn.</p>
-            </>
-          )}
-
-          {tab === "requests" && (
-            requests.length ? <div className={styles.reqs}>{requests.map((row) => (
-              <article key={row.id} className={`card ${styles.req}`}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                  <div><h3><Link href={`/admin/inventory/${row.id}`} className="link">{row.unitCode}</Link></h3><p className="muted small">{row.zone} · {row.landlordName || "Chưa có tên chủ nhà"}</p></div>
-                  <span className="badge badge-amber-soft"><Timer size={12} /> Chờ thẩm định</span>
-                </div>
-                <p className="small muted">Giá thuê {money(row.baseRentPrice)}đ · {row.carpetAreaM2} m² · tạo {date(row.createdAt)}</p>
-              </article>
-            ))}</div> : <div className={styles.empty}>Không có uỷ quyền nào đang chờ thẩm định trong Supabase.</div>
-          )}
-
-          {tab === "exit" && (
-            exiting.length ? <div className={styles.reqs}>{exiting.map((row) => (
-              <article key={row.id} className={`card ${styles.req}`}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                  <div><h3><Link href={`/admin/inventory/${row.id}`} className="link">{row.unitCode}</Link></h3><p className="muted small">{row.zone} · {row.landlordName || "Chưa có tên chủ nhà"}</p></div>
-                  <span className="badge badge-coral-soft"><Timer size={12} /> {row.exitCountdownDays === null ? "Chưa có hạn" : row.exitCountdownDays === 0 ? "Đã đủ hạn" : `Còn ${row.exitCountdownDays} ngày`}</span>
-                </div>
-                <p className="small muted">Yêu cầu {date(row.exitRequestedAt)} · hiệu lực {date(row.exitEffectiveAt)}</p>
-                {row.terminateBlockedReason && <p className="small muted">Chưa thể kết thúc: {row.terminateBlockedReason}</p>}
-                <div style={{ display: "flex", justifyContent: "flex-end" }}><button type="button" className="btn btn-quiet btn-sm" disabled={!row.canTerminate || !row.mandateId} onClick={() => void terminate(row)}>Hoàn tất thoát</button></div>
-              </article>
-            ))}</div> : <div className={styles.empty}>Không có yêu cầu thoát uỷ quyền trong dữ liệu hiện tại.</div>
-          )}
-        </>
+      {tab === "units" && (
+        <AdminQuery query={inventory} title="Không tải được rổ hàng">
+          {(rows) => <UnitsTab rows={rows} />}
+        </AdminQuery>
+      )}
+      {tab === "requests" && (
+        <AdminQuery query={consignments} title="Không tải được hồ sơ ký gửi">
+          {(rows) => <RequestsTab rows={rows} />}
+        </AdminQuery>
+      )}
+      {tab === "exit" && (
+        <AdminQuery query={inventory} title="Không tải được rổ hàng">
+          {(rows) => <ExitTab rows={rows.filter((u) => u.mandateStatus === "EXIT_REQUESTED")} />}
+        </AdminQuery>
       )}
     </div>
+  );
+}
+
+// ─── Rổ hàng ────────────────────────────────────────────────────────────────────────────────────────────────
+
+function UnitsTab({ rows }: { rows: InventoryRow[] }) {
+  const [zone, setZone] = useState("all");
+  const [status, setStatus] = useState<UnitStatusApi | "all">("all");
+  const [lock, setLock] = useState<DoorLockApi | "all">("all");
+  const zones = Array.from(new Set(rows.map((u) => u.zone))).sort();
+  const list = rows.filter((u) => (zone === "all" || u.zone === zone) && (status === "all" || u.status === status) && (lock === "all" || u.doorLockType === lock));
+
+  return (
+    <>
+      <div className={styles.tools}>
+        <select className="select" value={zone} onChange={(e) => setZone(e.target.value)} aria-label="Lọc theo phân khu">
+          <option value="all">Mọi phân khu</option>
+          {zones.map((z) => (
+            <option key={z} value={z}>
+              {z}
+            </option>
+          ))}
+        </select>
+        <select className="select" value={status} onChange={(e) => setStatus(e.target.value as UnitStatusApi | "all")} aria-label="Lọc theo trạng thái">
+          <option value="all">Mọi trạng thái</option>
+          {(Object.keys(UNIT_STATUS_LABEL) as UnitStatusApi[]).map((s) => (
+            <option key={s} value={s}>
+              {UNIT_STATUS_LABEL[s].label}
+            </option>
+          ))}
+        </select>
+        <select className="select" value={lock} onChange={(e) => setLock(e.target.value as DoorLockApi | "all")} aria-label="Lọc theo loại khoá">
+          <option value="all">Mọi loại khoá</option>
+          <option value="ELECTRONIC_PIN">Khoá điện tử</option>
+          <option value="PHYSICAL_KEY">Chìa cơ</option>
+        </select>
+        <span className="muted small">{list.length} căn</span>
+      </div>
+      <DataTable<InventoryRow>
+        columns={
+          [
+            {
+              key: "unit",
+              header: "Căn hộ",
+              render: (u) => (
+                <>
+                  <b>{unitTitle(u)}</b>
+                  <span className="muted xs" style={{ display: "block" }}>
+                    {u.unitCode}
+                    {u.isVerified && <BadgeCheck size={12} aria-label="Đã xác minh" style={{ marginLeft: 4, color: "var(--ok)" }} />}
+                  </span>
+                </>
+              ),
+            },
+            { key: "zone", header: "Phân khu", render: (u) => u.zone },
+            { key: "layout", header: "Loại", render: (u) => `${LAYOUT_LABEL[layoutKindOf(u.layout)]} · ${u.carpetAreaM2}m²` },
+            { key: "rent", header: "Giá thuê", align: "right", render: (u) => vnd(u.baseRentPrice) },
+            {
+              key: "status",
+              header: "Trạng thái",
+              render: (u) => (
+                <>
+                  <span className={`badge ${unitStatusMeta(u.status, u.mandateStatus).badge}`}>{unitStatusMeta(u.status, u.mandateStatus).label}</span>
+                  {u.mandateStatus === "EXIT_REQUESTED" && (
+                    <span className="badge badge-coral-soft" style={{ marginLeft: 6 }}>
+                      <Timer size={12} /> Đang thoát
+                    </span>
+                  )}
+                </>
+              ),
+            },
+            {
+              key: "lock",
+              header: "Khoá",
+              render: (u) => (
+                <span className="badge badge-plain">
+                  {u.doorLockType === "PHYSICAL_KEY" ? <KeyRound size={12} /> : <Smartphone size={12} />} {lockLabel(u.doorLockType)}
+                </span>
+              ),
+            },
+            { key: "landlord", header: "Chủ nhà", render: (u) => u.landlordName ?? "—" },
+          ] satisfies DataTableColumn<InventoryRow>[]
+        }
+        rows={list}
+        rowHref={(u) => `/admin/inventory/${u.id}`}
+        empty={<span className="muted">Không có căn nào khớp bộ lọc.</span>}
+      />
+    </>
+  );
+}
+
+// ─── Hồ sơ ký gửi ───────────────────────────────────────────────────────────────────────────────────────────
+
+function RequestsTab({ rows }: { rows: AdminConsignment[] }) {
+  const now = useNow(60_000);
+  const [rejecting, setRejecting] = useState<AdminConsignment | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  if (!now) return <div className="skeleton" style={{ height: 360 }} />;
+
+  const sorted = [...rows].sort((a, b) => Number(OPEN_STAGES.has(b.status)) - Number(OPEN_STAGES.has(a.status)));
+  const reviewing = rows.filter((c) => c.status === "reviewing").length;
+  const inspecting = rows.filter((c) => c.status === "awaiting_host" || c.status === "inspecting");
+  const overdue = inspecting.filter((c) => isInspectOverdue(c, now)).length;
+
+  const approve = async (c: AdminConsignment) => {
+    setBusy(c.id);
+    const res = await inventoryApi.approve(c.id);
+    setBusy(null);
+    if (!res.ok) return toast(apiErrorText(res, "Chưa duyệt được hồ sơ."));
+    toast("Đã duyệt ký gửi theo phiếu thẩm định.", "success");
+    invalidateInventory();
+  };
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: "var(--space-3)", display: "flex", gap: "var(--space-3)", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <b>Chờ duyệt:</b> {reviewing} căn · <b>Đang thẩm định:</b> {inspecting.length} căn
+          {overdue > 0 && (
+            <span className="badge badge-coral-soft" style={{ marginLeft: 8 }}>
+              <Timer size={12} /> {overdue} quá hạn
+            </span>
+          )}
+        </div>
+        <span className="muted small">Host kiểm tra thực tế trong 48h. Admin chỉ duyệt hồ sơ Inspector đề xuất không nhận.</span>
+      </div>
+
+      {sorted.length === 0 && <div className={styles.empty}>Chưa có yêu cầu ký gửi.</div>}
+      <div className={styles.reqs}>
+        {sorted.map((c) => {
+          const meta = CONSIGN_STATUS_META[c.status];
+          const late = isInspectOverdue(c, now);
+          const report = c.report as { recommendation?: string; note?: string } | null;
+          return (
+            <article key={c.id} className={`card ${styles.req}`}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <div>
+                  <h3>
+                    <Link href={consignmentHref(c.id)} className="link" style={{ textDecoration: "none" }}>
+                      {c.building} · Tầng {c.floor} · Căn {c.door}
+                    </Link>
+                  </h3>
+                  <p className="muted small">
+                    {c.landlord?.fullName ?? "—"} · #{c.contractNumber}
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  {late && (
+                    <span className="badge badge-coral-soft" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 700 }}>
+                      <AlertTriangle size={12} /> Quá hạn thẩm định
+                    </span>
+                  )}
+                  <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
+                </div>
+              </div>
+              <dl className={styles.reqMeta}>
+                <div>
+                  <dt>Loại căn</dt>
+                  <dd>
+                    {LAYOUT_LABEL[c.layoutKind]} · {c.areaM2} m²
+                  </dd>
+                </div>
+                <div>
+                  <dt>Giá chào thuê</dt>
+                  <dd>{vnd(c.askRent)}đ/tháng</dd>
+                </div>
+                <div>
+                  <dt>Nội thất</dt>
+                  <dd>{c.furnished ? "Có nội thất" : "Không nội thất"}</dd>
+                </div>
+                <div>
+                  <dt>Khoá cửa</dt>
+                  <dd>{c.locks.includes("physical") ? (c.locks.includes("smart") ? "Điện tử + chìa cơ" : "Chìa cơ") : "Khoá điện tử"}</dd>
+                </div>
+                <div>
+                  <dt>Host phụ trách</dt>
+                  <dd>{c.hostName ?? "Chưa gán"}</dd>
+                </div>
+                <div>
+                  <dt>Gửi lúc</dt>
+                  <dd>{fmtDate(c.createdAt)}</dd>
+                </div>
+              </dl>
+              {c.note && <p className="small muted">Ghi chú: {c.note}</p>}
+              {report?.recommendation && (
+                <p className="small" style={{ marginTop: "var(--space-2)" }}>
+                  <b>Đề xuất từ Host:</b>{" "}
+                  <span className={report.recommendation === "approve" ? "text-ok" : "text-danger"}>
+                    {report.recommendation === "approve" ? "Đủ điều kiện nhận ký gửi" : "Không khuyến nghị nhận"}
+                  </span>
+                  {report.note ? ` — ${report.note}` : ""}
+                </p>
+              )}
+              {c.status === "reviewing" && (
+                <div className={styles.reqActions}>
+                  <button type="button" className="btn btn-quiet" onClick={() => setRejecting(c)} disabled={busy === c.id}>
+                    <X size={16} /> Từ chối
+                  </button>
+                  <button type="button" className="btn btn-success" style={{ flex: 1 }} onClick={() => approve(c)} disabled={busy === c.id}>
+                    <Check size={16} /> {busy === c.id ? "Đang duyệt…" : "Duyệt ký gửi"}
+                  </button>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+
+      <RejectModal target={rejecting} onClose={() => setRejecting(null)} />
+    </>
+  );
+}
+
+/** Từ chối hồ sơ ở stage `reviewing` — backend yêu cầu lý do ≥ 5 ký tự và chấm dứt ủy quyền. */
+export function RejectModal({ target, onClose }: { target: Pick<AdminConsignment, "id"> | null; onClose: () => void }) {
+  const [note, setNote] = useState("Ảnh hiện trạng hoặc chất lượng chưa đạt yêu cầu");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!target) return;
+    if (note.trim().length < REJECT_NOTE_MIN) return setError(`Lý do từ chối phải có ít nhất ${REJECT_NOTE_MIN} ký tự.`);
+    setBusy(true);
+    const res = await inventoryApi.reject(target.id, note.trim());
+    setBusy(false);
+    if (!res.ok) return setError(apiErrorText(res, "Chưa từ chối được hồ sơ."));
+    toast("Đã từ chối hồ sơ ký gửi và báo chủ nhà.", "success");
+    invalidateInventory();
+    setError("");
+    onClose();
+  };
+
+  return (
+    <Modal
+      open={!!target}
+      onClose={() => {
+        setError("");
+        onClose();
+      }}
+      variant="sheet"
+      title="Từ chối yêu cầu ký gửi"
+      footer={
+        <button type="button" className="btn btn-danger btn-block" onClick={submit} disabled={busy}>
+          {busy ? "Đang gửi…" : "Xác nhận không duyệt"}
+        </button>
+      }
+    >
+      <label className="field">
+        <span className="label">Lý do (gửi cho chủ nhà)</span>
+        <textarea
+          className="textarea"
+          value={note}
+          onChange={(e) => {
+            setNote(e.target.value);
+            if (error) setError("");
+          }}
+          placeholder={`Nêu rõ lý do từ chối (tối thiểu ${REJECT_NOTE_MIN} ký tự)...`}
+        />
+        {error && <span className="field-error">{error}</span>}
+      </label>
+    </Modal>
+  );
+}
+
+// ─── Thoát ủy quyền ─────────────────────────────────────────────────────────────────────────────────────────
+
+function ExitTab({ rows }: { rows: InventoryRow[] }) {
+  const [terminating, setTerminating] = useState<InventoryRow | null>(null);
+  return (
+    <>
+      {rows.length === 0 && <div className={styles.empty}>Không có căn nào đang đếm ngược thoát uỷ quyền.</div>}
+      <div className={styles.reqs}>
+        {rows.map((u) => (
+          <article key={u.id} className={`card ${styles.req}`}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <div>
+                <h3>
+                  <Link href={`/admin/inventory/${u.id}`} className="link" style={{ textDecoration: "none" }}>
+                    {unitTitle(u)}
+                  </Link>
+                </h3>
+                <p className="muted small">{u.landlordName ?? "—"}</p>
+              </div>
+              <span className="badge badge-coral-soft">
+                <Timer size={12} /> {u.exitCountdownDays ? `Còn ${u.exitCountdownDays} ngày` : "Đã đủ 15 ngày"}
+              </span>
+            </div>
+            <dl className={styles.reqMeta}>
+              <div>
+                <dt>Yêu cầu lúc</dt>
+                <dd>{u.exitRequestedAt ? fmtDate(u.exitRequestedAt) : "—"}</dd>
+              </div>
+              <div>
+                <dt>Hiệu lực</dt>
+                <dd>{u.exitEffectiveAt ? fmtDate(u.exitEffectiveAt) : "—"}</dd>
+              </div>
+              <div>
+                <dt>Trạng thái căn</dt>
+                <dd>{unitStatusMeta(u.status, u.mandateStatus).label}</dd>
+              </div>
+            </dl>
+            <p className="small muted">Khi chấm dứt, căn chuyển “Ngừng niêm yết”. Trong thời gian báo trước căn vẫn hiển thị để đón nốt khách.</p>
+            <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              {u.canTerminate ? (
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => setTerminating(u)}>
+                  Chấm dứt ủy quyền
+                </button>
+              ) : (
+                <span className="small muted">{u.terminateBlockedReason ? TERMINATE_BLOCKED_LABEL[u.terminateBlockedReason] : ""}</span>
+              )}
+              {u.mandateId && (
+                <Link href={`/admin/contracts/mandate-${u.mandateId}`} className="link small">
+                  Xem hợp đồng →
+                </Link>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+      <TerminateModal target={terminating ? { mandateId: terminating.mandateId!, title: unitTitle(terminating) } : null} onClose={() => setTerminating(null)} />
+    </>
+  );
+}
+
+/** Chấm dứt ủy quyền sau 15 ngày báo trước; backend chặn 409 khi căn HOLDING hoặc có hợp đồng hiệu lực. */
+export function TerminateModal({ target, onClose }: { target: { mandateId: string; title: string } | null; onClose: () => void }) {
+  const [reason, setReason] = useState("Chủ nhà đã báo trước đủ 15 ngày");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!target) return;
+    if (!reason.trim()) return setError("Bắt buộc nhập lý do chấm dứt ủy quyền.");
+    setBusy(true);
+    const res = await inventoryApi.terminateMandate(target.mandateId, reason.trim());
+    setBusy(false);
+    if (!res.ok) return setError(apiErrorText(res, "Chưa chấm dứt được ủy quyền."));
+    toast("Đã chấm dứt ủy quyền, căn chuyển Ngừng niêm yết.", "success");
+    invalidateInventory();
+    setError("");
+    onClose();
+  };
+
+  return (
+    <Modal
+      open={!!target}
+      onClose={() => {
+        setError("");
+        onClose();
+      }}
+      variant="sheet"
+      title="Chấm dứt ủy quyền độc quyền"
+      description={target?.title}
+      footer={
+        <button type="button" className="btn btn-danger btn-block" onClick={submit} disabled={busy}>
+          {busy ? "Đang xử lý…" : "Xác nhận chấm dứt"}
+        </button>
+      }
+    >
+      <label className="field">
+        <span className="label">Lý do (lưu Audit)</span>
+        <textarea
+          className="textarea"
+          value={reason}
+          onChange={(e) => {
+            setReason(e.target.value);
+            if (error) setError("");
+          }}
+        />
+        {error && <span className="field-error">{error}</span>}
+      </label>
+    </Modal>
   );
 }

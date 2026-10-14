@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "@/components/ui/Toast";
+import { landlordItemLabels } from "@/lib/inspection/landlordItems";
 import { CONDITION_OPTIONS, GROUPS, GROUP_LABEL, MAX_EXTRA_LINES, blankLine } from "@/lib/inspection/logic";
 import type { CatalogItem, DraftLine, InspectionDraft, InventoryGroup } from "@/lib/inspection/types";
 import consign from "@/components/consign/Consign.module.css";
@@ -18,62 +19,50 @@ interface Props {
   onChange: (patch: (d: InspectionDraft) => InspectionDraft) => void;
 }
 
+interface CatalogProps extends Props {
+  /** Mã hạng mục chủ nhà khai có sẵn; null = hồ sơ cũ không khai (không hiện badge). */
+  declaredCodes: string[] | null;
+}
+
 const invalidIndex = (field: string | null): number => {
   const m = field ? /^inventory\.(\d+)/.exec(field) : null;
   return m ? Number(m[1]) : -1;
 };
 
-/** Khối 5 — bảng kê 32 hạng mục Điều 5 (accordion 8 nhóm) + tối đa 10 dòng phát sinh X. */
-export function InventoryBlock({ draft, catalog, photos, invalidField, onChange }: Props) {
+/** Mục 3 — bảng kê 32 hạng mục Điều 5 (accordion 8 nhóm), đánh dấu món chủ nhà đã khai. */
+export function InventoryBlock({ draft, catalog, photos, invalidField, onChange, declaredCodes }: CatalogProps) {
   const [open, setOpen] = useState<Record<InventoryGroup, boolean>>({ I: true, II: true, III: false, IV: false, V: false, VI: false, VII: false, VIII: false });
   const bad = invalidIndex(invalidField);
   const n = catalog.length;
-  const extras = draft.inventory.slice(n);
+  const declared = declaredCodes ? new Set(declaredCodes) : null;
+  const declaredLabels = declaredCodes ? landlordItemLabels(declaredCodes) : [];
   const allOpen = GROUPS.every((g) => open[g]);
-  const catalogLines = draft.inventory.slice(0, n);
-  const allPresent = catalogLines.every((l) => l.present);
-  const nonePresent = catalogLines.every((l) => !l.present);
-
-  // Tick / bỏ tick cả 32 hạng mục chuẩn (không đụng dòng phát sinh X). Ảnh đã tải vẫn nằm trên máy chủ như khi bỏ tick từng dòng.
-  const setAllPresent = (value: boolean) => onChange((d) => ({ ...d, inventory: d.inventory.map((l, i) => (i < n ? { ...l, present: value } : l)) }));
 
   const patchLine = (index: number, p: Partial<DraftLine>) => onChange((d) => ({ ...d, inventory: d.inventory.map((l, i) => (i === index ? { ...l, ...p } : l)) }));
 
-  const addExtra = () => {
-    if (extras.length >= MAX_EXTRA_LINES) {
-      toast(`Tối đa ${MAX_EXTRA_LINES} hạng mục phát sinh ngoài catalog.`, "info");
-      return;
-    }
-    onChange((d) => ({ ...d, inventory: [...d.inventory, { ...blankLine({ code: `X${d.inventory.length - n + 1}`, group: "I", name: "", liability: "misuse" }, true), condition: 80 }] }));
-  };
-  const removeExtra = (index: number) => {
-    // Chỉ cho xoá dòng X CUỐI (mã X1..Xk phải liên tục, ảnh gắn theo mã) — ảnh của dòng đó xoá khỏi server luôn.
-    const line = draft.inventory[index];
-    for (const p of photos.photosOf(line.code)) photos.remove(p.id);
-    onChange((d) => ({ ...d, inventory: d.inventory.filter((_, i) => i !== index) }));
-  };
-
   return (
     <div className={consign.formCard}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--s-3)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--s-3)", flexWrap: "wrap" }}>
         <div>
-          <h3 className={consign.formCardTitle}>5. Bảng kê trang thiết bị</h3>
+          <h3 className={consign.formCardTitle}>3. Bảng kê trang thiết bị</h3>
           <p className="muted small" style={{ margin: "var(--s-1) 0 0" }}>
-            {n} hạng mục chuẩn chia theo 8 khu vực. Mỗi hạng mục có mặt cần 1–{photos.perLineMax} ảnh chụp tại căn (bằng chứng cho Hộ chiếu bàn giao, không công khai).
+            {n} hạng mục chuẩn chia theo 8 phân khu sinh hoạt theo HĐ thuê chính thức. Mỗi món có mặt cần 1–{photos.perLineMax} ảnh chụp tại căn.
           </p>
         </div>
-        <div style={{ display: "flex", gap: "var(--s-2)", flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <button type="button" className="btn btn-quiet btn-sm" disabled={allPresent} onClick={() => setAllPresent(true)}>
-            Tick tất cả
-          </button>
-          <button type="button" className="btn btn-quiet btn-sm" disabled={nonePresent} onClick={() => setAllPresent(false)}>
-            Bỏ tick tất cả
-          </button>
-          <button type="button" className="btn btn-quiet btn-sm" onClick={() => setOpen(Object.fromEntries(GROUPS.map((g) => [g, !allOpen])) as Record<InventoryGroup, boolean>)}>
-            {allOpen ? "Thu gọn tất cả" : "Mở tất cả"}
-          </button>
-        </div>
+        <button type="button" className="btn btn-quiet btn-sm" onClick={() => setOpen(Object.fromEntries(GROUPS.map((g) => [g, !allOpen])) as Record<InventoryGroup, boolean>)}>
+          {allOpen ? "Thu gọn tất cả" : "Mở tất cả"}
+        </button>
       </div>
+
+      {declared && declared.size > 0 && (
+        <div className={consign.landlordSyncBanner}>
+          <Sparkles size={16} style={{ flexShrink: 0, color: "#059669" }} />
+          <span>
+            <b>Đã tự động liên kết từ hồ sơ ký gửi:</b> Hệ thống đã đối chiếu và tích sẵn <b>{declared.size} món</b> theo kê khai của chủ nhà
+            {declaredLabels.length > 0 && ` (${declaredLabels.join(", ")})`}. Host kiểm tra hiện trạng thực tế và chụp ảnh xác nhận.
+          </span>
+        </div>
+      )}
 
       {GROUPS.map((grp) => {
         const idxs = draft.inventory.slice(0, n).map((l, i) => (l.group === grp ? i : -1)).filter((i) => i >= 0);
@@ -97,19 +86,54 @@ export function InventoryBlock({ draft, catalog, photos, invalidField, onChange 
             {isOpen && (
               <div className={consign.groupBody}>
                 {idxs.map((i) => (
-                  <LineRow key={draft.inventory[i].code} id={`insp-inventory-${i}`} line={draft.inventory[i]} hint={catalog[i]} bad={bad === i} photos={photos} onPatch={(p) => patchLine(i, p)} />
+                  <LineRow
+                    key={draft.inventory[i].code}
+                    id={`insp-inventory-${i}`}
+                    line={draft.inventory[i]}
+                    hint={catalog[i]}
+                    bad={bad === i}
+                    photos={photos}
+                    declared={declared ? declared.has(draft.inventory[i].code) : undefined}
+                    onPatch={(p) => patchLine(i, p)}
+                  />
                 ))}
               </div>
             )}
           </div>
         );
       })}
+    </div>
+  );
+}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--s-3)", marginTop: "var(--s-2)" }}>
+/** Mục 4 — tối đa 10 hạng mục phát sinh ngoài catalog (mã X1..Xk liên tục). */
+export function ExtraItemsBlock({ draft, catalog, photos, invalidField, onChange }: Props) {
+  const bad = invalidIndex(invalidField);
+  const n = catalog.length;
+  const extras = draft.inventory.slice(n);
+  const patchLine = (index: number, p: Partial<DraftLine>) => onChange((d) => ({ ...d, inventory: d.inventory.map((l, i) => (i === index ? { ...l, ...p } : l)) }));
+
+  const addExtra = () => {
+    if (extras.length >= MAX_EXTRA_LINES) {
+      toast(`Tối đa ${MAX_EXTRA_LINES} hạng mục phát sinh ngoài catalog.`, "info");
+      return;
+    }
+    onChange((d) => ({ ...d, inventory: [...d.inventory, { ...blankLine({ code: `X${d.inventory.length - n + 1}`, group: "I", name: "", liability: "misuse" }, true), condition: 80 }] }));
+  };
+  const removeExtra = (index: number) => {
+    // Chỉ cho xoá dòng X CUỐI (mã X1..Xk phải liên tục, ảnh gắn theo mã) — ảnh của dòng đó xoá khỏi server luôn.
+    const line = draft.inventory[index];
+    for (const p of photos.photosOf(line.code)) photos.remove(p.id);
+    onChange((d) => ({ ...d, inventory: d.inventory.filter((_, i) => i !== index) }));
+  };
+
+  return (
+    <div className={consign.formCard}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--s-3)" }}>
         <div>
-          <h4 className={consign.formCardTitle}>Hạng mục phát sinh ngoài</h4>
+          <h3 className={consign.formCardTitle}>4. Hạng mục phát sinh ngoài catalog</h3>
           <p className="muted small" style={{ margin: "var(--s-1) 0 0" }}>
-            Tối đa {MAX_EXTRA_LINES} món đặc thù (két sắt, cây cảnh, máy chiếu…).
+            Kê khai thêm tối đa {MAX_EXTRA_LINES} món đồ đặc thù (két sắt, cây cảnh, máy chiếu...)
           </p>
         </div>
         {extras.length < MAX_EXTRA_LINES && (
@@ -141,11 +165,13 @@ interface RowProps {
   bad: boolean;
   extra?: boolean;
   photos: PhotoController;
+  /** Chủ nhà có khai món này không; undefined = không có dữ liệu khai (dòng X / hồ sơ cũ). */
+  declared?: boolean;
   onPatch: (p: Partial<DraftLine>) => void;
   onRemove?: () => void;
 }
 
-function LineRow({ id, line, hint, bad, extra, photos, onPatch, onRemove }: RowProps) {
+function LineRow({ id, line, hint, bad, extra, photos, declared, onPatch, onRemove }: RowProps) {
   const own = photos.photosOf(line.code);
   const ups = photos.uploadsOf(line.code);
   return (
@@ -167,6 +193,8 @@ function LineRow({ id, line, hint, bad, extra, photos, onPatch, onRemove }: RowP
             <span>
               {line.code}. {line.name}
             </span>
+            {declared === true && <span className={consign.landlordDeclaredBadge}>✓ Chủ nhà khai: Có</span>}
+            {declared === false && !line.present && <span className={consign.landlordUndeclaredBadge}>(Chủ nhà không kê khai)</span>}
           </label>
         )}
       </div>

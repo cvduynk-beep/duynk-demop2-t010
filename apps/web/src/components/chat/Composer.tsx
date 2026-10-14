@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Lock, LogIn, Send } from "lucide-react";
+import { CHAT_MESSAGE_MAX } from "@/lib/chat/api";
+import type { CriteriaState } from "@/lib/chat/types";
 import { SAMPLE_PROMPTS, sentenceFromCriteria, hasCriteria } from "@/lib/tenant/matchmaker";
-import type { CriteriaState } from "@/lib/mock/types";
 import { FilterTray } from "./FilterTray";
 import styles from "./Composer.module.css";
 
@@ -12,63 +13,39 @@ interface ComposerProps {
   criteria: CriteriaState;
   onCriteria: (c: CriteriaState) => void;
   onSend: (text: string) => void;
+  onTyping?: (typing: boolean) => void;
   busy: boolean;
   /** Khách vãng lai đã hết lượt nhắn. */
   locked: boolean;
   guestNotice: boolean;
   variant: "hero" | "rail";
   showPrompts?: boolean;
-  locale?: "vi" | "en";
-  /** Điền sẵn nội dung (không tự gửi); nonce đổi ⇒ áp dụng lại. */
-  prefill?: { text: string; nonce: number };
 }
 
-const HINT_INTERVAL_MS = 5000;
-
-const SAMPLE_PROMPTS_EN = [
-  "2 bedrooms in Sapphire 2 under 12 million",
-  "Furnished studio with air conditioning",
-  "High floor, budget up to 10 million",
-];
-
-export function Composer({ criteria, onCriteria, onSend, busy, locked, guestNotice, variant, showPrompts, locale = "vi", prefill }: ComposerProps) {
+export function Composer({ criteria, onCriteria, onSend, onTyping, busy, locked, guestNotice, variant, showPrompts }: ComposerProps) {
   const [text, setText] = useState("");
-  const [seenNonce, setSeenNonce] = useState(prefill?.nonce ?? 0);
-  // Nhận prefill mới ngay trong lúc render (không cần effect) — chỉ điền, không gửi.
-  if (prefill && prefill.nonce !== seenNonce) {
-    setSeenNonce(prefill.nonce);
-    setText(prefill.text);
-  }
   const area = useRef<HTMLTextAreaElement>(null);
   const filtered = hasCriteria(criteria);
-
-  // Placeholder hero tự đổi mỗi 5 giây theo cùng bộ câu với thẻ gợi ý; dừng khi đang gõ hoặc đang xử lý.
-  const prompts = locale === "en" ? SAMPLE_PROMPTS_EN : SAMPLE_PROMPTS;
-  const [hintIndex, setHintIndex] = useState(0);
-  const rotating = variant === "hero" && !locked && !text && !busy;
-  useEffect(() => {
-    if (!rotating) return;
-    const id = setInterval(() => setHintIndex((value) => value + 1), HINT_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [rotating]);
-  const hint = prompts[hintIndex % prompts.length];
 
   const grow = (el: HTMLTextAreaElement) => {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   };
 
-  const prefillNonce = prefill?.nonce;
-  useEffect(() => {
-    if (prefillNonce && area.current) grow(area.current);
-  }, [prefillNonce]);
+  const currentText = text.trim();
+  const canSubmit = Boolean(currentText || filtered);
 
   const submit = (value?: string) => {
-    const body = (value ?? text).trim() || (filtered ? sentenceFromCriteria(criteria) : "");
+    const rawVal = value ?? area.current?.value ?? text;
+    const body = ((rawVal ?? "").trim() || (filtered ? sentenceFromCriteria(criteria) : "")).slice(0, CHAT_MESSAGE_MAX);
     if (!body || busy || locked) return;
+    onTyping?.(false);
     onSend(body);
     setText("");
-    if (area.current) area.current.style.height = "auto";
+    if (area.current) {
+      area.current.value = "";
+      area.current.style.height = "auto";
+    }
   };
 
   if (locked) {
@@ -78,70 +55,116 @@ export function Composer({ criteria, onCriteria, onSend, busy, locked, guestNoti
           <Lock size={18} />
         </span>
         <div>
-          <strong>{locale === "en" ? "You have used your free message" : "Bạn đã dùng lượt nhắn miễn phí"}</strong>
-          <p className="muted small">{locale === "en" ? "Sign in to keep chatting with VinStay AI. You can still browse homes, change filters, and request a viewing without an account." : "Đăng nhập để chat không giới hạn với VinStay AI. Xem căn, đổi bộ lọc và đặt lịch vẫn dùng được mà không cần tài khoản."}</p>
+          <strong>Bạn đã dùng hết lượt tư vấn miễn phí</strong>
+          <p className="muted small">
+            Đăng nhập bằng Zalo OTP hoặc SĐT để tiếp tục trò chuyện không giới hạn với Quản gia Vinny và lưu các căn bạn ưng ý. Bạn vẫn xem chi tiết và đặt lịch xem phòng bình thường!
+          </p>
           <Link href="/login?as=tenant" className="btn btn-primary btn-sm">
-            <LogIn size={15} /> {locale === "en" ? "Sign in to continue" : "Đăng nhập để tiếp tục"}
+            <LogIn size={15} /> Xác thực nhanh qua SĐT
           </Link>
         </div>
       </div>
     );
   }
 
+  const charLength = text.length;
+
   return (
-    <div className={`${styles.wrap} ${variant === "hero" ? styles.hero : ""}`}>
-      <div className={styles.shell}>
-        <div className={styles.inputRow}>
+    <div className={styles.wrap}>
+      <form
+        className={styles.shell}
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
         <label htmlFor={`composer-${variant}`} className="sr-only">
           Nhập yêu cầu tìm căn
         </label>
-        <div className={styles.areaWrap}>
-        {variant === "hero" && !text && (
-          <span className={styles.hint} aria-hidden="true">
-            <span key={hint} className={styles.hintText}>{hint}</span>
-          </span>
-        )}
         <textarea
           id={`composer-${variant}`}
           ref={area}
           className={styles.area}
           rows={1}
-          placeholder={variant === "hero" ? "" : (locale === "en" ? "Ask a follow-up or adjust your search…" : "Hỏi tiếp hoặc chỉnh yêu cầu…")}
+          maxLength={CHAT_MESSAGE_MAX}
+          placeholder={variant === "hero" ? "Ví dụ: Studio dưới 8 triệu, có điều hòa, gần VinUni…" : "Hỏi tiếp hoặc chỉnh yêu cầu…"}
           value={text}
           disabled={busy}
+          onFocus={() => onTyping?.(true)}
+          onBlur={() => {
+            if (!text.trim()) onTyping?.(false);
+          }}
           onChange={(e) => {
             setText(e.target.value);
             grow(e.target);
+            onTyping?.(Boolean(e.target.value.trim()));
+          }}
+          onInput={(e) => {
+            const val = (e.target as HTMLTextAreaElement).value;
+            setText(val);
+            grow(e.target as HTMLTextAreaElement);
+            onTyping?.(Boolean(val.trim()));
+          }}
+          onCompositionEnd={(e) => {
+            const val = (e.target as HTMLTextAreaElement).value;
+            setText(val);
+            onTyping?.(Boolean(val.trim()));
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            if (e.key === "Enter" && !e.shiftKey) {
+              if (e.nativeEvent.isComposing) {
+                return;
+              }
               e.preventDefault();
               submit();
             }
           }}
         />
-        </div>
-        <button type="button" className={`${styles.send} ${text.trim() || filtered ? styles.ready : ""}`} disabled={busy || (!text.trim() && !filtered)} onClick={() => submit()} aria-label={text.trim() ? "Gửi tin nhắn" : "Tìm căn theo bộ lọc"}>
+
+        {charLength >= 150 && (
+          <span className={`${styles.charCounter} ${charLength >= 230 ? styles.charCounterWarning : ""}`}>
+            {charLength}/{CHAT_MESSAGE_MAX}
+          </span>
+        )}
+
+        <button
+          type="submit"
+          className={`${styles.send} ${canSubmit ? styles.ready : ""}`}
+          disabled={busy || !canSubmit}
+          aria-label={currentText ? "Gửi tin nhắn" : "Tìm căn theo bộ lọc"}
+        >
           <Send size={18} />
         </button>
-        </div>
-        {showPrompts && (
-          <div className={styles.prompts} aria-label={locale === "en" ? "Suggested questions" : "Gợi ý câu hỏi"}>
-            {(locale === "en" ? SAMPLE_PROMPTS_EN : SAMPLE_PROMPTS).map((p) => (
-              <button key={p} type="button" className={styles.prompt} onClick={() => submit(p)} disabled={busy}>
+      </form>
+
+      {variant === "rail" ? (
+        <div className={styles.railToolbar}>
+          <FilterTray criteria={criteria} onChange={onCriteria} compact />
+          <div className={styles.quickChips} role="group" aria-label="Gợi ý nhanh">
+            {["Studio < 8tr", "Rẻ hơn nữa ⚡", "1PN đủ đồ", "2PN view hồ"].map((p) => (
+              <button key={p} type="button" className={styles.quickChip} onClick={() => submit(p)} disabled={busy}>
                 {p}
               </button>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className={styles.filterRow}>
+          <FilterTray criteria={criteria} onChange={onCriteria} compact />
+        </div>
+      )}
+      {variant === "hero" && filtered && <p className={`muted xs ${styles.footHint}`}>Bấm mũi tên để tìm theo bộ lọc, hoặc gõ thêm ý bạn muốn.</p>}
 
-      <div className={styles.filterRow}>
-        <FilterTray criteria={criteria} onChange={onCriteria} compact locale={locale} />
-      </div>
-      {variant === "hero" && filtered && <p className={`muted xs ${styles.footHint}`}>{locale === "en" ? "Send to search with these filters, or add more details." : "Bấm mũi tên để tìm theo bộ lọc, hoặc gõ thêm ý bạn muốn."}</p>}
-
-      {guestNotice && <p className={`muted xs ${styles.guest}`}>{locale === "en" ? "Guests can send one message. Sign in for unlimited chat." : "Khách chưa đăng nhập được nhắn 1 lần. Đăng nhập để chat không giới hạn."}</p>}
+      {showPrompts && (
+        <div className={styles.prompts}>
+          {SAMPLE_PROMPTS.map((p) => (
+            <button key={p} type="button" className={styles.prompt} onClick={() => submit(p)} disabled={busy}>
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
+      {guestNotice && <p className={`muted xs ${styles.guest}`}>✨ <strong>VinStay AI Copilot</strong> · Tư vấn căn & giải đáp BQL 24/7 · Không tin ảo, không phí ẩn.</p>}
     </div>
   );
 }

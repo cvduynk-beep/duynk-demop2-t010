@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { ConsignmentCoreModule } from '../inspection/consignment-core.module';
+import { PropertyModule } from '../property/property.module';
 import { PhoneService } from '../auth/phone/phone.service';
 import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
@@ -11,6 +13,11 @@ import { AdminInventoryService } from './admin-inventory.service';
 import { AdminDepositService } from './admin-deposit.service';
 import { AdminKeyService, ADMIN_KEY_CRYPTO } from './admin-key.service';
 import { AdminContractRegistryService } from './admin-contract-registry.service';
+import { AdminDashboardService } from './admin-dashboard.service';
+import { AdminBookingsService } from './admin-bookings.service';
+import { AdminSettingsService } from './admin-settings.service';
+import { AdminReportsController } from './reports/admin-reports.controller';
+import { AdminReportsService } from './reports/admin-reports.service';
 
 const services = [
   AdminContractRegistryService,
@@ -22,11 +29,15 @@ const services = [
   AdminInventoryService,
   AdminDepositService,
   AdminKeyService,
+  AdminDashboardService,
+  AdminBookingsService,
+  AdminSettingsService,
+  AdminReportsService,
 ];
 
 @Module({
-  imports: [AuthModule],
-  controllers: [AdminController],
+  imports: [AuthModule, ConsignmentCoreModule, PropertyModule],
+  controllers: [AdminController, AdminReportsController],
   providers: [...services, { provide: ADMIN_KEY_CRYPTO, useExisting: PhoneService }],
   exports: services,
 })

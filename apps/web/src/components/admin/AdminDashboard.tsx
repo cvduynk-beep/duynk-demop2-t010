@@ -1,334 +1,255 @@
 "use client";
 
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, ClipboardCheck, Clock3, FileSignature, RefreshCw, Timer } from "lucide-react";
+import { AlertTriangle, ArrowRight, ClipboardCheck, Clock3, FileWarning, Timer } from "lucide-react";
 import { BarList } from "@/components/charts/BarList";
 import { Funnel } from "@/components/charts/Funnel";
-import { Heatmap, type HeatRow } from "@/components/charts/Heatmap";
+import { Heatmap } from "@/components/charts/Heatmap";
 import { StackBar } from "@/components/charts/StackBar";
 import { StatTile } from "@/components/charts/StatTile";
 import { Trend } from "@/components/charts/Trend";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
-import { api } from "@/lib/apiClient";
+import {
+  activityActor,
+  activityTitle,
+  fmtDuration,
+  fmtNumber,
+  fmtPercentValue,
+  fmtRange,
+  funnelSteps,
+  heatRows,
+  ictDay,
+  presetRange,
+  shortDay,
+  useDashboardActivity,
+  useDashboardBi,
+  useDashboardDispatch,
+  useDashboardWorkItems,
+  workItemViews,
+  type RangeInput,
+} from "@/lib/admin/dashboard";
+import { ACCEPT_SLA_SECONDS } from "@/lib/admin/hosts";
 import { fmtTime, relTime } from "@/lib/format";
-import { useApiQuery } from "@/lib/query/useApiQuery";
+import type { Query } from "@/lib/query/useApiQuery";
 import { useNow } from "@/lib/useNow";
+import { DashboardRangePicker, type RangeChoice } from "./DashboardRangePicker";
 import styles from "./Admin.module.css";
 
-/** SLA nhận ticket 3 phút (AGENTS.md — điểm nghẽn vận hành #5). */
-const SLA = 180;
-const POLL_MS = 30_000;
+const NO_SHOW_TARGET = 5; // % (PRD: no-show ≤ 5%)
+const ICON = { manual: AlertTriangle, sla: AlertTriangle, consign: ClipboardCheck, exit: Timer, contracts: FileWarning } as const;
 
-interface BiData {
-  funnel: {
-    stages: { stage: string; count: number | null; available: boolean; dropRate: number | null }[];
-    noShowRate: number | null;
-  };
-  dailyBookings: { date: string; count: number }[];
-  occupancyHeatmap: { buildingCode: string; zone: string; total: number; rented: number }[];
-  portfolioStatus: { totalUnits: number; rentedUnits: number; holdingUnits: number; availableUnits: number };
-}
-
-interface SlaTicket {
-  ticketId: string;
-  bookingRef: string;
-  unitCode: string;
-  building: string;
-  hostName: string;
-  tier: number;
-  status: string;
-  offeredAt: string;
-  secondsOverdue: number;
-  isBreached: boolean;
-}
-
-interface SlaSummary {
-  breachedCount: number;
-  byHost: { hostId: string; hostName: string; accepted: number; avgAcceptSeconds: number; overSla: number }[];
-  avgAcceptSeconds: number | null;
-}
-
-interface InventoryRow {
-  mandateStatus: string;
-  exitCountdownDays: number | null;
-  canTerminate: boolean;
-}
-
-interface ContractRow {
-  status: string;
-  endDate: string;
-}
-
-const TICKET_LABEL: Record<string, string> = {
-  OFFERED: "Đang mời Host",
-  ACCEPTED: "Đã nhận ca",
-  CHECKED: "Đã đón khách",
-  COMPLETED: "Hoàn tất",
-  EXPIRED: "Hết hạn",
-  ESCALATED: "Đã leo thang",
-  CANCELLED: "Đã huỷ",
-};
-
-/** "3. Đặt lịch OTP xác thực SĐT" → "Đặt lịch OTP xác thực SĐT". */
-const stageLabel = (s: string) => s.replace(/^\d+\.\s*/, "");
-const mmss = (sec: number) => `${Math.floor(sec / 60)}′${String(sec % 60).padStart(2, "0")}″`;
-const dayLabel = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
-
-function toHeatRows(data: BiData): HeatRow[] {
-  const zones = new Map<string, HeatRow["cells"]>();
-  for (const item of data.occupancyHeatmap) {
-    const cells = zones.get(item.zone) ?? [];
-    cells.push({ building: item.buildingCode, total: item.total, used: item.rented });
-    zones.set(item.zone, cells);
-  }
-  return [...zones].sort(([a], [b]) => a.localeCompare(b)).map(([zone, cells]) => ({ zone, cells }));
-}
-
-export function AdminDashboard() {
-  const bi = useApiQuery({ key: "admin-bi-funnel", fetch: () => api.get<BiData>("/admin/bi-funnel") }, true, { pollMs: POLL_MS });
-  const tickets = useApiQuery({ key: "admin-dispatch-sla", fetch: () => api.get<SlaTicket[]>("/admin/dispatch-sla") }, true, { pollMs: POLL_MS });
-  const sla = useApiQuery({ key: "admin-dispatch-sla-summary", fetch: () => api.get<SlaSummary>("/admin/dispatch-sla/summary") }, true, { pollMs: POLL_MS });
-  const inventory = useApiQuery({ key: "admin-exclusive-inventory", fetch: () => api.get<InventoryRow[]>("/admin/exclusive-inventory") });
-  const contracts = useApiQuery({ key: "admin-contracts", fetch: () => api.get<ContractRow[]>("/admin/contracts") });
-  const now = useNow(60_000);
-
-  const queries = [bi, tickets, sla, inventory, contracts];
-  const failed = queries.find((q) => q.state.status === "error");
-  const refreshing = queries.some((q) => q.state.status === "ready" && q.state.refreshing);
-  const refresh = () => queries.forEach((q) => q.reload());
-
-  const header = (
-    <PageHeader
-      title="Tổng quan vận hành"
-      description="Vinhomes Ocean Park 1 · số liệu trực tiếp từ hệ thống, tự cập nhật mỗi 30 giây"
-      actions={
-        <button type="button" className="btn btn-quiet btn-sm" onClick={refresh} disabled={refreshing}>
-          <RefreshCw size={15} /> Cập nhật
-        </button>
-      }
-    />
-  );
-
-  if (bi.state.status !== "ready" || sla.state.status !== "ready" || tickets.state.status !== "ready" || !now) {
+/** Mỗi widget tự chờ / báo lỗi + thử lại; một nguồn lỗi không làm sập cả trang. Đang làm mới ngầm thì giữ số cũ. */
+function Widget<T>({ query, title, height = 220, card = true, children }: { query: Query<T>; title: string; height?: number; card?: boolean; children: (data: T) => ReactNode }) {
+  const { state, reload } = query;
+  if (state.status === "loading") return <div className="skeleton" style={{ height, borderRadius: 16 }} aria-busy="true" aria-label={`Đang tải ${title.toLowerCase()}`} />;
+  if (state.status === "error") {
     return (
-      <div className={styles.page}>
-        {header}
-        {failed?.state.status === "error" ? (
-          <div role="alert" className="card">
-            <b>Không tải được số liệu vận hành</b>
-            <p className="small muted">{failed.state.message}</p>
-            <button type="button" className="btn btn-quiet btn-sm" onClick={refresh}>
-              Thử lại
-            </button>
-          </div>
-        ) : (
-          <div className="skeleton" style={{ height: 480 }} />
-        )}
+      <div className={`${card ? "card " : ""}${styles.widgetError}`} role="alert">
+        <b>{title}</b>
+        <p className="small">Không tải được số liệu: {state.message}</p>
+        <button type="button" className="btn btn-quiet btn-sm" onClick={reload}>
+          Thử lại
+        </button>
       </div>
     );
   }
+  return <>{children(state.data)}</>;
+}
 
-  const biData = bi.state.data;
-  const ticketRows = tickets.state.data;
-  const slaData = sla.state.data;
-  const inventoryRows = inventory.state.status === "ready" ? inventory.state.data : [];
-  const contractRows = contracts.state.status === "ready" ? contracts.state.data : [];
+const Empty = ({ children }: { children: ReactNode }) => <div className={`card muted small ${styles.widgetEmpty}`}>{children}</div>;
 
-  const { portfolioStatus: p, funnel } = biData;
-  const occupancy = p.totalUnits > 0 ? Math.round((p.rentedUnits / p.totalUnits) * 100) : null;
-  const noShow = funnel.noShowRate;
-  const daily = biData.dailyBookings.map((d) => ({ label: dayLabel(d.date), value: d.count }));
-  const today = daily.at(-1)?.value ?? 0;
-  const yesterday = daily.at(-2)?.value ?? 0;
-  const hostsOverSla = slaData.byHost.filter((h) => h.avgAcceptSeconds > SLA).length;
+export function AdminDashboard() {
+  const now = useNow(60_000);
+  const [choice, setChoice] = useState<RangeChoice>({ mode: "preset", days: 7 });
+  if (!now) return <div className="skeleton" style={{ height: 480 }} />;
+  const range: RangeInput = choice.mode === "preset" ? presetRange(choice.days, now) : { from: choice.from, to: choice.to };
+  return <DashboardBody now={now} range={range} choice={choice} onChoice={setChoice} />;
+}
 
-  const escalated = ticketRows.filter((t) => t.status === "ESCALATED");
-  const overSla = ticketRows.filter((t) => t.isBreached);
-  const pendingInspection = inventoryRows.filter((u) => u.mandateStatus === "PENDING_INSPECTION").length;
-  const exiting = inventoryRows.filter((u) => u.mandateStatus === "EXIT_REQUESTED");
-  const exitDue = exiting.filter((u) => u.canTerminate || u.exitCountdownDays === 0).length;
-  const awaitingSign = contractRows.filter((c) => c.status === "AWAITING_TENANT_SIGN" || c.status === "AWAITING_LANDLORD_SIGN").length;
-  const expiring = contractRows.filter((c) => {
-    if (c.status !== "ACTIVE") return false;
-    const left = Date.parse(c.endDate) - now;
-    return left >= 0 && left <= 30 * 86_400_000;
-  }).length;
-
-  const workItems = [
-    escalated.length > 0 && {
-      key: "escalated",
-      icon: AlertTriangle,
-      bad: true,
-      title: `${escalated.length} ticket cần điều phối tay`,
-      body: "Đã leo thang qua các tầng nhưng chưa có Host nhận ca.",
-      href: "/admin/bookings",
-      cta: "Điều phối",
-    },
-    overSla.length > 0 && {
-      key: "sla",
-      icon: AlertTriangle,
-      bad: true,
-      title: `${overSla.length} ticket quá hạn SLA`,
-      body: "Host được mời chưa nhận ca trong thời hạn của tầng hiện tại.",
-      href: "/admin/bookings",
-      cta: "Điều phối",
-    },
-    pendingInspection > 0 && {
-      key: "inspection",
-      icon: ClipboardCheck,
-      title: `${pendingInspection} căn đang chờ thẩm định ký gửi`,
-      body: "Host Thẩm định kiểm tra thực tế; đạt thì căn tự niêm yết.",
-      href: "/admin/inventory?tab=requests",
-      cta: "Xem",
-    },
-    exiting.length > 0 && {
-      key: "exit",
-      icon: Timer,
-      title: `${exiting.length} căn đang đếm ngược thoát uỷ quyền`,
-      body: exitDue > 0 ? `${exitDue} căn đã đủ 15 ngày, có thể hoàn tất thoát.` : "Hết 15 ngày báo trước mới được hoàn tất thoát.",
-      href: "/admin/inventory?tab=exit",
-      cta: "Xem",
-    },
-    expiring + awaitingSign > 0 && {
-      key: "contracts",
-      icon: FileSignature,
-      title: `${expiring + awaitingSign} hợp đồng cần theo dõi`,
-      body: [expiring > 0 && `${expiring} HĐ thuê hết hạn trong 30 ngày`, awaitingSign > 0 && `${awaitingSign} HĐ đang chờ ký`].filter(Boolean).join(" · "),
-      href: "/admin/contracts",
-      cta: "Mở sổ hợp đồng",
-    },
-  ].filter(Boolean) as { key: string; icon: typeof AlertTriangle; bad?: boolean; title: string; body: string; href: string; cta: string }[];
-
-  const recentTickets = ticketRows.slice(0, 6);
+function DashboardBody({ now, range, choice, onChoice }: { now: number; range: RangeInput; choice: RangeChoice; onChoice: (c: RangeChoice) => void }) {
+  const bi = useDashboardBi(range);
+  const dispatch = useDashboardDispatch(range);
+  const work = useDashboardWorkItems();
+  const activity = useDashboardActivity(8);
+  const label = fmtRange(range);
 
   return (
     <div className={styles.page}>
-      {header}
+      <PageHeader
+        title="Tổng quan vận hành"
+        description={`Vinhomes Ocean Park · ${label} (giờ Việt Nam). Lấp đầy, rổ hàng và việc cần xử lý là số hiện tại.`}
+        actions={<DashboardRangePicker value={choice} current={range} today={ictDay(now)} onChange={onChoice} />}
+      />
 
-      {failed?.state.status === "error" && (
-        <p role="status" className="small" style={{ color: "var(--danger)" }}>
-          {failed.state.message} Một số khối đang hiển thị dữ liệu lần tải gần nhất.
-        </p>
-      )}
-
-      {workItems.length > 0 && (
-        <Section title="Việc cần xử lý" flush>
-          <ul className={styles.alerts} aria-label="Cần xử lý">
-            {workItems.map((w) => (
-              <li key={w.key} className={w.bad ? styles.alertBad : undefined}>
-                <w.icon size={20} />
-                <div>
-                  <b>{w.title}</b>
-                  <p className="small">{w.body}</p>
-                </div>
-                <Link href={w.href} className="btn btn-quiet btn-sm">
-                  {w.cta} <ArrowRight size={14} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
+      <Widget query={work} title="Việc cần xử lý" height={96}>
+        {(w) => {
+          const items = workItemViews(w);
+          return (
+            <Section title="Việc cần xử lý" flush>
+              {items.length === 0 ? (
+                <p className={`muted small ${styles.widgetEmpty}`}>Không có việc tồn đọng.</p>
+              ) : (
+                <ul className={styles.alerts} aria-label="Cần xử lý">
+                  {items.map((it) => {
+                    const Icon = ICON[it.key as keyof typeof ICON] ?? AlertTriangle;
+                    return (
+                      <li key={it.key} className={it.bad ? styles.alertBad : undefined}>
+                        <Icon size={20} />
+                        <div>
+                          <b>{it.title}</b>
+                          <p className="small">{it.body}</p>
+                        </div>
+                        <Link href={it.href} className="btn btn-quiet btn-sm">
+                          {it.cta} <ArrowRight size={14} />
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Section>
+          );
+        }}
+      </Widget>
 
       <Section flush>
         <div className={styles.kpis}>
-          <StatTile
-            hero
-            label="Tỷ lệ lấp đầy"
-            value={occupancy === null ? "—" : String(occupancy)}
-            unit={occupancy === null ? undefined : "%"}
-            delta={{ text: `${p.rentedUnits}/${p.totalUnits} căn đã cho thuê`, tone: "flat" }}
-          />
-          <StatTile
-            label="Lịch xem đặt mới hôm nay"
-            value={String(today)}
-            delta={{ text: `so với ${yesterday} hôm qua`, tone: "flat" }}
-            spark={daily.slice(-12).map((d) => d.value)}
-          />
-          <StatTile
-            label="Tỷ lệ khách bỏ hẹn"
-            value={noShow === null ? "—" : String(noShow)}
-            unit={noShow === null ? undefined : "%"}
-            delta={noShow === null ? { text: "Chưa có ca xem kết thúc", tone: "flat" } : { text: "mục tiêu ≤ 5%", tone: noShow <= 5 ? "good" : "bad", dir: noShow <= 5 ? "down" : "up" }}
-          />
-          <StatTile
-            label="Host nhận ca trung bình"
-            value={slaData.avgAcceptSeconds === null ? "—" : mmss(slaData.avgAcceptSeconds)}
-            delta={
-              slaData.avgAcceptSeconds === null
-                ? { text: "Chưa có ca được nhận", tone: "flat" }
-                : { text: `SLA 3′00″ · ${hostsOverSla} Host vượt`, tone: hostsOverSla > 0 ? "bad" : "good", dir: hostsOverSla > 0 ? "up" : "down" }
-            }
-          />
+          <Widget query={bi} title="Tỷ lệ lấp đầy" height={128} card={false}>
+            {(d) => (
+              <StatTile
+                hero
+                label="Tỷ lệ lấp đầy"
+                value={fmtPercentValue(d.portfolioStatus.occupancyRate)}
+                unit={d.portfolioStatus.occupancyRate === null ? undefined : "%"}
+                delta={{ text: d.portfolioStatus.totalUnits === 0 ? "Chưa có căn trong hệ thống" : `${fmtNumber(d.portfolioStatus.rentedUnits)}/${fmtNumber(d.portfolioStatus.totalUnits)} căn đã cho thuê`, tone: "flat" }}
+              />
+            )}
+          </Widget>
+          <Widget query={bi} title="Lịch xem hôm nay" height={128} card={false}>
+            {(d) => <StatTile label="Lịch xem hôm nay" value={fmtNumber(d.viewingsToday.today)} delta={{ text: `so với ${fmtNumber(d.viewingsToday.yesterday)} hôm qua`, tone: "flat" }} />}
+          </Widget>
+          <Widget query={bi} title="Tỷ lệ khách bỏ hẹn" height={128} card={false}>
+            {(d) => {
+              const r = d.funnel.noShowRate;
+              return (
+                <StatTile
+                  label="Tỷ lệ khách bỏ hẹn"
+                  value={fmtPercentValue(r)}
+                  unit={r === null ? undefined : "%"}
+                  delta={
+                    r === null
+                      ? { text: "Chưa có lịch xem tới giờ hẹn trong khoảng", tone: "flat" }
+                      : { text: `${fmtNumber(d.funnel.noShowCount)}/${fmtNumber(d.funnel.noShowDenominator)} lịch · mục tiêu ≤ ${NO_SHOW_TARGET}%`, tone: r <= NO_SHOW_TARGET ? "good" : "bad", dir: r <= NO_SHOW_TARGET ? "down" : "up" }
+                  }
+                />
+              );
+            }}
+          </Widget>
+          <Widget query={dispatch} title="Host nhận ca trung bình" height={128} card={false}>
+            {(s) => {
+              const over = s.byHost.filter((h) => h.avgAcceptSeconds > ACCEPT_SLA_SECONDS).length;
+              return (
+                <StatTile
+                  label="Host nhận ca trung bình"
+                  value={fmtDuration(s.avgAcceptSeconds)}
+                  delta={
+                    s.avgAcceptSeconds === null
+                      ? { text: "Chưa có ca được nhận trong khoảng", tone: "flat" }
+                      : { text: `SLA ${fmtDuration(ACCEPT_SLA_SECONDS)} · ${fmtNumber(over)} Host vượt`, tone: over > 0 ? "bad" : "good", dir: over > 0 ? "up" : "down" }
+                  }
+                />
+              );
+            }}
+          </Widget>
         </div>
       </Section>
 
       <div className={styles.two}>
-        <Funnel steps={funnel.stages.map((s, i) => ({ key: `stage-${i}`, label: stageLabel(s.stage), value: s.available ? s.count : null }))} />
-        <Trend title="Lịch xem đặt mới mỗi ngày" subtitle="14 ngày gần nhất, đã xác thực OTP, không tính lịch đã huỷ" data={daily} seriesName="Lịch xem" />
+        <Widget query={bi} title="Phễu chuyển đổi" height={320}>
+          {(d) => <Funnel steps={funnelSteps(d.funnel.stages)} subtitle={`Lịch xem tạo trong ${label}, theo dõi tới ký hợp đồng`} />}
+        </Widget>
+        <Widget query={bi} title="Lịch xem đặt mới mỗi ngày" height={320}>
+          {(d) => (
+            <Trend
+              title="Lịch xem đặt mới mỗi ngày"
+              subtitle={`${label} · theo ngày tạo lịch, không tính lịch đã huỷ`}
+              data={d.dailyBookings.map((x) => ({ label: shortDay(x.date), value: x.count }))}
+              seriesName="Lịch xem"
+            />
+          )}
+        </Widget>
       </div>
 
       <div className={styles.two}>
-        <Heatmap rows={toHeatRows(biData)} />
+        <Widget query={bi} title="Tỷ lệ lấp đầy theo toà" height={300}>
+          {(d) => (d.occupancyHeatmap.length === 0 ? <Empty>Chưa có căn nào trong hệ thống.</Empty> : <Heatmap rows={heatRows(d.occupancyHeatmap)} />)}
+        </Widget>
         <div className={styles.stackCol}>
-          <div className={`card ${styles.padCard}`}>
-            <StackBar
-              title={`Rổ hàng ký gửi ${p.totalUnits} căn`}
-              segments={[
-                { label: "Đã cho thuê", value: p.rentedUnits },
-                { label: "Đang giữ căn", value: p.holdingUnits },
-                { label: "Còn trống", value: p.availableUnits },
-              ]}
-            />
-          </div>
-          <div className={`card ${styles.padCard}`}>
-            <h3 className={styles.feedTitle}>
-              <Clock3 size={17} /> Ticket điều phối gần nhất
-            </h3>
-            <ul className={styles.feed}>
-              {recentTickets.map((t) => (
-                <li key={t.ticketId} className={t.isBreached ? styles["t-alert"] : ""}>
-                  <div>
-                    <b>
-                      {t.unitCode} · {TICKET_LABEL[t.status] ?? t.status}
-                    </b>
-                    <p className="small muted">
-                      {t.hostName} · tầng {t.tier}
-                      {t.isBreached ? ` · quá hạn ${mmss(t.secondsOverdue)}` : ""}
-                    </p>
-                  </div>
-                  <span className="xs muted">
-                    {fmtTime(t.offeredAt)} · {relTime(t.offeredAt, now)}
-                  </span>
-                </li>
-              ))}
-              {recentTickets.length === 0 && <li className="muted small">Chưa có ticket điều phối.</li>}
-            </ul>
-            {ticketRows.length > recentTickets.length && (
-              <Link href="/admin/bookings" className="link small">
-                Xem tất cả {ticketRows.length} ticket
-              </Link>
+          <Widget query={bi} title="Rổ hàng" height={110}>
+            {(d) => {
+              const p = d.portfolioStatus;
+              return p.totalUnits === 0 ? (
+                <Empty>Chưa có căn nào trong hệ thống.</Empty>
+              ) : (
+                <div className={`card ${styles.padCard}`}>
+                  <StackBar
+                    title={`Rổ hàng ${fmtNumber(p.totalUnits)} căn`}
+                    segments={[
+                      { label: "Đã cho thuê", value: p.rentedUnits },
+                      { label: "Đang giữ căn", value: p.holdingUnits },
+                      { label: "Còn trống", value: p.availableUnits },
+                      { label: "Ngừng niêm yết / bảo trì", value: p.unlistedUnits + p.maintenanceUnits },
+                    ]}
+                  />
+                </div>
+              );
+            }}
+          </Widget>
+          <Widget query={activity} title="Dòng sự kiện" height={260}>
+            {(page) => (
+              <div className={`card ${styles.padCard}`}>
+                <h3 className={styles.feedTitle}>
+                  <Clock3 size={17} /> Dòng sự kiện
+                </h3>
+                <ul className={styles.feed}>
+                  {page.items.map((n) => (
+                    <li key={n.id}>
+                      <div>
+                        <b>{activityTitle(n.actionType)}</b>
+                        <p className="small muted">{activityActor(n)}</p>
+                      </div>
+                      <span className="xs muted">
+                        {fmtTime(n.createdAt)} · {relTime(n.createdAt, now)}
+                      </span>
+                    </li>
+                  ))}
+                  {page.items.length === 0 && <li className="muted small">Chưa có sự kiện.</li>}
+                </ul>
+              </div>
             )}
-          </div>
+          </Widget>
         </div>
       </div>
 
-      {slaData.byHost.length > 0 ? (
-        <BarList
-          title="Thời gian nhận ca của Field Host"
-          subtitle="Trung bình từ lúc được mời đến lúc bấm nhận ca; mục tiêu nhận ticket trong vòng 3 phút"
-          items={slaData.byHost.map((h) => ({ label: `${h.hostName} (${h.accepted} ca)`, value: h.avgAcceptSeconds }))}
-          threshold={SLA}
-          thresholdLabel="Ngưỡng SLA 3 phút (180 giây)"
-          format={mmss}
-          unit="Thời gian nhận ca"
-        />
-      ) : (
-        <Section title="Thời gian nhận ca của Field Host" description="Mục tiêu nhận ticket trong vòng 3 phút.">
-          <div className={styles.empty}>Chưa có ticket nào được Host nhận để tính thời gian.</div>
-        </Section>
-      )}
+      <Widget query={dispatch} title="Thời gian nhận ca của Field Host" height={220}>
+        {(s) =>
+          s.byHost.length === 0 ? (
+            <Empty>Chưa có ca nào được Host nhận trong {label}.</Empty>
+          ) : (
+            <BarList
+              title="Thời gian nhận ca của Field Host"
+              subtitle={`Trung bình trong ${label}; mục tiêu nhận ticket trong vòng 3 phút`}
+              items={s.byHost.map((h) => ({ label: h.hostName, value: h.avgAcceptSeconds, sub: `${fmtNumber(h.accepted)} ca` }))}
+              threshold={ACCEPT_SLA_SECONDS}
+              thresholdLabel="Ngưỡng SLA 3 phút (180 giây)"
+              format={(v) => fmtDuration(v)}
+              unit="Thời gian nhận ca"
+            />
+          )
+        }
+      </Widget>
     </div>
   );
 }

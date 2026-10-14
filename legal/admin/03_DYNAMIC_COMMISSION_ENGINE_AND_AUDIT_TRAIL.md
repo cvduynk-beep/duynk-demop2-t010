@@ -27,7 +27,7 @@ Toàn bộ các khoản chi phí, thù lao và hoa hồng của hệ thống đ�
 │      Thù lao cố định chi trả cho Field Host khi hoàn thành 01 lượt dẫn khách xem phòng hợp lệ.   │
 │                                                                                                  │
 │  [2] HOA HỒNG CHỐT CỌC THÀNH CÔNG (deal_commission_pct / fix) ► Dải: 200k – 1.000k VNĐ hoặc %    │
-│      Hoa hồng chi trả khi khách thuê hoàn tất ký cọc VietQR 2.000.000 VNĐ khóa căn 24h.          │
+│      Hoa hồng chi trả khi khách thuê hoàn tất cọc chốt căn qua VietQR (khóa căn mặc định 48h). │
 │                                                                                                  │
 │  [3] HỆ SỐ NHÂN THƯỞNG 5 SAO (rating_multiplier_5star) ──────► Dải điều chỉnh: 1.1x – 1.5x       │
 │      Hệ số nhân thù lao tự động kích hoạt khi khách bấm đánh giá 5★ trên tin nhắn Zalo OA.       │

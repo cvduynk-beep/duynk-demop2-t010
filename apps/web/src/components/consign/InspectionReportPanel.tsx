@@ -107,6 +107,17 @@ export function InspectionReportPanel({ unit, report, photos, hostName }: Props)
         </div>
       </Section>
 
+      {report.livingFees && (
+        <Section title="Biểu phí sinh hoạt thực tế tại tòa" description="Field Host xác minh cùng chủ nhà / lễ tân sảnh — All-in Cost của khách tính theo biểu phí này.">
+          <div className={styles.checkGrid}>
+            <div className={styles.checkItem}>Phí quản lý BQL: <b>{vnd(report.livingFees.mgmtFeePerM2)}đ/m²/tháng</b></div>
+            <div className={styles.checkItem}>Gửi xe máy: <b>{vnd(report.livingFees.motorbikeFee)}đ/xe/tháng</b></div>
+            <div className={styles.checkItem}>Gửi ô tô: <b>{vnd(report.livingFees.carFee)}đ/xe/tháng</b></div>
+            {report.livingFees.note && <div className={styles.checkItem}>Ghi chú: {report.livingFees.note}</div>}
+          </div>
+        </Section>
+      )}
+
       <Section title={`Bảng kê trang thiết bị (${report.inventory.length} dòng)`} flush>
         <DataTable<InventoryLineReport>
           columns={[

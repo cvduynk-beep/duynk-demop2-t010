@@ -7,13 +7,15 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { GoogleAuthGuard, GoogleCallbackGuard } from './google/google-auth.guard';
 import { GoogleStrategy } from './google/google.strategy';
+import { LoginLockoutService } from './login-lockout.service';
 import { ActionTokenService } from './otp/action-token.service';
 import { OtpController } from './otp/otp.controller';
 import { OtpService } from './otp/otp.service';
 import { PhoneVerificationService } from './otp/phone-verification.service';
-import { ConsoleOtpSender } from './otp/senders/console-otp.sender';
+import { MockZaloOtpSender } from './otp/senders/mock-zalo-otp.sender';
+import { otpSenderProvider } from './otp/senders/otp-sender.factory';
 import { SmsFallbackSender } from './otp/senders/sms-fallback.sender';
-import { ZaloZnsSender } from './otp/senders/zalo-zns.sender';
+import { ZaloOtpSender } from './otp/senders/zalo-otp.sender';
 import { PhoneService } from './phone/phone.service';
 import { resolveJwtSecret } from './secrets';
 import { AuthSessionService } from './session/auth-session.service';
@@ -46,13 +48,16 @@ import { SESSION_TOKEN_ISSUER, SessionTokenService } from './session/session-tok
     GoogleAuthGuard,
     GoogleCallbackGuard,
     AuthAuditService,
+    LoginLockoutService,
     PhoneService,
     OtpService,
     ActionTokenService,
     PhoneVerificationService,
-    ZaloZnsSender,
+    // OTP_PROVIDER=zalo|mock chọn kênh gửi; mock + NODE_ENV=production ⇒ factory throw, backend không khởi động.
+    ZaloOtpSender,
     SmsFallbackSender,
-    ConsoleOtpSender,
+    MockZaloOtpSender,
+    otpSenderProvider,
   ],
   // Guard toàn cục (AppModule) cần AuthSessionService + SessionCookieService; các module nghiệp vụ
   // (booking, deposit...) dùng PhoneService / OtpService / ActionTokenService khi chuyển sang OTP thật.

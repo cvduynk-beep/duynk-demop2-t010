@@ -26,8 +26,17 @@ export function landlordUnitRows(state: MockState, landlordId: string): Landlord
   });
 }
 
-/** Hồ sơ ký gửi (chưa thành căn chính thức) của chủ nhà: draft/pending/approved/rejected. */
+/** Hồ sơ ký gửi (chưa thành căn chính thức) của chủ nhà: pending/approved/rejected. */
 export function landlordConsignments(state: MockState, landlordId: string) {
   return state.consignments.filter((c) => c.landlordId === landlordId);
 }
 
+/** Căn đủ điều kiện chọn trong form thoát uỷ quyền: uỷ quyền đang hiệu lực (kể cả đang cho thuê/giữ chỗ — form tự vô hiệu hoá lựa chọn không hợp lệ). */
+export function exitableUnitRows(state: MockState, landlordId: string): LandlordUnitRow[] {
+  return landlordUnitRows(state, landlordId).filter((r) => r.mandateStatus === "active");
+}
+
+/** Căn đang trong 15 ngày đếm ngược thoát uỷ quyền. */
+export function exitingUnitRows(state: MockState, landlordId: string): LandlordUnitRow[] {
+  return landlordUnitRows(state, landlordId).filter((r) => r.mandateStatus === "exiting");
+}

@@ -15,6 +15,7 @@ import { PortalShell, type PortalNavItem } from "./PortalShell";
 export function hostNavItems(
   roles: HostRoleCode[],
   badges: { pending: number; awaitingInspect: number },
+  options?: { includeAccount?: boolean },
 ): PortalNavItem[] {
   const items: PortalNavItem[] = [];
 
@@ -40,8 +41,11 @@ export function hostNavItems(
   items.push(
     { href: "/host/earnings", label: "Thu nhập", icon: Wallet },
     { href: "/host/handbook", label: "Sổ tay phân khu", icon: BookOpenText },
-    { href: "/host/account", label: "Tài khoản", icon: UserRound },
   );
+
+  if (options?.includeAccount) {
+    items.push({ href: "/host/account", label: "Tài khoản", icon: UserRound });
+  }
 
   return items;
 }
@@ -68,6 +72,11 @@ export function HostShell({ children }: { children: React.ReactNode }) {
   return (
     <PortalShell
       portal="Cổng Field Host"
+      hidePortalBadge
+      hideTenantSwitch
+      compactLogo
+      logoHref="/host/dispatch"
+      accountHref="/host/account"
       userName={session.user?.fullName ?? session.user?.email ?? (session.ready ? "Tài khoản" : "Đang tải…")}
       userMeta={userMeta}
       signOutHref={loginPathFor("host")}

@@ -11,6 +11,8 @@ export const MANDATE_TERM_MONTHS = 12;
 /** Khóa FeeConfig do Admin cấu hình; chưa có thì dùng mặc định và trả `feeSource: 'default'`. */
 export const SERVICE_FEE_CONFIG_KEY = 'landlord_service_fee_rate';
 export const DEFAULT_SERVICE_FEE_PERCENT = 5;
+/** Phần chủ nhà nhận từ cọc giữ chỗ khách bỏ (legal/02 Điều 6.1: 50% chủ nhà bù trống phòng, 50% nền tảng). Không trừ phí dịch vụ. */
+export const LANDLORD_FORFEIT_SHARE = 0.5;
 export const MGMT_FEE_CONFIG_KEY = 'mgmt_fee_per_m2';
 export const DEFAULT_MGMT_FEE_PER_M2 = 9500;
 
@@ -62,8 +64,9 @@ export function toUiMandateStatus(status: MandateStatus): UiMandateStatus {
 
 // ─── Hồ sơ ký gửi (lưu trong ExclusiveMandate.doorAccessConfig.consignment) ────────────────────
 
-/** Chuỗi hợp lệ: draft → awaiting_host → inspecting → approved | rejected | awaiting_landlord (đổi giá/cọc ⇒ chủ duyệt: accept ⇒ approved, decline ⇒ rejected — hồ sơ 18). */
-export type ConsignmentStage = 'draft' | 'awaiting_host' | 'inspecting' | 'awaiting_landlord' | 'approved' | 'rejected';
+/** Chuỗi hợp lệ: awaiting_host → inspecting → approved | rejected | awaiting_landlord (đổi giá/cọc ⇒ chủ duyệt: accept ⇒ approved, decline ⇒ rejected — hồ sơ 18). */
+/** `reviewing` = Inspector đề xuất KHÔNG duyệt (căn bất thường) ⇒ chờ Admin quyết (duyệt niêm yết / từ chối). */
+export type ConsignmentStage = 'awaiting_host' | 'inspecting' | 'reviewing' | 'awaiting_landlord' | 'approved' | 'rejected';
 
 export interface ConsignmentForm {
   building: string;
@@ -78,7 +81,24 @@ export interface ConsignmentForm {
   note: string | null;
   /** Mã hạng mục (catalog 32 món, Điều 5) chủ nhà khai là có sẵn; màn thẩm định tick sẵn các món này. Hồ sơ cũ không có khoá này. */
   inventoryCodes?: string[];
+  /**
+   * Ủy quyền AI Chốt Nhanh & Giá sàn an toàn (AGENTS.md §1). Chỉ nằm trong meta hồ sơ ký gửi — KHÔNG có trong bảng
+   * `units` nên API catalog/chi tiết căn của khách thuê không bao giờ đọc được. Hồ sơ cũ không có khoá này.
+   */
+  allowFastClose?: boolean;
+  floorRent?: number | null;
 }
+
+/** Trần giá thuê theo layout (AGENTS.md nguyên tắc 4) — không cho nhập/lưu giá vượt trần; trần tuyệt đối 80 triệu. */
+export const RENT_CEILING_BY_KIND: Record<'Studio' | '1PN' | '2PN' | '3PN', number> = {
+  Studio: 18_000_000,
+  '1PN': 25_000_000,
+  '2PN': 35_000_000,
+  '3PN': 50_000_000,
+};
+export const ABSOLUTE_RENT_CEILING = 80_000_000;
+/** Giá sàn chốt nhanh tối thiểu (VNĐ/tháng). */
+export const MIN_FLOOR_RENT = 3_000_000;
 
 /**
  * Phần mở rộng của hồ sơ ký gửi mà schema chưa có cột riêng. Các bước sau (Inspector nhận/nộp phiếu thẩm định)
@@ -124,11 +144,15 @@ export interface InspectionPhoto {
   takenAt: string | null;
   uploadedAt: string;
   hostId: string;
+  /** Có khi ảnh niêm yết được SAO CHÉP từ ảnh tham khảo chủ nhà gửi (`ConsignmentPhoto.id`); file riêng, xoá không ảnh hưởng ảnh gốc. */
+  sourceLandlordPhotoId?: string;
 }
 
 export interface InspectionMeta {
   photos: InspectionPhoto[];
   doorRevealedAt?: string[];
+  /** Đã đưa ảnh tham khảo của chủ nhà vào ảnh niêm yết (một lần duy nhất — ảnh Host đã bỏ không quay lại). */
+  landlordPhotosImportedAt?: string;
 }
 
 /** Trách nhiệm hạng mục theo catalog Điều 5: lỗi do dùng, hoặc hao mòn/lỗi dùng. (01-CONTRACTS ghi `wear|misuse` nhưng catalog thật dùng `wear_or_misuse` — theo catalog, xem report R02.) */
@@ -181,6 +205,18 @@ export interface PricingProposal {
   original: { rent: number; securityDeposit: number };
 }
 
+/** Biểu phí sinh hoạt thực tế tại tòa — Field Host xác minh với chủ nhà / lễ tân sảnh lúc thẩm định (đồng/tháng). */
+export interface InspectionLivingFees {
+  /** Phí quản lý BQL (đ/m²/tháng). */
+  mgmtFeePerM2: number;
+  /** Phí gửi xe máy (đ/xe/tháng). */
+  motorbikeFee: number;
+  /** Phí gửi ô tô (đ/xe/tháng). */
+  carFee: number;
+  /** Ghi chú phí khác / tiện ích nội khu (≤150 ký tự). */
+  note?: string;
+}
+
 export interface InspectionReport {
   hostId: string;
   submittedAt: string;
@@ -197,6 +233,8 @@ export interface InspectionReport {
   facts?: InspectionFacts;
   pricing?: InspectionPricing;
   listing?: InspectionListing;
+  /** Có khi phiếu nộp sau khi có mục biểu phí; khi niêm yết ghi vào căn (All-in Cost theo căn). */
+  livingFees?: InspectionLivingFees;
   /** Server tính, không nhận từ client. */
   avgCondition: number;
 }
@@ -208,6 +246,8 @@ export interface ConsignmentMeta {
   ownershipWarrantedAt?: string;
   /** SĐT đã ký OTP, mã hoá AES (cùng `PhoneService`); KHÔNG gắn vào Profile. */
   signedPhoneEnc?: string;
+  /** Tài khoản thụ hưởng tiền thuê của căn này (số TK mã hoá AES). Chỉ chủ nhà xem được, dạng che. */
+  payout?: { bankName: string; accountEnc: string; holder: string };
   inspectDueAt?: string;
   /** FieldHost.id được GIAO (lúc ký) hoặc NHẬN (accept/claim). */
   hostId?: string;
@@ -236,6 +276,15 @@ export function withConsignmentMeta(doorAccessConfig: unknown, meta: Consignment
   return { ...base, consignment: meta };
 }
 
+/** Số căn suy từ mã căn khi không có `doorNumber` (vd `VHOP-S1.02-0701`, tầng 7 ⇒ `01`) — cùng quy tắc với web `unitDoor`. */
+export function doorFromCode(unitCode: string, floor: number): string {
+  const tail = unitCode.split('-').pop() ?? unitCode;
+  for (const prefix of [String(floor).padStart(2, '0'), String(floor)]) {
+    if (tail.startsWith(prefix) && tail.length > prefix.length) return tail.slice(prefix.length);
+  }
+  return tail;
+}
+
 export function consignmentStage(mandate: {
   status: MandateStatus;
   signedAt: Date | null;
@@ -244,7 +293,7 @@ export function consignmentStage(mandate: {
   const explicit = readConsignmentMeta(mandate.doorAccessConfig)?.stage;
   if (explicit) return explicit;
   if (mandate.status === MandateStatus.ACTIVE) return 'approved';
-  return mandate.signedAt ? 'awaiting_host' : 'draft';
+  return 'awaiting_host';
 }
 
 // ─── Enum web ↔ Prisma ────────────────────────────────────────────────────────────────────────

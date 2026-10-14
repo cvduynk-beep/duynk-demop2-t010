@@ -64,14 +64,20 @@ describe("hostNavItems theo vai", () => {
     expect(inspectItem?.badge).toBe(5);
   });
 
-  it("có cả hai vai sale và inspector: hiển thị đầy đủ cả 2 mục điều hướng", () => {
+  it("có cả hai vai sale và inspector: hiển thị đầy đủ 4 mục tác nghiệp (tài khoản đã chuyển vào User Menu)", () => {
     const items = hostNavItems(["sale", "inspector"], { pending: 1, awaitingInspect: 0 });
     const hrefs = items.map((i) => i.href);
     expect(hrefs).toContain("/host/dispatch");
     expect(hrefs).toContain("/host/inspections");
     expect(hrefs).toContain("/host/earnings");
     expect(hrefs).toContain("/host/handbook");
-    expect(hrefs).toContain("/host/account");
+    expect(hrefs).not.toContain("/host/account");
+    expect(items.length).toBe(4);
+  });
+
+  it("cho phép tuỳ chọn includeAccount khi cần hiển thị tài khoản trên nav dock", () => {
+    const items = hostNavItems(["sale", "inspector"], { pending: 1, awaitingInspect: 0 }, { includeAccount: true });
+    expect(items.map((i) => i.href)).toContain("/host/account");
     expect(items.length).toBe(5);
   });
 });

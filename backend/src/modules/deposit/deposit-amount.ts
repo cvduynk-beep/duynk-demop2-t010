@@ -1,9 +1,20 @@
 /**
- * Nguồn duy nhất của số tiền cọc giữ chỗ (VNĐ). Hồ sơ 18 chưa đổi quy tắc: luôn 2.000.000 cho mọi căn.
- * `unit` để dành cho đổi luật sau (non-goal hiện tại); hiện không dùng.
+ * Cọc v2 (quyết định 2026-10-14, thay cọc giữ chỗ cố định 2.000.000đ): khách chốt căn bằng cách chuyển thẳng
+ * TIỀN CỌC BẢO ĐẢM TÀI SẢN & NỘI THẤT của căn qua VietQR. Nguồn duy nhất của số tiền (server tính, CẤM nhận từ client):
+ * `units.security_deposit` do chủ nhà đặt (trong khoảng deposit-policy của Admin); chưa đặt ⇒ bằng 1 tháng tiền thuê.
+ * Khi ký Hợp đồng thuê, khoản này chuyển 100% thành Tiền cọc bảo đảm (không thu bù, không trừ tiền thuê tháng đầu).
  */
-export const HOLDING_DEPOSIT_VND = 2_000_000;
+export interface DepositUnit {
+  securityDeposit?: unknown;
+  baseRentPrice?: unknown;
+}
 
-export function holdingDepositAmount(_unit?: unknown): number {
-  return HOLDING_DEPOSIT_VND;
+const vnd = (v: unknown): number | null => {
+  if (v == null) return null;
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+export function securityDepositAmount(unit: DepositUnit | null | undefined): number {
+  return vnd(unit?.securityDeposit) ?? vnd(unit?.baseRentPrice) ?? 0;
 }

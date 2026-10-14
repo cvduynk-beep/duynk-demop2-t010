@@ -5,7 +5,7 @@ import { Columns } from "@/components/charts/Columns";
 import { StatTile } from "@/components/charts/StatTile";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { toast } from "@/components/ui/Toast";
-import { vnd, vndShort } from "@/lib/format";
+import { fmtDateTime, vnd, vndShort } from "@/lib/format";
 import { queries } from "@/lib/landlord/queries";
 import { UNIT_STATUS_META, axisMillions } from "@/lib/landlord/labels";
 import type { Finance } from "@/lib/landlord/types";
@@ -27,6 +27,9 @@ function FinanceBody({ f }: { f: Finance }) {
   const gross = f.perUnit.reduce((sum, r) => sum + r.rent, 0);
   const feeTotal = f.perUnit.reduce((sum, r) => sum + r.fee, 0);
   const defaultFee = f.feeSource === "default";
+  // Backend cũ (chưa có bồi thường trống phòng) không trả các trường này — coi như 0 / rỗng thay vì văng lỗi.
+  const forfeits = f.forfeits ?? [];
+  const forfeitThisMonth = f.thisMonth.forfeit ?? 0;
 
   const exportCsv = () => {
     const csv = [["Căn hộ", "Trạng thái", "Tiền thuê", "Phí dịch vụ", "Thực nhận", "Cọc đang giữ hộ"], ...f.perUnit.map((r) => [r.unitCode, UNIT_STATUS_META[r.status].label, r.rent, r.fee, r.net, r.escrow])]
@@ -53,13 +56,13 @@ function FinanceBody({ f }: { f: Finance }) {
       />
 
       <div className={styles.kpis}>
-        <StatTile hero label="Thực nhận tháng này" value={vndShort(f.thisMonth.net)} delta={{ text: `đã trừ phí dịch vụ ${vndShort(f.thisMonth.fee)}`, tone: "flat" }} spark={series.map((s) => s.value)} />
+        <StatTile hero label="Thực nhận tháng này" value={vndShort(f.thisMonth.net)} delta={{ text: forfeitThisMonth ? `đã trừ phí ${vndShort(f.thisMonth.fee)}, gồm bồi thường ${vndShort(forfeitThisMonth)}` : `đã trừ phí dịch vụ ${vndShort(f.thisMonth.fee)}`, tone: "flat" }} spark={series.map((s) => s.value)} />
         <StatTile label="Tổng thực nhận 6 tháng" value={vndShort(f.totalNet6Months)} />
         <StatTile label="Cọc đang giữ hộ" value={vndShort(f.escrowTotal)} delta={{ text: "hoàn 100% khi thanh lý", tone: "flat" }} />
         <StatTile label="Phí dịch vụ ký gửi" value={`${f.serviceFeePercent}`} unit="%" delta={{ text: defaultFee ? "mức tạm, Admin chưa cấu hình" : "do Admin cấu hình", tone: "flat" }} />
       </div>
 
-      <Columns title="Thực nhận mỗi tháng" subtitle="Tiền thuê sau phí dịch vụ; tháng hiện tại được nhấn" data={series} axisFormat={axisMillions} scaleFloor={1_000_000} valueFormat={(v) => `${vnd(v)}đ`} seriesName="Thực nhận" />
+      <Columns title="Thực nhận mỗi tháng" subtitle="Tiền thuê sau phí dịch vụ, cộng bồi thường trống phòng; tháng hiện tại được nhấn" data={series} axisFormat={axisMillions} scaleFloor={1_000_000} valueFormat={(v) => `${vnd(v)}đ`} seriesName="Thực nhận" />
 
       <section className="card" style={{ overflow: "hidden" }} aria-label="Chi tiết theo căn">
         <h2 className={styles.h2} style={{ padding: "18px 20px 0" }}>Chi tiết theo căn, tháng này</h2>
@@ -113,14 +116,52 @@ function FinanceBody({ f }: { f: Finance }) {
         </div>
       </section>
 
+      {forfeits.length > 0 && (
+        <section className="card" style={{ overflow: "hidden" }} aria-label="Bồi thường trống phòng">
+          <h2 className={styles.h2} style={{ padding: "18px 20px 0" }}>Bồi thường trống phòng</h2>
+          <p className="muted small" style={{ padding: "4px 20px 0", margin: 0 }}>
+            Khách đã cọc chốt căn nhưng quá hạn mà không ký hợp đồng: bạn nhận 50% khoản cọc (legal/02 Điều 6.1), không trừ phí dịch vụ.
+          </p>
+          <div className={styles.tableScroll}>
+            <table className={styles.finRows}>
+              <thead>
+                <tr>
+                  <th scope="col">Căn hộ</th>
+                  <th scope="col">Khách cọc lúc</th>
+                  <th scope="col">Hết hạn giữ chỗ</th>
+                  <th scope="col" className={styles.r}>Tiền cọc</th>
+                  <th scope="col" className={styles.r}>Bạn nhận (50%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forfeits.map((d) => (
+                  <tr key={d.depositId}>
+                    <td>
+                      <b>{d.unitCode}</b>
+                    </td>
+                    <td>{d.paidAt ? fmtDateTime(d.paidAt) : "—"}</td>
+                    <td>{d.expiredAt ? fmtDateTime(d.expiredAt) : "—"}</td>
+                    <td className={`${styles.r} tnum`}>{vnd(d.depositAmount)}đ</td>
+                    <td className={`${styles.r} tnum`}>
+                      <b>+{vnd(d.share)}đ</b>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       <section className="card" style={{ overflow: "hidden" }} aria-label="Tiền thuê theo tháng">
         <h2 className={styles.h2} style={{ padding: "18px 20px 0" }}>Tiền thuê theo tháng</h2>
         <div className={styles.tableScroll}>
-          <table className={styles.finRows} style={{ minWidth: 520 }}>
+          <table className={styles.finRows} style={{ minWidth: 640 }}>
             <thead>
               <tr>
                 <th scope="col">Kỳ</th>
                 <th scope="col" className={styles.r}>Tiền thuê</th>
+                <th scope="col" className={styles.r} title="50% tiền cọc khách bỏ (legal/02 Điều 6.1)">Bồi thường trống phòng</th>
                 <th scope="col" className={styles.r}>Thực nhận</th>
                 <th scope="col">Trạng thái</th>
               </tr>
@@ -130,8 +171,9 @@ function FinanceBody({ f }: { f: Finance }) {
                 <tr key={m.month}>
                   <td>Tháng {m.month.slice(5)}/{m.month.slice(0, 4)}</td>
                   <td className={`${styles.r} tnum`}>{m.gross ? `${vnd(m.gross)}đ` : "—"}</td>
+                  <td className={`${styles.r} tnum`}>{m.forfeit ? `+${vnd(m.forfeit)}đ` : "—"}</td>
                   <td className={`${styles.r} tnum`}>
-                    <b>{m.gross ? `${vnd(m.net)}đ` : "—"}</b>
+                    <b>{m.net ? `${vnd(m.net)}đ` : "—"}</b>
                   </td>
                   <td>
                     <span className={`badge ${i === 0 ? "badge-amber-soft" : "badge-plain"}`}>{i === 0 ? "Đang tích luỹ" : "Theo hợp đồng"}</span>
@@ -142,7 +184,7 @@ function FinanceBody({ f }: { f: Finance }) {
           </table>
         </div>
         <p className="muted xs" style={{ padding: "0 20px 16px", margin: 0 }}>
-          Số liệu tính từ hợp đồng thuê còn hiệu lực trong từng tháng; trạng thái chuyển khoản sẽ có khi hệ thống ghi nhận chi trả.
+          Số liệu tính từ hợp đồng thuê còn hiệu lực trong từng tháng. Bồi thường trống phòng = 50% tiền cọc khi khách quá hạn mà không ký hợp đồng, ghi vào tháng hết hạn giữ chỗ. Trạng thái chuyển khoản sẽ có khi hệ thống ghi nhận chi trả.
         </p>
       </section>
     </>

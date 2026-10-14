@@ -49,7 +49,7 @@ export function shouldAutoRemind(
 export const HOST_ERRORS: Record<string, string> = {
   ticket_not_found: "Ticket không còn tồn tại.",
   ticket_taken: "Đã có Sale khác nhận ca này.",
-  ticket_expired: "Đã quá 3 phút, ca chuyển sang Open Pool — bấm “Nhận ticket” nếu vẫn muốn nhận.",
+  ticket_expired: "Đã quá 3 phút nhận ca: hệ thống đã giao cho Sale rảnh khác (hoặc ca vào Open Pool nếu không còn ai). Bảng đang tải lại…",
   ticket_not_open: "Ca vẫn đang dành cho Sale được giao.",
   zone_mismatch: "Ca thuộc phân khu khác.",
   host_schedule_conflict: "Bạn đã có ca khác trong vòng 45 phút.",

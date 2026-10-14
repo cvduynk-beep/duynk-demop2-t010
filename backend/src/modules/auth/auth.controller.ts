@@ -1,11 +1,12 @@
 import { Body, Controller, Get, HttpCode, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
-import { PORTALS } from './auth.constants';
+import { isPortal, Portal, PORTALS } from './auth.constants';
+import { authError } from './auth.errors';
 import { AuthService, LoginOutcome, RequestContext } from './auth.service';
-import { LoginDto, SignupDto } from './dto/auth.dto';
+import { LoginDto, PortalQueryDto, SignupDto } from './dto/auth.dto';
 import { GoogleAuthGuard, GoogleCallbackGuard } from './google/google-auth.guard';
 import { GoogleIdentity } from './google/google.strategy';
 import { SessionCookieService } from './session/session-cookies.service';
@@ -19,7 +20,7 @@ export const requestContext = (req: Request): RequestContext => ({
 
 /**
  * Đăng nhập là việc của backend: FE chỉ hiển thị form và gọi các endpoint này. Phiên nằm trong cookie
- * httpOnly (`vs_access`) — response không bao giờ chứa token. API client có thể gửi
+ * httpOnly RIÊNG từng cổng (`vs_access_<portal>`) — response không bao giờ chứa token. API client có thể gửi
  * `Authorization: Bearer <access token>` thay cho cookie. Email + mật khẩu (băm scrypt trong `profiles`) và
  * Google (Passport) đều phát JWT phiên do backend ký; không dùng Supabase Auth, không có refresh token.
  */
@@ -48,7 +49,7 @@ export class AuthController {
   })
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const outcome = await this.auth.login(dto, requestContext(req));
-    this.cookies.set(res, outcome.tokens);
+    this.cookies.set(res, outcome.tokens, dto.portal);
     return this.loginBody(outcome);
   }
 
@@ -65,7 +66,7 @@ export class AuthController {
   })
   async signup(@Body() dto: SignupDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const outcome = await this.auth.signup(dto, requestContext(req));
-    this.cookies.set(res, outcome.tokens);
+    this.cookies.set(res, outcome.tokens, dto.portal);
     return this.loginBody(outcome);
   }
 
@@ -79,7 +80,7 @@ export class AuthController {
       'Mở bằng điều hướng trình duyệt (không phải fetch). Kết thúc ở `GET /auth/google/callback`. ' +
       '**"Try it out" ở Swagger sẽ báo lỗi CORS** (fetch bị redirect sang accounts.google.com) — hãy mở ' +
       '`/api/v1/auth/google?portal=tenant` trong tab mới, đăng nhập xong quay lại đây gọi `GET /auth/session` ' +
-      '(cookie `vs_access` dùng chung `localhost`).',
+      '?portal=tenant` (cookie `vs_access_tenant` dùng chung `localhost`).',
   })
   @ApiQuery({ name: 'portal', enum: PORTALS })
   google() {
@@ -98,7 +99,7 @@ export class AuthController {
     );
     this.cookies.clearOAuthState(res);
     if (result.ok) {
-      this.cookies.set(res, result.outcome.tokens);
+      this.cookies.set(res, result.outcome.tokens, result.outcome.user.portal as Portal);
       this.cookies.setGoogleHint(res, { name: result.outcome.user.fullName, email: result.outcome.user.email });
     }
     return res.redirect(302, result.redirectUrl);
@@ -106,14 +107,20 @@ export class AuthController {
 
   @Public()
   @Get('session')
+  // KHÔNG giới hạn tần suất: proxy Next gọi endpoint này cho MỌI lần điều hướng trang có chắn quyền (kể cả prefetch), từ
+  // CÙNG MỘT IP máy chủ Next ⇒ 429 sẽ bị hiểu là "chưa đăng nhập" và đá mọi người dùng về /login. Chỉ đọc phiên (không
+  // dò mật khẩu được); đăng nhập/đăng ký vẫn giữ giới hạn riêng.
+  @SkipThrottle()
   @ApiCookieAuth('session-cookie')
   @ApiOperation({
-    summary: 'Phiên hiện tại (user hoặc null)',
-    description: 'FE/proxy gọi endpoint này để biết đã đăng nhập chưa và ở cổng nào. Không bao giờ trả token.',
+    summary: 'Phiên của một cổng (user hoặc null)',
+    description:
+      'Chỉ đọc cookie `vs_access_<portal>` của đúng cổng (hoặc Bearer) và yêu cầu claim `portal` trùng. ' +
+      'Không có / hết hạn / sai cổng ⇒ `user: null` (cookie hỏng bị xoá). `portal` sai ⇒ 400. Không bao giờ trả token.',
   })
-  async session(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const { user, clear } = await this.auth.resolveSession(this.cookies.readAccessToken(req));
-    if (clear) this.cookies.clear(res);
+  async session(@Query() { portal }: PortalQueryDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const { user, clear } = await this.auth.resolveSession(this.cookies.readAccessToken(req, portal), portal);
+    if (clear) this.cookies.clear(res, portal);
     res.setHeader('Cache-Control', 'no-store');
     return { user };
   }
@@ -121,9 +128,11 @@ export class AuthController {
   @Public()
   @Post('logout')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Đăng xuất: xoá cookie phiên (idempotent)' })
-  logout(@Res({ passthrough: true }) res: Response) {
-    this.cookies.clear(res);
+  @ApiOperation({ summary: 'Đăng xuất một cổng: chỉ xoá cookie `vs_access_<portal>` (idempotent). `portal` ở body hoặc query' })
+  logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const portal: unknown = req.body?.portal ?? req.query?.portal;
+    if (!isPortal(portal)) throw authError('invalid_request');
+    this.cookies.clear(res, portal);
     return { loggedOut: true };
   }
 }

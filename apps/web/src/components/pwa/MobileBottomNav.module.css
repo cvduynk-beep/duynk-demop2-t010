@@ -1,0 +1,100 @@
+/* Mobile Bottom Navigation Bar */
+.bottomNav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .bottomNav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    height: calc(62px + env(safe-area-inset-bottom, 8px));
+    padding-bottom: env(safe-area-inset-bottom, 8px);
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    border-top: 1px solid rgba(255, 255, 255, 0.92);
+    box-shadow: 0 -8px 24px -4px rgba(10, 61, 74, 0.1);
+    align-items: center;
+    justify-content: space-around;
+  }
+
+  .navItem {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 100%;
+    text-decoration: none;
+    color: #7d8e93;
+    font-size: 10.5px;
+    font-weight: 600;
+    position: relative;
+    transition: all 0.2s ease;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .navItem:hover {
+    color: #0a3d4a;
+  }
+
+  .navItemActive {
+    color: #0a3d4a;
+    font-weight: 700;
+  }
+
+  .iconWrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+  }
+
+  .navItemActive .iconWrap {
+    background: rgba(10, 61, 74, 0.08);
+    color: #0a3d4a;
+    transform: translateY(-2px);
+  }
+
+  /* Badge số lượng (yêu thích, thông báo) */
+  .badge {
+    position: absolute;
+    top: -2px;
+    right: -6px;
+    background: #e1a13a;
+    color: #ffffff;
+    font-size: 9.5px;
+    font-weight: 800;
+    min-width: 15px;
+    height: 15px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-shadow: 0 2px 6px rgba(225, 161, 58, 0.4);
+    border: 1.5px solid #ffffff;
+  }
+
+  .activeIndicator {
+    position: absolute;
+    bottom: 2px;
+    width: 16px;
+    height: 3px;
+    border-radius: 999px;
+    background: #0a3d4a;
+    box-shadow: 0 1px 4px rgba(10, 61, 74, 0.3);
+  }
+}

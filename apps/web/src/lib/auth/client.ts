@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { SessionUser } from "./portals";
+import type { Portal, SessionUser } from "./portals";
 
 /**
  * Phiên đăng nhập THẬT cho Client Component: đọc `GET /api/v1/auth/session` (cookie httpOnly do backend set),
@@ -22,19 +22,29 @@ function publish(next: SessionState) {
   for (const l of listeners) l();
 }
 
-/** Số thứ tự lần đọc phiên gần nhất: lần đọc cũ về muộn (vd. tải lúc mở trang) không được ghi đè lần mới hơn. */
-let latestLoad = 0;
+/** Cổng của trang đang mở: chỉ hỏi phiên (cookie `vs_access_<portal>`) của đúng cổng này. */
+function getPortalForPath(): Portal {
+  if (typeof window === "undefined") return "tenant";
+  const p = window.location.pathname;
+  if (p.startsWith("/host")) return "host";
+  if (p.startsWith("/landlord")) return "landlord";
+  if (p.startsWith("/admin")) return "admin";
+  return "tenant";
+}
 
-async function load(): Promise<SessionState> {
-  const mine = ++latestLoad;
+async function load() {
+  const portal = getPortalForPath();
   try {
-    const res = await fetch("/api/v1/auth/session", { credentials: "same-origin", cache: "no-store" });
-    const body = res.ok ? ((await res.json()) as { data?: { user: SessionUser | null } }) : null;
-    if (mine === latestLoad) publish({ ready: true, user: body?.data?.user ?? null });
+    const res = await fetch(`/api/v1/auth/session?portal=${portal}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "x-portal": portal },
+    });
+    const user = res.ok ? ((await res.json()) as { data?: { user: SessionUser | null } })?.data?.user ?? null : null;
+    publish({ ready: true, user });
   } catch {
-    if (mine === latestLoad) publish({ ready: true, user: null }); // backend không với tới được ⇒ coi như chưa đăng nhập
+    publish({ ready: true, user: null }); // backend không với tới được ⇒ coi như chưa đăng nhập (không có phiên dự phòng)
   }
-  return state;
 }
 
 /** Đọc lại phiên (sau khi đổi họ tên…) để header và các màn hình khác cập nhật ngay. */
@@ -63,11 +73,24 @@ export function useRole(): SessionUser["portal"] {
   return useSession().user?.portal ?? null;
 }
 
-/** Đăng xuất: thu hồi phiên ở backend rồi tải lại toàn trang (xoá cache router của các trang có chắn quyền). */
-export async function signOut(redirectTo = "/login") {
+/**
+ * Đăng xuất cổng của trang đang mở: backend chỉ xoá cookie `vs_access_<portal>` của cổng đó (cổng khác giữ nguyên),
+ * rồi tải lại toàn trang (xoá cache router của các trang có chắn quyền).
+ */
+export async function signOut(redirectTo = "/login", portal: Portal = getPortalForPath()) {
   try {
-    await fetch("/api/v1/auth/logout", { method: "POST", credentials: "same-origin" });
+    const res = await fetch("/api/v1/auth/logout", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ portal }),
+    });
+    if (!res.ok) console.error(`[auth] Đăng xuất cổng ${portal} lỗi ${res.status}`);
+  } catch (err) {
+    // Không chặn người dùng rời phiên: vẫn tải lại trang (cache client mất), nhưng ghi lỗi để không nuốt âm thầm.
+    console.error(`[auth] Không gọi được đăng xuất cổng ${portal}:`, err instanceof Error ? err.message : err);
   } finally {
+    // Tải lại toàn trang ⇒ xoá cache dữ liệu tài khoản trong bộ nhớ (useApiQuery, phiên) và cache router.
     window.location.assign(redirectTo);
   }
 }

@@ -4,7 +4,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
-import { ACCESS_COOKIE } from './modules/auth/auth.constants';
+import { accessCookieName } from './modules/auth/auth.constants';
 import { useBodyParsers } from './modules/assistant/body-limit';
 
 async function bootstrap() {
@@ -65,12 +65,14 @@ async function bootstrap() {
         scheme: 'bearer',
         bearerFormat: 'JWT',
         name: 'JWT Authorization',
-        description: 'JWT phiên do backend ký (trình duyệt dùng cookie httpOnly do POST /auth/login set).',
+        description:
+          'JWT phiên do backend ký (trình duyệt dùng cookie httpOnly `vs_access_<portal>` do POST /auth/login set).',
         in: 'header',
       },
       'bearer-token',
     )
-    .addCookieAuth(ACCESS_COOKIE, { type: 'apiKey', in: 'cookie', name: ACCESS_COOKIE }, 'session-cookie')
+    // Cookie riêng từng cổng (`vs_access_<portal>`); Swagger chỉ khai được một tên nên ghi cookie của cổng tenant.
+    .addCookieAuth(accessCookieName('tenant'), { type: 'apiKey', in: 'cookie', name: accessCookieName('tenant') }, 'session-cookie')
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

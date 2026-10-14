@@ -1,7 +1,7 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { SPEC_POOL, generateInventory, seedUnitInventory } from './unit-inventory-seed';
 import { backfillUnitInventory } from './unit-inventory-backfill';
-import { holdingDepositAmount } from '../deposit/deposit-amount';
+import { securityDepositAmount } from '../deposit/deposit-amount';
 import { buildDepositTerms } from '../deposit/deposit-terms';
 import { ConsignmentMetaStore } from '../landlord/consignment-meta.store';
 import { LandlordAccessService } from '../landlord/landlord-access.service';
@@ -29,12 +29,15 @@ function makeCreateService() {
   const tx: any = {
     unit: { create: unitCreate },
     doorAccessKey: { create: jest.fn() },
-    exclusiveMandate: { create: mandateCreate },
+    exclusiveMandate: { create: mandateCreate, findMany: jest.fn(async () => []) },
+    fieldHost: { findMany: jest.fn(async () => []) },
   };
   const prisma: any = {
     building: { findUnique: jest.fn(async () => building) },
     unit: { findUnique: jest.fn(async () => null) },
     feeConfig: { findUnique: jest.fn(async () => null) },
+    // Số đã xác thực của tài khoản ⇒ ký không cần OTP (spec này chỉ kiểm dữ liệu căn).
+    profile: { findUnique: jest.fn(async () => ({ phoneEnc: 'enc-phone', isPhoneVerified: true, payoutBankName: 'VCB', payoutAccountEnc: 'ENC(0011223344)', payoutAccountHolder: 'TRAN B' })) },
     $transaction: jest.fn(async (fn: any) => fn(tx)),
   };
   const service = new LandlordConsignmentService(
@@ -42,15 +45,16 @@ function makeCreateService() {
     new LandlordAccessService(prisma),
     { log: jest.fn() } as any,
     {} as any,
-    { encrypt: jest.fn((v: string) => `ENC(${v})`) } as any,
+    { encrypt: jest.fn((v: string) => `ENC(${v})`), decrypt: jest.fn(() => '+84901234567'), normalize: jest.fn() } as any,
     {} as any,
     new ConsignmentMetaStore(prisma),
     new InspectorAssigner(),
+    { assertReady: jest.fn(async () => ({ ready: true })) } as any,
   );
   return { service, unitCreate, mandateCreate };
 }
 
-const baseDto = { building: 'S1.02', floor: 12, door: '08', layout: '1PN', areaM2: 47, askRent: 6_500_000, bathrooms: 2 };
+const baseDto = { building: 'S1.02', floor: 12, door: '08', layout: '1PN', areaM2: 47, askRent: 6_500_000, bathrooms: 2, ownershipWarranted: true, otp: '4829' };
 
 describe('P1-1/P1-2 — tạo ký gửi ghi thông tin căn vào units', () => {
   it('P1-1: ghi bathrooms/direction/securityDeposit/minLeaseMonths/furnishing', async () => {
@@ -238,10 +242,12 @@ describe('P1-5/P1-6/P1-7 — mapper API đọc căn', () => {
     expect(toTenantUnit(unit({ securityDeposit: '13000000.00', highlights: ['View hồ'] }))).toMatchObject({ securityDeposit: 13_000_000, highlights: ['View hồ'] });
   });
 
-  it('P1-7: holdingDeposit = holdingDepositAmount() (không đổi 2.000.000); điều khoản dùng cùng hàm', () => {
-    expect(toTenantUnit(unit()).holdingDeposit).toBe(holdingDepositAmount());
-    expect(holdingDepositAmount()).toBe(2_000_000);
-    expect(buildDepositTerms(48).amount).toBe(holdingDepositAmount());
+  it('P1-7 (cọc v2): số tiền chốt căn = Tiền cọc bảo đảm của căn (chưa đặt ⇒ 1 tháng thuê); điều khoản dùng cùng số', () => {
+    expect(toTenantUnit(unit({ securityDeposit: null })).holdingDeposit).toBe(6_500_000);
+    expect(toTenantUnit(unit({ securityDeposit: '13000000.00' })).holdingDeposit).toBe(13_000_000);
+    expect(securityDepositAmount({ securityDeposit: null, baseRentPrice: '6500000.00' })).toBe(6_500_000);
+    expect(buildDepositTerms(48, 13_000_000).amount).toBe(13_000_000);
+    expect(buildDepositTerms(48, 13_000_000).items.find((i) => i.id === 'amount')!.text).toContain('13.000.000 VNĐ');
   });
 });
 

@@ -6,6 +6,12 @@ import { PORTALS, Portal } from '../auth.constants';
 // Profile.email là VarChar(100).
 const EMAIL_MAX = 100;
 
+export class PortalQueryDto {
+  @ApiProperty({ enum: PORTALS })
+  @IsIn(PORTALS as unknown as string[])
+  portal: Portal;
+}
+
 export class LoginDto {
   @ApiProperty({ example: 'chunha@example.com' })
   @IsEmail()

@@ -65,9 +65,10 @@ describe('AdminContractRegistryService — sổ hợp đồng 4 loại', () => {
     expect(d.hostId).toBe('h1');
   });
 
-  it('cấu thành cọc: cọc giữ chỗ là một phần của cọc bảo đảm, không phải khoản thứ hai', () => {
-    expect(depositBreakdown(7_000_000, 2_000_000)).toBe('2.000.000đ cọc giữ chỗ (chuyển đổi 100%) + 5.000.000đ nộp thêm khi ký = 7.000.000đ');
-    expect(depositBreakdown(2_000_000, 2_000_000)).toMatch(/không phải nộp thêm/);
+  it('cấu thành cọc: khoản cọc chốt căn là (một phần) cọc bảo đảm, không phải khoản thứ hai', () => {
+    // HĐ cũ từ cọc giữ chỗ 2tr ⇒ nộp thêm phần chênh; cọc v2 = toàn bộ cọc bảo đảm ⇒ không nộp thêm.
+    expect(depositBreakdown(7_000_000, 2_000_000)).toBe('2.000.000đ cọc chốt căn (chuyển đổi 100%) + 5.000.000đ nộp thêm khi ký = 7.000.000đ');
+    expect(depositBreakdown(7_000_000, 7_000_000)).toMatch(/không phải nộp thêm/);
     expect(depositBreakdown(7_000_000, null)).toMatch(/chưa ghi nhận/);
   });
 

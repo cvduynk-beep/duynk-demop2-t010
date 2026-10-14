@@ -6,7 +6,7 @@ SCHEMA = {
     "type": "function",
     "function": {
         "name": NAME,
-        "description": "Chi tiết 1 căn: nội thất, cọc bảo đảm, cọc giữ chỗ, giờ giữ chỗ, mô tả.",
+        "description": "Chi tiết 1 căn: nội thất, Tiền cọc bảo đảm (= khoản cọc khi chốt căn), giờ giữ căn, mô tả.",
         "parameters": {
             "type": "object",
             "properties": {"code": {"type": "string", "description": "Mã căn, vd VHOP-S1.02-0607"}},

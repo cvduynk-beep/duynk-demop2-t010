@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { toast } from "@/components/ui/Toast";
@@ -13,15 +13,20 @@ import { useInspectionAction } from "@/lib/inspection/useInspectionAction";
 import { useInspectionUploads } from "@/lib/inspection/useInspectionUploads";
 import type { InspectionDetail, InspectionDraft, InspectionPhotoView, ListingRoom } from "@/lib/inspection/types";
 import consign from "@/components/consign/Consign.module.css";
-import { DoorPinBlock } from "./DoorPinBlock";
-import { DeclaredBlock, DoorBlock, FactsBlock, LandlordInfoBlock, MeasureBlock } from "./InfoBlocks";
-import { InventoryBlock } from "./InventoryBlock";
+import { DecisionBlock } from "./DecisionBlock";
+import { DeclaredBlock, DoorBlock, FunctionsBlock, LandlordInfoBlock, MeasureBlock } from "./InfoBlocks";
+import { ExtraItemsBlock, InventoryBlock } from "./InventoryBlock";
 import { ListingBlock } from "./ListingBlock";
+import { LivingFeesBlock } from "./LivingFeesBlock";
 import { ProgressPanel } from "./ProgressPanel";
 import type { PhotoController } from "./photoController";
 import styles from "./Inspection.module.css";
 
-/** Phiếu thẩm định ở stage `inspecting`: 7 khối, ảnh thật, nháp ở máy; kết thúc bằng một quyết định duy nhất: Đẩy căn lên (niêm yết ngay) hoặc Không duyệt (lý do gửi chủ nhà). */
+/**
+ * Phiếu thẩm định ở stage `inspecting` — bố cục như bản mock: 8 mục + cột phụ (thông tin chủ kê khai, tổng hợp trực tiếp).
+ * Ảnh thật, nháp ở máy. Mục 8 chọn đề xuất: duyệt ⇒ niêm yết ngay (đổi giá ⇒ chờ chủ nhà); không duyệt (căn bất thường)
+ * ⇒ phiếu chuyển Admin rà soát (`reviewing`). Cả hai đều phải điền đủ phiếu vì Admin có thể duyệt niêm yết từ phiếu này.
+ */
 export function InspectionWorkspace({ detail }: { detail: InspectionDetail }) {
   const router = useRouter();
   const { busy, run } = useInspectionAction(detail.id);
@@ -67,6 +72,22 @@ export function InspectionWorkspace({ detail }: { detail: InspectionDetail }) {
   }, []);
   const uploads = useInspectionUploads(detail.id, onUploaded);
 
+  // Ảnh chủ nhà gửi ⇒ đưa sẵn vào ảnh niêm yết MỘT lần (server sao chép file; Host bỏ ảnh không đạt như ảnh thường).
+  const importStarted = useRef(false);
+  useEffect(() => {
+    if (importStarted.current || detail.landlordPhotosImported !== false || detail.landlordPhotos.length === 0) return;
+    importStarted.current = true;
+    void inspectionApi.importLandlordPhotos(detail.id).then((res) => {
+      if (!res.ok) {
+        toast(inspectionResErrorText(res, "Chưa đưa được ảnh chủ nhà vào ảnh niêm yết."));
+        return;
+      }
+      if (res.data.length === 0) return;
+      setPhotos((prev) => [...prev, ...res.data.filter((p) => !prev.some((x) => x.id === p.id))]);
+      toast(`Đã đưa ${res.data.length} ảnh chủ nhà gửi vào ảnh niêm yết — bỏ ảnh nào không đạt.`, "info");
+    });
+  }, [detail.id, detail.landlordPhotosImported, detail.landlordPhotos.length]);
+
   const removePhoto = useCallback(
     async (photoId: string) => {
       setRemoving((s) => new Set(s).add(photoId));
@@ -100,14 +121,17 @@ export function InspectionWorkspace({ detail }: { detail: InspectionDetail }) {
   const pending = uploads.items.some((u) => u.status === "measuring" || u.status === "queued" || u.status === "uploading");
   const needPin = detail.doorKind === "smart" && (!detail.doorCodeOnFile || forcePin);
 
-  function decide(next: "approve" | "reject") {
+  function decide() {
     if (pending) {
       toast("Còn ảnh đang tải — đợi xong rồi nộp.", "info");
       return;
     }
-    // Lý do không đạt nhập ở hộp xác nhận ⇒ lúc kiểm phiếu chưa đòi lý do (đặt tạm để qua V10).
-    const probe: InspectionDraft = { ...effective, recommendation: next, note: next === "reject" ? effective.note.trim() || "-" : "" };
-    const err = validateDraftFull(probe, { ...detail, doorCodeOnFile: detail.doorCodeOnFile && !forcePin });
+    const next = effective.recommendation;
+    // Kiểm đủ phiếu như khi duyệt (Admin cần đủ dữ liệu để niêm yết); không duyệt thì PIN không bắt buộc, lý do bắt buộc.
+    const probe: InspectionDraft = { ...effective, recommendation: "approve", note: "" };
+    const err =
+      validateDraftFull(probe, { ...detail, doorCodeOnFile: next === "reject" || (detail.doorCodeOnFile && !forcePin) }) ??
+      (next === "reject" && !effective.note.trim() ? { field: "note", message: "Đề xuất không duyệt phải ghi lý do cho Admin." } : null);
     if (err) {
       setInvalid(err);
       toast(err.message);
@@ -118,14 +142,18 @@ export function InspectionWorkspace({ detail }: { detail: InspectionDetail }) {
 
   async function submit() {
     if (!decision) return;
-    const reason = effective.note.trim();
-    if (decision === "reject" && !reason) return; // nút xác nhận đã khoá khi chưa có lý do
-    const final: InspectionDraft = { ...effective, recommendation: decision, note: decision === "reject" ? reason : "" };
+    const final: InspectionDraft = { ...effective, recommendation: decision, note: effective.note.trim() };
     const res = await run(() => inspectionApi.submit(detail.id, toSubmitDto(final)));
     setDecision(null);
     if (res.ok) {
       clearDraft(detail.id);
-      toast(res.data.stage === "approved" ? `Đã đẩy căn ${res.data.unitCode} lên danh sách.` : "Đã gửi lý do không duyệt cho chủ nhà, hồ sơ đã đóng.", "success");
+      const done: Record<typeof res.data.stage, string> = {
+        approved: `Thẩm định thành công! Căn ${res.data.unitCode} đã lên hệ thống cho khách thuê.`,
+        awaiting_landlord: "Đã nộp báo cáo. Giá/cọc thay đổi nên chờ chủ nhà đồng ý trước khi niêm yết.",
+        reviewing: "Đã nộp báo cáo thẩm định. Admin sẽ rà soát hồ sơ.",
+        rejected: "Hồ sơ đã đóng.",
+      };
+      toast(done[res.data.stage], res.data.stage === "reviewing" ? "info" : "success");
       router.push("/host/inspections");
       return;
     }
@@ -151,83 +179,64 @@ export function InspectionWorkspace({ detail }: { detail: InspectionDetail }) {
             {invalid.message}
           </div>
         )}
-        <LandlordInfoBlock detail={detail} />
         <DoorBlock detail={detail} />
         <DeclaredBlock detail={detail} draft={effective} invalidField={invalidField} onChange={update} />
         <MeasureBlock detail={detail} draft={effective} invalidField={invalidField} onChange={update} />
-        <FactsBlock detail={detail} draft={effective} invalidField={invalidField} onChange={update} />
-        <InventoryBlock draft={effective} catalog={detail.catalog} photos={controller} invalidField={invalidField} onChange={update} />
+        <InventoryBlock
+          draft={effective}
+          catalog={detail.catalog}
+          photos={controller}
+          invalidField={invalidField}
+          onChange={update}
+          declaredCodes={detail.furnished !== false ? (detail.declared?.inventoryCodes ?? null) : null}
+        />
+        <ExtraItemsBlock draft={effective} catalog={detail.catalog} photos={controller} invalidField={invalidField} onChange={update} />
+        <FunctionsBlock draft={effective} onChange={update} />
+        <LivingFeesBlock detail={detail} draft={effective} invalidField={invalidField} onChange={update} />
         <ListingBlock draft={effective} photos={controller} min={detail.limits.listingMin} max={detail.limits.listingMax} invalid={invalidField === "listingPhotoIds"} onChange={update} />
-        {needPin && <DoorPinBlock draft={effective} invalid={invalidField === "doorPin"} onChange={update} />}
-
-        <div className={styles.stickyBar}>
-          {pending && <span className="muted small">Đang tải ảnh…</span>}
-          <button type="button" className="btn btn-danger" disabled={busy} onClick={() => decide("reject")}>
-            Không duyệt
-          </button>
-          <button type="button" className="btn btn-primary" style={{ padding: "10px 24px" }} disabled={busy} onClick={() => decide("approve")}>
-            Đẩy căn lên
-          </button>
-        </div>
+        <DecisionBlock draft={effective} needPin={needPin} invalidField={invalidField} busy={busy || pending} onChange={update} onSubmit={decide} />
       </div>
 
       <div className={consign.sideSummaryCol}>
+        <LandlordInfoBlock detail={detail} />
         <ProgressPanel draft={effective} catalog={detail.catalog} listingMin={detail.limits.listingMin} />
       </div>
 
       <Modal
         open={decision !== null}
         onClose={() => setDecision(null)}
-        title={decision === "approve" ? "Xác nhận đẩy căn lên" : "Xác nhận không duyệt"}
+        title={decision === "approve" ? "Xác nhận đề xuất duyệt" : "Xác nhận gửi Admin rà soát"}
         footer={
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: "var(--s-3)" }}>
             <button type="button" className="btn btn-quiet" onClick={() => setDecision(null)} disabled={busy}>
               Xem lại phiếu
             </button>
-            {decision === "approve" ? (
-              <button type="button" className="btn btn-primary" onClick={() => void submit()} disabled={busy}>
-                {busy ? "Đang nộp…" : "Xác nhận & niêm yết"}
-              </button>
-            ) : (
-              <button type="button" className="btn btn-danger" onClick={() => void submit()} disabled={busy || effective.note.trim().length < 1}>
-                {busy ? "Đang nộp…" : "Gửi lý do cho chủ nhà"}
-              </button>
-            )}
+            <button type="button" className={`btn ${decision === "approve" ? "btn-primary" : "btn-danger"}`} onClick={() => void submit()} disabled={busy}>
+              {busy ? "Đang nộp…" : decision === "approve" ? "Xác nhận & niêm yết" : "Gửi báo cáo cho Admin"}
+            </button>
           </div>
         }
       >
         {decision === "approve" ? (
           <ul className={styles.confirmList}>
             <li>
-              <b>Căn sẽ lên danh sách cho khách thuê NGAY, không qua Admin.</b>
+              <b>Căn sẽ lên hệ thống cho khách thuê NGAY, không qua Admin.</b>
             </li>
             <li>Giá thuê và tiền cọc giữ nguyên như chủ nhà đã khai.</li>
             <li>{effective.listingPhotoIds.length} ảnh niêm yết sẽ hiện công khai trên tin đăng.</li>
             <li>Ủy quyền ký gửi có hiệu lực; không thể nộp lại hay sửa phiếu sau khi xác nhận.</li>
           </ul>
         ) : (
-          <>
-            <ul className={styles.confirmList}>
-              <li>
-                <b>Hồ sơ ký gửi sẽ đóng, căn không lên danh sách.</b>
-              </li>
-              <li>Lý do dưới đây được gửi cho chủ nhà; không thể nộp lại sau khi xác nhận.</li>
-            </ul>
-            <label id="insp-note" className={`field ${invalidField === "note" ? styles.rowBad : ""}`}>
-              <span className="label">
-                Lý do không duyệt <b style={{ color: "var(--danger)" }}>*</b>
-              </span>
-              <textarea
-                className="input"
-                rows={4}
-                maxLength={300}
-                placeholder="Nhập lý do — chủ nhà sẽ xem nội dung này…"
-                value={draft.note}
-                onChange={(e) => update((d) => ({ ...d, note: e.target.value }))}
-                style={{ resize: "vertical" }}
-              />
-            </label>
-          </>
+          <ul className={styles.confirmList}>
+            <li>
+              <b>Căn chưa lên hệ thống — phiếu chuyển Admin rà soát.</b>
+            </li>
+            <li>Admin quyết: duyệt niêm yết theo phiếu này, hoặc từ chối (chấm dứt ký gửi).</li>
+            <li>
+              Lý do gửi Admin: <i>{effective.note.trim()}</i>
+            </li>
+            <li>Không thể nộp lại hay sửa phiếu sau khi xác nhận.</li>
+          </ul>
         )}
       </Modal>
     </form>

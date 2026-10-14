@@ -13,6 +13,8 @@ import {
 } from '../tenant/tenant.mappers';
 import { TenantUnit } from '../tenant/tenant.types';
 import { generateAllSlotsBetween } from '../tenant/slots.helper';
+import { DEFAULT_FEE_RATES, FeeRates, FeeRatesService } from './fee-rates.service';
+import { clampHoldHours, readDefaultHoldHours } from '../deposit/hold-policy';
 
 /** Thời gian giữ danh sách công khai; đủ ngắn để trạng thái căn không lệch lâu. */
 export const CATALOG_CACHE_MS = 20_000;
@@ -24,16 +26,19 @@ export class PropertyService {
 
   private readonly catalogCache = new Map<string, { at: number; value: TenantUnit[] }>();
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly feeRates: FeeRatesService = new FeeRatesService(prisma),
+  ) {}
 
   /**
    * Tính toán All-in Cost (phục vụ Matchmaker AI và bộ so sánh chi phí).
    */
-  calculateAllInCost(unit: any, motorbikes = 1, cars = 0, occupants = 2) {
+  calculateAllInCost(unit: any, motorbikes = 1, cars = 0, occupants = 2, rates: FeeRates = DEFAULT_FEE_RATES) {
     const baseRent = Number(unit.baseRentPrice);
     const managementFee = Number(unit.managementFee);
-    const parkingFee = motorbikes * 150000 + cars * 1250000;
-    const utilityCost = occupants * 300000;
+    const parkingFee = motorbikes * rates.motorbike + cars * rates.car;
+    const utilityCost = occupants * rates.utilityPerPerson;
     const allInTotal = baseRent + managementFee + parkingFee + utilityCost;
 
     const marketAvg = Number(unit.marketAvgPrice);
@@ -162,7 +167,7 @@ export class PropertyService {
     );
     const endOfDayVn = new Date(startOfDayVn.getTime() + 24 * 60 * 60 * 1000);
 
-    const [activeViewings, interestGroups, feeConfig] = await Promise.all([
+    const [activeViewings, interestGroups, defaultHold] = await Promise.all([
       this.prisma.viewing.findMany({
         where: {
           unitId: { in: unitIds },
@@ -186,9 +191,7 @@ export class PropertyService {
         },
         _count: { id: true },
       }),
-      this.prisma.feeConfig.findUnique({
-        where: { configKey: 'hold_hours_default' },
-      }),
+      readDefaultHoldHours(this.prisma),
     ]);
 
     const activeMap = new Map<string, string>();
@@ -203,13 +206,10 @@ export class PropertyService {
       interestMap.set(ig.unitId, ig._count.id);
     }
 
-    const defaultHold = feeConfig ? Number(feeConfig.paramValue) : 48;
-
     return units.map((u) => {
       const activeSlot = activeMap.get(u.id) || null;
       const interest = interestMap.get(u.id) || 0;
-      const rawHours = u.holdHoursOverride ?? defaultHold;
-      const holdHours = Math.min(72, Math.max(12, rawHours));
+      const holdHours = clampHoldHours(u.holdHoursOverride ?? defaultHold);
       return toTenantUnit(u, activeSlot, holdHours, interest);
     });
   }
@@ -252,7 +252,7 @@ export class PropertyService {
     );
     const endOfDayVn = new Date(startOfDayVn.getTime() + 24 * 60 * 60 * 1000);
 
-    const [activeViewing, interestCount, feeConfig] = await Promise.all([
+    const [activeViewing, interestCount, defaultHold] = await Promise.all([
       this.prisma.viewing.findFirst({
         where: {
           unitId: unit.id,
@@ -274,14 +274,10 @@ export class PropertyService {
           createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
         },
       }),
-      this.prisma.feeConfig.findUnique({
-        where: { configKey: 'hold_hours_default' },
-      }),
+      readDefaultHoldHours(this.prisma),
     ]);
 
-    const defaultHold = feeConfig ? Number(feeConfig.paramValue) : 48;
-    const rawHours = unit.holdHoursOverride ?? defaultHold;
-    const holdHours = Math.min(72, Math.max(12, rawHours));
+    const holdHours = clampHoldHours(unit.holdHoursOverride ?? defaultHold);
 
     return toTenantUnit(
       unit,
@@ -385,7 +381,7 @@ export class PropertyService {
       });
     }
 
-    const cost = this.calculateAllInCost(unit, motorbikes, cars, occupants);
+    const cost = this.calculateAllInCost(unit, motorbikes, cars, occupants, await this.feeRates.get());
     return {
       ...unit,
       allInCost: cost.breakdown,

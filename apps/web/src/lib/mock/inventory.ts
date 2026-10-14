@@ -1,6 +1,8 @@
 import { PASSPORT_ITEMS, type PassportItem } from "./units";
 import type { InventoryGroup, InventoryLine, Liability } from "./types";
 
+export type AssetCategory = "furniture" | "appliance" | "structure" | "key";
+
 export interface CatalogItem {
   code: string;
   group: InventoryGroup;
@@ -9,6 +11,8 @@ export interface CatalogItem {
   liability: Liability;
   specHint: string;
   checkHint: string;
+  category?: AssetCategory;
+  defaultPrice?: number;
 }
 
 export const MAX_EXTRA_LINES = 10;
@@ -36,6 +40,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Bộ ghế Sofa",
     passport: "Sofa & bàn ghế",
     liability: "misuse",
+    category: "furniture",
+    defaultPrice: 6_000_000,
     specHint: "Nhãn hiệu / Chất liệu da hoặc vải nỉ",
     checkHint: "Mới / Đã qua sử dụng (Ảnh chi tiết góc đệm, tay vịn)",
   },
@@ -45,6 +51,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Bàn trà phòng khách",
     passport: "Sofa & bàn ghế",
     liability: "misuse",
+    category: "furniture",
+    defaultPrice: 1_500_000,
     specHint: "Mặt kính / Mặt đá / Gỗ",
     checkHint: "Mặt bàn nguyên vẹn, không nứt vỡ, trầy xước",
   },
@@ -54,6 +62,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Kệ Tivi phòng khách",
     passport: "Sofa & bàn ghế",
     liability: "misuse",
+    category: "furniture",
+    defaultPrice: 2_000_000,
     specHint: "Gỗ công nghiệp / Gỗ tự nhiên",
     checkHint: "Cánh tủ khít, ray trượt êm, bề mặt không bong tróc",
   },
@@ -63,6 +73,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Tivi thông minh & Smart Box",
     passport: "Cửa, khoá & công tơ",
     liability: "misuse",
+    category: "appliance",
+    defaultPrice: 8_500_000,
     specHint: "Hãng, kích thước inch, Mã Serial",
     checkHint: "Màn hình sáng nét, không kẻ sọc, có kết nối Wifi",
   },
@@ -72,6 +84,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Rèm cửa phòng khách",
     passport: "Tường & sơn",
     liability: "wear_or_misuse",
+    category: "furniture",
+    defaultPrice: 2_500_000,
     specHint: "Rèm 2 lớp / Rèm cuốn / Rèm lá",
     checkHint: "Kéo êm, thanh ray chắc chắn, vải sạch không rách",
   },
@@ -83,6 +97,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Bếp từ / Bếp hồng ngoại",
     passport: "Bếp & hút mùi",
     liability: "misuse",
+    category: "appliance",
+    defaultPrice: 4_500_000,
     specHint: "Hãng, Model bếp, Số vùng nấu",
     checkHint: "Mặt kính nguyên vẹn; nhận nồi sau 15s; phím cảm ứng nhạy",
   },
@@ -92,6 +108,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Máy hút mùi nhà bếp",
     passport: "Bếp & hút mùi",
     liability: "misuse",
+    category: "appliance",
+    defaultPrice: 2_500_000,
     specHint: "Hãng, Model hút mùi",
     checkHint: "Hoạt động tốt các cấp quạt hút; đèn chiếu sáng sáng; lưới sạch",
   },
@@ -101,6 +119,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Tủ lạnh",
     passport: "Tủ lạnh",
     liability: "misuse",
+    category: "appliance",
+    defaultPrice: 6_000_000,
     specHint: "Hãng, Dung tích Lít, Mã Serial",
     checkHint: "Ngăn đá đông đá tốt, ngăn mát lạnh sâu, khay kệ đủ không nứt",
   },
@@ -110,6 +130,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Hệ thống tủ bếp trên & dưới",
     passport: "Bếp & hút mùi",
     liability: "misuse",
+    category: "furniture",
+    defaultPrice: 12_000_000,
     specHint: "Chất liệu gỗ MDF lõi xanh / Phủ Melamine, Acrylic",
     checkHint: "Cánh tủ đóng mở êm, đáy tủ khô ráo không ngấm nước rò rỉ",
   },
@@ -119,6 +141,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Mặt đá & Kính ốp bếp",
     passport: "Bếp & hút mùi",
     liability: "misuse",
+    category: "structure",
+    defaultPrice: 3_000_000,
     specHint: "Đá nhân tạo / Đá tự nhiên / Kính cường lực",
     checkHint: "Không nứt nẻ, bề mặt sạch dầu mỡ, keo silicon kín mép",
   },
@@ -128,6 +152,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Chậu rửa bát & Vòi rửa",
     passport: "Thiết bị vệ sinh",
     liability: "misuse",
+    category: "structure",
+    defaultPrice: 1_800_000,
     specHint: "Inox 304 / Đá granite",
     checkHint: "Vòi quay nhẹ không rỉ nước; xi-phông thoát nhanh, đáy khô",
   },
@@ -137,6 +163,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Bộ bàn ghế ăn",
     passport: "Sofa & bàn ghế",
     liability: "misuse",
+    category: "furniture",
+    defaultPrice: 3_500_000,
     specHint: "Bàn ăn ... ghế, vật liệu",
     checkHint: "Mặt bàn phẳng đẹp; ghế chắc chắn, đệm ghế sạch sẽ",
   },
@@ -148,6 +176,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Giường ngủ & Táp đầu giường",
     passport: "Giường & nệm",
     liability: "misuse",
+    category: "furniture",
+    defaultPrice: 5_000_000,
     specHint: "Kích thước m2, chất liệu gỗ",
     checkHint: "Khung giường chắc chắn, giát giường phẳng, không có tiếng kêu",
   },
@@ -157,6 +187,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Đệm nệm & Tấm bảo vệ đệm",
     passport: "Giường & nệm",
     liability: "misuse",
+    category: "furniture",
+    defaultPrice: 3_000_000,
     specHint: "Hãng, độ dày cm, loại đệm cao su/lò xo/bông ép",
     checkHint: "Đệm phẳng phiu, đàn hồi tốt; ga và nệm sạch 100%, không ố vàng",
   },
@@ -166,6 +198,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Tủ quần áo",
     passport: "Giường & nệm",
     liability: "misuse",
+    category: "furniture",
+    defaultPrice: 6_500_000,
     specHint: "Tủ ... cánh mở / Cánh lùa, chất liệu",
     checkHint: "Cánh kéo trượt nhẹ, bản lề chắc, suốt treo quần áo thẳng",
   },
@@ -175,6 +209,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Rèm chắn sáng phòng ngủ",
     passport: "Tường & sơn",
     liability: "wear_or_misuse",
+    category: "furniture",
+    defaultPrice: 1_800_000,
     specHint: "Rèm vải cản sáng 100% / Rèm cầu vồng",
     checkHint: "Cơ cấu kéo trơn tru, vải rèm lành lặn",
   },
@@ -186,6 +222,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Bình nước nóng lạnh",
     passport: "Bình nóng lạnh",
     liability: "misuse",
+    category: "appliance",
+    defaultPrice: 2_800_000,
     specHint: "Hãng, Dung tích Lít, Rơ-le ELCB",
     checkHint: "Nước nóng đạt chuẩn sau 10 phút; ELCB ngắt an toàn; không rò nước",
   },
@@ -195,6 +233,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Bồn cầu & Vòi xịt vệ sinh",
     passport: "Thiết bị vệ sinh",
     liability: "misuse",
+    category: "structure",
+    defaultPrice: 2_500_000,
     specHint: "Hãng sứ vệ sinh, nắp rơi êm",
     checkHint: "Men sứ sáng không nứt; xả nước mạnh không rỉ ngầm van phao; dây xịt mềm",
   },
@@ -204,6 +244,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Chậu Lavabo & Vòi rửa mặt",
     passport: "Thiết bị vệ sinh",
     liability: "misuse",
+    category: "structure",
+    defaultPrice: 1_500_000,
     specHint: "Hãng thiết bị vệ sinh",
     checkHint: "Men sứ nguyên vẹn; vòi cấp nước áp lực tốt; xi-phông thoát thông suốt",
   },
@@ -213,6 +255,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Vách kính tắm đứng & Bộ sen cây",
     passport: "Thiết bị vệ sinh",
     liability: "misuse",
+    category: "structure",
+    defaultPrice: 3_500_000,
     specHint: "Kính cường lực, Bộ sen tắm inox",
     checkHint: "Kính trong suốt không xước/mẻ mép; cánh đóng êm; sen cây phun đều",
   },
@@ -224,6 +268,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Máy giặt / Máy sấy quần áo",
     passport: "Thiết bị vệ sinh",
     liability: "misuse",
+    category: "appliance",
+    defaultPrice: 6_500_000,
     specHint: "Hãng, Khối lượng giặt kg, Mã Serial",
     checkHint: "Giặt vắt êm, không rung giật lắc mạnh; ống cấp và thoát nước thông suốt",
   },
@@ -233,6 +279,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Giàn phơi thông minh",
     passport: "Thiết bị vệ sinh",
     liability: "wear_or_misuse",
+    category: "structure",
+    defaultPrice: 1_200_000,
     specHint: "Giàn phơi gắn trần tay quay / Điện tử",
     checkHint: "Cáp tời trơn, thanh phơi nâng hạ nhẹ nhàng, đủ móc treo",
   },
@@ -244,6 +292,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Điều hòa không khí Phòng khách",
     passport: "Điều hòa",
     liability: "wear_or_misuse",
+    category: "appliance",
+    defaultPrice: 9_000_000,
     specHint: "Hãng, Công suất BTU, Inverter",
     checkHint: "Phả hơi lạnh ổn định sau 5 phút bật; không kêu rè; không chảy nước máng",
   },
@@ -253,6 +303,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Điều hòa không khí Phòng ngủ",
     passport: "Điều hòa",
     liability: "wear_or_misuse",
+    category: "appliance",
+    defaultPrice: 7_500_000,
     specHint: "Hãng, Công suất BTU, Inverter",
     checkHint: "Làm lạnh sâu, cánh vẫy tự động tốt; dàn nóng chạy êm",
   },
@@ -264,6 +316,7 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Sàn gỗ / Gạch lát nền",
     passport: "Sàn nhà",
     liability: "misuse",
+    category: "structure",
     specHint: "Gỗ công nghiệp dày ...mm / Gạch men",
     checkHint: "Bề mặt phẳng, không bong tróc, không có vết cào sâu hay ngấm nước phồng rộp",
   },
@@ -273,6 +326,7 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Nước sơn tường & Trần nhà",
     passport: "Tường & sơn",
     liability: "wear_or_misuse",
+    category: "structure",
     specHint: "Màu sơn, loại sơn",
     checkHint: "Sơn đồng màu, không bong tróc mảng lớn, không bị vẽ bẩn hay đục lỗ trái phép",
   },
@@ -282,6 +336,7 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Hệ thống đèn chiếu sáng & Công tắc ổ cắm",
     passport: "Tường & sơn",
     liability: "wear_or_misuse",
+    category: "structure",
     specHint: "Đèn LED âm trần, Hãng công tắc",
     checkHint: "Đèn sáng 100%, mặt hạt công tắc và ổ cắm chắc chắn an toàn",
   },
@@ -293,6 +348,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Khóa cửa chính ra vào căn hộ",
     passport: "Cửa, khoá & công tơ",
     liability: "wear_or_misuse",
+    category: "key",
+    defaultPrice: 3_500_000,
     specHint: "Khóa điện tử vân tay/mã số hoặc Khóa cơ",
     checkHint: "Đóng mở mượt mà; bàn phím cảm ứng nhạy; chốt khóa an toàn",
   },
@@ -302,6 +359,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Thẻ cư dân thang máy",
     passport: "Cửa, khoá & công tơ",
     liability: "misuse",
+    category: "key",
+    defaultPrice: 200_000,
     specHint: "Mã số in trên từng thẻ cư dân",
     checkHint: "Quẹt thang máy bình thường các tầng được cấp phép",
   },
@@ -311,6 +370,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Điều khiển điều hòa nhiệt độ (Remote)",
     passport: "Điều hòa",
     liability: "misuse",
+    category: "appliance",
+    defaultPrice: 250_000,
     specHint: "Điều khiển chính hãng theo từng máy",
     checkHint: "Bấm nhạy, màn hình hiển thị số rõ ràng, nắp pin đủ",
   },
@@ -320,6 +381,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Điều khiển Tivi (Remote Smart TV)",
     passport: "Cửa, khoá & công tơ",
     liability: "misuse",
+    category: "appliance",
+    defaultPrice: 350_000,
     specHint: "Điều khiển thông minh giọng nói",
     checkHint: "Nhận giọng nói tốt, phím bấm êm, không nứt vỏ",
   },
@@ -329,6 +392,8 @@ export const INVENTORY_CATALOG: ReadonlyArray<CatalogItem> = [
     name: "Chìa khóa cơ các loại (Cửa chính/phòng)",
     passport: "Cửa, khoá & công tơ",
     liability: "misuse",
+    category: "key",
+    defaultPrice: 100_000,
     specHint: "Chìa khóa cơ dự phòng",
     checkHint: "Đút vặn ổ nhẹ nhàng",
   },
@@ -368,3 +433,73 @@ export function passportSummary(
     };
   });
 }
+
+/**
+ * Ánh xạ danh sách trang thiết bị chủ nhà kê khai (preInventory/items)
+ * sang tập hợp mã code trong 32 danh mục chuẩn (INVENTORY_CATALOG).
+ */
+export const LANDLORD_ITEM_TO_CATALOG_CODES: Record<string, string[]> = {
+  sofa: ["1", "2", "3"],
+  tv: ["4", "31"],
+  curtains: ["5", "20"],
+  curtain: ["5", "20"],
+  kitchen: ["6", "7", "9", "10", "11"],
+  fridge: ["8"],
+  dining: ["12"],
+  bed: ["13", "14"],
+  wardrobe: ["15"],
+  heater: ["17"],
+  washer: ["19"],
+  ac: ["21", "22", "23", "24"],
+  balcony: ["20"],
+};
+
+export const FIXED_DEVELOPER_CODES: string[] = [];
+
+/**
+ * Phân giải các mã danh mục trong 32 dòng được tự động đánh dấu present dựa trên khai báo của chủ nhà.
+ * NGUYÊN TẮC BẤT BIẾN: Chỉ tự động đánh dấu các món mà chủ nhà THỰC SỰ CÓ KÊ KHAI.
+ * Tuyệt đối không tự động tick bất kỳ món nào mà chủ nhà không khai báo, tránh ép Sale phải chụp ảnh những món không tồn tại.
+ */
+export function resolveInventoryCodesFromLandlord(
+  items?: string[] | null,
+  furnished?: boolean,
+  note?: string | null
+): { codes: Set<string>; declaredKeys: Set<string>; landlordCodes: Set<string> } {
+  const declaredKeys = new Set<string>();
+
+  // 1. Đọc từ mảng items
+  if (Array.isArray(items)) {
+    for (const it of items) declaredKeys.add(it.toLowerCase());
+  }
+
+  // 2. Fallback trích xuất từ note nếu mảng items chưa có (VD: "Nội thất: ac, fridge, washer...")
+  if (note && note.includes("Nội thất:")) {
+    const match = note.match(/Nội thất:\s*([^|]+)/i);
+    if (match && match[1]) {
+      const parts = match[1].split(",").map((s) => s.trim().toLowerCase());
+      for (const p of parts) {
+        if (p) declaredKeys.add(p);
+      }
+    }
+  }
+
+  const codes = new Set<string>();
+  const landlordCodes = new Set<string>();
+
+  // CHỈ tự động tick các món khi chủ nhà CÓ THỰC SỰ KÊ KHAI
+  if (declaredKeys.size > 0) {
+    for (const key of declaredKeys) {
+      const mapped = LANDLORD_ITEM_TO_CATALOG_CODES[key];
+      if (mapped) {
+        for (const code of mapped) {
+          codes.add(code);
+          landlordCodes.add(code);
+        }
+      }
+    }
+  }
+
+  return { codes, declaredKeys, landlordCodes };
+}
+

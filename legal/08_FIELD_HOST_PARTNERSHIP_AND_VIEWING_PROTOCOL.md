@@ -90,9 +90,10 @@ Nhằm triệt tiêu triệt để tình trạng tranh giành khách (Lead Canni
 ```
 
 * **Chỉ số SLA bắt buộc đối với Bên B:**
-  * **Thời gian phản hồi nhận ticket:** Mặc định không quá **03 (ba) phút** (hoặc theo ngưỡng thời gian chờ được Quản trị viên thiết lập cho phân khu trên Trang Quản trị Admin) kể từ thời điểm hệ thống phát thông báo.
+  * **Thời gian phản hồi nhận ticket ca dẫn:** Mặc định không quá **03 (ba) phút** (hoặc theo ngưỡng thời gian chờ được Quản trị viên thiết lập cho phân khu trên Trang Quản trị Admin) kể từ thời điểm hệ thống phát thông báo.
   * **Tỷ lệ nhận ca (Acceptance Rate):** Duy trì tối thiểu **$\ge 80\%$** trên tổng số ticket phân bổ trong tháng.
   * **Tỷ lệ hoàn thành buổi xem phòng (Completion Rate):** Đạt tối thiểu **$\ge 95\%$** (trừ trường hợp khách hủy hẹn bất khả kháng).
+  * **Tiếp nhận & Thẩm định Hồ sơ Ký gửi (Consignment SLA 2h):** Hồ sơ ký gửi căn hộ mới được ưu tiên cho Host phụ trách phân khu (0–30p), sau đó tự động chuyển sang Open Pool liên phân khu (30p–2h) cho bất kỳ Host nào nhận trước (First-to-Claim). Quá 2h chưa ai nhận sẽ tự động chuyển cấp cho Area Lead và kích hoạt cảnh báo còi đỏ trên Admin; Quản trị viên (Admin) có toàn quyền Override chỉ định Host bất kỳ lúc nào.
 
 ---
 
@@ -102,7 +103,7 @@ Nhằm bảo đảm sự công bằng, minh bạch tuyệt đối và triệt ti
    * Khách thuê được Bên B tiếp nhận ticket, đón tiếp tại sảnh và dẫn xem phòng thành công lần đầu tiên (được hệ thống xác thực qua nhật ký mã hẹn OTP, dữ liệu mở cửa căn hộ và Call Log) sẽ được **tự động gắn mã định danh độc quyền với Bên B trong thời hạn 30 (ba mươi) ngày** kể từ ngày kết thúc ca dẫn.
    * Thời hạn Attribution Lock sẽ tự động được gia hạn thêm **30 ngày nữa (tối đa 60 ngày)** nếu khách thuê tiếp tục phát sinh các tương tác tìm kiếm hoặc đặt lịch xem các căn hộ khác trên hệ thống.
 2. **Quyền lợi bảo vệ hoa hồng tuyệt đối:**
-   * Trong suốt thời gian Attribution Lock có hiệu lực, bất kể khách thuê tự ý truy cập website đặt cọc giữ chỗ trực tuyến, gọi điện qua tổng đài hotline, hoặc đổi ý quyết định thuê một căn hộ khác trong cùng phân khu/dự án Ocean Park do nền tảng quản lý, **toàn bộ hoa hồng chốt cọc phát sinh từ giao dịch của khách thuê này vẫn được hệ thống tự động ghi nhận và chi trả 100% cho Bên B**.
+   * Trong suốt thời gian Attribution Lock có hiệu lực, bất kể khách thuê tự ý truy cập website đặt cọc trực tuyến, gọi điện qua tổng đài hotline, hoặc đổi ý quyết định thuê một căn hộ khác trong cùng phân khu/dự án Ocean Park do nền tảng quản lý, **toàn bộ hoa hồng chốt cọc phát sinh từ giao dịch của khách thuê này vẫn được hệ thống tự động ghi nhận và chi trả 100% cho Bên B**.
    * Trường hợp khách thuê đi cùng người thân/bạn bè (cùng nhóm ở chung đã khai báo), việc chốt hợp đồng đứng tên bất kỳ thành viên nào trong nhóm vẫn được tính hoa hồng trọn vẹn cho Bên B.
 3. **Cơ chế phân xử tự động bằng Audit Trail:**
    * Mọi nghi vấn tranh chấp nguồn khách giữa các chuyên viên tư vấn được hệ thống tự động đối soát dựa trên dấu thời gian điện tử (Timestamp đến từng giây) của lần tiếp xúc đầu tiên được lưu trữ bất biến trên hệ thống cơ sở dữ liệu. Phán quyết từ dữ liệu số là quyết định cuối cùng có giá trị ràng buộc Các Bên.
@@ -163,24 +164,16 @@ Nhằm bảo đảm an ninh tài sản tuyệt đối cho Chủ nhà (thực hi�
    * Bên B chủ động giới thiệu cho khách thuê về quy trình nghiệm thu Hộ chiếu bàn giao số nhúng Timestamp + GPS Geofence của VinStay AI;
    * Giải thích rõ cơ chế phân định minh bạch giữa hao mòn tự nhiên (Chủ nhà chịu) và hư hỏng bất cẩn (Khách bồi thường), giúp khách thuê an tâm 100% về tính công bằng, loại bỏ nỗi sợ bị trừ cọc oan khi trả phòng.
 4. **Quy chuẩn xử lý tình huống căn hộ được cọc trực tuyến trong ca dẫn (First-to-Pay Wins & AI Conflict Resolver):**
-   * Các Bên thống nhất nguyên tắc tối thượng của nền tảng: **"Tiền cọc gạch nợ thành công qua tài khoản định danh là căn cứ duy nhất để khóa căn sang `HOLDING`"**. Trường hợp có khách hàng khác hoàn tất chuyển khoản cọc 2.000.000 VNĐ trực tuyến qua VietQR trong lúc Bên B đang trực tiếp dẫn khách xem tại căn hộ:
+   * Các Bên thống nhất nguyên tắc tối thượng của nền tảng: **"Tiền cọc gạch nợ thành công qua tài khoản định danh là căn cứ duy nhất để khóa căn sang `HOLDING`"**. Trường hợp có khách hàng khác hoàn tất chuyển khoản cọc chốt căn trực tuyến qua VietQR trong lúc Bên B đang trực tiếp dẫn khách xem tại căn hộ:
      * (i) Bên B có nghĩa vụ thông báo minh bạch, văn minh và lịch sự với khách đang xem phòng về giao dịch giữ chỗ tự động vừa phát sinh trên hệ thống ngân hàng; tuyệt đối không có thái độ tiêu cực, không đổ lỗi cho nền tảng;
      * (ii) Ngay khi nhận được thông báo đẩy từ hệ thống, Bên B mở giao diện **AI Conflict Resolver** trên ứng dụng để nhận danh sách **02 (hai) căn hộ thay thế tương đồng $\ge 90\%$** (cùng layout, cùng phân khu, độ mới nội thất và giá thuê tương đương);
      * (iii) Bên B chủ động quẹt thẻ thang máy hướng dẫn khách di chuyển sang xem ngay căn thứ 2 trong bán kính 300m để hỗ trợ khách chốt cọc;
      * (iv) **Bảo vệ quyền lợi hoa hồng trọn vẹn:** Trường hợp khách thuê đồng ý chốt cọc căn hộ thay thế thứ 2, Bên B vẫn được **hệ thống ghi nhận và chi trả 100% thù lao lượt dẫn và 100% hoa hồng chốt cọc thành công** theo đúng cơ chế Attribution Lock quy định tại Điều 3 Hợp đồng này.
 
----
-
-### ĐIỀU 6: QUY TẮC TƯ VẤN MINH BẠCH ALL-IN COST, KHÔNG ÉP CỌC & HƯỚNG DẪN HỘ CHIẾU BÀN GIAO SỐ
-1. **Trung thực tuyệt đối về bảng tính All-in Cost trọn gói:**
-   * Bên B có nghĩa vụ tư vấn chính xác, công khai và minh bạch toàn bộ các cấu phần chi phí hàng tháng theo Bảng tính All-in Cost thời gian thực trên ứng dụng VinStay AI (bao gồm: Giá thuê cơ bản + Phí quản lý BQL Vinhomes từ 8.000 – 11.000 VNĐ/m² + Phí gửi xe máy/ô tô + Dự toán điện nước EVN sinh hoạt).
-   * Nghiêm cấm hành vi báo "giá mồi" thấp hơn thực tế để dụ dỗ khách, giấu giếm các khoản phí dịch vụ khiến khách bị sốc chi phí ẩn khi vào ở.
-2. **Văn hóa tiếp đón 5 sao — Tuyệt đối không ép cọc:**
-   * Định vị vai trò của Bên B là **"Đại sứ trải nghiệm & Chuyên gia thổ địa"** thân thiện, văn minh tại Ocean Park;
-   * Nghiêm cấm hành vi chèo kéo, nài ép, gây áp lực tâm lý buộc khách phải đặt cọc gấp; không tạo thông tin ảo về việc "sắp có người khác cọc mất căn" nếu không đúng thực tế hệ thống.
-3. **Giới thiệu quyền lợi Hộ chiếu bàn giao số 10 hạng mục:**
-   * Bên B chủ động giới thiệu cho khách thuê về quy trình nghiệm thu Hộ chiếu bàn giao số nhúng Timestamp + GPS Geofence của VinStay AI;
-   * Giải thích rõ cơ chế phân định minh bạch giữa hao mòn tự nhiên (Chủ nhà chịu) và hư hỏng bất cẩn (Khách bồi thường), giúp khách thuê an tâm 100% về tính công bằng, loại bỏ nỗi sợ bị trừ cọc oan khi trả phòng.
+  * 5. **Quy chế kích hoạt ưu đãi chốt nhanh trong Biên độ Giá Sàn (Fast-Close Floor Price Corridor):**
+    * Đối với căn hộ được Chủ nhà kích hoạt tùy chọn *"Ủy quyền AI Chốt Nhanh & Giá Sàn An Toàn"*, ứng dụng VinStay AI Partner tự động hiển thị mức giá chiết khấu ưu đãi cho phép khi khách cam kết thanh toán trước từ 06 đến 12 tháng hoặc cam kết cọc trong vòng 24 giờ kể từ thời điểm kết thúc ca xem phòng.
+    * Bên B (Field Host) được trao quyền chủ động kích hoạt mức giá ưu đãi nằm trong biên độ từ Giá sàn đến Giá chào thuê để chốt cọc khách ngay tại phòng mà không cần gọi điện xin phê duyệt từng lần của Chủ nhà.
+    * **Kỷ luật bảo vệ Giá Sàn:** Bên B tuyệt đối không được tự ý thương lượng hoặc chốt mức giá thấp hơn Giá sàn ủy quyền hiển thị trên ứng dụng. Hệ thống tự động từ chối khởi tạo mã VietQR động nếu mức giá nằm ngoài biên độ ủy quyền. Trường hợp Bên B cố ý thỏa thuận mức giá vi phạm Giá sàn, Bên B sẽ bị hủy bỏ toàn bộ quyền lợi hoa hồng chốt cọc và chịu chế tài xử lý theo quy định tại Điều 9 Hợp đồng này.
 
 ---
 
@@ -188,7 +181,7 @@ Nhằm bảo đảm an ninh tài sản tuyệt đối cho Chủ nhà (thực hi�
 Toàn bộ chính sách thu nhập của Bên B được hệ thống hóa công khai, minh bạch trên ứng dụng VinStay AI Partner và được cấu hình quản trị tập trung trên Admin Portal:
 1. **Cấu trúc thu nhập đa tầng:**
    * **Thù lao lượt dẫn xem phòng (Base Viewing Fee):** Được thanh toán cho mỗi ca dẫn khách hoàn thành đúng quy chuẩn SLA tại Điều 3 và Điều 4. Mức thù lao **HOÀN TOÀN KHÔNG CỐ ĐỊNH HOẶC MẶC ĐỊNH**, mà được Quản trị viên (Admin) trực tiếp cấu hình và thiết lập linh hoạt trên Trang Quản trị (Admin Portal) cho từng sản phẩm, từng phân khu hoặc từng chiến dịch điều phối cụ thể: **`[MỨC PHÍ LƯỢT DẪN]` VNĐ/ca** (thông số này được hiển thị công khai, minh bạch trên màn hình ticket trước khi Bên B bấm nhận ca).
-   * **Hoa hồng chốt cọc thành công (Deal Commission):** Khi khách thuê do Bên B chăm sóc chuyển khoản cọc giữ chỗ thành công và ký Hợp đồng thuê chính thức, Bên B được hưởng hoa hồng bằng **`[TỶ LỆ HOA HỒNG]`% giá trị tiền thuê** *(hoặc mức thù lao cố định theo từng căn hộ do Admin trực tiếp thiết lập trên hệ thống căn cứ theo bảng phí niêm yết)*.
+   * **Hoa hồng chốt cọc thành công (Deal Commission):** Khi khách thuê do Bên B chăm sóc chuyển khoản cọc chốt căn thành công và ký Hợp đồng thuê chính thức, Bên B được hưởng hoa hồng bằng **`[TỶ LỆ HOA HỒNG]`% giá trị tiền thuê** *(hoặc mức thù lao cố định theo từng căn hộ do Admin trực tiếp thiết lập trên hệ thống căn cứ theo bảng phí niêm yết)*.
    * **Thưởng nóng kích cầu (Incentive Bonus):** Thưởng chốt căn hời (Dynamic Deal Badge), thưởng nóng theo chiến dịch tuần/tháng, và thưởng nhân hệ số $1.2\times - 1.5\times$ dành cho các Field Host đạt chuẩn dịch vụ 5 sao do Admin cấu hình trên hệ thống.
 2. **Ví Đối Tác (Partner Wallet) & Nhật ký dòng tiền minh bạch (Audit Trail):**
    * Ngay khi một ca dẫn hoặc giao dịch chốt cọc hoàn tất hợp lệ, hệ thống tự động ghi nhận và cộng tiền tức thì vào Ví Đối Tác điện tử của Bên B trên ứng dụng.

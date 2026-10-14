@@ -1,6 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
 import type { ApiResponse } from "@/lib/apiClient";
 import { clearDraft, draftKey, loadDraft, saveDraft } from "@/lib/inspection/draftStore";
 import {
@@ -205,7 +203,7 @@ describe("W2 toSubmitDto", () => {
     expect(dto.declared.map((d) => d.field)).toEqual(["identity", "layout", "areaM2", "furnishing", "lock"]);
   });
 
-  it("dòng không present gửi photoIds rỗng; reject không gửi ảnh niêm yết; PIN chỉ khi đạt", () => {
+  it("dòng không present gửi photoIds rỗng; không duyệt (gửi Admin) vẫn gửi ảnh niêm yết + PIN đã nhập", () => {
     const { draft, photos } = validSetup();
     const d = syncPhotos({ ...draft, doorPin: " 4321 " }, photos);
     expect(toSubmitDto(d).doorPin).toBe("4321");
@@ -213,8 +211,9 @@ describe("W2 toSubmitDto", () => {
     expect(off.present).toBe(false);
     expect(off.photoIds).toEqual([]);
     const rej = toSubmitDto({ ...d, recommendation: "reject", note: "Không đạt" });
-    expect(rej.listingPhotoIds).toEqual([]);
-    expect(rej.doorPin).toBeUndefined();
+    expect(rej.listingPhotoIds).toEqual(toSubmitDto(d).listingPhotoIds);
+    expect(rej.listingPhotoIds.length).toBeGreaterThan(0);
+    expect(rej.doorPin).toBe("4321");
     expect(rej.note).toBe("Không đạt");
   });
 });
@@ -250,35 +249,6 @@ describe("W3 inspectionErrorText", () => {
     expect(inspectionResErrorText({ code: "inspection_taken", status: 409 })).toContain("Inspector khác");
     expect(inspectionResErrorText({ status: 0 })).toContain("kết nối");
     expect(inspectionResErrorText({ status: 500, message: "Lỗi máy chủ" })).toBe("Lỗi máy chủ");
-  });
-});
-
-describe("W4 không còn trạng thái đã bỏ ở web (ngoài vùng tương thích admin mock)", () => {
-  const ROOT = join(__dirname, "..");
-  const NEEDLE = "review" + "ing"; // ghép chuỗi để file test này không tự khớp
-  // Vùng tương thích admin mock (SPEC-P03 §5) + hai nơi ngoài phạm vi hồ sơ này (xem report: Câu hỏi mở).
-  const ALLOW = [
-    "lib/mock/",
-    "components/admin/",
-    "components/consign/status.ts",
-    "components/consign/ConsignTimeline.tsx",
-    "components/portal/AdminShell.tsx",
-    "tests/",
-  ];
-  function walk(dir: string, out: string[] = []): string[] {
-    for (const name of readdirSync(dir)) {
-      const p = join(dir, name);
-      if (statSync(p).isDirectory()) walk(p, out);
-      else if (/\.(ts|tsx|css)$/.test(name)) out.push(p);
-    }
-    return out;
-  }
-  it("không file nào ngoài danh sách cho phép chứa chuỗi trạng thái đã bỏ", () => {
-    const offenders = walk(ROOT)
-      .map((p) => relative(ROOT, p).split("\\").join("/"))
-      .filter((rel) => !ALLOW.some((a) => rel === a || rel.startsWith(a)))
-      .filter((rel) => readFileSync(join(ROOT, rel), "utf8").includes(NEEDLE));
-    expect(offenders).toEqual([]);
   });
 });
 

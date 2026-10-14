@@ -38,14 +38,20 @@ export function Handbook() {
   const [search, setSearch] = useState("");
   const profile = useHostMe();
   const catalog = useApiQuery(tenantQueries.units());
-  const units = useMemo(() => catalog.state.status === "ready" ? catalog.state.data.map(toUnit) : [], [catalog.state]);
+  const units = useMemo(() => catalog.state.status === "ready" ? catalog.state.data.units.map(toUnit) : [], [catalog.state]);
   const assignedZone = profile.state.status === "ready" ? profile.state.data.assignedZone : "";
+  // Phạm vi do Admin gán (backend): null = tất cả phân khu; thiếu field (backend cũ) ⇒ chỉ phân khu chính.
+  const scopeZones = useMemo(() => {
+    if (profile.state.status !== "ready") return [];
+    const me = profile.state.data;
+    return me.zoneScope === "all" ? null : me.zones ?? [me.assignedZone];
+  }, [profile.state]);
   const rows = useMemo(() => units.filter((unit) => {
     const zoneName = unit.zoneName || zoneById(unit.zoneId)?.name || "";
-    const inZone = assignedTo(unit.building, zoneName, assignedZone);
+    const inZone = scopeZones === null || scopeZones.some((z) => assignedTo(unit.building, zoneName, z));
     const matches = !search || unit.code.toLowerCase().includes(search.toLowerCase()) || unit.building.toLowerCase().includes(search.toLowerCase());
     return inZone && matches;
-  }), [units, assignedZone, search]);
+  }), [units, scopeZones, search]);
 
   const columns: DataTableColumn<Unit>[] = [
     { key: "address", header: "Căn hộ", render: (unit) => <b>{unitAddress(unit)}</b> },
@@ -61,7 +67,7 @@ export function Handbook() {
   if (profile.state.status === "loading" || catalog.state.status === "loading") return <div className="skeleton" style={{ height: 380 }} />;
 
   return <div className={styles.page}>
-    <PageHeader title="Sổ tay phân khu" description={error ? "Không tải được dữ liệu phân khu." : `Phân khu phụ trách: ${assignedZone}. Danh sách chỉ gồm căn đang niêm yết công khai.`} actions={<label className={styles.search}><Search size={17} /><span className="sr-only">Tra căn theo mã hoặc toà</span><input className="input" placeholder="Tra mã căn hoặc toà…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>} />
+    <PageHeader title="Sổ tay phân khu" description={error ? "Không tải được dữ liệu phân khu." : `Phân khu phụ trách: ${assignedZone}${scopeZones === null ? " · phạm vi: tất cả phân khu" : scopeZones.length > 1 ? ` · phạm vi: ${scopeZones.join(", ")}` : ""}. Danh sách chỉ gồm căn đang niêm yết công khai.`} actions={<label className={styles.search}><Search size={17} /><span className="sr-only">Tra căn theo mã hoặc toà</span><input className="input" placeholder="Tra mã căn hoặc toà…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>} />
     {error ? <div role="alert" className="card"><p>{error}</p><button type="button" className="btn btn-secondary btn-sm" onClick={() => { profile.reload(); catalog.reload(); }}>Thử lại</button></div> : <Section flush><DataTable<Unit> columns={columns} rows={rows} empty={<div className={styles.empty}><p className="muted">Không có căn niêm yết trong phân khu của bạn khớp “{search}”.</p></div>} /></Section>}
     <Section title="Nội quy nhắc khách khi dẫn xem"><ul className={styles.rules}>{HOUSE_RULES.map((rule) => <li key={rule.id}><b>{rule.title}.</b> {rule.body}</li>)}</ul></Section>
   </div>;

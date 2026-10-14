@@ -91,15 +91,33 @@ export class RejectConsignmentDto {
 }
 
 export class ReassignBookingDto {
-  @ApiProperty({ example: 'h1111111-1111-1111-1111-111111111111', description: 'ID của Field Host mới' })
-  @IsNotEmpty()
-  @IsString()
-  hostId: string;
+  // Chỉ khai báo trường (để ValidationPipe whitelist giữ lại); kiểm chi tiết + lỗi theo field ở AdminBookingsService.
+  @ApiProperty({ example: 'h1111111-1111-1111-1111-111111111111', description: 'ID Field Host nhận ca (lấy từ /reassign-candidates)' })
+  @IsOptional()
+  hostId?: unknown;
 
-  @ApiProperty({ example: 'Host cũ kẹt thang', description: 'Lý do can thiệp (lưu Audit)' })
-  @IsNotEmpty()
-  @IsString()
-  reason: string;
+  @ApiProperty({ example: 'Host cũ kẹt thang máy, khách đã tới sảnh', description: 'Lý do can thiệp, 5–300 ký tự (lưu Audit)' })
+  @IsOptional()
+  reason?: unknown;
+
+  @ApiProperty({ description: '`version` của dòng booking lúc tải; lệch ⇒ 409 reassign_conflict kèm dữ liệu mới nhất' })
+  @IsOptional()
+  version?: unknown;
+}
+
+export class UpdateHoldPolicyDto {
+  // Chỉ khai báo trường (để ValidationPipe whitelist giữ lại); kiểm chi tiết + lỗi theo field ở AdminSettingsService.
+  @ApiProperty({ example: 48, description: 'Thời gian giữ chỗ mặc định toàn sàn, số giờ nguyên 12–72' })
+  @IsOptional()
+  defaultHours?: unknown;
+
+  @ApiProperty({ example: 'Mùa cao điểm, rút ngắn để căn quay vòng nhanh', description: 'Lý do thay đổi, 5–300 ký tự (lưu Audit)' })
+  @IsOptional()
+  reason?: unknown;
+
+  @ApiProperty({ example: 'default', description: '`version` lúc tải (GET); lệch ⇒ 409 hold_policy_conflict kèm giá trị mới nhất' })
+  @IsOptional()
+  version?: unknown;
 }
 
 export class TerminateMandateDto {

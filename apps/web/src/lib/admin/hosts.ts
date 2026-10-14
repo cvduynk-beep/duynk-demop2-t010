@@ -2,12 +2,13 @@ import { api, type ApiResponse } from "@/lib/apiClient";
 import { useApiQuery, invalidateApiPattern, type Query } from "@/lib/query/useApiQuery";
 import type { HostRoleCode } from "@/lib/auth/portals";
 import { knownErrorMessage } from "@/components/auth/authApi";
+import type { ZoneScope, ZoneScopeFields } from "@/lib/host/zoneScope";
 
 /** Kiểu theo contract planning/14_2026-10-04_Sale-Auth/specs/01-CONTRACTS.md §4.3. */
 export type HostDuty = "ONLINE_AVAILABLE" | "BUSY_VIEWING" | "OFF_DUTY";
 export type TicketStatusKey = "OFFERED" | "ACCEPTED" | "CHECKED" | "COMPLETED" | "EXPIRED" | "ESCALATED" | "CANCELLED";
 
-export interface HostAdminView {
+export interface HostAdminView extends ZoneScopeFields {
   id: string;
   profileId: string;
   email: string | null;
@@ -20,6 +21,8 @@ export interface HostAdminView {
   rating: number;
   isActive: boolean;
   hasPassword: boolean;
+  /** Gửi lại khi lưu phạm vi; lệch ⇒ 409 `zone_scope_conflict`. */
+  zoneScopeVersion: string;
   lastLoginAt: string | null;
   createdAt: string;
   stats: HostStats;
@@ -67,6 +70,14 @@ export interface UpdateHostInput {
   isActive?: boolean;
 }
 
+/** `PUT /admin/field-hosts/:id/zone-scope` — phạm vi nhận ca pool + xem. */
+export interface UpdateZoneScopeInput {
+  zoneScope: ZoneScope;
+  /** Phân khu THÊM ngoài phân khu chính. */
+  managedZones: string[];
+  version: string;
+}
+
 const BASE = "/admin/field-hosts";
 
 /** Dựng query string bộ lọc; tham số rỗng/`undefined` bị bỏ. */
@@ -87,6 +98,8 @@ export const adminHostsApi = {
   create: (dto: CreateHostInput) => api.post<HostAdminDetail>(BASE, dto),
   update: (id: string, dto: UpdateHostInput) => api.patch<HostAdminDetail>(`${BASE}/${encodeURIComponent(id)}`, dto),
   deactivate: (id: string) => api.delete<HostAdminDetail>(`${BASE}/${encodeURIComponent(id)}`),
+  updateZoneScope: (id: string, dto: UpdateZoneScopeInput) =>
+    api.put<HostAdminDetail & { changed: boolean }>(`${BASE}/${encodeURIComponent(id)}/zone-scope`, dto),
 };
 
 /** Sau mọi thay đổi: bỏ cache danh sách/hồ sơ Host để màn đang mở tải lại. */
@@ -124,3 +137,21 @@ export const choiceOfRoles = (roles: readonly HostRoleCode[]): HostRoleChoice =>
 
 /** Nhãn hiển thị vai của một Host (một nhãn duy nhất, không tách badge). */
 export const hostRoleLabel = (roles: readonly HostRoleCode[]): string => ROLE_CHOICE_LABEL[choiceOfRoles(roles)];
+
+// ─── Trạng thái hiển thị (gộp khoá tài khoản + ca trực) ──────────────────────────────────────
+
+export type HostDisplayStatus = "active" | "busy" | "off_duty" | "suspended";
+
+export const hostDisplayStatus = (h: Pick<HostAdminView, "isActive" | "dutyStatus">): HostDisplayStatus =>
+  !h.isActive ? "suspended" : h.dutyStatus === "ONLINE_AVAILABLE" ? "active" : h.dutyStatus === "BUSY_VIEWING" ? "busy" : "off_duty";
+
+export const HOST_STATUS_META: Record<HostDisplayStatus, { label: string; badge: string; tone: "ok" | "warn" | "neutral" | "danger" }> = {
+  active: { label: "Đang trực", badge: "badge-kelp", tone: "ok" },
+  busy: { label: "Đang bận", badge: "badge-amber-soft", tone: "warn" },
+  off_duty: { label: "Nghỉ ca", badge: "badge-plain", tone: "neutral" },
+  suspended: { label: "Tạm đóng", badge: "badge-plain", tone: "danger" },
+};
+
+/** Khoá / mở khoá tài khoản Host (khoá bị chặn 409 khi Host còn ca đang chạy). */
+export const setHostActive = (id: string, active: boolean) =>
+  active ? adminHostsApi.update(id, { isActive: true }) : adminHostsApi.deactivate(id);

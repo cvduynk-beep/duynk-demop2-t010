@@ -16,8 +16,6 @@ interface PortalAuthProps {
   initialNotice?: string | null;
   /** Trang quay lại sau khi đăng nhập (đã qua safeNext). */
   next?: string;
-  /** Mặc định theo cổng (khách thuê/chủ nhà tự đăng ký); tab Field Host/Admin truyền `false`. */
-  allowSignup?: boolean;
 }
 
 interface LoginData {
@@ -26,11 +24,10 @@ interface LoginData {
 
 /**
  * Login (+ signup where allowed) for one role, by Google or email + password.
- * Admin is email + password only and cannot sign up.
- * Field Host: Admin creates the account, so login only.
+ * Admin is email + password only; Field Host accounts are created by Admin. Neither can sign up.
  */
-export function PortalAuth({ portal, label, initialError, initialNotice, next, allowSignup }: PortalAuthProps) {
-  const canSignup = allowSignup ?? portal !== "admin";
+export function PortalAuth({ portal, label, initialError, initialNotice, next }: PortalAuthProps) {
+  const canSignup = portal === "tenant" || portal === "landlord";
   const canGoogle = portal !== "admin"; // Admin chỉ đăng nhập email + mật khẩu
 
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -42,9 +39,8 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next, a
   const [loading, setLoading] = useState(false);
   const googleHint = useGoogleHint();
 
+  /** Host vào trang theo vai (Sale ⇒ điều phối, chỉ Thẩm định ⇒ thẩm định). */
   function enter(roles?: HostRoleCode[]) {
-    // Tải lại toàn trang: cookie phiên mới + store phiên ở client + router cache đều được làm mới đồng bộ.
-    // `router.push` rồi `router.refresh()` liền nhau có thể bị chồng lệnh (proxy chờ backend trả phiên) khiến UI kẹt ở trang đăng nhập.
     window.location.assign(next ?? (portal === "host" ? hostHome(roles ?? []) : PORTAL_HOME[portal]));
   }
 
@@ -58,6 +54,15 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next, a
     window.location.assign(`${API_BASE}/auth/google?portal=${portal}${hint}`);
   }
 
+  /** Lỗi mạng / quá thời gian khi gọi backend (không có đường dự phòng: đăng nhập chỉ do backend quyết định). */
+  function networkError(cause: unknown) {
+    setError(
+      cause instanceof DOMException && cause.name === "AbortError"
+        ? "Máy chủ đăng nhập phản hồi quá lâu. Kiểm tra backend rồi thử lại."
+        : "Không kết nối được máy chủ đăng nhập. Kiểm tra backend đang chạy rồi thử lại.",
+    );
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -66,16 +71,18 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next, a
     try {
       const path = mode === "login" ? "/auth/login" : "/auth/signup";
       const body = mode === "login" ? { email, password, portal } : { email, password, fullName, portal };
-      const { ok, data, code } = await postJson<LoginData>(path, body);
-      if (!ok) return setError(errorMessage(code));
-      enter(data.user?.hostRoles);
-      return;
-    } catch (cause) {
-      if (cause instanceof DOMException && cause.name === "AbortError") {
-        setError("Máy chủ đăng nhập phản hồi quá lâu. Kiểm tra backend rồi thử lại.");
-      } else {
-        setError("Không kết nối được máy chủ đăng nhập. Kiểm tra backend đang chạy rồi thử lại.");
+      const res = await postJson<LoginData>(path, body);
+      if (!res.ok) {
+        // Backend không nói email có tài khoản Google hay không (chống dò email) ⇒ FE tự gợi ý khi cổng có nút Google.
+        const googleTip =
+          mode === "login" && canGoogle && res.code === "invalid_credentials"
+            ? " Nếu bạn đăng ký bằng Google, hãy bấm nút Google ở trên."
+            : "";
+        return setError(errorMessage(res.code) + googleTip);
       }
+      return enter(res.data.user?.hostRoles);
+    } catch (cause) {
+      networkError(cause);
     } finally {
       setLoading(false);
     }
@@ -154,7 +161,7 @@ export function PortalAuth({ portal, label, initialError, initialNotice, next, a
           />
         </label>
         <button type="submit" className={styles.primaryButton} disabled={loading}>
-          {loading ? (mode === "login" ? "Đang đăng nhập…" : "Đang tạo tài khoản…") : mode === "login" ? "Đăng nhập" : "Tạo tài khoản"}
+          {mode === "login" ? "Đăng nhập" : "Tạo tài khoản"}
         </button>
       </form>
 

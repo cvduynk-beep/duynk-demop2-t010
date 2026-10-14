@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, INestApplication, Injectable, ValidationPipe } from '@nestjs/common';
+import { CanActivate, ExecutionContext, ForbiddenException, INestApplication, Injectable, ValidationPipe } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
@@ -11,6 +11,10 @@ import { LandlordDirectoryService } from './landlord-directory.service';
 import { LandlordFeeService } from './landlord-fee.service';
 import { LandlordController } from './landlord.controller';
 import { LandlordFinanceService } from './landlord-finance.service';
+import { HoldExpiryService } from '../deposit/hold-expiry.service';
+import { LandlordVerificationService } from './landlord-verification.service';
+import { LandlordPriceInsightService } from './landlord-price-insight.service';
+import { EkycSimulator } from '../identity/ekyc.simulator';
 import { LandlordMandateService } from './landlord-mandate.service';
 import { LandlordPricingService } from './landlord-pricing.service';
 import { LandlordPhotoService, displayName } from './landlord-photo.service';
@@ -24,6 +28,8 @@ const OTHER = '00000000-0000-4000-8000-0000000000bb';
 const MANDATE_ID = '00000000-0000-4000-8000-0000000000cc';
 const UNIT_ID = '00000000-0000-4000-8000-0000000000dd';
 const NOW = new Date('2026-10-02T03:00:00Z');
+/** Tài khoản thụ hưởng đã xác thực trong hồ sơ chủ nhà (mã hoá) — điều kiện để ký gửi. */
+const PAYOUT_ROW = { payoutBankName: 'VCB', payoutAccountEnc: 'ENC(0011223344)', payoutAccountHolder: 'TRAN B' };
 
 const building = { id: 'b1', buildingCode: 'S1.02', zoneName: 'The Sapphire 1', totalFloors: 28 };
 
@@ -88,7 +94,7 @@ function fakePrisma() {
     unit: { findUnique: jest.fn(async (_args?: any) => null), findFirst: jest.fn(), findMany: jest.fn(async (_args?: any) => []) },
     exclusiveMandate: { findFirst: jest.fn(), findMany: jest.fn(async () => []), update: jest.fn(async ({ where, data }) => mandateRow({ ...data, id: where.id })) },
     feeConfig: { findUnique: jest.fn(async () => null) },
-    profile: { findUnique: jest.fn(async (_args?: any): Promise<{ phoneEnc: string | null; isPhoneVerified?: boolean }> => ({ phoneEnc: 'enc-phone', isPhoneVerified: false })) },
+    profile: { findUnique: jest.fn(async (_args?: any): Promise<any> => ({ ...PAYOUT_ROW, phoneEnc: 'enc-phone', isPhoneVerified: false })) },
     contract: { findMany: jest.fn(async () => []), findFirst: jest.fn(async (_args?: any) => null) },
     fieldHost: { findFirst: jest.fn(async () => ({ id: 'host-1' })), findMany: jest.fn(async (_args?: any): Promise<any[]> => []) },
     viewing: { findMany: jest.fn(async (_args?: any) => []) },
@@ -118,8 +124,7 @@ describe('Landlord mappers', () => {
     expect(maskPhone(null)).toBeNull();
   });
 
-  it('suy trạng thái hồ sơ: nháp → chờ Host → duyệt; meta.stage ghi đè', () => {
-    expect(consignmentStage({ status: 'PENDING_INSPECTION' as any, signedAt: null, doorAccessConfig: null })).toBe('draft');
+  it('suy trạng thái hồ sơ: chờ Host → duyệt; meta.stage ghi đè', () => {
     expect(consignmentStage({ status: 'PENDING_INSPECTION' as any, signedAt: NOW, doorAccessConfig: null })).toBe('awaiting_host');
     expect(consignmentStage({ status: 'ACTIVE' as any, signedAt: NOW, doorAccessConfig: null })).toBe('approved');
     const inspecting = withConsignmentMeta(null, { form: {} as any, stage: 'inspecting' });
@@ -155,7 +160,7 @@ describe('LandlordAccessService — chống đọc/sửa dữ liệu của chủ
 });
 
 describe('LandlordConsignmentService', () => {
-  const dto = { building: 'S1.02', floor: 12, door: '08', layout: '1PN', areaM2: 47, askRent: 6_500_000 };
+  const dto = { building: 'S1.02', floor: 12, door: '08', layout: '1PN', areaM2: 47, askRent: 6_500_000, ownershipWarranted: true, otp: '4829' };
   let prisma: ReturnType<typeof fakePrisma>;
   let audit: { log: jest.Mock };
   let otp: { verify: jest.Mock; consume: jest.Mock; send: jest.Mock; expiresInSeconds: number };
@@ -180,10 +185,11 @@ describe('LandlordConsignmentService', () => {
       { withUrls: jest.fn(async () => []) } as any,
       new ConsignmentMetaStore(prisma as any),
       new InspectorAssigner(),
+      { assertReady: jest.fn(async () => ({ ready: true })) } as any,
     );
   });
 
-  it('tạo hồ sơ: căn UNLISTED + ủy quyền PENDING_INSPECTION, trạng thái draft, không lộ mã cửa', async () => {
+  it('tạo hồ sơ: căn UNLISTED + ủy quyền PENDING_INSPECTION đã ký, vào thẳng awaiting_host, không lộ mã cửa', async () => {
     const out = await service.create(ME, { ...dto, doorCode: '839201', locks: ['smart'] } as any);
 
     expect(prisma.tx.unit.create.mock.calls[0][0].data).toMatchObject({
@@ -199,7 +205,8 @@ describe('LandlordConsignmentService', () => {
     // Mã cửa plaintext không được nằm trong meta hồ sơ hay trong phản hồi.
     expect(JSON.stringify(prisma.tx.exclusiveMandate.create.mock.calls[0][0].data)).not.toContain('839201');
     expect(JSON.stringify(out)).not.toContain('839201');
-    expect(out).toMatchObject({ id: MANDATE_ID, status: 'draft', door: '08', layoutKind: '1PN' });
+    expect(out).toMatchObject({ id: MANDATE_ID, status: 'awaiting_host', door: '08', layoutKind: '1PN' });
+    expect(prisma.tx.exclusiveMandate.create.mock.calls[0][0].data.signedAt).toBeInstanceOf(Date);
     expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ actionType: 'CONSIGNMENT_CREATED', actorId: ME }));
   });
 
@@ -214,8 +221,27 @@ describe('LandlordConsignmentService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('bản nháp bỏ kiểm tra tiền cọc đề xuất', async () => {
-    await expect(service.create(ME, { ...dto, suggestedDeposit: 1_000_000, draft: true } as any)).resolves.toBeDefined();
+  it.each([
+    ['1PN vượt trần 25 triệu', { askRent: 25_000_001, suggestedDeposit: 25_000_001 }, 'rent_above_ceiling'],
+    ['Studio vượt trần 18 triệu', { layout: 'Studio', askRent: 18_500_000, suggestedDeposit: 18_500_000 }, 'rent_above_ceiling'],
+    ['bật chốt nhanh nhưng thiếu giá sàn', { allowFastClose: true }, 'floor_rent_invalid'],
+    ['giá sàn dưới 3 triệu', { allowFastClose: true, floorRent: 2_900_000 }, 'floor_rent_invalid'],
+    ['giá sàn bằng giá chào', { allowFastClose: true, floorRent: 6_500_000 }, 'floor_rent_invalid'],
+  ])('guardrail giá: %s ⇒ 400 %s, không ghi gì, không tiêu thụ OTP', async (_name, patch, code) => {
+    await expect(service.create(ME, { ...dto, ...patch } as any)).rejects.toMatchObject({ status: 400, response: { code } });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(otp.verify).not.toHaveBeenCalled();
+  });
+
+  it('giá sàn hợp lệ: lưu trong meta hồ sơ (không có ở bảng units), chỉ trả cho chủ nhà; tắt chốt nhanh ⇒ floorRent null', async () => {
+    const out = await service.create(ME, { ...dto, allowFastClose: true, floorRent: 5_800_000 } as any);
+    expect(out).toMatchObject({ allowFastClose: true, floorRent: 5_800_000 });
+    expect(JSON.stringify(prisma.tx.unit.create.mock.calls[0][0].data)).not.toContain('5800000');
+    const meta = prisma.tx.exclusiveMandate.create.mock.calls[0][0].data.doorAccessConfig.consignment;
+    expect(meta.form).toMatchObject({ allowFastClose: true, floorRent: 5_800_000 });
+
+    const off = await service.create(ME, { ...dto, door: '09', floorRent: 5_800_000 } as any);
+    expect(off).toMatchObject({ allowFastClose: false, floorRent: null });
   });
 
   it('tòa không tồn tại → 400; mã căn trùng → 409', async () => {
@@ -223,111 +249,129 @@ describe('LandlordConsignmentService', () => {
     await expect(service.create(ME, dto as any)).rejects.toMatchObject({ status: 400 });
     prisma.unit.findUnique.mockResolvedValueOnce({ id: 'x' } as any);
     await expect(service.create(ME, dto as any)).rejects.toMatchObject({ status: 409 });
+    expect(otp.verify).not.toHaveBeenCalled();
   });
 
-  describe('ký ủy quyền', () => {
-    const draft = () =>
-      mandateRow({ status: 'PENDING_INSPECTION', doorAccessConfig: withConsignmentMeta(null, { form: { door: '08' } as any, stage: 'draft' }) });
+  it('danh sách hồ sơ: mọi ủy quyền đã ký (kể cả nhập thẳng DB, không meta ⇒ số liệu từ units); bỏ bản nháp cũ chưa ký', async () => {
+    prisma.exclusiveMandate.findMany.mockResolvedValue([
+      mandateRow(
+        { id: 'm-seed', signedAt: NOW },
+        { unitCode: 'VHOP-S1.02-0701', floorNumber: 7, doorNumber: null, securityDeposit: null, minLeaseMonths: 6, furnishing: 'FULL' },
+      ),
+      mandateRow({ id: 'm-draft', status: 'PENDING_INSPECTION', signedAt: null }),
+    ] as any);
+    const out = await service.list(ME);
+
+    expect(out.map((c) => c.id)).toEqual(['m-seed']);
+    expect(out[0]).toMatchObject({ status: 'approved', door: '01', askRent: 6_500_000, suggestedDeposit: 6_500_000, leaseTerm: 'mid', furnished: true });
+  });
+
+  describe('xác thực chủ nhà + tài khoản thụ hưởng', () => {
+    it('chưa xác thực đủ ⇒ 403 landlord_not_verified, KHÔNG tiêu thụ OTP, không ghi gì', async () => {
+      const gate = { assertReady: jest.fn(async () => { throw new ForbiddenException({ code: 'landlord_not_verified', missing: ['identity'] }); }) };
+      (service as any).verification = gate;
+      await expect(service.create(ME, dto as any)).rejects.toMatchObject({ status: 403, response: { code: 'landlord_not_verified' } });
+      expect(otp.verify).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('đã xác thực: tài khoản đã xác thực trong hồ sơ được chép (mã hoá) vào meta căn; trả bản che', async () => {
+      phones.decrypt.mockImplementation((v: string) => (v.startsWith('ENC(') ? v.slice(4, -1) : '+84901234567'));
+      prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: 'enc-phone', isPhoneVerified: false, payoutBankName: 'VCB', payoutAccountEnc: 'ENC(0011223344)', payoutAccountHolder: 'TRAN B' } as any);
+      const out = await service.create(ME, dto as any);
+      const meta = prisma.tx.exclusiveMandate.create.mock.calls[0][0].data.doorAccessConfig.consignment;
+      expect(meta.payout).toEqual({ bankName: 'VCB', accountEnc: 'ENC(0011223344)', holder: 'TRAN B' });
+      expect(JSON.stringify(meta)).not.toContain('"0011223344"'); // chỉ có bản mã hoá
+      expect(out.payout).toEqual({ bankName: 'VCB', bankAccountMasked: '001****3344', bankAccountHolder: 'TRAN B' });
+    });
+  });
+
+  describe('ký ủy quyền ngay khi tạo (không có bản nháp)', () => {
+    const savedMeta = () => prisma.tx.exclusiveMandate.create.mock.calls[0][0].data.doorAccessConfig.consignment;
 
     it('thành công: verify + consume OTP, đặt signedAt, stage awaiting_host, hạn thẩm định 48h, gán Inspector', async () => {
-      prisma.seed(draft());
       prisma.fieldHost.findMany.mockResolvedValue([{ id: 'host-1', createdAt: NOW }]);
-      await service.sign(ME, MANDATE_ID, { ownershipWarranted: true, otp: '4829' });
+      await service.create(ME, dto as any);
 
       expect(otp.verify).toHaveBeenCalledWith({ phone: '+84901234567', purpose: 'PHONE_VERIFY', code: '4829' });
       expect(otp.consume).toHaveBeenCalledWith('otp-1');
-      const data = prisma.tx.exclusiveMandate.update.mock.calls[0][0].data;
+      const data = prisma.tx.exclusiveMandate.create.mock.calls[0][0].data;
       expect(data.signedAt).toBeInstanceOf(Date);
-      const meta = (data.doorAccessConfig as any).consignment;
+      const meta = savedMeta();
       expect(meta).toMatchObject({ stage: 'awaiting_host', hostId: 'host-1' });
       expect(new Date(meta.inspectDueAt).getTime() - new Date(meta.ownershipWarrantedAt).getTime()).toBe(48 * 3_600_000);
+      expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ actionType: 'CONSIGNMENT_SIGNED' }));
     });
 
-    it('cọc đã lưu ngoài 0.5–4× giá thuê (vd. thuê 10tr, cọc 100tr) → 400, không tiêu thụ OTP, không ký', async () => {
-      prisma.seed(mandateRow({
-        status: 'PENDING_INSPECTION',
-        doorAccessConfig: withConsignmentMeta(null, { form: { door: '08', askRent: 10_000_000, suggestedDeposit: 100_000_000 } as any, stage: 'draft' }),
-      }));
-      await expect(service.sign(ME, MANDATE_ID, { ownershipWarranted: true, otp: '4829' })).rejects.toMatchObject({ status: 400 });
+    it('cọc ngoài 0.5–4× giá thuê (vd. thuê 10tr, cọc 100tr) → 400, không tiêu thụ OTP, không ghi gì', async () => {
+      await expect(service.create(ME, { ...dto, askRent: 10_000_000, suggestedDeposit: 100_000_000 } as any)).rejects.toMatchObject({ status: 400 });
       expect(otp.verify).not.toHaveBeenCalled();
-      expect(prisma.tx.exclusiveMandate.update).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('cọc đã lưu hợp lệ (4× giá thuê) → ký được', async () => {
-      prisma.seed(mandateRow({
-        status: 'PENDING_INSPECTION',
-        doorAccessConfig: withConsignmentMeta(null, { form: { door: '08', askRent: 10_000_000, suggestedDeposit: 40_000_000 } as any, stage: 'draft' }),
-      }));
-      await service.sign(ME, MANDATE_ID, { ownershipWarranted: true, otp: '4829' });
-      expect(prisma.tx.exclusiveMandate.update).toHaveBeenCalled();
+    it('cọc hợp lệ (4× giá thuê) → tạo được', async () => {
+      await service.create(ME, { ...dto, askRent: 10_000_000, suggestedDeposit: 40_000_000 } as any);
+      expect(prisma.tx.exclusiveMandate.create).toHaveBeenCalled();
     });
 
     it('không cam kết sở hữu → 400 và không tiêu thụ OTP', async () => {
-      prisma.seed(draft());
-      await expect(service.sign(ME, MANDATE_ID, { ownershipWarranted: false, otp: '4829' })).rejects.toMatchObject({ status: 400 });
+      await expect(service.create(ME, { ...dto, ownershipWarranted: false } as any)).rejects.toMatchObject({ status: 400 });
       expect(otp.verify).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('chưa có SĐT và không gửi phone → 400', async () => {
-      prisma.seed(draft());
-      prisma.profile.findUnique.mockResolvedValue({ phoneEnc: null });
-      await expect(service.sign(ME, MANDATE_ID, { ownershipWarranted: true, otp: '4829' })).rejects.toMatchObject({ status: 400 });
-      expect(prisma.tx.exclusiveMandate.update).not.toHaveBeenCalled();
+    it('chưa có SĐT và không gửi phone → 400, không tạo gì', async () => {
+      prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: null });
+      await expect(service.create(ME, dto as any)).rejects.toMatchObject({ status: 400 });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('OTP sai ⇒ lỗi từ OtpService, không tạo căn/ủy quyền', async () => {
+      otp.verify.mockRejectedValueOnce(Object.assign(new Error('Mã OTP không đúng'), { status: 400 }));
+      await expect(service.create(ME, dto as any)).rejects.toMatchObject({ status: 400 });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('chưa có SĐT nhưng gửi phone: xác thực OTP trên số đó, KHÔNG gắn vào tài khoản, lưu số ký (mã hoá) trong hồ sơ', async () => {
-      prisma.seed(draft());
-      prisma.profile.findUnique.mockResolvedValue({ phoneEnc: null });
-      await service.sign(ME, MANDATE_ID, { ownershipWarranted: true, otp: '4829', phone: '0901234567' });
+      prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: null });
+      await service.create(ME, { ...dto, phone: '0901234567' } as any);
 
       expect(otp.verify).toHaveBeenCalledWith(expect.objectContaining({ phone: '+84901234567', code: '4829' }));
       expect(prisma.profile.findUnique).toHaveBeenCalled(); // chỉ ĐỌC hồ sơ; không có đường ghi Profile
-      expect(prisma.tx.exclusiveMandate.update).toHaveBeenCalled();
-      const saved = JSON.stringify(prisma.tx.exclusiveMandate.update.mock.calls[0][0]);
+      const saved = JSON.stringify(prisma.tx.exclusiveMandate.create.mock.calls[0][0]);
       expect(saved).toContain('signedPhoneEnc');
       expect(saved).not.toContain('0901234567');
     });
 
     it('số đã xác thực của tài khoản + không nhập số khác: KHÔNG cần OTP, vẫn lưu số ký, audit otpSkipped', async () => {
-      prisma.seed(draft());
-      prisma.profile.findUnique.mockResolvedValue({ phoneEnc: 'enc-phone', isPhoneVerified: true });
-      await service.sign(ME, MANDATE_ID, { ownershipWarranted: true });
+      prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: 'enc-phone', isPhoneVerified: true });
+      await service.create(ME, { ...dto, otp: undefined } as any);
       expect(otp.verify).not.toHaveBeenCalled();
       expect(otp.consume).not.toHaveBeenCalled();
-      expect(JSON.stringify(prisma.tx.exclusiveMandate.update.mock.calls[0][0])).toContain('signedPhoneEnc');
+      expect(JSON.stringify(prisma.tx.exclusiveMandate.create.mock.calls[0][0])).toContain('signedPhoneEnc');
       expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ actionType: 'CONSIGNMENT_SIGNED', newValue: expect.objectContaining({ otpSkipped: true }) }));
     });
 
     it('số đã xác thực + nhập đúng số đó: vẫn không cần OTP', async () => {
-      prisma.seed(draft());
-      prisma.profile.findUnique.mockResolvedValue({ phoneEnc: 'enc-phone', isPhoneVerified: true });
-      await service.sign(ME, MANDATE_ID, { ownershipWarranted: true, phone: '0901234567' });
+      prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: 'enc-phone', isPhoneVerified: true });
+      await service.create(ME, { ...dto, otp: undefined, phone: '0901234567' } as any);
       expect(otp.verify).not.toHaveBeenCalled();
-      expect(prisma.tx.exclusiveMandate.update).toHaveBeenCalled();
+      expect(prisma.tx.exclusiveMandate.create).toHaveBeenCalled();
     });
 
-    it('ĐỔI số (khác số đã xác thực): bắt buộc OTP trên số mới; thiếu OTP → 400, không ký', async () => {
-      prisma.seed(draft());
-      prisma.profile.findUnique.mockResolvedValue({ phoneEnc: 'enc-phone', isPhoneVerified: true });
-      await expect(service.sign(ME, MANDATE_ID, { ownershipWarranted: true, phone: '0999999999' })).rejects.toMatchObject({ status: 400 });
-      expect(prisma.tx.exclusiveMandate.update).not.toHaveBeenCalled();
-      await service.sign(ME, MANDATE_ID, { ownershipWarranted: true, otp: '4829', phone: '0999999999' });
+    it('ĐỔI số (khác số đã xác thực): bắt buộc OTP trên số mới; thiếu OTP → 400, không tạo', async () => {
+      prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: 'enc-phone', isPhoneVerified: true });
+      await expect(service.create(ME, { ...dto, otp: undefined, phone: '0999999999' } as any)).rejects.toMatchObject({ status: 400 });
+      expect(prisma.tx.exclusiveMandate.create).not.toHaveBeenCalled();
+      await service.create(ME, { ...dto, phone: '0999999999' } as any);
       expect(otp.verify).toHaveBeenCalledWith(expect.objectContaining({ phone: '+84999999999', code: '4829' }));
     });
 
     it('có số nhưng CHƯA xác thực: vẫn bắt buộc OTP trên số đã lưu', async () => {
-      prisma.seed(draft());
-      prisma.profile.findUnique.mockResolvedValue({ phoneEnc: 'enc-phone', isPhoneVerified: false });
-      await expect(service.sign(ME, MANDATE_ID, { ownershipWarranted: true })).rejects.toMatchObject({ status: 400 });
-      await service.sign(ME, MANDATE_ID, { ownershipWarranted: true, otp: '4829' });
+      prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: 'enc-phone', isPhoneVerified: false });
+      await expect(service.create(ME, { ...dto, otp: undefined } as any)).rejects.toMatchObject({ status: 400 });
+      await service.create(ME, dto as any);
       expect(otp.verify).toHaveBeenCalledWith(expect.objectContaining({ phone: '+84901234567' }));
-    });
-
-    it('đã ký rồi → 409; hồ sơ của người khác → 404', async () => {
-      prisma.exclusiveMandate.findFirst.mockResolvedValue(mandateRow({ status: 'PENDING_INSPECTION', signedAt: NOW }));
-      await expect(service.sign(ME, MANDATE_ID, { ownershipWarranted: true, otp: '4829' })).rejects.toMatchObject({ status: 409 });
-      prisma.exclusiveMandate.findFirst.mockResolvedValue(null);
-      await expect(service.sign(OTHER, MANDATE_ID, { ownershipWarranted: true, otp: '4829' })).rejects.toMatchObject({ status: 404 });
     });
   });
 });
@@ -344,6 +388,7 @@ describe('LandlordConsignmentService.get — phiếu thẩm định cho chủ nh
     const service = new LandlordConsignmentService(
       prisma as any, new LandlordAccessService(prisma as any), { log: jest.fn() } as any, {} as any, {} as any,
       photos as any, new ConsignmentMetaStore(prisma as any), new InspectorAssigner(),
+      { assertReady: jest.fn(async () => ({ ready: true })) } as any,
     );
     return { prisma, photos, service };
   };
@@ -370,7 +415,7 @@ describe('LandlordConsignmentService.get — phiếu thẩm định cho chủ nh
 describe('LandlordConsignmentService.sendSignOtp', () => {
   const build = () => {
     const prisma = fakePrisma();
-    const otp = { send: jest.fn(async () => ({ devCode: '4829' })), expiresInSeconds: 300 };
+    const otp = { send: jest.fn(async () => ({})), expiresInSeconds: 300, resendInSeconds: 60 };
     const phones = {
       decrypt: jest.fn(() => '+84901234567'),
       normalize: jest.fn((v: string) => (/^0\d{9}$/.test(v) ? `+84${v.slice(1)}` : null)),
@@ -384,49 +429,49 @@ describe('LandlordConsignmentService.sendSignOtp', () => {
       { withUrls: jest.fn(async () => []) } as any,
       new ConsignmentMetaStore(prisma as any),
       new InspectorAssigner(),
+      { assertReady: jest.fn(async () => ({ ready: true })) } as any,
     );
-    prisma.exclusiveMandate.findFirst.mockResolvedValue(mandateRow({ status: 'PENDING_INSPECTION' }));
     return { prisma, otp, service };
   };
 
   it('có số nhưng chưa xác thực → gửi OTP tới số đã lưu, trả SĐT đã che (không lộ số đầy đủ)', async () => {
     const { otp, service } = build();
-    const out = await service.sendSignOtp(ME, MANDATE_ID);
+    const out = await service.sendSignOtp(ME);
     expect(otp.send).toHaveBeenCalledWith({ phone: '+84901234567', purpose: 'PHONE_VERIFY' });
-    expect(out).toMatchObject({ otpRequired: true, maskedPhone: '0901 *** 567', expiresInSeconds: 300, devCode: '4829' });
+    expect(out).toEqual({ otpRequired: true, maskedPhone: '0901 *** 567', expiresInSeconds: 300, resendInSeconds: 60 });
     expect(JSON.stringify(out)).not.toContain('901234567');
+  });
+
+  it('OTP_PROVIDER=mock (OtpService trả devOtp) ⇒ response chuyển tiếp devOtp; kênh thật (trả {}) ⇒ không có trường này', async () => {
+    const { otp, service } = build();
+    otp.send.mockResolvedValueOnce({ devOtp: '0427' });
+    expect(await service.sendSignOtp(ME)).toMatchObject({ otpRequired: true, devOtp: '0427' });
+    expect(await service.sendSignOtp(ME)).not.toHaveProperty('devOtp');
   });
 
   it('số đã xác thực + không nhập số khác → otpRequired:false, KHÔNG gửi mã', async () => {
     const { prisma, otp, service } = build();
-    prisma.profile.findUnique.mockResolvedValue({ phoneEnc: 'enc-phone', isPhoneVerified: true });
-    const out = await service.sendSignOtp(ME, MANDATE_ID);
+    prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: 'enc-phone', isPhoneVerified: true });
+    const out = await service.sendSignOtp(ME);
     expect(out).toMatchObject({ otpRequired: false, maskedPhone: '0901 *** 567' });
     expect(otp.send).not.toHaveBeenCalled();
   });
 
   it('số đã xác thực nhưng nhập số KHÁC → gửi OTP tới số mới', async () => {
     const { prisma, otp, service } = build();
-    prisma.profile.findUnique.mockResolvedValue({ phoneEnc: 'enc-phone', isPhoneVerified: true });
-    const out = await service.sendSignOtp(ME, MANDATE_ID, '0999999999');
+    prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: 'enc-phone', isPhoneVerified: true });
+    const out = await service.sendSignOtp(ME, '0999999999');
     expect(otp.send).toHaveBeenCalledWith({ phone: '+84999999999', purpose: 'PHONE_VERIFY' });
     expect(out).toMatchObject({ otpRequired: true });
   });
 
   it('chưa có SĐT → dùng số client gửi; số sai định dạng → 400', async () => {
     const { prisma, otp, service } = build();
-    prisma.profile.findUnique.mockResolvedValue({ phoneEnc: null });
-    await service.sendSignOtp(ME, MANDATE_ID, '0912345678');
+    prisma.profile.findUnique.mockResolvedValue({ ...PAYOUT_ROW, phoneEnc: null });
+    await service.sendSignOtp(ME, '0912345678');
     expect(otp.send).toHaveBeenCalledWith({ phone: '+84912345678', purpose: 'PHONE_VERIFY' });
-    await expect(service.sendSignOtp(ME, MANDATE_ID, 'abc')).rejects.toMatchObject({ status: 400 });
-    await expect(service.sendSignOtp(ME, MANDATE_ID)).rejects.toMatchObject({ status: 400 });
-  });
-
-  it('hồ sơ đã ký → 409, không gửi OTP', async () => {
-    const { prisma, otp, service } = build();
-    prisma.exclusiveMandate.findFirst.mockResolvedValue(mandateRow({ status: 'PENDING_INSPECTION', signedAt: NOW }));
-    await expect(service.sendSignOtp(ME, MANDATE_ID)).rejects.toMatchObject({ status: 409 });
-    expect(otp.send).not.toHaveBeenCalled();
+    await expect(service.sendSignOtp(ME, 'abc')).rejects.toMatchObject({ status: 400 });
+    await expect(service.sendSignOtp(ME)).rejects.toMatchObject({ status: 400 });
   });
 });
 
@@ -493,7 +538,7 @@ describe('LandlordFinanceService', () => {
     const out = await new LandlordFinanceService(prisma as any, feeOf(prisma)).getFinance(ME, NOW);
 
     expect(out).toMatchObject({ serviceFeePercent: 5, feeSource: 'default' });
-    expect(out.thisMonth).toEqual({ gross: 10_000_000, fee: 500_000, net: 9_500_000 });
+    expect(out.thisMonth).toEqual({ gross: 10_000_000, fee: 500_000, forfeit: 0, net: 9_500_000 });
     // HĐ bắt đầu 15/08 → tháng 5,6,7 chưa có thu; 8,9,10 có thu.
     expect(out.history.map((m) => m.gross)).toEqual([0, 0, 0, 10_000_000, 10_000_000, 10_000_000]);
     expect(out.totalNet6Months).toBe(28_500_000);
@@ -505,11 +550,72 @@ describe('LandlordFinanceService', () => {
     const prisma = fakePrisma();
     prisma.feeConfig.findUnique.mockResolvedValue({ paramValue: 8 } as any);
     prisma.unit.findMany.mockResolvedValue([{ id: UNIT_ID, unitCode: 'U1', status: 'HOLDING', building, mandates: [{ status: 'ACTIVE' }] }]);
-    prisma.holdingDeposit.findMany.mockResolvedValue([{ unitId: UNIT_ID, amount: 2_000_000 }]);
+    prisma.holdingDeposit.findMany.mockResolvedValueOnce([{ unitId: UNIT_ID, amount: 2_000_000 }]).mockResolvedValueOnce([]);
     const out = await new LandlordFinanceService(prisma as any, feeOf(prisma)).getFinance(ME, NOW);
 
     expect(out).toMatchObject({ serviceFeePercent: 8, feeSource: 'config', escrowTotal: 2_000_000 });
     expect(out.perUnit[0]).toMatchObject({ status: 'holding', rent: 0, escrow: 2_000_000 });
+  });
+
+  it('cọc giữ chỗ còn hạn mới tính "giữ hộ" (lọc expiresAt > now)', async () => {
+    const prisma = fakePrisma();
+    await new LandlordFinanceService(prisma as any, feeOf(prisma)).getFinance(ME, NOW);
+    const holdingWhere = (prisma.holdingDeposit.findMany.mock.calls as any[])[0][0].where;
+    expect(holdingWhere).toMatchObject({ paymentStatus: 'PAID_HOLDING', expiresAt: { gt: NOW } });
+  });
+
+  it('cọc khách bỏ (FORFEITED): chủ nhà nhận 50% vào tháng của expiresAt, cộng thẳng vào thực nhận, không trừ phí', async () => {
+    const prisma = fakePrisma();
+    prisma.holdingDeposit.findMany
+      .mockResolvedValueOnce([]) // cọc đang giữ
+      .mockResolvedValueOnce([
+        { id: 'd1', unitId: UNIT_ID, unit: { unitCode: 'U1' }, amount: 2_000_000, paidAt: new Date('2026-09-29T10:00:00Z'), expiresAt: new Date('2026-10-01T10:00:00Z') },
+        { id: 'd2', unitId: UNIT_ID, unit: { unitCode: 'U1' }, amount: 2_000_000, paidAt: new Date('2026-09-18T10:00:00Z'), expiresAt: new Date('2026-09-20T10:00:00Z') },
+      ]);
+    const out = await new LandlordFinanceService(prisma as any, feeOf(prisma)).getFinance(ME, NOW);
+
+    expect((prisma.holdingDeposit.findMany.mock.calls as any[])[1][0].where).toMatchObject({ paymentStatus: 'FORFEITED' });
+    expect(out.thisMonth).toEqual({ gross: 0, fee: 0, forfeit: 1_000_000, net: 1_000_000 });
+    expect(out.history.map((m) => m.forfeit)).toEqual([0, 0, 0, 0, 1_000_000, 1_000_000]);
+    expect(out.totalNet6Months).toBe(2_000_000);
+    expect(out.escrowTotal).toBe(0);
+    // Liệt kê từng khoản: căn nào, cọc bao nhiêu, chủ nhà nhận bao nhiêu, hết hạn lúc nào.
+    expect(out.forfeits).toEqual([
+      expect.objectContaining({ depositId: 'd1', unitCode: 'U1', depositAmount: 2_000_000, share: 1_000_000, expiredAt: new Date('2026-10-01T10:00:00Z') }),
+      expect.objectContaining({ depositId: 'd2', unitCode: 'U1', share: 1_000_000 }),
+    ]);
+  });
+});
+
+describe('HoldExpiryService', () => {
+  const build = (due: { unitId: string }[]) => {
+    const tx = { marker: 'tx' };
+    const prisma = {
+      holdingDeposit: { findMany: jest.fn(async (_args: unknown) => due) },
+      $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
+    };
+    const deposits = { expireIfDue: jest.fn(async (_unitId: string, _tx: unknown) => undefined) };
+    return { prisma, deposits, tx, service: new HoldExpiryService(prisma as any, deposits as any) };
+  };
+
+  it('quét cọc PAID_HOLDING/UNC quá hạn của đúng chủ nhà, gọi expireIfDue cho từng căn trong transaction', async () => {
+    const { prisma, deposits, tx, service } = build([{ unitId: 'u1' }, { unitId: 'u2' }]);
+    const n = await service.sweep({ landlordId: ME }, NOW);
+
+    expect(n).toBe(2);
+    expect((prisma.holdingDeposit.findMany.mock.calls as any[])[0][0]).toMatchObject({
+      where: { paymentStatus: { in: ['PAID_HOLDING', 'UNC_PENDING_REVIEW'] }, expiresAt: { lte: NOW }, unit: { landlordId: ME } },
+      distinct: ['unitId'],
+    });
+    expect(deposits.expireIfDue).toHaveBeenCalledWith('u1', tx);
+    expect(deposits.expireIfDue).toHaveBeenCalledWith('u2', tx);
+  });
+
+  it('một căn lỗi không chặn các căn khác; không lọc chủ nhà khi quét nền', async () => {
+    const { prisma, deposits, service } = build([{ unitId: 'u1' }, { unitId: 'u2' }]);
+    deposits.expireIfDue.mockRejectedValueOnce(new Error('boom'));
+    expect(await service.sweep({}, NOW)).toBe(1);
+    expect((prisma.holdingDeposit.findMany.mock.calls as any[])[0][0].where).not.toHaveProperty('unit');
   });
 });
 
@@ -676,7 +782,7 @@ describe('LandlordPhotoService — ảnh tham khảo của chủ nhà', () => {
   const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.from([0, 0, 0, 0]), Buffer.from('WEBP')]);
   const img = (name: string, buffer: Buffer, size = buffer.length) => ({ originalname: name, buffer, size });
 
-  const metaWith = (photos: unknown[] = [], stage: string = 'draft') =>
+  const metaWith = (photos: unknown[] = [], stage: string = 'awaiting_host') =>
     withConsignmentMeta(null, { form: { building: 'S1.02' } as any, stage: stage as any, photos: photos as any });
 
   const build = (doorAccessConfig: unknown = metaWith()) => {
@@ -784,7 +890,7 @@ describe('ConsignmentMetaStore — khóa dòng + đọc lại meta trong khóa (
 
   it('khóa dòng bằng SELECT … FOR UPDATE TRƯỚC khi đọc lại hồ sơ, rồi ghi meta + cột phụ trong một UPDATE', async () => {
     const prisma = fakePrisma();
-    prisma.seed(row('draft'));
+    prisma.seed(row('awaiting_host'));
     const order: string[] = [];
     prisma.tx.$queryRaw.mockImplementation(async (strings: TemplateStringsArray, ...vals: unknown[]) => {
       order.push(`lock:${strings.join('?')}:${vals[0]}`);
@@ -820,7 +926,7 @@ describe('ConsignmentMetaStore — khóa dòng + đọc lại meta trong khóa (
 
   it('fn ném lỗi ⇒ không UPDATE; hồ sơ không tồn tại / thiếu meta ⇒ 404', async () => {
     const prisma = fakePrisma();
-    prisma.seed(row('draft'));
+    prisma.seed(row('awaiting_host'));
     const store = new ConsignmentMetaStore(prisma as any);
     await expect(store.mutate(MANDATE_ID, async () => { throw new Error('boom'); })).rejects.toThrow('boom');
     expect(prisma.tx.exclusiveMandate.update).not.toHaveBeenCalled();
@@ -879,14 +985,12 @@ describe('ConsignmentMetaStore — khóa dòng + đọc lại meta trong khóa (
   });
 });
 
-describe('LandlordConsignmentService.sign — giao Inspector (P1-1)', () => {
+describe('LandlordConsignmentService.create — giao Inspector khi ký (P1-1)', () => {
+  const dto = { building: 'S1.02', floor: 12, door: '08', layout: '1PN', areaM2: 47, askRent: 6_500_000, ownershipWarranted: true, otp: '4829' };
   const build = (hosts: any[], mandates: any[] = []) => {
     const prisma = fakePrisma();
     prisma.fieldHost.findMany.mockResolvedValue(hosts);
     prisma.tx.exclusiveMandate.findMany.mockResolvedValue(mandates);
-    prisma.seed(
-      mandateRow({ status: 'PENDING_INSPECTION', doorAccessConfig: withConsignmentMeta(null, { form: { door: '08' } as any, stage: 'draft' }) }),
-    );
     const audit = { log: jest.fn() };
     const otp = { verify: jest.fn(async () => ({ id: 'otp-1' })), consume: jest.fn(async () => true), expiresInSeconds: 300 };
     const phones = { decrypt: jest.fn(() => '+84901234567'), normalize: jest.fn(), encrypt: jest.fn() };
@@ -899,18 +1003,19 @@ describe('LandlordConsignmentService.sign — giao Inspector (P1-1)', () => {
       { withUrls: jest.fn(async () => []) } as any,
       new ConsignmentMetaStore(prisma as any),
       new InspectorAssigner(),
+      { assertReady: jest.fn(async () => ({ ready: true })) } as any,
     );
     return { prisma, audit, service };
   };
   const busy = (hostId: string, stage = 'awaiting_host') => ({ doorAccessConfig: withConsignmentMeta(null, { form: {} as any, stage: stage as any, hostId }) });
-  const savedMeta = (prisma: ReturnType<typeof fakePrisma>) => (prisma.state.mandate.doorAccessConfig as any).consignment;
+  const savedMeta = (prisma: ReturnType<typeof fakePrisma>) => prisma.tx.exclusiveMandate.create.mock.calls[0][0].data.doorAccessConfig.consignment;
 
   it('chọn Inspector cùng phân khu ÍT ca nhất; ghi hostId + offeredAt; audit có inspectorId', async () => {
     const { prisma, audit, service } = build(
       [{ id: 'host-a', createdAt: NOW }, { id: 'host-b', createdAt: NOW }],
       [busy('host-a'), busy('host-a', 'inspecting'), busy('host-b')],
     );
-    const out = await service.sign(ME, MANDATE_ID, { ownershipWarranted: true, otp: '4829' });
+    const out = await service.create(ME, dto as any);
 
     expect(savedMeta(prisma)).toMatchObject({ stage: 'awaiting_host', hostId: 'host-b' });
     expect(typeof savedMeta(prisma).offeredAt).toBe('string');
@@ -922,9 +1027,9 @@ describe('LandlordConsignmentService.sign — giao Inspector (P1-1)', () => {
     expect(prisma.fieldHost.findMany.mock.calls[0][0].where).toEqual({ roles: { has: 'INSPECTOR' }, assignedZone: { contains: 'The Sapphire 1' }, profile: { isPhoneVerified: true } });
   });
 
-  it('không có Inspector trong phân khu ⇒ không ghi hostId/offeredAt (ca vào Open Pool ngay), vẫn ký được', async () => {
+  it('không có Inspector trong phân khu ⇒ không ghi hostId/offeredAt (ca vào Open Pool ngay), vẫn tạo được', async () => {
     const { prisma, audit, service } = build([]);
-    const out = await service.sign(ME, MANDATE_ID, { ownershipWarranted: true, otp: '4829' });
+    const out = await service.create(ME, dto as any);
 
     expect(savedMeta(prisma).stage).toBe('awaiting_host');
     expect(savedMeta(prisma)).not.toHaveProperty('hostId');
@@ -932,23 +1037,15 @@ describe('LandlordConsignmentService.sign — giao Inspector (P1-1)', () => {
     expect(out.hostId).toBeNull();
     expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ newValue: expect.objectContaining({ inspectorId: null }) }));
   });
-
-  it('stage đổi giữa lúc kiểm sớm và lúc vào khóa (ký 2 lần song song) ⇒ lần sau 409, không ghi đè', async () => {
-    const { prisma, service } = build([{ id: 'host-a', createdAt: NOW }]);
-    const dto = { ownershipWarranted: true, otp: '4829' };
-    const results = await Promise.allSettled([service.sign(ME, MANDATE_ID, dto), service.sign(ME, MANDATE_ID, dto)]);
-    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    expect(results.find((r) => r.status === 'rejected')).toMatchObject({ reason: { status: 409 } });
-    expect(prisma.tx.exclusiveMandate.update).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('LandlordController qua HTTP — phân quyền & lấy landlordId từ phiên', () => {
   let app: INestApplication;
   const units = { list: jest.fn(async () => []), detail: jest.fn(), viewingLog: jest.fn(), doorAuditTrail: jest.fn() };
-  const consignments = { list: jest.fn(async () => []), create: jest.fn(async () => ({})), get: jest.fn(), sign: jest.fn() };
+  const consignments = { list: jest.fn(async () => []), create: jest.fn(async () => ({})), get: jest.fn() };
   const mandates = { requestExit: jest.fn(async () => ({})), cancelExit: jest.fn() };
   const photos = { add: jest.fn(async () => []), remove: jest.fn(async () => []) };
+  const payouts = { status: jest.fn(async () => ({})), scan: jest.fn(), submit: jest.fn(), updatePayout: jest.fn(async () => ({})) };
   const pricing = { decide: jest.fn(async () => ({ stage: 'approved' })) };
 
   /** Thay SupabaseAuthGuard: vai trò + id lấy từ header test; RolesGuard là bản thật. */
@@ -972,6 +1069,9 @@ describe('LandlordController qua HTTP — phân quyền & lấy landlordId từ 
         { provide: LandlordMandateService, useValue: mandates },
         { provide: LandlordPricingService, useValue: pricing },
         { provide: LandlordPhotoService, useValue: photos },
+        { provide: HoldExpiryService, useValue: { sweep: jest.fn(async () => 0) } },
+        { provide: LandlordVerificationService, useValue: payouts },
+        { provide: LandlordPriceInsightService, useValue: { insights: jest.fn(async () => []), applyRent: jest.fn() } },
         { provide: APP_GUARD, useClass: HeaderAuthGuard },
         { provide: APP_GUARD, useClass: RolesGuard },
       ],
@@ -995,6 +1095,15 @@ describe('LandlordController qua HTTP — phân quyền & lấy landlordId từ 
       .set('x-test-role', 'landlord')
       .expect(200);
     expect(units.list).toHaveBeenCalledWith(ME);
+  });
+
+  it('PUT payout-account: số TK sai định dạng ⇒ 400; hợp lệ ⇒ gọi service với landlordId từ phiên', async () => {
+    const put = (body: object) =>
+      request(app.getHttpServer()).put('/landlord/payout-account').set('x-test-user', ME).set('x-test-role', 'landlord').send(body);
+    await put({ bankName: 'VCB', bankAccount: '12ab', bankAccountHolder: 'TRAN B' }).expect(400);
+    expect(payouts.updatePayout).not.toHaveBeenCalled();
+    await put({ bankName: 'VCB', bankAccount: '0011223344', bankAccountHolder: 'TRAN B' }).expect(200);
+    expect(payouts.updatePayout).toHaveBeenCalledWith(ME, expect.objectContaining({ bankAccount: '0011223344' }));
   });
 
   it('POST consignments: dữ liệu sai bị ValidationPipe chặn 400 (giá thuê dưới 3tr)', async () => {
@@ -1070,5 +1179,170 @@ describe('LandlordController qua HTTP — phân quyền & lấy landlordId từ 
     expect(pricing.decide).not.toHaveBeenCalled();
     await post('landlord', { decision: 'accept' }).expect(200);
     expect(pricing.decide).toHaveBeenCalledWith(ME, id, 'accept');
+  });
+});
+
+describe('LandlordVerificationService', () => {
+  const KYC = { fullName: 'TRẦN THỊ BÌNH', idNumber: '001234567890', dob: '12/04/1980', issuedDate: '18/08/2021', address: 'Đống Đa, Hà Nội' };
+  const build = (opts: { phoneVerified?: boolean; kyc?: boolean; payout?: boolean } = {}) => {
+    const profileRow: any = {
+      phoneEnc: 'ENC(+84901234567)',
+      isPhoneVerified: opts.phoneVerified ?? true,
+      fullName: 'Tran Binh',
+      payoutBankName: opts.payout ? 'VCB' : null,
+      payoutAccountEnc: opts.payout ? 'ENC(0011223344)' : null,
+      payoutAccountHolder: opts.payout ? 'TRAN THI BINH' : null,
+      payoutVerifiedAt: opts.payout ? NOW : null,
+    };
+    const tx = { identityVerification: { create: jest.fn(async (_a: unknown) => ({})) }, profile: { update: jest.fn(async (_a: unknown) => ({})) } };
+    const prisma = {
+      profile: { findUnique: jest.fn(async (_a: unknown) => profileRow), update: jest.fn(async (_a: unknown) => ({})) },
+      identityVerification: {
+        findFirst: jest.fn(async (_a: unknown) => (opts.kyc ? { verifiedDataRef: `ENC(${JSON.stringify(KYC)})`, verifiedAt: NOW } : null)),
+      },
+      $transaction: jest.fn(async (fn: (t: unknown) => unknown) => fn(tx)),
+    };
+    const audit = { log: jest.fn(async (_a: unknown) => undefined) };
+    const phones = { encrypt: jest.fn((v: string) => `ENC(${v})`), decrypt: jest.fn((v: string) => v.slice(4, -1)) };
+    return { prisma, tx, audit, service: new LandlordVerificationService(prisma as any, phones as any, audit as any) };
+  };
+
+  it('status: liệt kê đúng bước còn thiếu theo thứ tự; đủ 3 bước ⇒ ready', async () => {
+    expect((await build({ phoneVerified: false }).service.status(ME)).missing).toEqual(['phone', 'identity', 'payout']);
+    const ok = await build({ kyc: true, payout: true }).service.status(ME);
+    expect(ok).toMatchObject({ ready: true, missing: [], identity: { fullName: 'TRẦN THỊ BÌNH', idNumberMasked: '001******890' } });
+    expect(ok.payout.account).toEqual({ bankName: 'VCB', bankAccountMasked: '001****3344', bankAccountHolder: 'TRAN THI BINH' });
+    expect(JSON.stringify(ok)).not.toContain('001234567890');
+  });
+
+  it('assertReady: thiếu bước ⇒ 403 landlord_not_verified kèm missing', async () => {
+    await expect(build({ kyc: true }).service.assertReady(ME)).rejects.toMatchObject({ status: 403, response: { code: 'landlord_not_verified', missing: ['payout'] } });
+  });
+
+  it('eKYC: scanId gắn đúng chủ nhà; lưu mã hoá vào identity_verifications (deposit null) + cập nhật họ tên', async () => {
+    const { tx, service } = build();
+    const scan = await service.scan(ME, true, 'PRIVACY-2026.10-v1');
+    await service.submit(ME, { scanId: scan.scanId, consentVersion: 'PRIVACY-2026.10-v1', fields: { ...KYC }, confirmedLowConfidence: true });
+    const data = (tx.identityVerification.create.mock.calls as any[])[0][0].data;
+    expect(data).toMatchObject({ tenantId: ME, status: 'VERIFIED', providerName: 'SIMULATED' });
+    expect(data).not.toHaveProperty('depositId');
+    expect(data.verifiedDataRef).toBe(`ENC(${JSON.stringify(KYC)})`);
+    expect((tx.profile.update.mock.calls as any[])[0][0].data).toMatchObject({ fullName: 'TRẦN THỊ BÌNH' });
+  });
+
+  it('eKYC: scanId của người khác / của lịch khách thuê ⇒ 422 scan_expired', async () => {
+    const { service } = build();
+    const foreign = EkycSimulator.createScanToken('viewing-1', EkycSimulator.scan('A', '0901234567'), 'PRIVACY-2026.10-v1');
+    await expect(service.submit(ME, { scanId: foreign, consentVersion: 'PRIVACY-2026.10-v1', fields: { ...KYC }, confirmedLowConfidence: true }))
+      .rejects.toMatchObject({ status: 422, response: { code: 'scan_expired' } });
+  });
+
+  it('ngân hàng: chưa eKYC ⇒ 409 kyc_required; tên chủ TK khác CCCD ⇒ 422; trùng (bỏ dấu) ⇒ lưu mã hoá + payoutVerifiedAt, audit bản che', async () => {
+    const body = { bankName: 'VCB', bankAccount: '0011223344', bankAccountHolder: 'tran thi binh' };
+    await expect(build().service.updatePayout(ME, body)).rejects.toMatchObject({ status: 409, response: { code: 'kyc_required' } });
+
+    const { prisma, audit, service } = build({ kyc: true });
+    await expect(service.updatePayout(ME, { ...body, bankAccountHolder: 'NGUYEN VAN A' })).rejects.toMatchObject({ status: 422, response: { code: 'payout_name_mismatch' } });
+    await service.updatePayout(ME, body);
+    const data = (prisma.profile.update.mock.calls as any[])[0][0].data;
+    expect(data).toMatchObject({ payoutBankName: 'VCB', payoutAccountEnc: 'ENC(0011223344)', payoutAccountHolder: 'TRAN THI BINH' });
+    expect(data.payoutVerifiedAt).toBeInstanceOf(Date);
+    expect(JSON.stringify(audit.log.mock.calls)).not.toContain('0011223344');
+  });
+});
+
+describe('LandlordService.getLandlordDashboard — dòng hoạt động', () => {
+  const unit = { id: UNIT_ID, unitCode: 'VHOP-S1.02-1208' };
+  const at = (iso: string) => new Date(iso);
+
+  it('dựng từ ca xem / cọc / hợp đồng thật, mới nhất trước, lọc theo chủ nhà, không lộ thông tin khách', async () => {
+    const prisma = {
+      viewing: {
+        findMany: jest.fn(async (_a: unknown) => [
+          { id: 'v1', status: 'NO_SHOW', viewingSlot: at('2026-09-28T03:00:00Z'), createdAt: at('2026-09-27T03:00:00Z'), completedAt: at('2026-09-28T03:45:00Z'), unit },
+        ]),
+      },
+      holdingDeposit: {
+        findMany: jest.fn(async (_a: unknown) => [
+          { id: 'd1', amount: 2_000_000, paymentStatus: 'FORFEITED', paidAt: at('2026-09-29T01:00:00Z'), expiresAt: at('2026-10-01T01:00:00Z'), unit },
+        ]),
+      },
+      contract: { findMany: jest.fn(async (_a: unknown) => []) },
+    };
+    const out = await new LandlordService(prisma as any).getLandlordDashboard(ME, NOW);
+
+    expect(out.activity.map((a) => a.kind)).toEqual(['deposit_forfeited', 'no_show', 'viewing_booked']);
+    expect(out.activity[0].body).toContain('1.000.000đ');
+    expect((prisma.viewing.findMany.mock.calls as any[])[0][0].where.unit).toEqual({ landlordId: ME });
+    expect((prisma.holdingDeposit.findMany.mock.calls as any[])[0][0].where.unit).toEqual({ landlordId: ME });
+    expect(JSON.stringify(out)).not.toMatch(/tenant|phone|0901/i);
+  });
+});
+
+describe('LandlordPriceInsightService', () => {
+  const comp = (rent: number, zoneName = 'The Sapphire 1') => ({ baseRentPrice: rent, building: { zoneName } });
+  const mine = (over: Record<string, unknown> = {}) => ({
+    id: UNIT_ID,
+    unitCode: 'VHOP-S1.02-1208',
+    layoutType: 'ONE_BED_PLUS',
+    baseRentPrice: 9_000_000,
+    managementFee: 446_500,
+    status: 'AVAILABLE',
+    verifiedAt: new Date('2026-09-10T00:00:00Z'),
+    createdAt: new Date('2026-09-01T00:00:00Z'),
+    building: { zoneName: 'The Sapphire 1' },
+    mandates: [{ status: 'ACTIVE', signedAt: new Date('2026-09-01T00:00:00Z'), doorAccessConfig: null }],
+    viewings: [
+      { status: 'COMPLETED', completedAt: new Date('2026-09-25T00:00:00Z'), deposit: null },
+      { status: 'NO_SHOW', completedAt: new Date('2026-09-26T00:00:00Z'), deposit: null },
+    ],
+    ...over,
+  });
+  const build = (units: any[], comps: any[]) => {
+    const prisma = {
+      unit: {
+        findMany: jest.fn(async (args: any) => (args.where.landlordId ? units : comps)),
+        findFirst: jest.fn(async (_a: unknown) => units[0] ?? null),
+        update: jest.fn(async (_a: unknown) => ({})),
+      },
+    };
+    const audit = { log: jest.fn(async (_a: unknown) => undefined) };
+    return { prisma, audit, service: new LandlordPriceInsightService(prisma as any, audit as any) };
+  };
+  // Mặt bằng 1PN Sapphire 1: 7.0 / 7.5 / 8.0tr (+ 1 căn 40tr ngoại lai bị IQR loại) ⇒ trung vị 7.5tr.
+  const comps = [comp(7_000_000), comp(7_500_000), comp(8_000_000), comp(40_000_000), comp(5_000_000, 'The Beverly')];
+
+  it('mặt bằng = trung vị cùng layout + phân khu, lọc ngoại lai; đề xuất = mức cao nhất vẫn đạt "Căn hời" (≥10% All-in)', async () => {
+    const { prisma, service } = build([mine()], comps);
+    const [i] = await service.insights(ME, NOW);
+    // fees = 446.500 + 150.000 + 600.000 ⇒ 7.5tr − 10% × (7.5tr + 1.1965tr) = 6.630.350 ⇒ làm tròn xuống 6.600.000.
+    expect(i).toMatchObject({ scope: 'zone', comps: 3, marketMedian: 7_500_000, suggestedRent: 6_600_000, dealBadge: true, currentRent: 9_000_000 });
+    expect(i).toMatchObject({ daysVacant: 22, viewings30d: 2, viewingsNoDeposit: 1, noShows: 1 });
+    expect(i.savingPercent).toBeGreaterThanOrEqual(10);
+    // Chỉ học từ căn đã xác thực, cùng layout.
+    expect((prisma.unit.findMany.mock.calls as any[])[1][0].where).toMatchObject({ layoutType: 'ONE_BED_PLUS', isVerified: true });
+  });
+
+  it('giá sàn chốt nhanh cao hơn mức đạt badge ⇒ đề xuất dừng ở giá sàn, không có badge', async () => {
+    const meta = { consignment: { form: { allowFastClose: true, floorRent: 7_000_000 } } };
+    const { service } = build([mine({ mandates: [{ status: 'ACTIVE', signedAt: NOW, doorAccessConfig: meta }] })], comps);
+    const [i] = await service.insights(ME, NOW);
+    expect(i).toMatchObject({ suggestedRent: 7_000_000, dealBadge: false, floorLimited: true });
+  });
+
+  it('căn đã rẻ (≤ mức badge) hoặc chưa đủ căn đối chứng ⇒ không gợi ý', async () => {
+    expect(await build([mine({ baseRentPrice: 6_500_000 })], comps).service.insights(ME, NOW)).toEqual([]);
+    expect(await build([mine()], [comp(7_000_000)]).service.insights(ME, NOW)).toEqual([]);
+  });
+
+  it('applyRent: căn không trống ⇒ 409; dưới sàn / quá trần ⇒ 400; hợp lệ ⇒ đổi giá + marketAvgPrice + audit', async () => {
+    await expect(build([mine({ status: 'HOLDING' })], comps).service.applyRent(ME, UNIT_ID, 7_000_000)).rejects.toMatchObject({ status: 409 });
+    const { prisma, audit, service } = build([mine()], comps);
+    await expect(service.applyRent(ME, UNIT_ID, 2_000_000)).rejects.toMatchObject({ status: 400 });
+    await expect(service.applyRent(ME, UNIT_ID, 26_000_000)).rejects.toMatchObject({ status: 400 });
+    await service.applyRent(ME, UNIT_ID, 6_600_000);
+    expect((prisma.unit.update.mock.calls as any[])[0][0].data).toEqual({ baseRentPrice: 6_600_000, marketAvgPrice: 7_500_000 });
+    expect((prisma.unit.findFirst.mock.calls as any[])[0][0].where).toEqual({ id: UNIT_ID, landlordId: ME });
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ actionType: 'UNIT_RENT_UPDATED' }));
   });
 });

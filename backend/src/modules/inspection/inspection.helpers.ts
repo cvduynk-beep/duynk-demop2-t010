@@ -10,6 +10,7 @@ import {
   toLayoutKind,
   toLockKind,
 } from '../landlord/landlord.mappers';
+import { coversZone, type HostZoneScopeSource } from '../field-hosts/host-scope';
 import { INSPECT_OFFER_HOURS, INSPECT_SLA_HOURS } from './inspection.constants';
 import { inspectionBadStage, inspectionNotFound } from './inspection.errors';
 import type { InspectionCard, InspectionPhotoView } from './inspection.types';
@@ -51,10 +52,19 @@ export function isOpenPool(meta: ConsignmentMeta, signedAt: Date | null, now: Da
   return offered !== null && now.getTime() - offered >= INSPECT_OFFER_HOURS * HOUR_MS;
 }
 
-/** Tầng của ca đối với Inspector `hostId` (SPEC-P01 §2); null = không thấy. Chỉ xét `awaiting_host`. */
-export function awaitingTier(meta: ConsignmentMeta, signedAt: Date | null, hostId: string, now: Date): 'assigned' | 'open' | null {
-  if (meta.hostId === hostId) return 'assigned';
-  return isOpenPool(meta, signedAt, now) ? 'open' : null;
+/**
+ * Tầng của ca đối với Inspector (SPEC-P01 §2); null = không thấy. Chỉ xét `awaiting_host`.
+ * Ca Open Pool chỉ hiện với Inspector có phạm vi phủ phân khu của căn (`coversZone`, quyết định 2026-10-14).
+ */
+export function awaitingTier(
+  meta: ConsignmentMeta,
+  signedAt: Date | null,
+  host: HostZoneScopeSource & { hostId: string },
+  zoneName: string,
+  now: Date,
+): 'assigned' | 'open' | null {
+  if (meta.hostId === host.hostId) return 'assigned';
+  return isOpenPool(meta, signedAt, now) && coversZone(host, zoneName) ? 'open' : null;
 }
 
 export function stageOf(m: Parameters<typeof consignmentStage>[0]): ConsignmentStage {
@@ -95,7 +105,8 @@ export function toCard(
     overdue: (stage === 'awaiting_host' || stage === 'inspecting') && now.getTime() > new Date(due).getTime(),
     tier,
     hostAcceptedAt: meta.hostAcceptedAt ?? null,
-    decidedAt: meta.decidedAt ?? null,
+    // Ca `reviewing` chưa có quyết định (chờ Admin) ⇒ lấy giờ Inspector nộp phiếu.
+    decidedAt: meta.decidedAt ?? meta.report?.submittedAt ?? null,
   };
 }
 
@@ -109,6 +120,7 @@ export function toPhotoView(p: InspectionPhoto, urls: Map<string, string | null>
     size: p.size,
     uploadedAt: p.uploadedAt,
     url: urls.get(p.path) ?? null,
+    fromLandlord: Boolean(p.sourceLandlordPhotoId),
   };
 }
 

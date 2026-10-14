@@ -24,14 +24,20 @@ export function ListingBlock({ draft, photos, min, max, invalid, onChange }: Pro
   const byId = new Map(photos.photosOf("listing").map((p) => [p.id, p]));
   const ordered = draft.listingPhotoIds.map((id) => byId.get(id)).filter((p): p is InspectionPhotoView => Boolean(p));
   const pending = photos.uploadsOf("listing");
+  const fromLandlord = ordered.filter((p) => p.fromLandlord).length;
 
   const ids = draft.listingPhotoIds; // đã đồng bộ với ảnh trên server (bản `draft` thô có thể chưa có)
   const move = (i: number, dir: -1 | 1) => onChange((d) => ({ ...d, listingOrder: moveListing(ids, i, dir) }));
 
   return (
     <div id="insp-listingPhotoIds" className={`${consign.formCard} ${invalid ? styles.cardBad : ""}`}>
-      <h3 className={consign.formCardTitle}>6. Ảnh niêm yết ({min}–{max} ảnh)</h3>
-      <p className={styles.publicNote}>Ảnh này hiện công khai trên tin đăng ngay khi đạt. Chụp sáng, gọn, đủ các phòng; ảnh đầu tiên là ảnh bìa.</p>
+      <h3 className={consign.formCardTitle}>7. Ảnh niêm yết ({min}–{max} ảnh)</h3>
+      <p className={styles.publicNote}>Ảnh này hiện công khai trên tin đăng khi căn được niêm yết. Chụp sáng, gọn, đủ các phòng; ảnh đầu tiên là ảnh bìa.</p>
+      {fromLandlord > 0 && (
+        <p className="muted small" style={{ margin: 0 }}>
+          Đã đưa sẵn {fromLandlord} ảnh tham khảo do chủ nhà gửi (nhãn <b>Ảnh chủ nhà</b>). Giữ ảnh dùng được, bấm ✕ bỏ ảnh không đạt.
+        </p>
+      )}
 
       <div>
         <span className="label" style={{ display: "block", marginBottom: 6 }}>
@@ -60,6 +66,7 @@ export function ListingBlock({ draft, photos, min, max, invalid, onChange }: Pro
                     <span className="muted xs">Ảnh đã lên</span>
                   )}
                   <span className={styles.listingIndex}>{i + 1}</span>
+                  {p.fromLandlord && <span className={styles.listingSource}>Ảnh chủ nhà</span>}
                 </div>
                 <div className={styles.listingFoot}>
                   <span>{p.room ? ROOM_LABEL[p.room] : "—"}</span>

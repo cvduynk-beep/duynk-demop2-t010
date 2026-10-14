@@ -32,7 +32,8 @@ function InspectionBody({ detail }: { detail: InspectionDetail }) {
   const can = `${detail.building} · Tầng ${detail.floor} · Căn ${detail.door ?? "—"}`;
 
   const timeline = {
-    status: detail.stage,
+    // Host không bao giờ thấy hồ sơ nháp (chưa ký); timeline chỉ biết các trạng thái từ lúc ký trở đi.
+    status: detail.stage === "draft" ? ("awaiting_host" as const) : detail.stage,
     signedAt: detail.signedAt,
     hostAcceptedAt: detail.hostAcceptedAt ?? undefined,
     decidedAt: detail.decidedAt ?? undefined,
@@ -71,6 +72,15 @@ function InspectionBody({ detail }: { detail: InspectionDetail }) {
 
       {detail.stage === "inspecting" && <InspectionWorkspace detail={detail} />}
 
+      {detail.stage === "reviewing" && (
+        <div className={styles.formCard} role="status">
+          <h3 style={{ margin: 0 }}>Đã gửi báo cáo cho Admin rà soát</h3>
+          <p className="small muted" style={{ margin: 0 }}>
+            Bạn đề xuất không duyệt căn này{detail.report?.note ? ` (lý do: ${detail.report.note})` : ""}. Admin sẽ quyết duyệt niêm yết hay từ chối ký gửi.
+          </p>
+        </div>
+      )}
+
       {detail.stage === "awaiting_landlord" && (
         <div className={styles.formCard} role="status">
           <h3 style={{ margin: 0 }}>Đã gửi đề xuất giá cho chủ nhà</h3>
@@ -80,7 +90,7 @@ function InspectionBody({ detail }: { detail: InspectionDetail }) {
         </div>
       )}
 
-      {(detail.stage === "approved" || detail.stage === "rejected" || detail.stage === "awaiting_landlord") &&
+      {(detail.stage === "approved" || detail.stage === "rejected" || detail.stage === "awaiting_landlord" || detail.stage === "reviewing") &&
         (detail.report ? (
           <InspectionReportPanel unit={detail} report={detail.report} photos={detail.photos} />
         ) : (

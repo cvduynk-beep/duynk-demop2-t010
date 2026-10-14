@@ -1,24 +1,31 @@
-import { api, type ApiResponse } from "@/lib/apiClient";
+import { api, apiErrorText, type ApiResponse } from "@/lib/apiClient";
 import type {
   CreateBookingDto,
   DepositTermsDoc,
   EkycScanResult,
+  FastCloseCycle,
+  FastCloseQuotes,
+  SignLeaseDto,
   SubmitEkycDto,
   TenantBooking,
   TenantContract,
+  TenantHandover,
   TenantUnit,
 } from "./types";
 
 export const ERROR_MESSAGES: Record<string, string> = {
   invalid_request: "Thông tin gửi lên không hợp lệ.",
+  units_upstream: "Không tải được danh sách căn từ máy chủ. Vui lòng thử lại.",
   unauthorized: "Vui lòng đăng nhập để tiếp tục.",
   forbidden: "Tài khoản không phải Khách thuê.",
   otp_required: "Vui lòng xác thực số điện thoại qua OTP.",
   action_token_invalid: "Phiên xác thực OTP đã hết hạn hoặc không hợp lệ. Vui lòng xin mã OTP mới.",
   otp_invalid: "Mã OTP không chính xác.",
   otp_not_found_or_expired: "Mã OTP đã hết hạn hoặc không tồn tại.",
-  otp_locked: "Đã vượt quá số lần thử OTP. Vui lòng chờ 15 phút.",
-  otp_cooldown: "Vui lòng đợi ít nhất 30 giây trước khi yêu cầu mã OTP mới.",
+  otp_locked: "Bạn đã nhập sai mã quá số lần cho phép. Vui lòng chờ rồi xin mã mới.",
+  otp_cooldown: "Vui lòng đợi trước khi xin mã OTP mới.",
+  otp_send_failed: "Hiện chưa gửi được mã OTP. Vui lòng thử lại sau.",
+  ref_generation_failed: "Chưa cấp được mã lịch hẹn. Vui lòng bấm đặt lịch lại.",
   phone_already_registered: "Số điện thoại này đã được gắn với một tài khoản khác.",
   unit_not_found: "Không tìm thấy căn hộ hoặc căn hộ không còn khả dụng.",
   unit_not_available: "Căn hộ hiện không khả dụng để đặt lịch hoặc giữ chỗ.",
@@ -30,8 +37,13 @@ export const ERROR_MESSAGES: Record<string, string> = {
   already_rated: "Lịch hẹn này đã được đánh giá.",
   terms_version_stale: "Phiên bản điều khoản cọc đã được cập nhật. Vui lòng kiểm tra lại.",
   unit_already_held: "Căn hộ vừa được khách khác đặt cọc thành công (First-to-Pay Wins).",
+  fast_close_unavailable: "Căn này hiện không áp dụng ưu đãi chốt nhanh. Vui lòng chọn cọc thường.",
   vietqr_not_configured: "Thanh toán VietQR chưa được cấu hình nhận và đối soát giao dịch. Vui lòng liên hệ hỗ trợ.",
-  ekyc_provider_unavailable: "Nhà cung cấp eKYC thật chưa được cấu hình; chưa thể xác minh CCCD hoặc lập hợp đồng.",
+  no_kyc: "Cần xác minh CCCD (eKYC) trước khi ký hợp đồng thuê.",
+  lease_already_signed: "Lịch hẹn này đã có hợp đồng thuê.",
+  signature_required: "Vui lòng ký tay vào ô chữ ký trước khi xác nhận.",
+  floor_rent_invalid: "Giá sàn phải từ 3.000.000đ và thấp hơn giá chào thuê.",
+  rent_above_ceiling: "Giá thuê vượt trần cho loại căn này.",
   hold_expired: "Thời hạn giữ chỗ của căn hộ đã hết hiệu lực.",
   ekyc_already_done: "Thông tin eKYC của lịch hẹn này đã được xác thực trước đó.",
   scan_expired: "Phiên quét CCCD đã hết hạn (tối đa 15 phút). Vui lòng quét lại.",
@@ -41,6 +53,26 @@ export const ERROR_MESSAGES: Record<string, string> = {
   pdf_pending: "Hợp đồng PDF đang được tạo. Vui lòng bấm Thử lại sau giây lát.",
   not_found: "Không tìm thấy trang hoặc tính năng không khả dụng.",
 };
+
+const fmtWait = (sec: number) => (sec >= 90 ? `${Math.ceil(sec / 60)} phút` : `${Math.max(1, Math.round(sec))} giây`);
+
+/** Thời gian chờ (giây) server trả kèm `otp_cooldown` / `otp_locked`; không có ⇒ undefined (không đoán). */
+export function retryAfterSeconds(res: ApiResponse<unknown>): number | undefined {
+  const v = res.errors?.retryAfterSeconds;
+  return typeof v === "number" && v > 0 ? v : undefined;
+}
+
+/** Thông báo OTP dùng SỐ LIỆU THẬT của server (thời gian chờ, số lần thử còn lại) thay vì câu ghi cứng. */
+export function otpErrorText(res: ApiResponse<unknown>): string {
+  const wait = retryAfterSeconds(res);
+  if (res.code === "otp_invalid") {
+    const left = res.errors?.attemptsRemaining;
+    return typeof left === "number" ? `Mã OTP không chính xác. Bạn còn ${left} lần thử.` : ERROR_MESSAGES.otp_invalid;
+  }
+  if (res.code === "otp_locked") return wait ? `Bạn đã nhập sai quá số lần cho phép. Thử lại sau ${fmtWait(wait)}.` : ERROR_MESSAGES.otp_locked;
+  if (res.code === "otp_cooldown") return wait ? `Vui lòng đợi ${fmtWait(wait)} trước khi xin mã OTP mới.` : ERROR_MESSAGES.otp_cooldown;
+  return errorText(res);
+}
 
 export function errorText(
   codeOrRes?: string | ApiResponse<unknown> | null,
@@ -54,7 +86,21 @@ export function errorText(
   if (code && ERROR_MESSAGES[code]) {
     return ERROR_MESSAGES[code];
   }
-  return codeOrRes.message || fallback;
+  return apiErrorText(codeOrRes, fallback);
+}
+
+export interface OtpSent {
+  expiresInSeconds: number;
+  /** Số giây tối thiểu trước khi được xin mã mới (khớp `otp_cooldown` của server). */
+  resendInSeconds: number;
+  /** Chỉ có khi backend chạy `OTP_PROVIDER=mock` (Zalo giả lập, dev/staging nội bộ). Kênh thật không bao giờ trả mã. */
+  devOtp?: string;
+}
+
+/** Danh mục kèm nguồn: `mock` CHỈ xuất hiện khi server bật fallback có cờ (không bao giờ ở production). */
+export interface CatalogPayload {
+  units: TenantUnit[];
+  source: "api" | "mock";
 }
 
 export interface UnitFilter {
@@ -66,14 +112,15 @@ export interface UnitFilter {
 
 export const tenantApi = {
   // A1: Catalog công khai
-  units: (filter?: UnitFilter): Promise<ApiResponse<TenantUnit[]>> => {
+  // Đi qua route Next `/api/catalog/units` (data-source server, cờ fallback chỉ đọc ở server) — không gọi thẳng backend.
+  units: (filter?: UnitFilter): Promise<ApiResponse<CatalogPayload>> => {
     const params = new URLSearchParams();
     if (filter?.zone) params.set("zone", filter.zone);
     if (filter?.layout) params.set("layout", filter.layout);
     if (filter?.maxRent) params.set("maxRent", String(filter.maxRent));
     if (filter?.q) params.set("q", filter.q);
     const qs = params.toString();
-    return api.get<TenantUnit[]>(`/properties/units${qs ? `?${qs}` : ""}`);
+    return api.get<CatalogPayload>(`/api/catalog/units${qs ? `?${qs}` : ""}`);
   },
 
   // A2: Chi tiết căn hộ theo mã code
@@ -91,8 +138,9 @@ export const tenantApi = {
   },
 
   // A4: Gửi mã OTP xác thực SĐT
-  sendOtp: (phone: string, purpose = "TENANT_VIEWING"): Promise<ApiResponse<{ expiresInSeconds: number; devCode?: string }>> => {
-    return api.post<{ expiresInSeconds: number; devCode?: string }>("/auth/otp/send", { phone, purpose });
+  // Kênh thật: response KHÔNG chứa mã. Chỉ backend `OTP_PROVIDER=mock` mới trả thêm `devOtp`.
+  sendOtp: (phone: string, purpose = "TENANT_VIEWING"): Promise<ApiResponse<OtpSent>> => {
+    return api.post<OtpSent>("/auth/otp/send", { phone, purpose });
   },
 
   // A5: Xác thực OTP lấy actionToken
@@ -149,9 +197,18 @@ export const tenantApi = {
     return api.get<DepositTermsDoc>(`/legal/deposit-terms${unitCode ? `?unitCode=${encodeURIComponent(unitCode)}` : ""}`);
   },
 
-  // A15: Chấp thuận điều khoản cọc & lấy thông tin VietQR
-  acceptDeposit: (ref: string, termsVersion: string): Promise<ApiResponse<TenantBooking>> => {
-    return api.post<TenantBooking>(`/bookings/${encodeURIComponent(ref)}/deposit`, { acceptTerms: true, termsVersion });
+  // A14b: Báo giá chốt nhanh (chỉ chủ lịch hẹn, khi đang chốt cọc)
+  fastCloseQuotes: (ref: string): Promise<ApiResponse<FastCloseQuotes>> => {
+    return api.get<FastCloseQuotes>(`/bookings/${encodeURIComponent(ref)}/fast-close`);
+  },
+
+  // A15: Chấp thuận điều khoản cọc & lấy thông tin VietQR. Chưa có tiền về thì gọi lại để đổi lựa chọn (báo giá lại).
+  acceptDeposit: (ref: string, termsVersion: string, fastCloseCycle?: FastCloseCycle | null): Promise<ApiResponse<TenantBooking>> => {
+    return api.post<TenantBooking>(`/bookings/${encodeURIComponent(ref)}/deposit`, {
+      acceptTerms: true,
+      termsVersion,
+      ...(fastCloseCycle ? { fastCloseCycle } : {}),
+    });
   },
 
   // DEMO (xoá khi có webhook thật): giả lập ngân hàng báo có cọc
@@ -159,22 +216,29 @@ export const tenantApi = {
     return api.post<{ outcome: string }>(`/bookings/${encodeURIComponent(ref)}/deposit/demo-pay`);
   },
 
-  // A17: Quét CCCD; backend trả ekyc_provider_unavailable đến khi tích hợp nhà cung cấp thật.
+  // A17: Quét CCCD — MÔ PHỎNG OCR ở backend (EkycSimulator) cho tới khi tích hợp FPT.AI.
   scanEkyc: (ref: string, consentVersion: string): Promise<ApiResponse<EkycScanResult>> => {
     return api.post<EkycScanResult>(`/bookings/${encodeURIComponent(ref)}/ekyc/scan`, { consent: true, consentVersion });
   },
 
-  // A18: Nộp hồ sơ eKYC & hợp đồng
-  submitEkyc: (
-    ref: string,
-    dto: SubmitEkycDto,
-  ): Promise<ApiResponse<{ booking: TenantBooking; contract: TenantContract }>> => {
-    return api.post<{ booking: TenantBooking; contract: TenantContract }>(`/bookings/${encodeURIComponent(ref)}/ekyc`, dto);
+  // A18: Lưu thông tin CCCD đã xác nhận (chưa lập hợp đồng)
+  submitEkyc: (ref: string, dto: SubmitEkycDto): Promise<ApiResponse<{ booking: TenantBooking }>> => {
+    return api.post<{ booking: TenantBooking }>(`/bookings/${encodeURIComponent(ref)}/ekyc`, dto);
+  },
+
+  // A18b: Ký Hợp đồng thuê chính thức (nghi thức ký OTP/TSA mô phỏng; Contract/SignedDocument ghi DB thật)
+  signLease: (dto: SignLeaseDto): Promise<ApiResponse<{ booking: TenantBooking; contract: TenantContract }>> => {
+    return api.post<{ booking: TenantBooking; contract: TenantContract }>("/contracts/lease/sign", dto);
   },
 
   // A19: Hợp đồng của tôi
   myContracts: (): Promise<ApiResponse<TenantContract[]>> => {
     return api.get<TenantContract[]>("/me/contracts");
+  },
+
+  // Biên bản bàn giao số của hợp đồng (chỉ chủ hợp đồng xem được; người khác ⇒ 403)
+  handovers: (contractId: string): Promise<ApiResponse<TenantHandover[]>> => {
+    return api.get<TenantHandover[]>(`/handovers/contracts/${encodeURIComponent(contractId)}`);
   },
 
   // A20: Tải file PDF hợp đồng

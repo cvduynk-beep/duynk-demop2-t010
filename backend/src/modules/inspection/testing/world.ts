@@ -42,18 +42,23 @@ export function buildWorld() {
   const w = {
     db, prisma, phones, storage, doors, store, query, publisher, flow, photos, media,
 
-    addInspector(name: string, o: { zone?: string; roles?: string[] } = {}) {
+    addInspector(name: string, o: { zone?: string; roles?: string[]; scope?: 'ALL' | 'SELECTED'; managed?: string[] } = {}) {
       n += 1;
       const host = {
         id: `host-${name}`, profileId: `prof-${name}`, assignedZone: o.zone ?? ZONE, roles: o.roles ?? ['INSPECTOR'],
+        zoneScope: o.scope ?? 'SELECTED', managedZones: o.managed ?? [],
         dutyStatus: 'ONLINE_AVAILABLE', rating: 5, createdAt: new Date(2026, 0, n), profile: { fullName: `Thẩm định ${name}` },
       };
       db.hosts.push(host);
       return host;
     },
 
-    actor(host: { id: string; profileId: string; assignedZone: string }): HostActor {
-      return { hostId: host.id, profileId: host.profileId, assignedZone: host.assignedZone, rating: 5, dutyStatus: 'ONLINE_AVAILABLE' as any };
+    actor(host: { id: string; profileId: string; assignedZone: string; zoneScope?: string; managedZones?: string[] }): HostActor {
+      return {
+        hostId: host.id, profileId: host.profileId, assignedZone: host.assignedZone,
+        zoneScope: (host.zoneScope ?? 'SELECTED') as HostActor['zoneScope'], managedZones: host.managedZones ?? [],
+        rating: 5, dutyStatus: 'ONLINE_AVAILABLE' as any,
+      };
     },
 
     /** Một hồ sơ ký gửi (unit UNLISTED + mandate PENDING_INSPECTION) ở stage cho trước. */

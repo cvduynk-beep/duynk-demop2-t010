@@ -2,12 +2,29 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, type LucideIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Building2,
+  ChevronDown,
+  Compass,
+  LogOut,
+  Radio,
+  Settings,
+  Shield,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { signOut } from "@/lib/auth/client";
 import { initials } from "@/lib/format";
-import { Button } from "@/components/ui/button";
-import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import styles from "./PortalShell.module.css";
+
+export interface PortalNavChild {
+  href: string;
+  label: string;
+  icon?: LucideIcon;
+  description?: string;
+}
 
 export interface PortalNavItem {
   href: string;
@@ -16,6 +33,8 @@ export interface PortalNavItem {
   badge?: number;
   /** Tiền tố đường dẫn khác cũng tính là mục này đang active, vd ["/host/viewing"]. */
   match?: string[];
+  /** Danh sách mục con khi hover/click mở dropdown menu. */
+  children?: PortalNavChild[];
 }
 
 interface PortalShellProps {
@@ -26,14 +45,28 @@ interface PortalShellProps {
   children: React.ReactNode;
   /** Đích sau đăng xuất. Mặc định "/login". */
   signOutHref?: string;
-  /** Nội dung phụ trong sidebar, giữa nav và khối người dùng. */
+  /** Nội dung phụ trong thanh công cụ (ví dụ Host Duty và Chuông thông báo). */
   sideSlot?: React.ReactNode;
-  /** Nhãn breadcrumb cho các đường dẫn không nằm trong `nav` (vd. trang con tĩnh). */
-  crumbLabels?: Record<string, string>;
+  /** Đường dẫn trang Cài đặt (nếu có, hiển thị icon ⚙️ ở góc phải). */
+  settingsHref?: string;
+  /** Ẩn badge tên cổng cạnh Logo để thanh thương hiệu thoáng đãng. */
+  hidePortalBadge?: boolean;
+  /** Ẩn nút chuyển cổng Khách thuê trên thanh công cụ (đã tích hợp trong User Menu). */
+  hideTenantSwitch?: boolean;
+  /** Đường dẫn khi nhấp vào Logo. Mặc định "/". */
+  logoHref?: string;
+  /** Thu gọn logo theo hướng tối giản (1 dòng duy nhất, icon 26px, ẩn subtext dài). */
+  compactLogo?: boolean;
+  /** Đường dẫn đến trang Tài khoản cá nhân trong User Dropdown (ví dụ: "/host/account"). */
+  accountHref?: string;
 }
 
 /** Thuần, export để test: active khi khớp href, href/…, hoặc một tiền tố trong match (khớp p hoặc p/…). */
-export function isNavActive(pathname: string, item: Pick<PortalNavItem, "href" | "match">): boolean {
+export function isNavActive(
+  pathname: string | null | undefined,
+  item: Pick<PortalNavItem, "href" | "match" | "children">,
+): boolean {
+  if (!pathname) return false;
   if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
     return true;
   }
@@ -44,81 +77,360 @@ export function isNavActive(pathname: string, item: Pick<PortalNavItem, "href" |
       }
     }
   }
+  if (item.children) {
+    for (const child of item.children) {
+      if (pathname === child.href || pathname.startsWith(`${child.href}/`)) {
+        return true;
+      }
+    }
+  }
   return false;
 }
 
-/** Khung dashboard có sidebar cho cổng Chủ nhà và Admin (trên mobile sidebar thành thanh cuộn ngang). */
-export function PortalShell({ portal, userName, userMeta, nav, children, signOutHref, sideSlot, crumbLabels }: PortalShellProps) {
-  const pathname = usePathname();
-  const labels = { ...Object.fromEntries(nav.map((n) => [n.href, n.label])), ...crumbLabels };
+/** Component từng mục điều hướng trên Desktop, hỗ trợ dropdown menu con. */
+function DesktopNavItem({
+  item,
+  pathname,
+}: {
+  item: PortalNavItem;
+  pathname: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const active = isNavActive(pathname, item);
+  const { href, label, icon: Icon, badge, children } = item;
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  if (!children || children.length === 0) {
+    return (
+      <Link
+        href={href}
+        className={`${styles.navLink} ${active ? styles.navLinkActive : ""}`}
+        aria-current={active ? "page" : undefined}
+      >
+        <Icon size={15} />
+        <span>{label}</span>
+        {typeof badge === "number" && badge > 0 && <i className={styles.badgeCount}>{badge}</i>}
+      </Link>
+    );
+  }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-[100dvh] bg-background text-foreground">
-      <aside className="md:w-64 lg:w-72 shrink-0 bg-[#123d3a] text-[#eef5f0] flex flex-col border-b md:border-b-0 md:border-r border-[#2a514b] sticky top-0 z-40 md:h-[100dvh]">
-        <div className="p-4 md:p-6 pb-4 md:pb-8 shrink-0 flex items-center justify-between md:block">
-          <Logo inverse href="/" sub={portal} />
+    <div
+      className={styles.navItemWithDropdown}
+      ref={ref}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <Link
+        href={href}
+        className={`${styles.navLink} ${active ? styles.navLinkActive : ""}`}
+        aria-current={active ? "page" : undefined}
+        onClick={() => setOpen(false)}
+      >
+        <Icon size={15} />
+        <span>{label}</span>
+        {typeof badge === "number" && badge > 0 && <i className={styles.badgeCount}>{badge}</i>}
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={`Mở danh mục ${label}`}
+          className={styles.dropdownChevronWrap}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen((v) => !v);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen((v) => !v);
+            }
+          }}
+        >
+          <ChevronDown size={13} className={`${styles.dropdownChevron} ${open ? styles.chevronOpen : ""}`} />
+        </span>
+      </Link>
+
+      {open && (
+        <div className={styles.navDropdownMenu} role="menu">
+          {children.map((child) => {
+            const childActive = pathname === child.href || pathname.startsWith(`${child.href}/`);
+            const ChildIcon = child.icon ?? Icon;
+            return (
+              <Link
+                key={child.href}
+                href={child.href}
+                className={`${styles.navDropdownItem} ${childActive ? styles.navDropdownItemActive : ""}`}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+              >
+                <div className={styles.dropdownItemIconWrap}>
+                  <ChildIcon size={16} />
+                </div>
+                <div className={styles.dropdownItemTextWrap}>
+                  <strong>{child.label}</strong>
+                  {child.description && <span>{child.description}</span>}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Menu User Dropdown mở khi bấm vào avatar góc phải. */
+function UserMenuDropdown({
+  userName,
+  userMeta,
+  portal,
+  signOutHref,
+  settingsHref,
+  accountHref,
+  pathname,
+}: {
+  userName: string;
+  userMeta: string;
+  portal: string;
+  signOutHref?: string;
+  settingsHref?: string;
+  accountHref?: string;
+  pathname?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const shortName = userName.split(" ")[0];
+
+  return (
+    <div className={styles.userMenuWrap} ref={ref}>
+      <button
+        type="button"
+        className={`${styles.userTriggerBtn} ${open ? styles.userTriggerActive : ""}`}
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label="Tài khoản người dùng"
+        title={userName}
+      >
+        <span className={styles.avatarPill}>{initials(userName)}</span>
+        <span className={styles.userNameShort}>{shortName}</span>
+        <ChevronDown size={13} className={`${styles.userChevron} ${open ? styles.chevronOpen : ""}`} />
+      </button>
+
+      {open && (
+        <div className={styles.userDropdown} role="menu">
+          <div className={styles.userDropdownHeader}>
+            <div className={styles.userDropdownAvatar}>{initials(userName)}</div>
+            <div className={styles.userDropdownIdentity}>
+              <strong className={styles.userDropdownName}>{userName}</strong>
+              <span className={styles.userDropdownRole}>{userMeta}</span>
+              <span className={styles.userDropdownPortal}>{portal}</span>
+            </div>
+          </div>
+
+          <div className={styles.userDropdownDivider} />
+
+          {accountHref && (
+            <>
+              <div className={styles.userDropdownSection}>
+                <Link
+                  href={accountHref}
+                  className={`${styles.userDropdownLink} ${pathname === accountHref ? styles.userDropdownLinkActive : ""}`}
+                  onClick={() => setOpen(false)}
+                >
+                  <UserRound size={15} />
+                  <span>Thông tin tài khoản</span>
+                </Link>
+              </div>
+              <div className={styles.userDropdownDivider} />
+            </>
+          )}
+
+          <div className={styles.userDropdownSection}>
+            <span className={styles.userDropdownSectionLabel}>Chuyển cổng giao diện</span>
+            <Link href="/" className={styles.userDropdownLink} onClick={() => setOpen(false)}>
+              <Compass size={15} />
+              <span>Trang Khách thuê (Trang chủ)</span>
+            </Link>
+            {portal !== "Cổng Field Host" && (
+              <Link href="/host/dispatch" className={styles.userDropdownLink} onClick={() => setOpen(false)}>
+                <Radio size={15} />
+                <span>Cổng Field Host (Thực địa)</span>
+              </Link>
+            )}
+            {portal !== "Cổng chủ nhà" && (
+              <Link href="/landlord/dashboard" className={styles.userDropdownLink} onClick={() => setOpen(false)}>
+                <Building2 size={15} />
+                <span>Cổng Chủ nhà (Ký gửi)</span>
+              </Link>
+            )}
+            {portal !== "Quản trị nền tảng" && (
+              <Link href="/admin/dashboard" className={styles.userDropdownLink} onClick={() => setOpen(false)}>
+                <Shield size={15} />
+                <span>Quản trị nền tảng (Admin)</span>
+              </Link>
+            )}
+          </div>
+
+          {settingsHref && (
+            <>
+              <div className={styles.userDropdownDivider} />
+              <div className={styles.userDropdownSection}>
+                <Link href={settingsHref} className={styles.userDropdownLink} onClick={() => setOpen(false)}>
+                  <Settings size={15} />
+                  <span>Cài đặt hệ thống & Quy chế</span>
+                </Link>
+              </div>
+            </>
+          )}
+
+          <div className={styles.userDropdownDivider} />
+
+          <div className={styles.userDropdownSection}>
+            <button
+              type="button"
+              className={styles.userDropdownLogout}
+              onClick={() => void signOut(signOutHref ?? "/login")}
+            >
+              <LogOut size={15} />
+              <span>Đăng xuất tài khoản</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Khung giao diện Quản trị / Chủ nhà / Field Host đồng bộ 100% ngôn ngữ thiết kế sang trọng
+ * với trang Khách thuê: Thanh điều hướng kính mờ trên cùng (Top Bar), giải phóng không gian
+ * toàn màn hình, màu ngọc trai sang trọng, typography mực lagoon và hổ phách.
+ */
+export function PortalShell({
+  portal,
+  userName,
+  userMeta,
+  nav,
+  children,
+  signOutHref,
+  sideSlot,
+  settingsHref,
+  hidePortalBadge = false,
+  hideTenantSwitch = false,
+  logoHref,
+  compactLogo = false,
+  accountHref,
+}: PortalShellProps) {
+  const pathname = usePathname() || "";
+
+  return (
+    <div className={styles.shell}>
+      {/* ── Top Bar: Kính mờ siêu thực chuẩn Trang Khách thuê ── */}
+      <header className={styles.header}>
+        <div className={styles.headerInner}>
+          {/* Logo & Portal Badge */}
+          <div className={styles.brandGroup}>
+            <Logo
+              href={logoHref ?? "/"}
+              compact={compactLogo}
+            />
+            {!hidePortalBadge && <span className={styles.portalBadge}>{portal}</span>}
+          </div>
+
+          {/* Desktop Navigation Links (Center Dock) */}
+          <nav className={styles.desktopNav} aria-label={`Điều hướng ${portal}`}>
+            {nav.map((item) => (
+              <DesktopNavItem key={item.href} item={item} pathname={pathname} />
+            ))}
+          </nav>
+
+          {/* Right Group: Host tools + User Menu */}
+          <div className={styles.rightGroup}>
+            {sideSlot && <div className={styles.sideSlotWrap}>{sideSlot}</div>}
+
+            {!hideTenantSwitch && (
+              <Link href="/" className={styles.tenantSwitchBtn} title="Chuyển sang trang Khách thuê">
+                <Compass size={15} />
+                <span className={styles.tenantSwitchLabel}>Khách thuê</span>
+              </Link>
+            )}
+
+            <UserMenuDropdown
+              userName={userName}
+              userMeta={userMeta}
+              portal={portal}
+              signOutHref={signOutHref}
+              settingsHref={settingsHref}
+              accountHref={accountHref}
+              pathname={pathname}
+            />
+          </div>
         </div>
 
-        <nav
-          className="flex-1 overflow-x-auto md:overflow-y-auto overflow-y-hidden px-4 md:px-3 pb-2 md:pb-4 flex md:flex-col gap-1 md:gap-1.5 scrollbar-none"
-          aria-label={`Điều hướng ${portal}`}
-        >
+        {/* Mobile / Tablet Horizontal Scrollable Nav Strip */}
+        <nav className={styles.mobileNavStrip} aria-label={`Điều hướng nhanh ${portal}`}>
           {nav.map((item) => {
             const active = isNavActive(pathname, item);
-            const { href, label, icon: Icon, badge } = item;
+            const { href, label, icon: Icon, badge, children } = item;
+            if (children && children.length > 0) {
+              return children.map((child) => {
+                const childActive = pathname === child.href || pathname.startsWith(`${child.href}/`);
+                const ChildIcon = child.icon ?? Icon;
+                return (
+                  <Link
+                    key={child.href}
+                    href={child.href}
+                    className={`${styles.mobileNavLink} ${childActive ? styles.mobileNavLinkActive : ""}`}
+                    aria-current={childActive ? "page" : undefined}
+                  >
+                    <ChildIcon size={14} />
+                    <span>{child.label}</span>
+                  </Link>
+                );
+              });
+            }
             return (
               <Link
                 key={href}
                 href={href}
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 md:py-3 rounded-xl font-medium text-sm transition-all whitespace-nowrap shrink-0 md:shrink
-                  ${active
-                    ? "bg-[#23534d] text-white shadow-sm"
-                    : "text-[#b9cfca] hover:bg-[#1a4842] hover:text-white"
-                  }
-                `}
+                className={`${styles.mobileNavLink} ${active ? styles.mobileNavLinkActive : ""}`}
                 aria-current={active ? "page" : undefined}
               >
-                <Icon size={18} className={active ? "text-[#e6bc73]" : "opacity-75"} />
-                <span className="flex-1">{label}</span>
-                {!!badge && (
-                  <span className={`
-                    text-xs px-2 py-0.5 rounded-full font-bold
-                    ${active ? "bg-[#e6bc73]/20 text-[#f0ca86]" : "bg-[#1a4842] text-[#d1e0da]"}
-                  `}>
-                    {badge}
-                  </span>
-                )}
+                <Icon size={14} />
+                <span>{label}</span>
+                {typeof badge === "number" && badge > 0 && <i className={styles.badgeCount}>{badge}</i>}
               </Link>
             );
           })}
         </nav>
+      </header>
 
-        {sideSlot && <div className="hidden md:block px-4 py-2 shrink-0">{sideSlot}</div>}
-
-        <div className="hidden md:flex items-center gap-3 p-4 m-3 mt-0 rounded-2xl bg-[#194640] border border-[#2a5a52] shrink-0">
-          <span className="w-10 h-10 rounded-full bg-[#dcefe8] text-[#105b53] flex items-center justify-center font-bold text-sm shrink-0">
-            {initials(userName)}
-          </span>
-          <div className="flex-1 min-w-0 flex flex-col justify-center">
-            <strong className="text-sm font-semibold truncate text-white">{userName}</strong>
-            <span className="text-xs text-[#b9cfca] truncate">{userMeta}</span>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-[#b9cfca] hover:text-white hover:bg-[#23534d] rounded-xl shrink-0"
-            aria-label="Đăng xuất"
-            onClick={() => void signOut(signOutHref ?? "/login")}
-          >
-            <LogOut size={18} />
-          </Button>
-        </div>
-      </aside>
-
-      <main className="flex-1 flex flex-col min-w-0 min-h-0 bg-muted/20 px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-9">
-        <Breadcrumbs root={{ href: nav[0]?.href ?? "/", label: portal }} labels={labels} />
-        {children}
+      {/* ── Main Canvas: Ambient Pearl Light Background ── */}
+      <main className={styles.main}>
+        <div className={styles.contentWrap}>{children}</div>
       </main>
     </div>
   );

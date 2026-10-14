@@ -295,7 +295,7 @@ function UnitBody({ unit }: { unit: UnitDetail }) {
               <Timer size={16} /> Báo trước tối thiểu <b>15 ngày</b>; trong thời gian này căn vẫn đón nốt khách.
             </li>
             <li>
-              <CheckCircle2 size={16} /> Căn phải đang <b>trống</b>: không có cọc giữ chỗ hay hợp đồng thuê hiệu lực.
+              <CheckCircle2 size={16} /> Căn phải đang <b>trống</b>: không có cọc đang giữ căn hay hợp đồng thuê hiệu lực.
             </li>
             <li>
               <CheckCircle2 size={16} /> Hết hạn, mã cửa và chìa cơ bị thu hồi khỏi mạng lưới Field Host.

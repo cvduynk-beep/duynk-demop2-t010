@@ -82,20 +82,20 @@ describe("W5 màn thẩm định: giá & cọc", () => {
     expect(validateExtras({ ...draft, pricing: { ...draft.pricing, reason: "x".repeat(301) } }, detail)?.field).toBe("pricing.reason");
   });
 
-  it("F2: biên giá/cọc cùng backend — rent ∈ [3tr,200tr], cọc ∈ [2tr, 3×rent], số nguyên", () => {
+  it("F2: biên giá/cọc cùng backend — rent ∈ [3tr,200tr], cọc ∈ [½×rent, 3×rent], số nguyên", () => {
     const { detail, draft } = setup();
     const f = (rent: string, securityDeposit: string) => validateExtras({ ...draft, pricing: { rent, securityDeposit, reason: "x" } }, detail)?.field;
     expect(f("2999999", "3000000")).toBe("pricing.rent");
     expect(f("6500000", "0")).toBe("pricing.securityDeposit");
-    expect(f("6500000", "1999999")).toBe("pricing.securityDeposit");
+    expect(f("6500000", "3249999")).toBe("pricing.securityDeposit");
     expect(f("6500000", "19500001")).toBe("pricing.securityDeposit");
     expect(f("6500000", "1e15")).toBe("pricing.securityDeposit");
     expect(f("6500000", "NaN")).toBe("pricing.securityDeposit");
     expect(f("6500000.5", "6500000")).toBe("pricing.rent");
     expect(f("6500000", "6500000.5")).toBe("pricing.securityDeposit");
-    expect(f("6500000", "2000000")).toBeUndefined();
+    expect(f("6500000", "3250000")).toBeUndefined();
     expect(f("6500000", "19500000")).toBeUndefined();
-    expect(validateExtras({ ...draft, pricing: { rent: "6500000", securityDeposit: "1000000", reason: "x" } }, detail)?.message).toMatch(/2\.000\.000/);
+    expect(validateExtras({ ...draft, pricing: { rent: "6500000", securityDeposit: "1000000", reason: "x" } }, detail)?.message).toMatch(/nửa tháng/);
   });
 
   it("facts: miền giá trị cùng backend", () => {
@@ -121,14 +121,14 @@ describe("W5 màn thẩm định: giá & cọc", () => {
     expect(listingForbiddenField("highlights", { highlights: ["OK", "", "Giá 7 triệu"] })).toBe("listing.highlights.2");
   });
 
-  it("không đạt ⇒ không gửi facts/pricing/listing và không kiểm V12–V14", () => {
+  it("không duyệt (gửi Admin) ⇒ vẫn gửi facts/pricing/listing để Admin niêm yết từ phiếu; không kiểm V12–V14 ở logic", () => {
     const { detail, draft } = setup();
-    const rej = { ...draft, recommendation: "reject" as const, note: "Không đạt", listing: { highlights: ["", "", ""] } };
+    const rej = { ...draft, recommendation: "reject" as const, note: "Giá thuê quá cao", listing: { highlights: ["", "", ""] } };
     expect(validateDraftFull(rej, detail)).toBeNull();
     const dto = toSubmitDto(rej);
-    expect(dto).not.toHaveProperty("facts");
-    expect(dto).not.toHaveProperty("pricing");
-    expect(dto).not.toHaveProperty("listing");
+    expect(dto.facts).toBeDefined();
+    expect(dto.pricing).toEqual(toSubmitDto({ ...rej, recommendation: "approve" }).pricing);
+    expect(dto.listing).toEqual({ highlights: [] });
   });
 
   it("toExtrasDto bỏ ô nổi bật rỗng, hướng rỗng ⇒ null", () => {
@@ -139,18 +139,26 @@ describe("W5 màn thẩm định: giá & cọc", () => {
   });
 });
 
-describe("W5 render khối PIN cửa / Thông tin thực tế", () => {
-  it("ô PIN cửa hiện đúng nhãn bắt buộc khi đẩy căn lên; không còn khối Giá & cọc / Kết luận", async () => {
-    const { DoorPinBlock } = await import("@/components/host/inspection/DoorPinBlock");
+describe("W5 render mục Đề xuất (PIN cửa) / Thông tin thực tế", () => {
+  it("mục 7: ô PIN cửa bắt buộc khi đề xuất duyệt, tuỳ chọn khi không duyệt (gửi Admin); không có khối Giá & cọc", async () => {
+    const { DecisionBlock } = await import("@/components/host/inspection/DecisionBlock");
     const { draft } = setup();
-    const html = renderToStaticMarkup(createElement(DoorPinBlock, { draft, invalid: false, onChange: () => {} }));
+    const props = { needPin: true, invalidField: null, busy: false, onChange: () => {}, onSubmit: () => {} };
+    const html = renderToStaticMarkup(createElement(DecisionBlock, { ...props, draft: { ...draft, recommendation: "approve" as const } }));
     expect(html).toContain("Mã PIN thật của cửa");
-    expect(html).toContain("Bắt buộc khi đẩy căn lên");
+    expect(html).toContain("Bắt buộc khi đề xuất duyệt");
+    expect(html).toContain("Nộp báo cáo &amp; niêm yết");
     expect(html).not.toContain("Giá &amp; cọc");
+    const rej = renderToStaticMarkup(createElement(DecisionBlock, { ...props, draft: { ...draft, recommendation: "reject" as const } }));
+    expect(rej).toContain("Nộp báo cáo cho Admin");
+    expect(rej).toContain("giá thuê quá cao, nội thất sai hiện trạng");
+    expect(rej).not.toContain("Bắt buộc khi đề xuất duyệt");
+    const noPin = renderToStaticMarkup(createElement(DecisionBlock, { ...props, needPin: false, draft }));
+    expect(noPin).not.toContain("Mã PIN thật của cửa");
   });
 
-  it("ô facts đã sửa có nhãn 'Đã sửa (chủ khai: …)'", async () => {
-    const { FactsBlock } = await import("@/components/host/inspection/InfoBlocks");
+  it("ô facts (trong mục 2) đã sửa có nhãn 'Đã sửa (chủ khai: …)'", async () => {
+    const { MeasureBlock: FactsBlock } = await import("@/components/host/inspection/InfoBlocks");
     const { detail, draft } = setup();
     const noop = () => {};
     const clean = renderToStaticMarkup(createElement(FactsBlock, { detail, draft, invalidField: null, onChange: noop }));

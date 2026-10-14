@@ -13,17 +13,21 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { FieldHostsModule } from '../field-hosts/field-hosts.module';
 import { HostModule } from '../host/host.module';
 import { AuthModule } from './auth.module';
-import { SESSION_TTL_SECONDS } from './auth.constants';
+import { ADMIN_SESSION_TTL_SECONDS, SESSION_TTL_SECONDS } from './auth.constants';
 import { GoogleStrategy } from './google/google.strategy';
 import { hashPassword } from './password-hasher';
 import { createFakePrisma, FakePrisma, seedProfile } from './testing/fake-prisma';
 import { createSessionTokens } from './testing/fake-session-token';
+import { MockZaloOtpSender } from './otp/senders/mock-zalo-otp.sender';
+import { OtpMessage } from './otp/senders/otp-sender';
+import { ZaloOtpSender } from './otp/senders/zalo-otp.sender';
+import { containsValue } from './testing/contains-value';
 
 const ENV = {
   WEB_APP_URL: 'http://localhost:3000',
   API_PREFIX: 'api/v1',
   AES_SECRET_KEY: 'a-test-master-secret-of-32-chars!!',
-  OTP_ECHO_DEV_CODE: 'true',
+  OTP_PROVIDER: 'mock',
   OTP_RESEND_SECONDS: '0',
   JWT_SECRET: 'a-test-jwt-secret-of-at-least-32-chars',
   GOOGLE_CLIENT_ID: 'test-client-id.apps.googleusercontent.com',
@@ -82,6 +86,10 @@ async function createApp(prisma: FakePrisma, env: Record<string, string | undefi
   return app;
 }
 
+/** Mã mà kênh gửi đã nhận (mock vẫn chạy thật, chỉ ghi lại thêm) ⇒ so được với `devOtp` của response. */
+let deliveredCodes: string[] = [];
+const lastOtp = () => deliveredCodes[deliveredCodes.length - 1];
+
 describe('Auth HTTP (Nest thật + Prisma giả)', () => {
   let app: INestApplication;
   let prisma: FakePrisma;
@@ -93,6 +101,12 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
   });
 
   beforeEach(async () => {
+    deliveredCodes = [];
+    const realMockSend = MockZaloOtpSender.prototype.send;
+    jest.spyOn(MockZaloOtpSender.prototype, 'send').mockImplementation(async function (this: MockZaloOtpSender, message: OtpMessage) {
+      deliveredCodes.push(message.code);
+      return realMockSend.call(this, message);
+    });
     prisma = createFakePrisma();
     restoreEnv = applyEnv(ENV);
     app = await createApp(prisma);
@@ -101,6 +115,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
   afterEach(async () => {
     await app.close();
     restoreEnv();
+    jest.restoreAllMocks();
   });
 
   /** Seed tài khoản đã có mật khẩu `PASSWORD` (như sau khi đăng ký). */
@@ -109,6 +124,9 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
 
   const cookiesOf = (res: request.Response): string[] => (res.headers['set-cookie'] as unknown as string[]) ?? [];
   const cookieValue = (res: request.Response, name: string) => cookiesOf(res).find((c) => c.startsWith(`${name}=`) && !c.startsWith(`${name}=;`));
+  /** Giá trị JWT trong Set-Cookie `vs_access_<portal>` (không có ⇒ undefined). */
+  const tokenOf = (res: request.Response, portal: string) => cookieValue(res, `vs_access_${portal}`)?.split(';')[0].slice(`vs_access_${portal}=`.length);
+  const session = (agent: ReturnType<typeof request.agent> | request.SuperTest<request.Test>, portal: string) => agent.get(`/api/v1/auth/session?portal=${portal}`);
   const login = (agent: ReturnType<typeof request.agent>, portal: string, email = 'a@example.com', password = PASSWORD) =>
     agent.post('/api/v1/auth/login').send({ email, password, portal });
 
@@ -120,9 +138,9 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ success: true, data: { user: { portal: 'landlord', role: 'landlord' } } });
 
-      const access = cookieValue(res, 'vs_access')!;
-      const token = access.split(';')[0].slice('vs_access='.length);
-      expect(createSessionTokens().verify(token)).toMatchObject({ email: 'a@example.com' });
+      const access = cookieValue(res, 'vs_access_landlord')!;
+      const token = access.split(';')[0].slice('vs_access_landlord='.length);
+      expect(createSessionTokens().verify(token)).toMatchObject({ email: 'a@example.com', portal: 'landlord', role: 'landlord' });
       expect(JSON.stringify(res.body)).not.toContain(token);
       expect(JSON.stringify(res.body)).not.toContain('scrypt$');
       expect(JSON.stringify(res.body)).not.toContain('refresh');
@@ -161,11 +179,55 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect(cookiesOf(res)).toHaveLength(0);
     });
 
-    it('tài khoản Google chưa có mật khẩu → 401 password_not_set', async () => {
+    it('tài khoản Google chưa có mật khẩu → 401 invalid_credentials, cùng message với email không tồn tại (không lộ email có tài khoản)', async () => {
       seedProfile(prisma, { email: 'g@example.com', roleCode: 'tenant' });
-      const res = await login(request(app.getHttpServer()) as any, 'tenant', 'g@example.com');
-      expect(res.status).toBe(401);
-      expect(res.body.code).toBe('password_not_set');
+      const google = await login(request(app.getHttpServer()) as any, 'tenant', 'g@example.com');
+      const unknown = await login(request(app.getHttpServer()) as any, 'tenant', 'khong-co@example.com');
+      expect(google.status).toBe(401);
+      expect(google.body.code).toBe('invalid_credentials');
+      expect(google.body.message).toBe(unknown.body.message);
+      expect(cookiesOf(google)).toHaveLength(0);
+    });
+
+    it.each([
+      ['tenant', 'tenant', {}],
+      ['landlord', 'landlord', {}],
+      ['host', 'field_host', { withFieldHost: true }],
+      ['admin', 'ops_admin', {}],
+    ] as const)('đăng nhập thành công cổng %s → chỉ set cookie vs_access_<cổng> (claim portal đúng), session cổng đó nhận ra', async (portal, roleCode, extra) => {
+      seedUser('a@example.com', roleCode, extra);
+      const agent = request.agent(app.getHttpServer());
+      const res = await login(agent, portal);
+      expect(res.status).toBe(200);
+      expect(res.body.data.user).toMatchObject({ portal });
+      const set = cookiesOf(res).filter((c) => /^vs_access_[a-z]+=[^;]/.test(c));
+      expect(set.map((c) => c.split('=')[0])).toEqual([`vs_access_${portal}`]);
+      expect(createSessionTokens().verify(tokenOf(res, portal))).toMatchObject({ portal });
+      expect((await session(agent, portal)).body.data.user).toMatchObject({ portal });
+    });
+
+    it('cookie Admin: SameSite=Strict, Max-Age = ADMIN_SESSION_TTL_SECONDS; cổng khác SameSite=Lax 7 ngày', async () => {
+      seedUser('ad@example.com', 'ops_admin');
+      seedUser('t@example.com', 'tenant');
+      const admin = cookieValue(await login(request(app.getHttpServer()) as any, 'admin', 'ad@example.com'), 'vs_access_admin')!;
+      const tenant = cookieValue(await login(request(app.getHttpServer()) as any, 'tenant', 't@example.com'), 'vs_access_tenant')!;
+      expect(admin).toMatch(/SameSite=Strict/i);
+      expect(admin).toContain(`Max-Age=${ADMIN_SESSION_TTL_SECONDS}`);
+      expect(admin).toMatch(/HttpOnly/i);
+      expect(tenant).toMatch(/SameSite=Lax/i);
+      expect(tenant).toContain(`Max-Age=${SESSION_TTL_SECONDS}`);
+    });
+
+    it('sai mật khẩu 5 lần cùng email → lần 6 trả 429 login_locked (dù đúng mật khẩu), không set cookie', async () => {
+      seedUser('a@example.com', 'tenant');
+      const statuses: number[] = [];
+      for (let i = 0; i < 5; i++) statuses.push((await login(request(app.getHttpServer()) as any, 'tenant', 'a@example.com', 'sai')).status);
+      expect(statuses).toEqual([401, 401, 401, 401, 401]);
+
+      const res = await login(request(app.getHttpServer()) as any, 'tenant');
+      expect(res.status).toBe(429);
+      expect(res.body).toMatchObject({ success: false, code: 'login_locked' });
+      expect(res.body.errors.retryAfterSeconds).toBeGreaterThan(0);
       expect(cookiesOf(res)).toHaveLength(0);
     });
 
@@ -185,10 +247,10 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect(res.body.code).toBe('account_suspended');
     });
 
-    it('giới hạn tần suất: lần thứ 11 trong 1 phút → 429 rate_limited', async () => {
+    it('giới hạn tần suất theo IP: lần thứ 11 trong 1 phút → 429 rate_limited (mỗi lần một email, không dính khoá theo email)', async () => {
       const responses = [];
       for (let i = 0; i < 11; i++) {
-        responses.push(await request(app.getHttpServer()).post('/api/v1/auth/login').send({ email: 'a@example.com', password: 'x', portal: 'tenant' }));
+        responses.push(await request(app.getHttpServer()).post('/api/v1/auth/login').send({ email: `u${i}@example.com`, password: 'x', portal: 'tenant' }));
       }
       expect(responses.slice(0, 10).every((r) => r.status === 401)).toBe(true);
       expect(responses[10].status).toBe(429);
@@ -207,11 +269,11 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toMatchObject({ user: { email: 'n@example.com', fullName: 'Nguyễn An', portal: 'tenant' } });
       expect('needsEmailConfirmation' in res.body.data).toBe(false);
-      expect(cookieValue(res, 'vs_access')).toMatch(/HttpOnly/i);
+      expect(cookieValue(res, 'vs_access_tenant')).toMatch(/HttpOnly/i);
       expect(prisma.profile.rows[0].passwordHash).toMatch(/^scrypt\$/);
       expect(JSON.stringify(res.body)).not.toContain('scrypt$');
 
-      expect((await agent.get('/api/v1/auth/session')).body.data.user).toMatchObject({ email: 'n@example.com', portal: 'tenant' });
+      expect((await session(agent, 'tenant')).body.data.user).toMatchObject({ email: 'n@example.com', portal: 'tenant' });
     });
 
     it('đăng nhập lại bằng mật khẩu vừa đăng ký → 200; sai mật khẩu → 401', async () => {
@@ -254,9 +316,9 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       seedUser('a@example.com', 'landlord');
       const agent = request.agent(app.getHttpServer());
 
-      expect((await agent.get('/api/v1/auth/session')).body.data).toEqual({ user: null });
+      expect((await session(agent, 'landlord')).body.data).toEqual({ user: null });
       await login(agent, 'landlord');
-      const res = await agent.get('/api/v1/auth/session');
+      const res = await session(agent, 'landlord');
       expect(res.body.data.user).toMatchObject({ email: 'a@example.com', portal: 'landlord' });
       expect(res.headers['cache-control']).toBe('no-store');
     });
@@ -267,9 +329,9 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
     });
 
     it('cookie phiên hỏng / token Supabase cũ → user null và xoá cookie', async () => {
-      const res = await request(app.getHttpServer()).get('/api/v1/auth/session').set('Cookie', 'vs_access=eyJhbGciOiJIUzI1NiJ9.e30.sai-chu-ky');
+      const res = await session(request(app.getHttpServer()), 'tenant').set('Cookie', 'vs_access_tenant=eyJhbGciOiJIUzI1NiJ9.e30.sai-chu-ky');
       expect(res.body.data).toEqual({ user: null });
-      expect(cookiesOf(res).find((c) => c.startsWith('vs_access=;'))).toMatch(/Expires=Thu, 01 Jan 1970/);
+      expect(cookiesOf(res).find((c) => c.startsWith('vs_access_tenant=;'))).toMatch(/Expires=Thu, 01 Jan 1970/);
     });
 
     it('Profile bị khoá sau khi đăng nhập → phiên vô hiệu', async () => {
@@ -279,30 +341,81 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       profile.isActive = false;
       // Cache phiên 30s (AuthSessionService) có thể còn giữ user cũ; dùng token khác để không dính cache.
       const fresh = request.agent(app.getHttpServer());
-      const token = createSessionTokens().sign(profile.id, 'a@example.com').accessToken;
-      const res = await fresh.get('/api/v1/auth/session').set('Cookie', `vs_access=${token}`);
+      const token = createSessionTokens().sign(profile.id, 'a@example.com', 'tenant').accessToken;
+      const res = await session(fresh, 'tenant').set('Cookie', `vs_access_tenant=${token}`);
       expect(res.body.data.user).toBeNull();
     });
 
-    it('POST /auth/logout xoá cả hai cookie, phiên sau đó là null', async () => {
+    it('POST /auth/logout {portal} xoá vs_access_<portal> (+ cookie bản cũ), phiên cổng đó sau đó là null', async () => {
       seedUser('a@example.com', 'tenant');
       const agent = request.agent(app.getHttpServer());
       await login(agent, 'tenant');
 
-      const res = await agent.post('/api/v1/auth/logout');
+      const res = await agent.post('/api/v1/auth/logout').send({ portal: 'tenant' });
       expect(res.status).toBe(200);
       const cleared = cookiesOf(res);
+      expect(cleared.find((c) => c.startsWith('vs_access_tenant=;'))).toMatch(/Expires=Thu, 01 Jan 1970/);
       expect(cleared.find((c) => c.startsWith('vs_access=;'))).toMatch(/Expires=Thu, 01 Jan 1970/);
       expect(cleared.find((c) => c.startsWith('vs_refresh=;'))).toMatch(/Expires=Thu, 01 Jan 1970/);
-      expect((await agent.get('/api/v1/auth/session')).body.data.user).toBeNull();
+      expect((await session(agent, 'tenant')).body.data.user).toBeNull();
+    });
+
+    it('đăng nhập đồng thời 2 cổng cùng trình duyệt: không ghi đè nhau; logout một cổng giữ nguyên cổng kia', async () => {
+      seedUser('t@example.com', 'tenant');
+      seedUser('ad@example.com', 'ops_admin');
+      const agent = request.agent(app.getHttpServer());
+      await login(agent, 'tenant', 't@example.com');
+      await login(agent, 'admin', 'ad@example.com');
+
+      expect((await session(agent, 'tenant')).body.data.user).toMatchObject({ email: 't@example.com', portal: 'tenant' });
+      expect((await session(agent, 'admin')).body.data.user).toMatchObject({ email: 'ad@example.com', portal: 'admin' });
+
+      const out = await agent.post('/api/v1/auth/logout').send({ portal: 'admin' });
+      expect(cookiesOf(out).some((c) => c.startsWith('vs_access_tenant='))).toBe(false); // không đụng cookie tenant
+      expect((await session(agent, 'admin')).body.data.user).toBeNull();
+      expect((await session(agent, 'tenant')).body.data.user).toMatchObject({ portal: 'tenant' });
+    });
+
+    it('token cổng A đặt vào cookie cổng B → session cổng B: user null, xoá cookie; route Admin: 401', async () => {
+      seedUser('t@example.com', 'tenant');
+      const tenantToken = tokenOf(await login(request(app.getHttpServer()) as any, 'tenant', 't@example.com'), 'tenant');
+
+      const res = await session(request(app.getHttpServer()), 'admin').set('Cookie', `vs_access_admin=${tenantToken}`);
+      expect(res.body.data).toEqual({ user: null });
+      expect(cookiesOf(res).find((c) => c.startsWith('vs_access_admin=;'))).toMatch(/Expires=Thu, 01 Jan 1970/);
+
+      const admin = await request(app.getHttpServer()).get('/api/v1/admin/field-hosts').set('Cookie', `vs_access_admin=${tenantToken}`);
+      expect(admin.status).toBe(401);
+      // Cookie tenant đúng tên nhưng hỏi session cổng admin ⇒ không đọc cookie cổng khác.
+      expect((await session(request(app.getHttpServer()), 'admin').set('Cookie', `vs_access_tenant=${tenantToken}`)).body.data).toEqual({ user: null });
+    });
+
+    it('cookie dùng chung vs_access của bản cũ không còn được chấp nhận', async () => {
+      const profile = seedUser('t@example.com', 'tenant');
+      const token = createSessionTokens().sign(profile.id, 't@example.com', 'tenant').accessToken;
+      expect((await session(request(app.getHttpServer()), 'tenant').set('Cookie', `vs_access=${token}`)).body.data).toEqual({ user: null });
+    });
+
+    it('portal thiếu / ngoài danh sách cho phép → 400 invalid_request (session và logout), không set cookie', async () => {
+      const responses = [
+        await request(app.getHttpServer()).get('/api/v1/auth/session'),
+        await request(app.getHttpServer()).get('/api/v1/auth/session?portal=superuser'),
+        await request(app.getHttpServer()).post('/api/v1/auth/logout'),
+        await request(app.getHttpServer()).post('/api/v1/auth/logout').send({ portal: 'x; Domain=evil.com' }),
+      ];
+      for (const res of responses) {
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe('invalid_request');
+        expect(cookiesOf(res)).toHaveLength(0);
+      }
     });
 
     it('Authorization: Bearer cũng dùng được (API client / Swagger)', async () => {
       seedUser('a@example.com', 'tenant');
       const res0 = await login(request.agent(app.getHttpServer()), 'tenant');
-      const token = cookieValue(res0, 'vs_access')!.split(';')[0].slice('vs_access='.length);
+      const token = tokenOf(res0, 'tenant');
 
-      const res = await request(app.getHttpServer()).get('/api/v1/auth/session').set('Authorization', `Bearer ${token}`);
+      const res = await session(request(app.getHttpServer()), 'tenant').set('Authorization', `Bearer ${token}`);
       expect(res.body.data.user).toMatchObject({ portal: 'tenant' });
     });
   });
@@ -315,11 +428,11 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
     });
 
     it('token giả → 401', async () => {
-      const res = await request(app.getHttpServer()).get('/api/v1/admin/field-hosts').set('Cookie', 'vs_access=forged');
+      const res = await request(app.getHttpServer()).get('/api/v1/admin/field-hosts').set('Cookie', 'vs_access_admin=forged');
       expect(res.status).toBe(401);
     });
 
-    it('header x-demo-role bị bỏ qua khi không bật chế độ demo', async () => {
+    it('header x-demo-role luôn bị bỏ qua', async () => {
       const res = await request(app.getHttpServer()).get('/api/v1/admin/field-hosts').set('x-demo-role', 'ops_admin');
       expect(res.status).toBe(401);
     });
@@ -462,7 +575,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect((await host.get('/api/v1/host/me')).status).toBe(200);
 
       expect((await admin.delete(`/api/v1/admin/field-hosts/${id}`)).body.data).toMatchObject({ isActive: false, dutyStatus: 'OFF_DUTY' });
-      expect((await host.get('/api/v1/auth/session')).body.data.user).toBeNull();
+      expect((await session(host, 'host')).body.data.user).toBeNull();
       expect((await login(request.agent(app.getHttpServer()), 'host', 'h@example.com')).body.code).toBe('account_suspended');
 
       expect((await admin.patch(`/api/v1/admin/field-hosts/${id}`).send({ isActive: true })).body.data).toMatchObject({ isActive: true });
@@ -550,13 +663,13 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect(res.headers.location).toBe('http://localhost:3000/landlord/dashboard');
       expect(exchange).toHaveBeenCalledWith('abc', expect.anything(), expect.any(Function));
       const cookies = cookiesOf(res);
-      const access = cookies.find((c) => c.startsWith('vs_access='))!;
+      const access = cookies.find((c) => c.startsWith('vs_access_landlord='))!;
       expect(access).toMatch(/HttpOnly/i);
       expect(access).toMatch(/SameSite=Lax/i);
       expect(access).toContain(`Max-Age=${SESSION_TTL_SECONDS}`);
       expect(cookies.find((c) => c.startsWith('vs_refresh=;'))).toBeDefined(); // xoá refresh cũ, không đặt mới
       expect(cookies.find((c) => c.startsWith('vs_oauth=;'))).toBeDefined();
-      expect(res.text).not.toContain(access.split(';')[0].slice('vs_access='.length));
+      expect(res.text).not.toContain(access.split(';')[0].slice('vs_access_landlord='.length));
       expect(prisma.profile.rows).toHaveLength(1);
       expect(prisma.profile.rows[0].passwordHash).toBeNull();
     });
@@ -581,20 +694,20 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       fakeGoogle(googleProfile());
       const { state, cookie } = await startFlow('tenant');
       const res = await callback(`code=abc&state=${encodeURIComponent(state)}`, cookie);
-      const access = cookiesOf(res).find((c) => c.startsWith('vs_access='))!.split(';')[0];
-      const token = access.slice('vs_access='.length);
+      const access = cookiesOf(res).find((c) => c.startsWith('vs_access_tenant='))!.split(';')[0];
+      const token = access.slice('vs_access_tenant='.length);
 
-      const session = await request(app.getHttpServer()).get('/api/v1/auth/session').set('Cookie', access);
-      expect(session.body.data.user).toMatchObject({ email: 'g@example.com', portal: 'tenant', role: 'tenant', fullName: 'Nguyễn Văn An' });
-      expect(JSON.stringify(session.body)).not.toContain(token);
+      const current = await session(request(app.getHttpServer()), 'tenant').set('Cookie', access);
+      expect(current.body.data.user).toMatchObject({ email: 'g@example.com', portal: 'tenant', role: 'tenant', fullName: 'Nguyễn Văn An' });
+      expect(JSON.stringify(current.body)).not.toContain(token);
 
       // Route cần đăng nhập (guard toàn cục) chấp nhận token backend qua Bearer.
       const guarded = await request(app.getHttpServer()).get('/api/v1/host/me').set('Authorization', `Bearer ${token}`);
       expect(guarded.status).toBe(403); // qua guard xác thực (không phải 401), bị phân quyền từ chối vì không phải Field Host
 
-      const out = await request(app.getHttpServer()).post('/api/v1/auth/logout').set('Cookie', access);
+      const out = await request(app.getHttpServer()).post('/api/v1/auth/logout').set('Cookie', access).send({ portal: 'tenant' });
       expect(out.status).toBe(200);
-      expect(cookiesOf(out).find((c) => c.startsWith('vs_access=;'))).toBeDefined();
+      expect(cookiesOf(out).find((c) => c.startsWith('vs_access_tenant=;'))).toBeDefined();
     });
 
     it('callback thiếu cookie vs_oauth (CSRF / mở link ở trình duyệt khác) → về màn đăng nhập, không gọi Google', async () => {
@@ -605,7 +718,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect(res.status).toBe(302);
       expect(res.headers.location).toBe('http://localhost:3000/login?error=oauth_failed&tab=tenant');
       expect(exchange).not.toHaveBeenCalled();
-      expect(cookiesOf(res).find((c) => c.startsWith('vs_access='))).toBeUndefined();
+      expect(cookiesOf(res).find((c) => /^vs_access_[a-z]+=[^;]/.test(c))).toBeUndefined();
       expect(prisma.profile.rows).toHaveLength(0);
     });
 
@@ -626,7 +739,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       const res = await callback(`error=access_denied&state=${encodeURIComponent(state)}`, cookie);
       expect(res.status).toBe(302);
       expect(res.headers.location).toBe('http://localhost:3000/admin/login?error=oauth_failed&tab=host');
-      expect(cookiesOf(res).find((c) => c.startsWith('vs_access='))).toBeUndefined();
+      expect(cookiesOf(res).find((c) => /^vs_access_[a-z]+=[^;]/.test(c))).toBeUndefined();
     });
 
     it('email Google chưa xác minh → email_not_verified, không cấp phiên', async () => {
@@ -635,7 +748,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
 
       const res = await callback(`code=abc&state=${encodeURIComponent(state)}`, cookie);
       expect(res.headers.location).toBe('http://localhost:3000/login?error=email_not_verified&tab=tenant');
-      expect(cookiesOf(res).find((c) => c.startsWith('vs_access='))).toBeUndefined();
+      expect(cookiesOf(res).find((c) => /^vs_access_[a-z]+=[^;]/.test(c))).toBeUndefined();
     });
 
     it('sai cổng (email đã là Chủ nhà) → wrong_portal, không cấp phiên', async () => {
@@ -645,7 +758,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
 
       const res = await callback(`code=abc&state=${encodeURIComponent(state)}`, cookie);
       expect(res.headers.location).toBe('http://localhost:3000/login?error=wrong_portal&tab=tenant');
-      expect(cookiesOf(res).find((c) => c.startsWith('vs_access='))).toBeUndefined();
+      expect(cookiesOf(res).find((c) => /^vs_access_[a-z]+=[^;]/.test(c))).toBeUndefined();
     });
 
     it('Field Host có hồ sơ (Admin tạo) đăng nhập Google → redirect trang đích theo vai; session có hostRoles', async () => {
@@ -655,9 +768,9 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
 
       const res = await callback(`code=abc&state=${encodeURIComponent(state)}`, cookie);
       expect(res.headers.location).toBe('http://localhost:3000/host/inspections');
-      const access = cookiesOf(res).find((c) => c.startsWith('vs_access='))!.split(';')[0];
-      const session = await request(app.getHttpServer()).get('/api/v1/auth/session').set('Cookie', access);
-      expect(session.body.data.user).toMatchObject({ portal: 'host', isHostVerified: true, hostRoles: ['inspector'] });
+      const access = cookiesOf(res).find((c) => c.startsWith('vs_access_host='))!.split(';')[0];
+      const hostSession = await session(request(app.getHttpServer()), 'host').set('Cookie', access);
+      expect(hostSession.body.data.user).toMatchObject({ portal: 'host', isHostVerified: true, hostRoles: ['inspector'] });
     });
 
     it('Google cổng host, Profile field_host chưa có hồ sơ → host_not_provisioned (không phải not_authorized), không có phiên', async () => {
@@ -666,15 +779,30 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       const { state, cookie } = await startFlow('host');
       const res = await callback(`code=abc&state=${encodeURIComponent(state)}`, cookie);
       expect(res.headers.location).toBe('http://localhost:3000/admin/login?error=host_not_provisioned&tab=host');
-      expect(cookiesOf(res).find((c) => c.startsWith('vs_access='))).toBeUndefined();
+      expect(cookiesOf(res).find((c) => /^vs_access_[a-z]+=[^;]/.test(c))).toBeUndefined();
     });
+  });
+
+  it('GET /auth/session không bị giới hạn tần suất (proxy gọi cho mọi lần điều hướng, cùng một IP)', async () => {
+    const http = request(app.getHttpServer());
+    const statuses = await Promise.all(Array.from({ length: 80 }, () => http.get('/api/v1/auth/session?portal=tenant').then((r) => r.status)));
+    expect(statuses.every((s) => s === 200)).toBe(true); // module test đặt hạn mức 60/phút
+  });
+
+  it('đăng nhập vẫn bị giới hạn tần suất (chống dò mật khẩu)', async () => {
+    const http = request(app.getHttpServer());
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i++) statuses.push((await http.post('/api/v1/auth/login').send({ email: `x${i}@example.com`, password: 'sai-mat-khau', portal: 'tenant' })).status);
+    expect(statuses).toContain(429);
   });
 
   describe('OTP', () => {
     it('send → verify (Khách thuê) trả action token; sai mã báo số lần còn lại', async () => {
       const send = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
       expect(send.status).toBe(200);
-      const code: string = send.body.data.devCode;
+      // OTP_PROVIDER=mock ⇒ response có `devOtp` đúng bằng mã đã gửi; giao diện điền mã này rồi xác minh thật.
+      expect(send.body.data).toEqual({ expiresInSeconds: 300, resendInSeconds: expect.any(Number), devOtp: lastOtp() });
+      const code: string = send.body.data.devOtp;
       expect(code).toMatch(/^\d{4}$/);
 
       const wrongCode = code === '0000' ? '1111' : '0000';
@@ -686,6 +814,97 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       expect(ok.status).toBe(200);
       expect(ok.body.data).toMatchObject({ expiresInSeconds: 900 });
       expect(ok.body.data.actionToken).toEqual(expect.stringContaining('.'));
+    });
+
+    it('gửi lại quá nhanh → 429 otp_cooldown kèm retryAfterSeconds thật; mã cũ vẫn dùng được', async () => {
+      await app.close();
+      restoreEnv();
+      const env60 = { ...ENV, OTP_RESEND_SECONDS: '60' };
+      restoreEnv = applyEnv(env60);
+      app = await createApp(prisma, env60);
+      const first = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
+      expect(first.body.data).toMatchObject({ resendInSeconds: 60 });
+      const code = lastOtp();
+      const again = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
+      expect(again.status).toBe(429);
+      expect(again.body).toMatchObject({ code: 'otp_cooldown', errors: { retryAfterSeconds: expect.any(Number) } });
+      expect(again.body.errors.retryAfterSeconds).toBeGreaterThan(50);
+      expect(deliveredCodes).toHaveLength(1); // không gửi mã thứ hai
+      const ok = await request(app.getHttpServer()).post('/api/v1/auth/otp/verify').send({ phone: '0912345678', purpose: 'TENANT_VIEWING', code });
+      expect(ok.status).toBe(200);
+    });
+
+    it('sai quá số lần → 429 otp_locked kèm retryAfterSeconds', async () => {
+      await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
+      const wrong = lastOtp() === '0000' ? '1111' : '0000';
+      const verify = () => request(app.getHttpServer()).post('/api/v1/auth/otp/verify').send({ phone: '0912345678', purpose: 'TENANT_VIEWING', code: wrong });
+      await verify();
+      await verify();
+      const locked = await verify();
+      expect(locked.status).toBe(429);
+      expect(locked.body).toMatchObject({ code: 'otp_locked', errors: { retryAfterSeconds: expect.any(Number) } });
+    });
+
+    /** Dựng lại app với env khác (cùng Prisma giả). */
+    const reboot = async (env: Record<string, string | undefined>) => {
+      await app.close();
+      restoreEnv();
+      restoreEnv = applyEnv(env);
+      app = await createApp(prisma, env);
+    };
+
+    it('production + OTP_PROVIDER=mock ⇒ app KHÔNG khởi động được', async () => {
+      await app.close();
+      restoreEnv();
+      const env = { ...ENV, NODE_ENV: 'production', OTP_PROVIDER: 'mock' };
+      restoreEnv = applyEnv(env);
+      await expect(createApp(prisma, env)).rejects.toThrow(/OTP_PROVIDER=mock bị cấm khi NODE_ENV=production/);
+      restoreEnv();
+      restoreEnv = applyEnv(ENV);
+      app = await createApp(prisma, ENV); // để afterEach đóng được
+    });
+
+    it('production, OTP_PROVIDER mặc định (zalo, chưa cấu hình) ⇒ 502 otp_send_failed, không có mã, không qua kênh mock', async () => {
+      await reboot({ ...ENV, NODE_ENV: 'production', OTP_PROVIDER: undefined });
+      const prod = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0987654321', purpose: 'TENANT_VIEWING' });
+      expect(prod.status).toBe(502);
+      expect(prod.body.code).toBe('otp_send_failed');
+      expect(JSON.stringify(prod.body)).not.toContain('devOtp');
+      expect(deliveredCodes).toHaveLength(0);
+    });
+
+    it('OTP_PROVIDER=zalo gửi được ⇒ response KHÔNG có mã (otp/send và phone/send-otp); mã vẫn xác minh được', async () => {
+      await reboot({ ...ENV, OTP_PROVIDER: 'zalo' });
+      const sentToZalo: string[] = [];
+      jest.spyOn(ZaloOtpSender.prototype, 'send').mockImplementation(async (m: OtpMessage) => {
+        sentToZalo.push(m.code);
+        return { channel: 'ZALO' };
+      });
+
+      const send = await request(app.getHttpServer()).post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'TENANT_VIEWING' });
+      expect(send.status).toBe(200);
+      expect(Object.keys(send.body.data).sort()).toEqual(['expiresInSeconds', 'resendInSeconds']);
+      expect(containsValue(send.body, sentToZalo[0])).toBe(false);
+      const ok = await request(app.getHttpServer()).post('/api/v1/auth/otp/verify').send({ phone: '0912345678', purpose: 'TENANT_VIEWING', code: sentToZalo[0] });
+      expect(ok.status).toBe(200);
+
+      seedUser('z@example.com', 'landlord');
+      const agent = request.agent(app.getHttpServer());
+      await login(agent, 'landlord', 'z@example.com');
+      const phoneSend = await agent.post('/api/v1/auth/phone/send-otp').send({ phone: '0912345679' });
+      expect(phoneSend.status).toBe(200);
+      expect(Object.keys(phoneSend.body.data).sort()).toEqual(['expiresInSeconds', 'resendInSeconds']);
+      expect(deliveredCodes).toHaveLength(0); // không đi qua mock
+    });
+
+    it('phone/send-otp ở chế độ mock trả devOtp; điền mã đó vào phone/verify thì gắn được SĐT', async () => {
+      seedUser('m@example.com', 'landlord');
+      const agent = request.agent(app.getHttpServer());
+      await login(agent, 'landlord', 'm@example.com');
+      const sent = await agent.post('/api/v1/auth/phone/send-otp').send({ phone: '0912345670' });
+      expect(sent.body.data).toEqual({ expiresInSeconds: 300, resendInSeconds: expect.any(Number), devOtp: lastOtp() });
+      const res = await agent.post('/api/v1/auth/phone/verify').send({ phone: '0912345670', code: sent.body.data.devOtp });
+      expect(res.status).toBe(200);
     });
 
     it('SĐT sai định dạng → 400 invalid_phone; PHONE_VERIFY không verify được ở endpoint tenant', async () => {
@@ -702,7 +921,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
       await login(agent, 'landlord', 'l@example.com');
 
       const send = await agent.post('/api/v1/auth/otp/send').send({ phone: '0912345678', purpose: 'PHONE_VERIFY' });
-      const res = await agent.post('/api/v1/auth/phone/verify').send({ phone: '0912345678', code: send.body.data.devCode });
+      const res = await agent.post('/api/v1/auth/phone/verify').send({ phone: '0912345678', code: lastOtp() });
       expect({ status: res.status, body: res.body }).toMatchObject({ status: 200, body: { success: true } });
 
       const profile = prisma.profile.rows[0];
@@ -721,7 +940,7 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
 
       const sendA = await a.post('/api/v1/auth/phone/send-otp').send({ phone: '0912345678' });
       expect(sendA.status).toBe(200);
-      await a.post('/api/v1/auth/phone/verify').send({ phone: '0912345678', code: sendA.body.data.devCode });
+      await a.post('/api/v1/auth/phone/verify').send({ phone: '0912345678', code: lastOtp() });
 
       const otpRows = () => (prisma as any).otpCode?.rows?.length;
       const before = otpRows();
@@ -751,22 +970,17 @@ describe('Auth HTTP (Nest thật + Prisma giả)', () => {
     });
   });
 
-  it.skip('demo-login bị tắt mặc định → 404 demo_disabled', async () => {
-    const res = await request(app.getHttpServer()).post('/api/v1/auth/demo-login').send({ portal: 'tenant' });
-    expect(res.status).toBe(404);
-    expect(res.body.code).toBe('demo_disabled');
-  });
-
-  it.skip('demo-login bật (AUTH_DEMO_MODE=true) → đăng nhập qua login với tài khoản demo đã seed, set cookie phiên', async () => {
+  it('đã gỡ POST /auth/demo-login và x-demo-role: kể cả AUTH_DEMO_MODE=true ⇒ 404 / 401, không set cookie', async () => {
     const demoEnv = { ...ENV, AUTH_DEMO_MODE: 'true', DEMO_PASSWORD: PASSWORD };
     const restoreDemo = applyEnv(demoEnv);
     const demo = await createApp(prisma, demoEnv);
     try {
       seedUser('khachthue.demo@vinstay.vn', 'tenant');
       const res = await request(demo.getHttpServer()).post('/api/v1/auth/demo-login').send({ portal: 'tenant' });
-      expect(res.status).toBe(200);
-      expect(res.body.data).toMatchObject({ user: { portal: 'tenant', email: 'khachthue.demo@vinstay.vn' } });
-      expect(cookieValue(res, 'vs_access')).toMatch(/HttpOnly/i);
+      expect(res.status).toBe(404);
+      expect(cookiesOf(res)).toHaveLength(0);
+      const viaHeader = await request(demo.getHttpServer()).get('/api/v1/admin/field-hosts').set('x-demo-role', 'ops_admin');
+      expect(viaHeader.status).toBe(401);
     } finally {
       await demo.close();
       restoreDemo();

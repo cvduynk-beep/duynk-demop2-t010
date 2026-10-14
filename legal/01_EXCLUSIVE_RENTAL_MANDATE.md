@@ -45,7 +45,14 @@ Bên A đồng ý ủy quyền độc quyền cho Bên B thực hiện việc qu
 3. **Diện tích sử dụng (thông thủy):** [...] m² • Thiết kế: [Căn hộ Studio / 1 Phòng ngủ + 1 / 2 Phòng ngủ 1 Vệ sinh / 2 Phòng ngủ 2 Vệ sinh / 3 Phòng ngủ].
 4. **Hiện trạng trang thiết bị:** Đầy đủ nội thất cao cấp *(Chi tiết theo Biên bản thẩm định và kiểm kê 10 hạng mục nội thất đính kèm hợp đồng này)*.
 5. **Giá chào thuê cơ bản kỳ vọng:** [...] VNĐ/tháng *(Bằng chữ: [...])*. Giá này chưa bao gồm phí quản lý tòa nhà, phí gửi phương tiện và tiền sử dụng điện, nước sinh hoạt do khách thuê trực tiếp chi trả theo thực tế sử dụng.
-6. **Mức tiền đặt cọc giữ chỗ & cọc bảo đảm nội thất:** Xác định linh hoạt theo thông số dữ liệu đầu vào của căn hộ (căn cứ theo giá thuê và giá trị gói trang thiết bị nội thất thực tế được hai bên thống nhất trên hệ thống).
+6. **Cơ chế Biên độ Giá Sàn Ủy Quyền & Chiết khấu Chốt Nhanh (Fast-Close Floor Price Corridor):**
+   * Trường hợp Bên A kích hoạt tùy chọn Ủy quyền Chốt Nhanh trên hệ thống VinStay AI, Bên A xác lập một mức **Giá sàn tối thiểu (Floor Price)**: [...] VNĐ/tháng *(không thấp hơn 3.000.000 VNĐ/tháng và không cao hơn Giá chào thuê cơ bản)*.
+   * Bên A ủy quyền trước cho Bên B (VinStay AI) toàn quyền tự động kích hoạt chính sách ưu đãi chiết khấu nằm trong biên độ từ Giá sàn đến Giá chào thuê nhằm chốt cọc nhanh khi khách thuê đáp ứng các điều kiện sau:
+     * (i) Khách thuê cam kết trả trước tiền thuê theo chu kỳ 01, 03 hoặc 06 tháng/kỳ — giá thuê giảm lần lượt 3,5% / 5,5% / 10% (làm tròn 50.000 VNĐ, không thấp hơn Giá sàn) và tiền cọc giảm khoảng 5% (tối thiểu 200.000 VNĐ, tối đa 8%);
+     * (ii) **Và** tiền đặt cọc (Tiền Cọc Bảo Đảm của căn, đã giảm) về tài khoản ký quỹ trong vòng 24 giờ kể từ lúc khách chấp thuận điều khoản; về muộn hơn thì ưu đãi hết hiệu lực, căn không bị khóa và khách được hoàn tiền.
+   * *(Bản nháp cọc v2 2026-10-14 — cần pháp chế rà soát.)*
+   * **Bảo đảm trần sàn tối thiểu & Bảo mật thông tin:** Bên B cam kết tuyệt đối không bao giờ chốt giá hợp đồng thuê thấp hơn mức Giá sàn do Bên A đã cài đặt. Đồng thời, thông số Giá sàn được hệ thống mã hóa bảo mật 100%, không hiển thị công khai trên giao diện niêm yết tìm kiếm nhằm bảo vệ tối đa giá trị tài sản cho Bên A.
+7. **Mức tiền đặt cọc = Tiền cọc bảo đảm nội thất:** Bên A xác lập Tiền Cọc Bảo Đảm Tài Sản của căn trong biên độ chính sách cọc của Bên B (từ nửa tháng đến 03 tháng tiền thuê; không xác lập thì mặc định 01 tháng tiền thuê). Khách thuê chuyển đúng khoản này khi chốt căn.
 
 ---
 
@@ -54,6 +61,13 @@ Bên A đồng ý ủy quyền độc quyền cho Bên B thực hiện việc qu
 2. Căn hộ hoàn toàn không thuộc diện đang có khiếu nại, tranh chấp về quyền sở hữu hoặc quyền sử dụng; không bị cơ quan Nhà nước có thẩm quyền kê biên, phong tỏa để thi hành án hoặc để chấp hành quyết định hành chính; đủ điều kiện đưa vào kinh doanh cho thuê theo quy định của Luật Nhà ở 2023 và Luật Kinh doanh Bất động sản 2023.
 3. Trường hợp Căn hộ đang được thế chấp tại Ngân hàng hoặc tổ chức tín dụng, Bên A cam đoan việc cho thuê Căn hộ không vi phạm nghĩa vụ thế chấp và không làm ảnh hưởng đến quyền cư trú ổn định của khách thuê.
 4. Bên A chịu trách nhiệm hoàn toàn về các nghĩa vụ tài chính và thuế thu nhập cá nhân phát sinh từ hoạt động cho thuê căn hộ theo quy định của pháp luật.
+5. **Cam đoan về tính trung thực của thông tin chào thuê & Chế tài chống hành vi phá hoại hệ thống / khai khống giá (4-Tier Anti-Abuse & Data Guardrail):**
+   * Bên A cam đoan cung cấp thông tin chào thuê trung thực, có nhu cầu cho thuê thực tế và mức giá chào thuê nằm trong biên độ phù hợp với mặt bằng thị trường tại Vinhomes Ocean Park.
+   * Bên A hiểu và chấp thuận tuân thủ Khung trần giá tối đa theo layout căn hộ được thiết lập trên hệ thống VinStay AI (Studio: tối đa 18.000.000 VNĐ/tháng; 1PN: tối đa 25.000.000 VNĐ/tháng; 2PN: tối đa 35.000.000 VNĐ/tháng; 3PN: tối đa 50.000.000 VNĐ/tháng; Trần giá tuyệt đối toàn hệ thống: 80.000.000 VNĐ/tháng).
+   * Mọi hành vi cố tình nhập khống giá trị thuê phi thực tế (ví dụ chào thuê hàng trăm triệu đồng/tháng cho các layout thông thường), tạo hồ sơ rác nhằm mục đích phá hoại thuật toán định giá AI, gây nhiễu loạn thị trường hoặc chiếm dụng tài nguyên điều phối thực địa sẽ bị xử lý:
+     * (i) Hệ thống tự động từ chối tiếp nhận niêm yết và chặn phê duyệt hồ sơ;
+     * (ii) Khóa vĩnh viễn Số điện thoại / Căn cước công dân của Bên A trên toàn hệ thống VinStay AI và danh sách đen (Blacklist) liên sàn đối tác;
+     * (iii) Bên B có toàn quyền lập biên bản điện tử và chuyển giao chứng cứ cho cơ quan chức năng có thẩm quyền truy cứu trách nhiệm theo quy định pháp luật về an ninh mạng nếu có dấu hiệu tấn công quấy rối hoặc phá hoại dịch vụ có tổ chức.
 
 ---
 
@@ -61,6 +75,9 @@ Bên A đồng ý ủy quyền độc quyền cho Bên B thực hiện việc qu
 1. **Quyền quản lý và điều phối độc quyền:**
    * Bên A ủy quyền độc quyền cho Bên B toàn quyền niêm yết thông tin, sử dụng hệ thống tự động đối khớp nhu cầu khách thuê và điều phối đội ngũ nhân sự tiếp đón thường trú nội khu dẫn khách xem căn hộ.
    * Bên A cam kết trong suốt thời gian hợp đồng có hiệu lực sẽ không gửi căn hộ qua các đơn vị môi giới tự do ngoài sàn, nhằm tránh việc bị phân tán nguồn tin, gây nhiễu loạn giá và tình trạng đăng tin ảo dìm giá trị căn hộ trên thị trường.
+   * **1.1. Quyền tự động kích hoạt ưu đãi chốt cọc nhanh theo Biên độ Giá Sàn (Fast-Close Authorization):**
+     * Trường hợp Bên A kích hoạt tùy chọn Ủy quyền Chốt Nhanh tại Điều 1 Khoản 6, Bên B (và đội ngũ Field Host được ủy quyền) được toàn quyền chủ động áp dụng các chính sách chiết khấu kích cầu nằm trong biên độ từ Giá sàn đến Giá chào thuê nhằm chốt cọc khách ngay tại buổi xem phòng hoặc khi khách cam kết trả trước dài hạn (06 – 12 tháng) mà không cần phải gọi điện thoại xin phê duyệt từng lần của Bên A.
+     * Bên B cam kết chịu trách nhiệm bồi thường toàn bộ phần chênh lệch nếu vi phạm cam kết, chốt giá hợp đồng cho thuê thấp hơn mức Giá sàn do Bên A đã ấn định.
 2. **Chi phí kiểm định hiện trạng và chụp ảnh thực tế miễn phí (0 VNĐ):**
    * Bên B có trách nhiệm cử nhân sự chuyên trách đến khảo sát, chụp ảnh thực tế góc rộng, lập hồ sơ kiểm định 10 hạng mục nội thất trọng yếu và gắn dấu bản quyền kỹ thuật số kèm dấu thời gian xác thực mà không thu bất kỳ khoản phí nào của Bên A.
 3. **Cơ chế quản lý phương thức mở cửa an toàn (Chủ nhà không phải di chuyển):**
@@ -89,12 +106,12 @@ Bên A đồng ý ủy quyền độc quyền cho Bên B thực hiện việc qu
 
 ---
 
-### ĐIỀU 5: CƠ CHẾ TIỀN ĐẶT CỌC GIỮ CHỖ LINH HOẠT & BẢO ĐẢM TÀI SẢN NỘI THẤT
-1. **Tiền đặt cọc giữ chỗ qua mã thanh toán tự động & Thời hạn giữ chỗ linh hoạt:**
-   * Khi khách thuê đồng ý thuê căn hộ, Bên B hướng dẫn khách chuyển khoản số tiền đặt cọc giữ chỗ (mặc định 2.000.000 VNĐ hoặc theo mức thiết lập của căn hộ) qua mã VietQR động vào tài khoản ký quỹ chuyên dụng phong tỏa tại ngân hàng.
-   * Ngay khi tài khoản nhận được tiền, hệ thống sẽ tự động khóa căn hộ ở trạng thái giữ chỗ trong thời hạn được xác lập cho căn hộ (mặc định 24 giờ hoặc được thiết lập linh hoạt từ 12 giờ đến 72 giờ trên Trang Quản trị Admin căn cứ theo đặc thù sản phẩm) trên toàn mạng lưới để chuẩn bị ký hợp đồng chính thức.
+### ĐIỀU 5: CƠ CHẾ TIỀN ĐẶT CỌC CHỐT CĂN BẰNG TIỀN CỌC BẢO ĐẢM TÀI SẢN NỘI THẤT
+1. **Tiền đặt cọc qua mã thanh toán tự động & Thời hạn giữ căn linh hoạt:**
+   * Khi khách thuê đồng ý thuê căn hộ, Bên B hướng dẫn khách chuyển khoản số tiền đặt cọc bằng Tiền Cọc Bảo Đảm Tài Sản của căn (mặc định 01 tháng tiền thuê) qua mã VietQR động vào tài khoản ký quỹ chuyên dụng phong tỏa tại ngân hàng.
+   * Ngay khi tài khoản nhận được tiền, hệ thống sẽ tự động khóa căn hộ ở trạng thái giữ chỗ trong thời hạn được xác lập cho căn hộ (mặc định 48 giờ hoặc được thiết lập linh hoạt từ 12 giờ đến 72 giờ trên Trang Quản trị Admin căn cứ theo đặc thù sản phẩm) trên toàn mạng lưới để chuẩn bị ký hợp đồng chính thức.
 2. **Chuyển đổi 100% thành Tiền đặt cọc bảo đảm tài sản và nội thất:**
-   * Khi khách thuê ký Hợp đồng thuê căn hộ chính thức, toàn bộ số tiền đặt cọc giữ chỗ thực tế nêu trên được **chuyển đổi 100% thành một phần của Tiền đặt cọc bảo đảm tài sản và nội thất** (mức cọc bảo đảm tổng thể thông thường tương đương từ 01 đến 02 tháng tiền thuê) và được giữ nguyên suốt thời hạn thuê.
+   * Khi khách thuê ký Hợp đồng thuê căn hộ chính thức, toàn bộ số tiền đặt cọc nêu trên được **chuyển đổi 100% thành Tiền đặt cọc bảo đảm tài sản và nội thất** (khách không phải nộp bù) và được giữ nguyên suốt thời hạn thuê.
    * **Nguyên tắc bắt buộc:** Khoản tiền này **TUYỆT ĐỐI KHÔNG ĐƯỢC KHẤU TRỪ vào tiền thuê nhà tháng đầu tiên**, nhằm duy trì nguồn tài chính bảo đảm khắc phục hư hại tài sản và dự phòng nợ cước dịch vụ phát sinh của khách thuê cho Bên A.
 3. **Hồ sơ bàn giao hiện trạng số hóa, giải tỏa tiền cọc & Bảo đảm 0% nợ đọng:**
    * Bên B chịu trách nhiệm thiết lập Hồ sơ bàn giao hiện trạng số hóa 10 hạng mục nội thất có gắn tọa độ vị trí và dấu thời gian điện tử làm chứng cứ pháp lý duy nhất để đối soát bảo vệ quyền lợi tài sản cho Bên A.

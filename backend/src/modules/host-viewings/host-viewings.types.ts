@@ -78,6 +78,9 @@ export interface HostActor {
   hostId: string;
   profileId: string;
   assignedZone: string;
+  /** Phạm vi nhận ca pool + xem (`field-hosts/host-scope.ts`). Cache 30s — nơi ghi (nhận ca) tự đọc lại. */
+  zoneScope: 'ALL' | 'SELECTED';
+  managedZones: string[];
   rating: number;
   dutyStatus: HostDutyStatus;
 }

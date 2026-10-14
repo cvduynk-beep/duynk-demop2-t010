@@ -12,7 +12,7 @@ Tôn chỉ quản trị rổ hàng:
 1. **Triệt tiêu 100% rổ hàng "thiu" (Real-time Inventory Sync):** Mọi căn hộ trên hệ thống đều có mã định danh chuẩn `[Tòa - Tầng - Căn]` và được Chủ nhà ủy quyền độc quyền; chấm dứt tình trạng tin ảo, tin trùng và tráo căn trên thị trường.
 2. **Chi phí kiểm định bằng 0 VNĐ (Zero Verification CapEx):** Thẩm định tiêu chuẩn nội thất 1 lần duy nhất lúc tiếp nhận ký gửi; tận dụng Hộ chiếu bàn giao số để duy trì dữ liệu hiện trạng xuyên suốt.
 3. **Thoát ủy quyền linh hoạt 15 ngày (Fair & Flexible Exit):** Tôn trọng quyền tài sản của Chủ nhà; cho phép rút ký gửi nhanh chóng chỉ với điều kiện **báo trước 15 ngày kèm trạng thái nhà trống**.
-4. **Khóa căn tự động chống tranh chấp:** Khoản cọc giữ chỗ 2 triệu qua VietQR động lập tức khóa căn hộ sang trạng thái `holding` trên toàn mạng lưới, loại trừ hoàn toàn việc bán trùng căn (Double-Booking).
+4. **Khóa căn tự động chống tranh chấp:** Khoản cọc chốt căn (bằng Tiền cọc bảo đảm của căn) qua VietQR động lập tức khóa căn hộ sang trạng thái `holding` trên toàn mạng lưới, loại trừ hoàn toàn việc bán trùng căn (Double-Booking).
 
 ---
 
@@ -26,7 +26,7 @@ Toàn bộ rổ hàng căn hộ trên Admin Portal được quản trị qua má
 │                                                                                                  │
 │   [1. AVAILABLE] ───────► Đang trống, hiển thị công khai trên Web & AI Matchmaker.               │
 │         │                                                                                        │
-│         ├─── Quét VietQR 2.000.000 VNĐ ──► [2. HOLDING] (Khóa giữ chỗ 24h, ẩn khỏi tìm kiếm)     │
+│         ├─── Quét VietQR tiền cọc bảo đảm ─► [2. HOLDING] (Khóa căn mặc định 48h, ẩn tìm kiếm) │
 │         │                                        │                                               │
 │         │                                        ├── Ký Hợp đồng thuê & Cọc ──► [3. RENTED]      │
 │         │                                        └── Hết 24h không ký ────────► (Về Available)  │
@@ -44,8 +44,8 @@ Toàn bộ rổ hàng căn hộ trên Admin Portal được quản trị qua má
 ```
 
 1. **`Available` (Sẵn Sàng Cho Thuê):** Căn hộ đã được xác thực 100% ảnh thật, có mã mở cửa JIT hoặc chìa cơ tại phân khu; sẵn sàng cho khách đặt lịch OTP.
-2. **`Holding` (Đang Giữ Chỗ 24h):** Khách đã quét VietQR 2.000.000 VNĐ; căn hộ tạm thời ẩn khỏi kết quả tìm kiếm và khóa toàn bộ lịch đặt xem mới.
-3. **`Rented` (Đang Cho Thuê):** Đã ký Hợp đồng số, chuyển 2 triệu thành Tiền Cọc Bảo Đảm Tài Sản và kích hoạt Hộ chiếu bàn giao 10 hạng mục.
+2. **`Holding` (Đang Giữ Căn, mặc định 48h do Admin cài đặt):** Khách đã chuyển Tiền cọc bảo đảm của căn qua VietQR; căn hộ tạm thời ẩn khỏi kết quả tìm kiếm và khóa toàn bộ lịch đặt xem mới.
+3. **`Rented` (Đang Cho Thuê):** Đã ký Hợp đồng số, chuyển 100% tiền cọc đã nhận thành Tiền Cọc Bảo Đảm Tài Sản và kích hoạt Hộ chiếu bàn giao 10 hạng mục.
 4. **`Pre-Leasing` (Chuẩn Bị Trống Phòng):** Còn 30 ngày hết hạn thuê và khách hiện tại không gia hạn; mở tính năng đặt lịch xem trước cho khách mới.
 5. **`Exit_Pending` (Đang Xử Lý Rút Ký Gửi):** Chủ nhà bấm rút ủy quyền; hệ thống kích hoạt đồng hồ đếm ngược 15 ngày.
 6. **`Offboarded` (Đã Rút Khỏi Sàn):** Hết 15 ngày đếm ngược và không có công nợ; căn hộ bị đóng băng tài khoản và hoàn trả quyền tự quyết cho chủ nhà.
@@ -56,7 +56,7 @@ Toàn bộ rổ hàng căn hộ trên Admin Portal được quản trị qua má
 Nhằm tạo áp lực chốt sớm văn minh và bảo vệ khách thuê đã chuyển cọc:
 
 1. **Tự động chuyển trạng thái trong 3 giây (Bank Webhook Sync):**
-   - Khi khách quét mã VietQR động 2.000.000 VNĐ gạch nợ vào tài khoản định danh nền tảng:
+   - Khi khách quét mã VietQR động (số tiền = Tiền cọc bảo đảm của căn) gạch nợ vào tài khoản định danh nền tảng:
      * Cổng thanh toán bắn Webhook xác nhận thành công $\rightarrow$ Hệ thống tự động chuyển trạng thái căn hộ từ `Available` sang **`Holding`** trong vòng **03 giây**.
      * Đồng hồ đếm ngược **Countdown Widget (24:00:00)** hiển thị công khai trên giao diện chi tiết căn hộ.
 2. **Bảo vệ độc quyền trong 24 giờ:**
@@ -65,7 +65,7 @@ Nhằm tạo áp lực chốt sớm văn minh và bảo vệ khách thuê đã c
 3. **Xử lý khi hết hạn 24 giờ:**
    - Nếu quá 24:00:00 mà khách không ký Hợp đồng thuê và không bổ sung đủ tiền cọc bảo đảm theo quy định:
      * Căn hộ tự động giải phóng trạng thái `Holding` quay trở về **`Available`** để đón khách mới.
-     * Tiền cọc giữ chỗ được xử lý minh bạch theo Quy chế Ký quỹ (Chủ nhà nhận 50%, Quỹ vận hành nền tảng nhận 50% chi phí điều phối).
+     * Tiền cọc chốt căn được xử lý minh bạch theo Quy chế Ký quỹ (Chủ nhà nhận 50%, Quỹ vận hành nền tảng nhận 50% chi phí điều phối).
 
 ---
 
@@ -121,7 +121,7 @@ VinStay AI cam kết mô hình hợp tác cởi mở, không trói buộc chủ 
    - Trong thời gian hợp đồng ủy quyền độc quyền còn hiệu lực (và chưa hết thời hạn 15 ngày đếm ngược), nếu Chủ nhà tự ý cho khách ngoài thuê hoặc giao dịch ngầm qua môi giới khác:
      * Chủ nhà phải bồi thường cho nền tảng khoản chi phí điều phối tương đương **01 tháng tiền thuê căn hộ** theo đúng thỏa thuận tại Hợp đồng Ký gửi Độc quyền.
 2. **Khóa tranh chấp (Dispute Lock):**
-   - Trường hợp phát sinh khiếu nại giữa Khách cọc giữ chỗ và Chủ nhà muốn rút căn đột xuất, Admin Portal có quyền kích hoạt trạng thái **`Dispute_Locked`** để đóng băng căn hộ trong tối đa **72 giờ** nhằm đối soát dữ liệu và phân xử theo đúng quy định pháp luật.
+   - Trường hợp phát sinh khiếu nại giữa Khách đã cọc chốt căn và Chủ nhà muốn rút căn đột xuất, Admin Portal có quyền kích hoạt trạng thái **`Dispute_Locked`** để đóng băng căn hộ trong tối đa **72 giờ** nhằm đối soát dữ liệu và phân xử theo đúng quy định pháp luật.
 
 ---
 

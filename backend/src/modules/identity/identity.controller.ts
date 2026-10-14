@@ -13,8 +13,8 @@ export class IdentityController {
   @Roles('tenant')
   @Post('bookings/:ref/ekyc/scan')
   @ApiOperation({
-    summary: 'A17: Quét CCCD qua nhà cung cấp eKYC đã cấu hình',
-    description: 'Hiện trả lỗi ekyc_provider_unavailable cho đến khi nhà cung cấp thật được tích hợp.',
+    summary: 'A17: Quét CCCD (MÔ PHỎNG OCR — chưa tích hợp FPT.AI)',
+    description: 'Trả kết quả OCR giả lập + độ tin cậy từng trường và scanId ký HMAC hạn 15 phút. Chỉ chủ lịch, lịch đang giữ chỗ.',
   })
   async scan(
     @Param('ref') ref: string,
@@ -28,8 +28,8 @@ export class IdentityController {
   @Post('bookings/:ref/ekyc')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'A18: Gửi thông tin eKYC xác nhận & Tự động xác lập Hợp đồng thuê chính thức',
-    description: 'Hiện bị khóa cho đến khi có kết quả xác minh từ nhà cung cấp eKYC thật.',
+    summary: 'A18: Lưu thông tin CCCD đã xác nhận (mã hoá AES-256)',
+    description: 'Ghi IdentityVerification thật cho lịch đang giữ chỗ. Hợp đồng thuê lập ở POST /contracts/lease/sign.',
   })
   async submit(
     @Param('ref') ref: string,

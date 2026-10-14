@@ -1,4 +1,4 @@
-import type { CriteriaState } from "@/lib/mock/types";
+import type { CriteriaState } from "@/lib/chat/types";
 
 /** 4 trạng thái của màn Preview bên phải khung chat. */
 export type PreviewPhase = "idle" | "loading" | "results" | "empty";

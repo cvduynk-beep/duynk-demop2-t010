@@ -23,6 +23,8 @@ export class HostActorService {
       hostId: host.id,
       profileId,
       assignedZone: host.assignedZone,
+      zoneScope: host.zoneScope,
+      managedZones: host.managedZones,
       rating: Number(host.rating),
       dutyStatus: host.dutyStatus,
     };

@@ -1,6 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
 import styles from "./DataTable.module.css";
 
 export interface DataTableColumn<T> {
@@ -21,6 +23,8 @@ interface DataTableProps<T> {
 
 /** Bảng danh sách chuẩn cho mọi cổng: xếp chồng nhãn–giá trị dưới 720px. */
 export function DataTable<T>({ columns, rows, rowHref, empty }: DataTableProps<T>) {
+  const router = useRouter();
+
   if (rows.length === 0) {
     return <div className={styles.empty}>{empty}</div>;
   }
@@ -34,14 +38,25 @@ export function DataTable<T>({ columns, rows, rowHref, empty }: DataTableProps<T
                 {col.header}
               </th>
             ))}
-            {rowHref && <th aria-hidden="true" />}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => {
             const href = rowHref?.(row);
             return (
-              <tr key={rowIndex} className={href ? styles.clickable : undefined}>
+              <tr
+                key={rowIndex}
+                className={href ? styles.clickable : undefined}
+                onClick={
+                  href
+                    ? (e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.closest("a, button, input, select, textarea, label")) return;
+                        router.push(href);
+                      }
+                    : undefined
+                }
+              >
                 {columns.map((col, colIndex) => {
                   const record = row as Record<string, ReactNode>;
                   const content = col.render ? col.render(row) : (record[col.key] ?? "");
@@ -57,13 +72,6 @@ export function DataTable<T>({ columns, rows, rowHref, empty }: DataTableProps<T
                     </td>
                   );
                 })}
-                {href && (
-                  <td aria-hidden="true" style={{ textAlign: "right" }}>
-                    <span className={styles.more}>
-                      Chi tiết <ChevronRight size={14} />
-                    </span>
-                  </td>
-                )}
               </tr>
             );
           })}

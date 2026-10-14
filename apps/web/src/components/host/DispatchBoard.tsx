@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ApiResponse } from "@/lib/apiClient";
-import { AlarmClock, Check, ChevronRight, MessageSquareText, X } from "lucide-react";
+import { AlarmClock, Check, ChevronRight, Loader2, MessageSquareText, X } from "lucide-react";
 import { StatTile } from "@/components/charts/StatTile";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Modal } from "@/components/ui/Modal";
@@ -105,6 +105,8 @@ export function DispatchBoard() {
   }
 
   const { requests, schedule, history, lobbyNow, kpis } = board;
+  // Backend chặn nhận ca khi tắt trực (`host_off_duty`); báo trước trên nút thay vì để Host bấm rồi mới biết.
+  const offDuty = board.dutyStatus === "OFF_DUTY";
   const firstName = (session.user?.fullName ?? "").trim().split(/\s+/).slice(-1)[0] || "bạn";
   const lobbyCase = lobbyNow ? schedule.find((s) => s.ref === lobbyNow) : undefined;
 
@@ -329,10 +331,13 @@ export function DispatchBoard() {
                       <button
                         type="button"
                         className="btn btn-success"
-                        disabled={rowBusy || !t.canAccept || over}
+                        disabled={rowBusy || !t.canAccept || over || offDuty}
+                        aria-busy={rowBusy}
+                        title={offDuty ? "Bật trực để nhận ca" : undefined}
                         onClick={() => void act(t.ticketId, () => hostApi.accept(t.ticketId), `Đã nhận ca ${t.tenant.name}`)}
                       >
-                        <Check size={17} /> Nhận ca
+                        {rowBusy ? <Loader2 size={17} className={styles.spin} /> : <Check size={17} />}{" "}
+                        {rowBusy ? "Đang nhận…" : offDuty ? "Bật trực để nhận ca" : "Nhận ca"}
                       </button>
                     </>
                   ) : (
@@ -340,10 +345,14 @@ export function DispatchBoard() {
                       type="button"
                       className="btn btn-success"
                       style={{ width: "100%" }}
-                      disabled={rowBusy || !t.canClaim}
+                      disabled={rowBusy || !t.canClaim || offDuty}
+                      aria-busy={rowBusy}
+                      title={offDuty ? "Bật trực để nhận ca" : undefined}
                       onClick={() => void act(t.ticketId, () => hostApi.claim(t.ticketId), `Đã nhận ticket ${t.tenant.name}`)}
                     >
-                      <Check size={17} /> Nhận ticket
+                      {/* Nhận ca mất ~3 giây (DB ở xa): phải thấy đang xử lý, không phải nút "chết" (lỗi A 2026-10-14). */}
+                      {rowBusy ? <Loader2 size={17} className={styles.spin} /> : <Check size={17} />}{" "}
+                      {rowBusy ? "Đang nhận ticket…" : offDuty ? "Bật trực để nhận ca" : "Nhận ticket"}
                     </button>
                   )}
                 </div>

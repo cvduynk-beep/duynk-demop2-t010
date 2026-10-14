@@ -1,5 +1,11 @@
 import { api, type ApiResponse } from "@/lib/apiClient";
+import type { EkycSubmitPayload } from "@/components/kyc/EkycCapture";
+import { EKYC_CONSENT_VERSION, type EkycScanResult } from "@/lib/tenant/types";
+import type { OtpSent } from "@/lib/tenant/api";
 import type {
+  PriceInsight,
+  LandlordDashboard,
+  LandlordVerification,
   BuildingOption,
   Consignment,
   ConsignmentPhoto,
@@ -7,9 +13,7 @@ import type {
   DoorAuditEntry,
   ExitResult,
   Finance,
-  InventoryCatalogEntry,
   MyProfile,
-  PricingDecisionResult,
   SignOtpInfo,
   UnitDetail,
   UnitRow,
@@ -35,22 +39,27 @@ export const landlordApi = {
   },
   deletePhoto: (id: string, photoId: string) =>
     api.delete<ConsignmentPhoto[]>(`${BASE}/consignments/${encodeURIComponent(id)}/photos/${encodeURIComponent(photoId)}`),
-  sendSignOtp: (id: string, phone?: string) =>
-    api.post<SignOtpInfo>(`${BASE}/consignments/${encodeURIComponent(id)}/send-otp`, phone ? { phone } : {}),
-  signConsignment: (id: string, body: { ownershipWarranted: boolean; otp?: string; phone?: string }) =>
-    api.post<Consignment>(`${BASE}/consignments/${encodeURIComponent(id)}/sign`, body),
-
-  /** Chủ nhà đồng ý / không đồng ý giá + cọc bảo đảm do Inspector đề xuất. 409 `PRICING_NOT_PENDING`, 403 `NOT_OWNER`. */
-  decidePricing: (id: string, decision: "accept" | "decline") =>
-    api.post<PricingDecisionResult>(`${BASE}/consignments/${encodeURIComponent(id)}/pricing-decision`, { decision }),
+  sendSignOtp: (phone?: string) => api.post<SignOtpInfo>(`${BASE}/consignments/send-otp`, phone ? { phone } : {}),
 
   finance: () => api.get<Finance>(`${BASE}/finance`),
 
   requestExit: (mandateId: string, reason: string) => api.post<ExitResult>(`${BASE}/mandates/request-exit`, { mandateId, reason }),
   cancelExit: (mandateId: string) => api.post<{ mandateId: string; status: "active" }>(`${BASE}/mandates/cancel-exit`, { mandateId }),
 
+  priceInsights: () => api.get<PriceInsight[]>(`${BASE}/price-insights`),
+  updateUnitRent: (id: string, rent: number) =>
+    api.put<{ unitId: string; rent: number; previous: number; marketMedian: number | null }>(`${BASE}/units/${encodeURIComponent(id)}/rent`, { rent }),
+  dashboard: () => api.get<LandlordDashboard>(`${BASE}/dashboard`),
+  verification: () => api.get<LandlordVerification>(`${BASE}/verification`),
+  sendPhoneOtp: (phone: string) => api.post<OtpSent>("/auth/phone/send-otp", { phone }),
+  verifyPhone: (phone: string, code: string) => api.post<{ verified: boolean }>("/auth/phone/verify", { phone, code }),
+  scanEkyc: () => api.post<EkycScanResult>(`${BASE}/verification/ekyc/scan`, { consent: true, consentVersion: EKYC_CONSENT_VERSION }),
+  submitEkyc: (payload: EkycSubmitPayload) => api.post<LandlordVerification>(`${BASE}/verification/ekyc`, payload),
+  /** Thêm/đổi + xác thực tài khoản thụ hưởng (tên chủ TK phải trùng họ tên CCCD). */
+  updatePayoutAccount: (body: { bankName: string; bankAccount: string; bankAccountHolder: string }) =>
+    api.put<LandlordVerification>(`${BASE}/payout-account`, body),
+
   buildings: () => api.get<BuildingOption[]>("/properties/buildings"),
-  inventoryCatalog: () => api.get<InventoryCatalogEntry[]>(`${BASE}/inventory-catalog`),
   profile: () => api.get<MyProfile>("/me/profile"),
 };
 

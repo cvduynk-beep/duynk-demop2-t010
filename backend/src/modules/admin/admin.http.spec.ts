@@ -25,6 +25,13 @@ import { AdminBiService } from './admin-bi.service';
 import { AdminInventoryService } from './admin-inventory.service';
 import { AdminDepositService } from './admin-deposit.service';
 import { AdminKeyService } from './admin-key.service';
+import { ConsignmentReviewService } from '../inspection/consignment-review.service';
+import { LandlordPhotoStorage } from '../landlord/landlord-photo-storage.service';
+import { AdminDashboardService } from './admin-dashboard.service';
+import { AdminBookingsService } from './admin-bookings.service';
+import { AdminSettingsService } from './admin-settings.service';
+import { AdminReportsController } from './reports/admin-reports.controller';
+import { AdminReportsService } from './reports/admin-reports.service';
 import { AdminService } from './admin.service';
 
 const ENV = {
@@ -42,6 +49,8 @@ const ADMIN_ROUTES: Route[] = [
   { method: 'get', path: 'bi-funnel' },
   { method: 'get', path: 'exclusive-inventory' },
   { method: 'post', path: 'mandates/x/terminate' },
+  { method: 'get', path: 'consignments' },
+  { method: 'get', path: 'consignments/x' },
   { method: 'post', path: 'consignments/x/approve' },
   { method: 'post', path: 'consignments/x/reject' },
   { method: 'get', path: 'dispatch-sla' },
@@ -63,11 +72,25 @@ const ADMIN_ROUTES: Route[] = [
   // Tạm tắt cùng endpoint phí dịch vụ chủ nhà:
   // { method: 'get', path: 'settings/landlord-fee' },
   // { method: 'post', path: 'settings/landlord-fee' },
+  { method: 'get', path: 'settings/fee-rates' },
   { method: 'get', path: 'deposits' },
   { method: 'post', path: 'deposits/x/resolve-unc' },
   { method: 'get', path: 'door-keys' },
   { method: 'post', path: 'door-keys/x/rotate' },
   { method: 'post', path: 'door-keys/x/revoke' },
+  // Dashboard admin
+  { method: 'get', path: 'dashboard/work-items' },
+  { method: 'get', path: 'activity' },
+  // Điều phối lịch xem
+  { method: 'get', path: 'bookings' },
+  { method: 'get', path: 'bookings/x/reassign-candidates' },
+  // Cài đặt: chính sách giữ chỗ
+  { method: 'get', path: 'settings/hold-policy' },
+  { method: 'put', path: 'settings/hold-policy' },
+  // Báo cáo (AdminReportsController)
+  { method: 'get', path: 'reports' },
+  { method: 'get', path: 'reports/host-performance' },
+  { method: 'get', path: 'reports/deals/export' },
 ];
 
 describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
@@ -124,6 +147,18 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
       .useValue(fakeService)
       .overrideProvider(AdminKeyService)
       .useValue(fakeService)
+      .overrideProvider(LandlordPhotoStorage)
+      .useValue(fakeService)
+      .overrideProvider(ConsignmentReviewService)
+      .useValue(fakeService)
+      .overrideProvider(AdminDashboardService)
+      .useValue(fakeService)
+      .overrideProvider(AdminBookingsService)
+      .useValue(fakeService)
+      .overrideProvider(AdminSettingsService)
+      .useValue(fakeService)
+      .overrideProvider(AdminReportsService)
+      .useValue(fakeService)
       .compile();
     app = moduleRef.createNestApplication();
     app.useLogger(false);
@@ -157,6 +192,18 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
     }
     expect(reflector.get(IS_PUBLIC_KEY, AdminController)).toBeUndefined();
     expect(reflector.get(ROLES_KEY, AdminController)).toEqual(['ops_admin']);
+    expect(reflector.get(IS_PUBLIC_KEY, AdminReportsController)).toBeUndefined();
+    expect(reflector.get(ROLES_KEY, AdminReportsController)).toEqual(['ops_admin']);
+  });
+
+  it('xuất báo cáo bị giới hạn 5 lần/phút ⇒ lần thứ 6 nhận 429', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent.post('/api/v1/auth/login').send({ email: 'ops@example.com', password: 'Matkhau-123', portal: 'admin' }).expect(200);
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) statuses.push((await agent.get('/api/v1/admin/reports/deals/export').set('x-portal', 'admin')).status);
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+    // Xem báo cáo (không phải xuất) không bị giới hạn chung này.
+    expect((await agent.get('/api/v1/admin/reports/deals').set('x-portal', 'admin')).status).toBe(200);
   });
 
   it.each(ADMIN_ROUTES)('không token ⇒ 401: $method $path', async (r) => {
@@ -165,11 +212,41 @@ describe('/admin/* — xác thực + @Roles(ops_admin)', () => {
   });
 
   const WRONG_ROLES = ['tenant', 'landlord', 'field_host', 'area_lead', 'compliance_officer'];
-  it.each(WRONG_ROLES)('vai %s ⇒ 403 ở mọi route admin', async (role) => {
-    const token = moduleRef.get(SessionTokenService).sign(`00000000-0000-4000-8000-00000000000${role.length}`, `${role}@example.com`).accessToken;
+  const PORTAL_OF: Record<string, 'tenant' | 'landlord' | 'host'> = { tenant: 'tenant', landlord: 'landlord', field_host: 'host' };
+  const tokenFor = (role: string, portal: 'tenant' | 'landlord' | 'host' | 'admin') =>
+    moduleRef.get(SessionTokenService).sign(`00000000-0000-4000-8000-00000000000${role.length}`, `${role}@example.com`, portal, role).accessToken;
+
+  it.each(Object.keys(PORTAL_OF))('vai %s (token đúng cổng của vai) ⇒ 403 ở mọi route admin', async (role) => {
+    const token = tokenFor(role, PORTAL_OF[role]);
     for (const r of ADMIN_ROUTES) {
       const res = await call(request(app.getHttpServer()) as any, r, token);
       expect([r.method, r.path, res.status]).toEqual([r.method, r.path, 403]);
+    }
+  });
+
+  // Vai không thuộc cổng nào (area_lead, compliance_officer) hoặc token tự nhận cổng admin mà vai trong DB không phải
+  // ops_admin ⇒ claim portal không khớp vai ⇒ coi như không có phiên (401), không lọt sang RolesGuard.
+  it.each(WRONG_ROLES)('vai %s mang token cổng admin ⇒ 401 ở mọi route admin', async (role) => {
+    const token = tokenFor(role, 'admin');
+    for (const r of ADMIN_ROUTES) {
+      const res = await call(request(app.getHttpServer()) as any, r, token);
+      expect([r.method, r.path, res.status]).toEqual([r.method, r.path, 401]);
+    }
+  });
+
+  it('ops_admin: khoảng thời gian / limit sai ⇒ 400 có lỗi theo field (kiểm ở server, không chỉ ở UI)', async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent.post('/api/v1/auth/login').send({ email: 'ops@example.com', password: 'Matkhau-123', portal: 'admin' }).expect(200);
+    const cases: Array<[string, string, string]> = [
+      ['bi-funnel?from=2026-13-01', 'invalid_range', 'from'],
+      ['bi-funnel?from=2026-10-13&to=2026-10-01', 'invalid_range', 'from'],
+      ['bi-funnel?from=2026-01-01&to=2026-12-31', 'invalid_range', 'to'],
+      ['dispatch-sla/summary?from=abc', 'invalid_range', 'from'],
+      ['activity?limit=500', 'invalid_request', 'limit'],
+    ];
+    for (const [path, code, field] of cases) {
+      const res = await agent.get(`/api/v1/admin/${path}`).set('x-portal', 'admin');
+      expect([path, res.status, res.body.code, Object.keys(res.body.errors ?? {})]).toEqual([path, 400, code, [field]]);
     }
   });
 

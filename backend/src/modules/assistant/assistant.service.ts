@@ -42,8 +42,8 @@ export class AssistantService implements OnModuleDestroy {
   /** Có phiên hợp lệ không (mọi lỗi ⇒ khách). */
   async hasSession(request: unknown): Promise<boolean> {
     try {
-      const token = this.cookies.readAccessToken(request as never);
-      return !!token && !!(await this.sessions.authenticate(token));
+      const token = this.cookies.readAccessToken(request as never, 'tenant');
+      return !!token && !!(await this.sessions.authenticate(token, 'tenant'));
     } catch {
       return false;
     }
@@ -52,9 +52,9 @@ export class AssistantService implements OnModuleDestroy {
   /** Tên gọi (từ cuối của họ tên) nếu có phiên hợp lệ; mọi lỗi ⇒ khách vãng lai. */
   async firstNameFrom(request: unknown): Promise<string | undefined> {
     try {
-      const token = this.cookies.readAccessToken(request as never);
+      const token = this.cookies.readAccessToken(request as never, 'tenant');
       if (!token) return undefined;
-      const user = await this.sessions.authenticate(token);
+      const user = await this.sessions.authenticate(token, 'tenant');
       const first = user?.fullName?.trim().split(/\s+/).pop();
       return first ? first.slice(0, 40) : undefined;
     } catch {

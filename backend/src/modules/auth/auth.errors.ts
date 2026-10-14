@@ -17,7 +17,6 @@ export class AuthException extends HttpException {
 
 const MESSAGES: Record<string, [HttpStatus, string]> = {
   invalid_credentials: [HttpStatus.UNAUTHORIZED, 'Email hoặc mật khẩu không đúng'],
-  password_not_set: [HttpStatus.UNAUTHORIZED, 'Tài khoản này đăng nhập bằng Google, chưa đặt mật khẩu'],
   email_not_verified: [HttpStatus.UNAUTHORIZED, 'Email Google chưa được xác minh'],
   not_authorized: [HttpStatus.FORBIDDEN, 'Email này chưa được cấp quyền truy cập cổng này'],
   wrong_portal: [HttpStatus.FORBIDDEN, 'Tài khoản thuộc một vai trò khác. Vui lòng đăng nhập đúng cổng dành cho vai trò của bạn'],
@@ -32,6 +31,7 @@ const MESSAGES: Record<string, [HttpStatus, string]> = {
   host_has_active_tickets: [HttpStatus.CONFLICT, 'Field Host đang có ca được giao hoặc đang dẫn, cần điều phối lại trước khi khoá'],
   HOST_ROLES_INVALID: [HttpStatus.BAD_REQUEST, 'Vai Field Host chỉ được là Sale hoặc Sale + Thẩm định'],
   invalid_zone: [HttpStatus.BAD_REQUEST, 'Phân khu không hợp lệ'],
+  zone_scope_conflict: [HttpStatus.CONFLICT, 'Phạm vi phân khu của Host vừa được người khác thay đổi. Xem giá trị mới nhất rồi lưu lại.'],
   invalid_request: [HttpStatus.BAD_REQUEST, 'Thông tin chưa hợp lệ'],
   unauthorized: [HttpStatus.UNAUTHORIZED, 'Chưa đăng nhập hoặc phiên đã hết hạn'],
   forbidden: [HttpStatus.FORBIDDEN, 'Bạn không có quyền thực hiện thao tác này'],
@@ -40,6 +40,7 @@ const MESSAGES: Record<string, [HttpStatus, string]> = {
   oauth_failed: [HttpStatus.BAD_REQUEST, 'Đăng nhập bằng Google không thành công'],
   auth_not_configured: [HttpStatus.SERVICE_UNAVAILABLE, 'Đăng nhập Google chưa được cấu hình (thiếu GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)'],
   rate_limited: [HttpStatus.TOO_MANY_REQUESTS, 'Quá nhiều yêu cầu, vui lòng thử lại sau'],
+  login_locked: [HttpStatus.TOO_MANY_REQUESTS, 'Đăng nhập sai quá nhiều lần, vui lòng thử lại sau ít phút'],
   invalid_phone: [HttpStatus.BAD_REQUEST, 'Số điện thoại không hợp lệ'],
   phone_already_registered: [HttpStatus.CONFLICT, 'Số điện thoại đã được dùng cho tài khoản khác'],
   otp_not_found_or_expired: [HttpStatus.BAD_REQUEST, 'Mã OTP không tồn tại hoặc đã hết hạn'],

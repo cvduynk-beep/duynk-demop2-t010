@@ -1,5 +1,5 @@
 import type { Household, PaymentCycle } from "./cost";
-import type { Furnishing, HostRole, ItemKey, LayoutKind, LeaseTermPref, LockType, PassportItem, UnitStatus, ZoneId } from "./units";
+import type { Furnishing, HostRole, HostStatus, ItemKey, LayoutKind, LeaseTermPref, LockType, PassportItem, UnitStatus, ZoneId } from "./units";
 export { PASSPORT_ITEMS, type PassportItem } from "./units";
 
 export interface HoldPolicy {
@@ -16,25 +16,6 @@ export interface HoldAudit {
   to: number | null;                  // null = gỡ override về mặc định
 }
 
-export interface DepositPolicy {
-  /** Tỷ lệ cọc tối thiểu theo giá thuê tháng (mặc định 0.5 = 50%) */
-  minRatio: number;
-  /** Tỷ lệ cọc tối đa theo giá thuê tháng (mặc định 4.0 = 400% / 4 lần) */
-  maxRatio: number;
-  /** Tỷ lệ cọc khuyến nghị mặc định (mặc định 1.0 = 100% / 1 tháng) */
-  defaultRatio: number;
-}
-
-export interface DepositAudit {
-  id: string;
-  at: string;
-  by: string;
-  minRatio: number;
-  maxRatio: number;
-  defaultRatio: number;
-  reason?: string;
-}
-
 // ─── Lịch xem nhà ───────────────────────────────────────────────────────────────────────────
 
 export type DispatchTier = "top" | "zone_pool" | "wide_pool";
@@ -46,6 +27,7 @@ export interface BookingDispatch {
   openedAt: string;
   claimedAt?: string;
   escalated?: boolean;
+  assignedByAdmin?: boolean;
 }
 
 /**
@@ -159,6 +141,8 @@ export interface Booking {
   closedReason?: string;
   rating?: number;
   reminderSentAt?: string;
+  /** Mã ca xem trước nếu đây là ca xem nối tiếp tại chỗ (Chain viewing / cross-sell). */
+  chainedFromBookingId?: string;
 }
 
 // ─── Thông báo (Zalo / push) ─────────────────────────────────────────────────────────────────
@@ -201,7 +185,6 @@ export interface Mandate {
 }
 
 export type ConsignmentStatus =
-  | "draft"          // đã đăng ký, chưa ký OTP ủy quyền
   | "awaiting_host"  // đã ký, ticket đã gán Host phân khu, Host chưa nhận
   | "inspecting"     // Host đã nhận, đang kiểm tra thực tế
   | "reviewing"      // Host đã nộp báo cáo, chờ Admin chốt
@@ -222,13 +205,30 @@ export interface InventoryLine {
   qty?: number; // ≥ 1 khi present
   condition?: number; // % độ mới, bội số 10, [0,100], bắt buộc khi present
   photoAt?: string; // ISO, bắt buộc khi present
+  photoUrl?: string; // Data URL hoặc đường dẫn ảnh chụp thực tế
   note?: string; // ≤ 120
   liability: Liability;
   compensation?: number; // VNĐ, tuỳ chọn
+  // ─── Mô hình kiểm soát 3 lớp (3-Tier Verification Architecture) ───
+  aiValidated?: boolean;
+  aiDetected?: string;
+  aiConfidence?: number;
+  aiStatus?: "match" | "warning" | "unclear";
+  locationTag?: string;
 }
 
 export type DeclaredField = "identity" | "layout" | "areaM2" | "furnishing" | "lock";
 export interface DeclaredCheck { field: DeclaredField; ok: boolean; /** bắt buộc khi ok=false, ≤80 ký tự */ actual?: string }
+
+export interface UnitLivingFees {
+  managementFeePerM2: number; // Phí quản lý (đ/m²/tháng do Host thẩm định nhập hoặc xác nhận)
+  motorbikeFee: number;       // Phí gửi xe máy (đ/xe/tháng)
+  carFee: number;             // Phí gửi ô tô (đ/xe/tháng)
+  electricityNote?: string;   // Ghi chú tiền điện (theo biểu giá EVN Hà Nội)
+  waterNote?: string;         // Ghi chú tiền nước (theo biểu giá BQL)
+  otherFeesNote?: string;     // Phí tiện ích khác nếu có
+  verifiedByHost?: boolean;   // Đã xác thực thực địa bởi Host
+}
 
 export interface InspectionReport {
   hostId: string;
@@ -239,6 +239,7 @@ export interface InspectionReport {
   furnishing: Furnishing; // nội thất thực tế: full | basic | empty
   recommendation: "approve" | "reject";
   note?: string; // ≤300 ký tự
+  livingFees?: UnitLivingFees; // Biểu phí sinh hoạt thực tế do Host thẩm định nhập
   // Compatibility fields for un-refactored UI components (WP3/4/7)
   items?: { key: ItemKey; present: boolean }[];
   equipment?: { item: PassportItem; condition: number; photoAt: string; note?: string }[];
@@ -247,6 +248,7 @@ export type InspectionDraft = Omit<InspectionReport, "hostId" | "submittedAt" | 
   inventory?: InventoryLine[];
   netAreaM2?: number;
   furnishing?: Furnishing;
+  livingFees?: UnitLivingFees;
 };
 
 export interface ConsignInput {
@@ -261,9 +263,15 @@ export interface ConsignInput {
   leaseTerm?: LeaseTermPref;
   furnished?: boolean;
   locks?: LockType[];
+  allowFastClose?: boolean;
+  floorRent?: number;
   auditByHost?: boolean;
   doorCode?: string;
   note?: string;
+  bankName?: string;
+  bankAccount?: string;
+  bankAccountHolder?: string;
+  saveAsDefaultPayout?: boolean;
   // Compatibility fields for un-refactored UI components (WP3)
   furnishing?: Furnishing;
   lock?: LockType;
@@ -283,6 +291,11 @@ export interface Consignment {
   leaseTerm: LeaseTermPref; // +
   furnished: boolean; // ~ thay furnishing: Furnishing
   locks: LockType[]; // ~ thay lock; 1–2 phần tử
+  allowFastClose?: boolean;
+  floorRent?: number;
+  bankName?: string;
+  bankAccount?: string;
+  bankAccountHolder?: string;
   auditByHost: boolean;
   status: ConsignmentStatus;
   createdAt: string;
@@ -294,7 +307,15 @@ export interface Consignment {
   report?: InspectionReport;
   decidedAt?: string;
   decidedBy?: string; // tên Admin
-  ownershipWarrantedAt?: string; // MỚI — tick cam đoan Điều 2 legal/01, set trong signConsignment
+  ownershipWarrantedAt?: string; // MỚI — tick cam đoan Điều 2 legal/01, set khi ký ủy quyền
+  // Cơ chế Auto-Escalation & SLA 2h + Admin Override
+  openPoolAt?: string; // mốc thời gian tự động mở vào Open Pool (>30p)
+  slaBreached?: boolean; // mốc thời gian quá 2h chưa có host nhận (SLA Breach)
+  escalatedToAreaLead?: boolean; // tự động chuyển cho Area Lead
+  adminOverriddenBy?: string; // lưu vết Admin chỉ định tay
+  adminOverriddenAt?: string;
+  /** Ảnh ký gửi chủ nhà tải lên (chỉ có khi hồ sơ lấy từ backend). */
+  photos?: { id?: string; url?: string; path?: string }[];
   // Compatibility fields for un-refactored UI components (WP3/4/7)
   furnishing: Furnishing;
   lock: LockType;
@@ -340,6 +361,12 @@ export interface CriteriaState {
   pets?: boolean;
   household: Household;
   moveIn?: string;
+  /** Khách ưu tiên tìm căn giá thấp nhất / tối ưu chi phí */
+  sortByPrice?: boolean;
+  /** Khách ưu tiên căn nội thất mới (tình trạng >= 85%) */
+  preferNewFurnishing?: boolean;
+  /** Khách yêu cầu gần một địa điểm / tiện ích cụ thể */
+  nearLocation?: string;
 }
 
 export interface ChatMessage {
@@ -350,8 +377,6 @@ export interface ChatMessage {
   /** Tin trả lời có kết quả tìm căn. */
   resultIds?: string[];
   criteria?: CriteriaState;
-  /** Nút/liên kết kèm tin (vd mời đăng nhập). */
-  cta?: { label: string; href: string };
 }
 
 export interface ChatState {
@@ -362,6 +387,23 @@ export interface ChatState {
 }
 
 // ─── State tổng ───────────────────────────────────────────────────────────────────────────────
+
+export type DelistReason =
+  | "landlord_exit"
+  | "personal_use"
+  | "unit_sold"
+  | "maintenance"
+  | "data_cleanup"
+  | "other";
+
+export interface ArchivedUnitRecord {
+  unitId: string;
+  archivedAt: string;
+  archivedBy: string;
+  reason: DelistReason;
+  reasonLabel: string;
+  note?: string;
+}
 
 export interface UnitOverride {
   status: UnitStatus;
@@ -384,17 +426,23 @@ export interface MockState {
   guestSent: number;
   chat: ChatState;
   /** Thông tin khách đã dùng để điền sẵn form đặt lịch. */
-  tenantProfile?: { name: string; phone: string };
+  tenantProfile?: { name: string; phone: string; refundAccount?: RefundAccount };
+  /** Danh sách tài khoản nhận hoàn cọc đã lưu theo SĐT khách thuê. `null` = khách đã xoá (không rơi về tài khoản cũ). */
+  savedRefundAccounts?: Record<string, RefundAccount | null>;
   /** Vai của Field Host khi bị Admin sửa (mặc định lấy từ HOSTS). */
   hostRoles: Record<string, HostRole[]>;
+  /** Phân khu phụ trách của Field Host khi bị Admin sửa (mặc định lấy từ HOSTS). */
+  hostZones: Record<string, ZoneId[]>;
+  /** Trạng thái tài khoản Field Host (active, busy, off_duty, suspended) khi Admin cập nhật */
+  hostStatuses: Record<string, HostStatus>;
   /** Danh sách SĐT khách thuê đã xác thực qua OTP Zalo (SPEC-P06 §2) */
   verifiedPhones: string[];
   /** Cấu hình thời hạn giữ chỗ theo giờ (SPEC-P01 §1) */
   holdPolicy: HoldPolicy;
   /** Lịch sử thay đổi thời hạn giữ chỗ (SPEC-P01 §3) */
   holdAudit: HoldAudit[];
-  /** Cấu hình quy định tiền cọc theo hợp đồng thuê (tối thiểu 50%, tối đa 4 lần giá thuê tháng) */
-  depositPolicy: DepositPolicy;
-  /** Lịch sử thay đổi quy định tiền cọc */
-  depositAudit?: DepositAudit[];
+  /** Danh sách căn hộ đã ngừng niêm yết & lưu trữ an toàn bởi Admin (Delist & Archive) */
+  archivedUnits?: Record<string, ArchivedUnitRecord>;
+  /** Tài khoản thụ hưởng mặc định của Chủ nhà (Smart Onboarding) */
+  landlordPayoutAccount?: { bankName: string; bankAccount: string; bankAccountHolder: string; isVerified: boolean };
 }

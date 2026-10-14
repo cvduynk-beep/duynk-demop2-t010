@@ -16,6 +16,9 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ValidateNested } from 'class-validator';
+import { SubmitEkycFieldsDto } from '../../identity/dto/identity.dto';
 import { DIRECTIONS } from '../../property/unit-facts';
 
 export class RequestExitMandateDto {
@@ -125,18 +128,29 @@ export class CreateConsignmentDto {
   @IsString({ each: true })
   inventoryCodes?: string[];
 
-  @ApiPropertyOptional({ default: false, description: 'true = bản nháp: bỏ kiểm tra tiền cọc đề xuất' })
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Ủy quyền AI Chốt Nhanh: cho phép VinStay/Field Host chiết khấu trong biên độ giá sàn khi khách trả trước / cọc nhanh',
+  })
   @IsOptional()
   @IsBoolean()
-  draft?: boolean;
-}
+  allowFastClose?: boolean;
 
-export class SignConsignmentDto {
+  @ApiPropertyOptional({
+    example: 6_000_000,
+    description: 'Giá sàn tối thiểu (VNĐ/tháng): ≥ 3.000.000 và < giá chào. Bắt buộc khi allowFastClose=true. Không bao giờ hiển thị cho khách thuê.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  floorRent?: number;
+
   @ApiProperty({ example: true, description: 'Cam kết quyền sở hữu/sử dụng hợp pháp (Điều 2 legal/01) — bắt buộc true' })
   @IsBoolean()
   ownershipWarranted: boolean;
 
-  @ApiPropertyOptional({ example: '4829', description: 'OTP Zalo — KHÔNG cần khi ký bằng số đã xác thực của tài khoản; bắt buộc khi nhập số khác hoặc tài khoản chưa có số (gửi trước bằng POST /landlord/consignments/:id/send-otp)' })
+
+  @ApiPropertyOptional({ example: '4829', description: 'OTP Zalo — KHÔNG cần khi ký bằng số đã xác thực của tài khoản; bắt buộc khi nhập số khác hoặc tài khoản chưa có số (gửi trước bằng POST /landlord/consignments/send-otp)' })
   @IsOptional()
   @IsString()
   @Matches(/^\d{4}$/, { message: 'OTP gồm 4 chữ số' })
@@ -160,4 +174,53 @@ export class PricingDecisionDto {
   @ApiProperty({ enum: ['accept', 'decline'] })
   @IsIn(['accept', 'decline'])
   decision: 'accept' | 'decline';
+}
+
+/** Đổi tài khoản thụ hưởng mặc định của chủ nhà (trang Tài khoản). */
+export class UpdatePayoutAccountDto {
+  @ApiProperty({ example: 'Techcombank' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  bankName: string;
+
+  @ApiProperty({ example: '19036789012345', description: '6–20 chữ số — lưu mã hoá AES, chỉ trả lại dạng che' })
+  @Matches(/^\d{6,20}$/, { message: 'Số tài khoản gồm 6–20 chữ số' })
+  bankAccount: string;
+
+  @ApiProperty({ example: 'NGUYEN VAN A' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  bankAccountHolder: string;
+}
+
+/** Chủ nhà xác nhận kết quả eKYC CCCD (bước 2 xác thực tài khoản). */
+export class LandlordEkycSubmitDto {
+  @ApiProperty({ description: 'Mã phiên quét eKYC (POST /landlord/verification/ekyc/scan)' })
+  @IsNotEmpty()
+  @IsString()
+  scanId: string;
+
+  @ApiProperty({ example: 'PRIVACY-2026.10-v1' })
+  @IsNotEmpty()
+  @IsString()
+  consentVersion: string;
+
+  @ApiProperty({ type: SubmitEkycFieldsDto })
+  @ValidateNested()
+  @Type(() => SubmitEkycFieldsDto)
+  fields: SubmitEkycFieldsDto;
+
+  @ApiProperty({ description: 'Đã kiểm tra các trường độ tin cậy < 85%' })
+  @IsBoolean()
+  confirmedLowConfidence: boolean;
+}
+
+/** Chủ nhà áp dụng giá thuê mới cho căn đang trống (từ gợi ý AI hoặc tự nhập). */
+export class UpdateUnitRentDto {
+  @ApiProperty({ example: 7_100_000, description: 'VNĐ/tháng — ≥ 3.000.000, ≥ giá sàn chốt nhanh, ≤ trần layout' })
+  @IsInt()
+  @Min(0)
+  rent: number;
 }
