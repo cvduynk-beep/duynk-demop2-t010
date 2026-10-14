@@ -96,12 +96,12 @@ describe('Inspection — giá/cọc đổi ⇒ chủ nhà duyệt (hồ sơ 18)'
     expect(await field({ facts: { areaM2: 47, layout: '1PN', bathrooms: 1, direction: null, floor: 12 } })).toBeUndefined(); // null hợp lệ ⇒ không lỗi (approved)
   });
 
-  it('F2: biên giá/cọc — rent ∈ [3tr,200tr], cọc ∈ [2tr, 3×rent], số nguyên hữu hạn', async () => {
+  it('F2: biên giá/cọc — rent ∈ [3tr,200tr], cọc ∈ [50% rent, 3×rent] (cọc v2), số nguyên hữu hạn', async () => {
     const { c, photos } = setup();
     const field = async (pricing: Record<string, unknown>) => ((await bodyOf(submit(c, photos, { pricing: { reason: 'x', ...pricing } }))) as any)?.field;
     expect(await field({ rent: 2_999_999, securityDeposit: 3_000_000 })).toBe('pricing'); // rent < 3tr
-    expect(await field({ rent: 6_500_000, securityDeposit: 0 })).toBe('pricing'); // cọc < cọc giữ chỗ
-    expect(await field({ rent: 6_500_000, securityDeposit: 1_999_999 })).toBe('pricing');
+    expect(await field({ rent: 6_500_000, securityDeposit: 0 })).toBe('pricing');
+    expect(await field({ rent: 6_500_000, securityDeposit: 3_249_999 })).toBe('pricing'); // < 50% tiền thuê
     expect(await field({ rent: 6_500_000, securityDeposit: 19_500_001 })).toBe('pricing'); // > 3 × rent
     expect(await field({ rent: 6_500_000, securityDeposit: 1e15 })).toBe('pricing');
     expect(await field({ rent: 6_500_000, securityDeposit: NaN })).toBe('pricing');
@@ -109,7 +109,7 @@ describe('Inspection — giá/cọc đổi ⇒ chủ nhà duyệt (hồ sơ 18)'
     expect(await field({ rent: 6_500_000.4, securityDeposit: 6_500_000 })).toBe('pricing'); // thập phân
     expect(await field({ rent: 6_500_000, securityDeposit: 6_500_000.5 })).toBe('pricing');
     expect(await field({ rent: '6500000', securityDeposit: 6_500_000 })).toBe('pricing');
-    expect(await field({ rent: 6_500_000, securityDeposit: 2_000_000 })).toBeUndefined(); // đúng cận dưới
+    expect(await field({ rent: 6_500_000, securityDeposit: 3_250_000 })).toBeUndefined(); // đúng cận dưới (50%)
     const top = setup();
     expect(((await bodyOf(submit(top.c, top.photos, { pricing: { rent: 6_500_000, securityDeposit: 19_500_000, reason: 'x' } }))) as any)?.field).toBeUndefined(); // đúng cận trên
   });

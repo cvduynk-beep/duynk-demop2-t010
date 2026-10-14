@@ -1,7 +1,6 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { holdingDepositAmount } from '../deposit/deposit-amount';
 import { clampHoldHours, HOLD_HOURS_DEFAULT, HOLD_HOURS_KEY, HOLD_HOURS_MAX, HOLD_HOURS_MIN } from '../deposit/hold-policy';
 import type { AdminActor } from './admin-fee.service';
 
@@ -34,8 +33,6 @@ export interface HoldPolicyView {
   version: string;
   updatedAt: string | null;
   updatedBy: { id: string; name: string | null } | null;
-  /** Tiền cọc giữ chỗ — ràng buộc cứng (AGENTS), chỉ hiển thị. */
-  holdingDepositAmount: number;
   history: HoldPolicyChange[];
 }
 
@@ -67,7 +64,6 @@ export class AdminSettingsService {
       version: row ? row.updatedAt.toISOString() : DEFAULT_VERSION,
       updatedAt: row ? row.updatedAt.toISOString() : null,
       updatedBy: row ? { id: row.updatedBy, name: updater?.fullName ?? null } : null,
-      holdingDepositAmount: holdingDepositAmount(),
       history,
     };
   }

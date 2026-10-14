@@ -50,7 +50,9 @@ function fakePrisma() {
     depositCode: 'DEP-VS-99999',
     viewingId: 'viewing-1',
     unitId: UNIT_ID,
-    amount: 2000000,
+    // Cọc v2: khách đã chuyển thẳng Tiền cọc bảo đảm (= 1 tháng thuê của căn) theo điều khoản v2.
+    amount: 6500000,
+    termsVersion: 'DEP-2026.10-v2',
     vietqrRef: 'VQ-9999',
     transferContent: 'COC VHOP-S1.02-1208 0912345678',
     paymentStatus: DepositStatus.PAID_HOLDING,
@@ -298,10 +300,11 @@ describe('eKYC (mô phỏng OCR) → ký Hợp đồng thuê (POST /contracts/le
   let fixture: ReturnType<typeof fakePrisma>;
   let phoneService: PhoneService;
   const ME = { id: TENANT_ID };
-  const todayStr = () => new Date().toISOString().split('T')[0];
+  /** Ngày giờ VN cách hôm nay `n` ngày (T0 = hôm nay vì cọc về `now`). */
+  const vnDay = (n: number) => new Date(Date.now() + 7 * 3_600_000 + n * 86_400_000).toISOString().slice(0, 10);
   const lease = (over: Record<string, unknown> = {}) => ({
     bookingRef: 'VS-99999',
-    startDate: todayStr(),
+    startDate: vnDay(3), // trong khung miễn phí (T0+2 … T0+7)
     months: 12,
     paymentCycle: 1 as const,
     signatureSvg: '<svg><path d="M0 0L10 10"/></svg>',
@@ -412,28 +415,60 @@ describe('eKYC (mô phỏng OCR) → ký Hợp đồng thuê (POST /contracts/le
     ['months < minLeaseMonths', { months: 3 }],
     ['months > 36', { months: 37 }],
     ['kỳ thanh toán 2 tháng', { paymentCycle: 2 }],
-    ['ngày bắt đầu trong quá khứ', { startDate: '2020-01-01' }],
-    ['ngày bắt đầu quá 30 ngày', { startDate: new Date(Date.now() + 40 * 86_400_000).toISOString().split('T')[0] }],
+    ['ngày dọn vào trong quá khứ', { startDate: '2020-01-01' }],
+    ['ngày dọn vào sớm hơn T0+2 (BQL chưa kịp duyệt)', { startDate: vnDay(1) }],
+    ['ngày dọn vào quá T0+30', { startDate: vnDay(31) }],
+    ['ngày sai định dạng', { startDate: '2026-02-30' }],
   ])('điều khoản sai (%s) → 422 lease_terms_invalid', async (_label, over) => {
     await verify();
     await expect(leaseSigning.sign(ME, lease(over) as any)).rejects.toMatchObject({ response: { code: 'lease_terms_invalid' } });
     expect(fixture.savedContracts).toHaveLength(0);
   });
 
-  it('ký hợp lệ → HĐ ACTIVE, cọc CONVERTED (2tr thành cọc bảo đảm), căn RENTED, lịch LEASED, audit LEASE_ESTABLISHED', async () => {
+  it('ký hợp lệ (cọc v2) → HĐ ACTIVE, khoản đã chuyển = 100% Tiền cọc bảo đảm (không thu bù), căn RENTED, lịch LEASED, audit', async () => {
     await verify();
     const { contract, booking } = await leaseSigning.sign(ME, lease({ paymentCycle: 3 }));
     expect(contract.status).toBe('active');
-    expect(contract.convertedHolding).toBe(2_000_000);
+    expect(contract.convertedHolding).toBe(6_500_000);
+    expect(contract.securityDeposit).toBe(6_500_000);
+    expect(contract.startDate).toBe(vnDay(3)); // dọn vào trong khung miễn phí ⇒ tính tiền từ ngày dọn vào
     expect(fixture.getSavedDeposit().paymentStatus).toBe(DepositStatus.CONVERTED_TO_CONTRACT);
     expect(fixture.mockUnit.status).toBe(UnitStatus.RENTED);
     expect(fixture.getSavedViewing().status).toBe(ViewingStatus.LEASED);
     expect(booking.status).toBe('leased');
     expect(fixture.savedAudits.map((a: any) => a.actionType)).toContain('LEASE_ESTABLISHED');
-    // Kỳ đầu = tiền thuê × chu kỳ + phần bù cọc bảo đảm; 2tr KHÔNG bị trừ vào tiền thuê.
+    // Kỳ đầu = tiền thuê × chu kỳ; cọc đã đủ nên không thu bù; cọc KHÔNG bị trừ vào tiền thuê.
     expect(contract.firstPaymentDue.rent).toBe(6_500_000 * 3);
-    expect(contract.firstPaymentDue.depositTopUp).toBe(6_500_000 - 2_000_000);
+    expect(contract.firstPaymentDue.depositTopUp).toBe(0);
     expect(contract.firstPaymentDue.transferContent).toBe('VSA VHOP-S1.02-1208 THANH TOAN TIEN THUE KY 1');
+  });
+
+  it('cọc giữ chỗ CŨ (điều khoản HOLD-*, 2tr) vẫn ký được: cọc bảo đảm theo căn, kỳ đầu thu phần chênh', async () => {
+    Object.assign(fixture.getSavedDeposit(), { amount: 2_000_000, termsVersion: 'HOLD-2026.10-v1' });
+    await verify();
+    const { contract } = await leaseSigning.sign(ME, lease());
+    expect(contract.convertedHolding).toBe(2_000_000);
+    expect(contract.securityDeposit).toBe(6_500_000);
+    expect(contract.firstPaymentDue.depositTopUp).toBe(6_500_000 - 2_000_000);
+  });
+
+  it('Smart Move-in: dọn vào sau 7 ngày ⇒ HĐ & tiền thuê bắt đầu T0+7; audit ghi ngày dọn vào + ngày tính tiền', async () => {
+    await verify();
+    const { contract } = await leaseSigning.sign(ME, lease({ startDate: vnDay(20) }));
+    expect(contract.startDate).toBe(vnDay(7));
+    const audit = fixture.savedAudits.find((a: any) => a.actionType === 'LEASE_ESTABLISHED');
+    expect(audit.newValue).toMatchObject({ moveInDate: vnDay(20), billingStartDate: vnDay(7) });
+  });
+
+  it('chốt nhanh: HĐ dùng giá đã chốt + bắt buộc đúng chu kỳ đã cam kết', async () => {
+    Object.assign(fixture.getSavedDeposit(), { amount: 6_150_000, baseAmount: 6_500_000, fastCloseCycle: 3, quotedMonthlyRent: 6_150_000 });
+    await verify();
+    await expect(leaseSigning.sign(ME, lease({ paymentCycle: 1 }))).rejects.toMatchObject({ response: { code: 'lease_terms_invalid', errors: { paymentCycle: 3 } } });
+    const { contract } = await leaseSigning.sign(ME, lease({ paymentCycle: 3 }));
+    expect(contract.monthlyRent).toBe(6_150_000);
+    expect(contract.securityDeposit).toBe(6_150_000);
+    expect(contract.firstPaymentDue.rent).toBe(6_150_000 * 3);
+    expect(fixture.savedAudits.find((a: any) => a.actionType === 'LEASE_ESTABLISHED').newValue).toMatchObject({ fastCloseCycle: 3, monthlyRent: 6_150_000 });
   });
 
   it('PDF thật (bắt đầu %PDF-, có số HĐ, SHA-256 thật), Signature của khách + TSA mô phỏng; người khác tải → 404', async () => {

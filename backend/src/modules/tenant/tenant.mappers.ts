@@ -1,4 +1,4 @@
-import { holdingDepositAmount } from '../deposit/deposit-amount';
+import { securityDepositAmount } from '../deposit/deposit-amount';
 import { ViewingStatus, LayoutType } from '@prisma/client';
 import { INSPECTION_GROUPS } from '../inspection/inspection.catalog';
 import { BookingStatusWeb, UnitInventoryLine, TenantBooking, TenantContract, TenantUnit } from './tenant.types';
@@ -124,7 +124,7 @@ export function toTenantUnit(
       holdHours: HOLD_HOURS_DEFAULT,
       activeViewingAt: null,
       securityDeposit: 0,
-      holdingDeposit: holdingDepositAmount(),
+      holdingDeposit: 0,
       highlights: [],
       inventory: [],
     };
@@ -182,7 +182,8 @@ export function toTenantUnit(
     holdHours: clampHoldHours(holdHours ?? unit.holdHoursOverride ?? HOLD_HOURS_DEFAULT),
     activeViewingAt: activeViewingAt ?? null,
     securityDeposit: unit.securityDeposit != null ? Number(unit.securityDeposit) : Number(unit.baseRentPrice),
-    holdingDeposit: holdingDepositAmount(unit),
+    // Cọc v2: số tiền khách chuyển để chốt căn = Tiền cọc bảo đảm của căn (giữ tên field để không đổi API).
+    holdingDeposit: securityDepositAmount(unit),
     highlights: Array.isArray(unit.highlights) ? unit.highlights : [],
     inventory: toInventoryLines(unit.inventoryItems),
   };
@@ -267,7 +268,18 @@ export function toTenantBooking(
     }
 
     depositDto = {
-      amount: holdingDepositAmount(),
+      // Số tiền đã chốt trên CHÍNH khoản cọc này (cọc cũ 2.000.000đ, cọc v2 = tiền cọc bảo đảm, chốt nhanh = đã giảm).
+      amount: Number(d.amount),
+      ...(d.fastCloseCycle
+        ? {
+            fastClose: {
+              cycle: d.fastCloseCycle,
+              baseAmount: Number(d.baseAmount ?? d.amount),
+              monthlyRent: Number(d.quotedMonthlyRent),
+              quoteExpiresAt: d.quoteExpiresAt ? new Date(d.quoteExpiresAt).toISOString() : null,
+            },
+          }
+        : {}),
       transferContent: d.transferContent || '',
       qrRef: d.vietqrRef,
       createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : new Date().toISOString(),
@@ -277,7 +289,7 @@ export function toTenantBooking(
       holdHours: d.holdHours ?? undefined,
       expiresAt: d.expiresAt ? new Date(d.expiresAt).toISOString() : undefined,
       outcome,
-      vietqr: getVietQrPaymentDetails(holdingDepositAmount(), d.transferContent || ''),
+      vietqr: getVietQrPaymentDetails(Number(d.amount), d.transferContent || ''),
     };
   }
 
@@ -340,7 +352,9 @@ export function toTenantContract(contract: any): TenantContract {
   const cycle = (contract.paymentCycleMonths || 1) as 1 | 3 | 6;
   const securityDeposit = Number(contract.securityDepositAmount);
   const rent = monthlyRent * cycle;
-  const depositTopUp = Math.max(0, securityDeposit - holdingDepositAmount());
+  // Khoản đã chuyển khi chốt căn (cọc v2 = toàn bộ tiền cọc bảo đảm ⇒ không thu bù; HĐ cũ từ cọc 2tr vẫn thu phần chênh).
+  const converted = Number(contract.convertedHoldingAmount ?? contract.holdingDeposit?.amount ?? 0);
+  const depositTopUp = Math.max(0, securityDeposit - converted);
   const total = rent + depositTopUp;
   const transferContent = `VSA ${contract.unit?.unitCode || ''} THANH TOAN TIEN THUE KY 1`;
 
@@ -376,7 +390,7 @@ export function toTenantContract(contract: any): TenantContract {
     paymentCycle: cycle,
     monthlyRent,
     securityDeposit,
-    convertedHolding: holdingDepositAmount(),
+    convertedHolding: converted,
     firstPaymentDue: {
       rent,
       depositTopUp,

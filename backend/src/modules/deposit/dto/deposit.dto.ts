@@ -1,4 +1,3 @@
-import { holdingDepositAmount } from '../deposit-amount';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl } from 'class-validator';
 
@@ -8,10 +7,15 @@ export class CreateDepositDto {
   @IsBoolean()
   acceptTerms: boolean;
 
-  @ApiProperty({ example: 'HOLD-2026.10-v1', description: 'Phiên bản điều khoản cọc' })
+  @ApiProperty({ example: 'DEP-2026.10-v2', description: 'Phiên bản điều khoản cọc' })
   @IsNotEmpty()
   @IsString()
   termsVersion: string;
+
+  // Chỉ khai báo (whitelist); kiểm 1 | 3 | 6 + điều kiện chủ nhà ủy quyền ở DepositService.
+  @ApiPropertyOptional({ enum: [1, 3, 6], description: 'Chốt nhanh: chu kỳ thanh toán cam kết (tháng). Bỏ trống = cọc thường. Số tiền luôn do server tính.' })
+  @IsOptional()
+  fastCloseCycle?: unknown;
 }
 
 export class VietQrWebhookInputDto {
@@ -25,7 +29,7 @@ export class VietQrWebhookInputDto {
   @IsString()
   transferContent?: string;
 
-  @ApiProperty({ example: holdingDepositAmount(), description: 'Số tiền chuyển khoản' })
+  @ApiProperty({ example: 6_500_000, description: 'Số tiền chuyển khoản (phải đúng số tiền của khoản cọc)' })
   @IsNotEmpty()
   @IsNumber()
   amount: number;

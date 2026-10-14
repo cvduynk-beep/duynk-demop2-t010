@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 /**
  * Sổ hợp đồng hợp nhất cho Admin: 4 loại văn bản đọc thẳng từ bảng thật, không bảng mới.
  *   mandate     ← ExclusiveMandate (HĐ ký gửi độc quyền, legal/01)
- *   holding     ← HoldingDeposit   (thoả thuận cọc giữ chỗ 2.000.000đ, legal/02)
+ *   holding     ← HoldingDeposit   (khoản cọc chốt căn — cọc v2 = Tiền cọc bảo đảm; cọc cũ 2.000.000đ, legal/02)
  *   lease       ← Contract         (HĐ thuê, legal/06)
  *   partnership ← FieldHost        (thoả thuận đối tác Field Host, legal/08)
  * `GET /admin/contracts` (chỉ HĐ thuê) giữ nguyên cho các màn đang dùng.
@@ -58,17 +58,17 @@ const dateVi = (d: Date | string | null | undefined) =>
   d ? new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(d)) : '—';
 
 /**
- * Cọc giữ chỗ chuyển đổi 100% thành MỘT PHẦN của Tiền cọc bảo đảm (không phải khoản cọc thứ hai, không trừ tiền thuê tháng đầu).
- * Phần còn lại là số khách nộp thêm khi ký hợp đồng thuê.
+ * Khoản cọc chốt căn chuyển đổi 100% thành Tiền cọc bảo đảm (không phải khoản cọc thứ hai, không trừ tiền thuê tháng đầu).
+ * Cọc v2 = toàn bộ cọc bảo đảm ⇒ không nộp thêm; HĐ cũ từ cọc giữ chỗ 2tr ⇒ phần còn lại nộp thêm khi ký.
  */
 export function depositBreakdown(security: unknown, converted: unknown): string {
   const total = Number(security ?? 0);
-  if (converted == null) return `${money(total)} (chưa ghi nhận cọc giữ chỗ chuyển đổi)`;
+  if (converted == null) return `${money(total)} (chưa ghi nhận khoản cọc chuyển đổi)`;
   const held = Number(converted);
   const extra = Math.max(0, total - held);
   return extra > 0
-    ? `${money(held)} cọc giữ chỗ (chuyển đổi 100%) + ${money(extra)} nộp thêm khi ký = ${money(total)}`
-    : `${money(held)} cọc giữ chỗ chuyển đổi 100%, không phải nộp thêm`;
+    ? `${money(held)} cọc chốt căn (chuyển đổi 100%) + ${money(extra)} nộp thêm khi ký = ${money(total)}`
+    : `${money(held)} cọc chốt căn chuyển đổi 100%, không phải nộp thêm`;
 }
 
 const unitScope = (u: any) =>
@@ -287,7 +287,7 @@ export class AdminContractRegistryService {
       startAt: iso(d.paidAt),
       endAt: iso(d.expiresAt),
       amount: Number(d.amount),
-      amountLabel: 'Cọc giữ chỗ',
+      amountLabel: d.fastCloseCycle ? `Cọc bảo đảm (chốt nhanh ${d.fastCloseCycle} tháng)` : 'Cọc bảo đảm',
       needsAction:
         d.paymentStatus === 'UNC_PENDING_REVIEW'
           ? 'Duyệt uỷ nhiệm chi thủ công'

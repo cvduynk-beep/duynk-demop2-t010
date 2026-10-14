@@ -11,7 +11,7 @@ const HISTORY_MONTHS = 6;
  * một tháng được tính là có thu khi hợp đồng còn hiệu lực trong tháng đó.
  * Tỷ lệ phí dịch vụ lấy từ FeeConfig `landlord_service_fee_rate` (Admin cấu hình, legal/01 Điều 6 để mở);
  * chưa cấu hình thì dùng mặc định và báo `feeSource: 'default'` để UI nói rõ đây là mức tạm.
- * Cọc giữ chỗ khách bỏ (`FORFEITED`) ⇒ chủ nhà nhận `LANDLORD_FORFEIT_SHARE` (50%), ghi vào tháng của `expiresAt`
+ * Khoản cọc khách bỏ (`FORFEITED`, cọc v2 = toàn bộ cọc bảo đảm) ⇒ chủ nhà nhận `LANDLORD_FORFEIT_SHARE` (50%), ghi vào tháng của `expiresAt`
  * (thời điểm khách mất cọc — chưa có sổ chi trả thực tế), cộng thẳng vào thực nhận, không trừ phí dịch vụ.
  */
 @Injectable()
@@ -77,7 +77,7 @@ export class LandlordFinanceService {
           rent,
           fee: feeOf(rent),
           net: rent - feeOf(rent),
-          // Cọc đang giữ hộ: cọc bảo đảm của HĐ đang chạy, hoặc 2tr cọc giữ chỗ nếu chưa ký HĐ.
+          // Cọc đang giữ hộ: cọc bảo đảm của HĐ đang chạy, hoặc khoản cọc đã chuyển (amount) nếu chưa ký HĐ.
           escrow: lease ? Number(lease.securityDepositAmount) : (holdByUnit.get(u.id) ?? 0),
         };
       });

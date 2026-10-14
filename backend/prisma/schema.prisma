@@ -556,7 +556,12 @@ model HoldingDeposit {
   termsAcceptedAt  DateTime?     @map("terms_accepted_at") @db.Timestamptz
   termsVersion     String?       @map("terms_version") @db.VarChar(20)
   holdHours        Int?          @map("hold_hours")
-  expiresAt        DateTime?     @map("expires_at") @db.Timestamptz // +7 ngày sau paidAt
+  expiresAt        DateTime?     @map("expires_at") @db.Timestamptz // paidAt + hold_hours
+  /// Cọc v2 (2026-10-14): `amount` = Tiền cọc bảo đảm phải trả. Chốt nhanh ⇒ snapshot dưới đây (migrations-sql/20261014_deposit_v2_fast_close).
+  baseAmount        Decimal?   @map("base_amount") @db.Decimal(12, 2) // cọc trước khi giảm chốt nhanh
+  fastCloseCycle    Int?       @map("fast_close_cycle") // 1 | 3 | 6 tháng đã cam kết
+  quotedMonthlyRent Decimal?   @map("quoted_monthly_rent") @db.Decimal(12, 2) // giá thuê đã chốt (≥ giá sàn)
+  quoteExpiresAt    DateTime?  @map("quote_expires_at") @db.Timestamptz // hạn ưu đãi = tạo cọc + 24h
   agreementDocId   String?       @unique @map("agreement_doc_id") @db.Uuid
   createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz
