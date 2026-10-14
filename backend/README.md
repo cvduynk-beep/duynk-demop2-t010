@@ -163,6 +163,7 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 | `POST /admin/field-hosts` `{email, fullName, assignedZone, roles[1..2], password?}` | ops_admin | Admin tạo Host: Profile `field_host` + hồ sơ Host cùng 1 giao dịch. Không có SĐT (Host tự xác thực OTP), không có số thẻ. Email là Profile `field_host` chưa có hồ sơ Host ⇒ nhận vào. Bỏ `password` ⇒ Host chỉ đăng nhập Google | ✅ |
 | `GET /admin/field-hosts/:id` | ops_admin | hồ sơ Host + `ticketStats` (7 trạng thái ticket); thu nhập/lịch xem chi tiết ở hồ sơ 15 | ✅ |
 | `PATCH /admin/field-hosts/:id` `{fullName?, assignedZone?, roles?, password?, isActive?}` | ops_admin | sửa tên/phân khu, đổi vai (AuditLog `HOST_ROLES_UPDATE`), đặt lại mật khẩu, khoá/mở. Email không sửa được. Phiên của Host đọc lại ngay | ✅ |
+| `PUT /admin/field-hosts/:id/zone-scope` `{zoneScope: all\|selected, managedZones[], version}` | ops_admin | **phạm vi phân khu** (nhận ca pool + xem): `all` = mọi phân khu kể cả tạo sau; `selected` = phân khu chính + `managedZones`. Ghi theo `version` (= `zoneScopeVersion` ở GET), lệch ⇒ 409 `zone_scope_conflict` + `errors.latest`; phân khu lạ ⇒ 400 `invalid_zone`; audit `HOST_ZONE_SCOPE_UPDATE` (cũ → mới). Xem §1.5.5 | ✅ |
 | `DELETE /admin/field-hosts/:id` | ops_admin | khoá mềm (giữ lịch sử ticket/cọc/chi trả); Host đang có ticket OFFERED/ACCEPTED/CHECKED ⇒ 409 `host_has_active_tickets` | ✅ |
 | `GET /admin/commission-engine` · `POST /admin/commission-engine/config` | ops_admin | cấu hình biến phí + nhật ký thay đổi | ✅ |
 | `GET /admin/settings/hold-policy` · `PUT /admin/settings/hold-policy` `{defaultHours, reason, version}` | ops_admin | màn Cài đặt: thời gian giữ chỗ mặc định toàn sàn + người/thời điểm cập nhật cuối + 10 thay đổi gần nhất (gộp giờ riêng từng căn) — quy tắc ở §1.5.3 | ✅ |
@@ -211,6 +212,18 @@ Màn: tổng quan, rổ hàng ký gửi, lịch hẹn & điều phối, sổ h�
 - **Một transaction**: ghi `fee_configs` + `audit_logs` `HOLD_POLICY_UPDATED` (actor, vai, `oldValue {defaultHours, isDefault}`,
   `newValue {defaultHours, reason}`); audit lỗi ⇒ rollback, chính sách không đổi.
 
+#### 1.5.5. Phạm vi phân khu của Field Host (2026-10-14)
+
+- **Nguồn duy nhất** `src/modules/field-hosts/host-scope.ts` → `coversZone(host, zoneName)`. Dùng cho: bảng ca pool
+  (`ZONE_POOL`), `POST /host/tickets/:id/claim`, bảng/chi tiết/`claim` thẩm định ở Open Pool, `GET /host/me` (Sổ tay phân khu).
+- `zone_scope = SELECTED` (mặc định) ⇒ phân khu chính `assigned_zone` ∪ `managed_zones`; `ALL` ⇒ mọi phân khu (wildcard).
+  Host có trước migration giữ nguyên hành vi (chỉ phân khu chính).
+- **Không đổi theo phạm vi**: tự giao ca tầng 1 / giao lại khi quá SLA (`DispatchAssignerService`), giao ca thẩm định
+  (`InspectorAssigner`), "Host phụ trách" (landlord-directory, admin-inventory) — vẫn theo phân khu chính.
+- `claim` đọc lại phạm vi trong transaction (HostActor cache 30s); bảng ca có thể chậm tối đa 30s sau khi Admin đổi.
+- Migration: `prisma/migrations-sql/20261014_host_zone_scope/{up,down}.sql` (thêm enum `HostZoneScope`, 2 cột). **Chạy `up.sql`
+  TRƯỚC khi deploy backend mới** — Prisma client mới đọc 2 cột này ở mọi truy vấn Field Host.
+
 #### 1.5.4. Báo cáo admin (`modules/admin/reports`)
 
 Mỗi báo cáo là một `ReportDefinition` riêng (`*.report.ts`, đăng ký ở `REPORTS`). Tổng hợp ở Postgres (`$queryRaw` +
@@ -248,7 +261,7 @@ DROP INDEX CONCURRENTLY IF EXISTS holding_deposits_paid_at_idx, holding_deposits
 | Tác vụ | Kích hoạt | TT |
 |---|---|---|
 | Nhắc hẹn kép T-10m (push Host + Zalo 1-chạm cho khách) | lịch hẹn `confirmed` | ⬜ |
-| Leo thang điều phối 3 tầng khi ticket quá 3 phút chưa nhận | ticket chưa nhận | ⬜ |
+| Giao lại ca quá SLA 3′ (`dispatch/dispatch-sla.service.ts`, mỗi `DISPATCH_SLA_SWEEP_INTERVAL_MS`, mặc định 15s, chạy ngay lúc boot): ticket cũ `EXPIRED` + `reject_reason = sla_timeout`, ticket tầng 1 mới cho Sale rảnh cùng phân khu, không có ⇒ phân khu gần nhất (toạ độ sảnh); tối đa 2 lần rồi để pool; audit `DISPATCH_REASSIGNED` | ticket OFFERED có Sale, quá 3′, ca chưa tới giờ | ✅ |
 | Hết hạn giữ chỗ → xử lý mất cọc 50/50, mở lại căn `available` | hết thời hạn `holding` | ⬜ |
 | Đếm ngược thoát uỷ quyền 15 ngày → ngừng niêm yết, thu hồi mã cửa | yêu cầu thoát | ⬜ |
 | Cảnh báo quá hạn thẩm định ký gửi | hồ sơ chờ thẩm định | ⬜ |
