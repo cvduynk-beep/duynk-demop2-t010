@@ -13,6 +13,8 @@ interface ConsignOtpSignProps {
   warranted: boolean;
   /** Hồ sơ chủ nhà chưa có SĐT xác thực: phải nhập SĐT, OTP đúng sẽ gắn số này vào hồ sơ. */
   needPhone: boolean;
+  /** SĐT đã xác thực của chính chủ (khi `needPhone` = false) — chỉ để hiển thị. */
+  verifiedPhone?: string | null;
   /**
    * Tạo hồ sơ ký gửi kèm chữ ký (không có bản nháp). `otp` bỏ trống khi ký bằng số đã xác thực.
    * Trả true khi đã ký xong; false khi lỗi (cha tự đặt thông báo qua `onError`).
@@ -21,8 +23,11 @@ interface ConsignOtpSignProps {
   onError: (message: string) => void;
 }
 
-/** Ký ủy quyền bằng OTP Zalo gửi tới SĐT chủ nhà: gửi mã → nhập 4 số là tạo hồ sơ + ký (số đã xác thực thì ký thẳng). */
-export function ConsignOtpSign({ warranted, needPhone, onSign, onError }: ConsignOtpSignProps) {
+/**
+ * Ký ủy quyền. SĐT tài khoản đã xác thực Zalo ⇒ ký thẳng 1 bước (backend tin số đã xác thực, `otpSkipped`), KHÔNG gửi OTP.
+ * Chưa có số xác thực ⇒ nhập SĐT → gửi mã → nhập 4 số là tạo hồ sơ + ký.
+ */
+export function ConsignOtpSign({ warranted, needPhone, verifiedPhone, onSign, onError }: ConsignOtpSignProps) {
   const [phone, setPhone] = useState("");
   const [info, setInfo] = useState<SignOtpInfo | null>(null);
   const [code, setCode] = useState("");
@@ -64,6 +69,19 @@ export function ConsignOtpSign({ warranted, needPhone, onSign, onError }: Consig
       setCode("");
     }
   };
+
+  if (!needPhone) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <p className="muted small">
+          Bạn ký bằng số Zalo đã xác thực{verifiedPhone ? <> <b className="tnum">{fmtPhone(verifiedPhone)}</b></> : null}, không cần nhập mã OTP.
+        </p>
+        <button type="button" className="btn btn-primary btn-lg btn-block" disabled={!warranted || busy} onClick={() => void sign()}>
+          {busy ? "Đang ký..." : "Ký ủy quyền độc quyền"}
+        </button>
+      </div>
+    );
+  }
 
   if (!info) {
     return (

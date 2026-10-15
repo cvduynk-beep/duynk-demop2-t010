@@ -58,33 +58,21 @@ export interface UrbanProject {
   }[];
 }
 
+/** Gom toà trong DB theo phân khu (giữ thứ tự xuất hiện của phân khu, toà sắp theo mã). */
+export function zonesFromBuildings(buildings: readonly BuildingOption[]): UrbanProject["zones"] {
+  const byZone = new Map<string, string[]>();
+  for (const b of buildings) byZone.set(b.zoneName, [...(byZone.get(b.zoneName) ?? []), b.buildingCode]);
+  return [...byZone].map(([name, codes]) => ({ name, buildings: codes.sort((a, b) => a.localeCompare(b, "vi", { numeric: true })) }));
+}
+
 export const URBAN_PROJECTS: UrbanProject[] = [
   {
     id: "vhop1",
     name: "Vinhomes Ocean Park 1",
     location: "Gia Lâm, Hà Nội (Đang trực chiến)",
-    zones: [
-      {
-        name: "The Sapphire 1",
-        buildings: ["S1.01", "S1.02", "S1.03", "S1.05", "S1.06", "S1.07", "S1.08", "S1.09", "S1.10", "S1.11", "S1.12"],
-      },
-      {
-        name: "The Sapphire 2",
-        buildings: ["S2.01", "S2.02", "S2.03", "S2.05", "S2.06", "S2.07", "S2.08", "S2.09", "S2.10", "S2.11", "S2.12", "S2.15", "S2.16", "S2.17", "S2.18", "S2.19"],
-      },
-      {
-        name: "The Zenpark",
-        buildings: ["R1.01", "R1.02", "R1.03", "R1.05", "ZR1", "ZR2"],
-      },
-      {
-        name: "The Pavilion",
-        buildings: ["P1", "P2", "P3", "P4", "BE3"],
-      },
-      {
-        name: "Masteri Waterfront",
-        buildings: ["M1", "M2", "M3", "H1", "H2", "H3"],
-      },
-    ],
+    // Phân khu + toà của Ocean Park 1 lấy từ DB (`GET /landlord/buildings`) — backend chỉ nhận toà có trong bảng
+    // `buildings` (400 "Tòa nhà không thuộc phân khu hỗ trợ"). CẤM ghi cứng danh sách toà ở đây.
+    zones: [],
   },
   {
     id: "vhsc",
@@ -179,7 +167,7 @@ const blank: Form = {
   areaM2: "",
   askRent: "",
   suggestedDeposit: "",
-  leaseTerm: "flexible",
+  leaseTerm: "mid",
   maxOccupants: 2,
   petPolicy: "no",
   furnished: true,
@@ -204,7 +192,7 @@ export function ConsignWizard() {
           <QueryView query={buildings} skeleton="form">
             {(bs) => (
               <QueryView query={profile} skeleton="form">
-                {(p) => <Wizard buildings={bs} phoneVerified={p.isPhoneVerified} payout={v.payout.account} />}
+                {(p) => <Wizard buildings={bs} phoneVerified={p.isPhoneVerified} verifiedPhone={p.phone ?? null} payout={v.payout.account} />}
               </QueryView>
             )}
           </QueryView>
@@ -258,34 +246,38 @@ function VerifyGate({ v }: { v: LandlordVerification }) {
 function Wizard({
   buildings,
   phoneVerified,
+  verifiedPhone,
   payout,
 }: {
   buildings: BuildingOption[];
   phoneVerified: boolean;
+  verifiedPhone: string | null;
   /** Tài khoản thụ hưởng ĐÃ XÁC THỰC (dạng che) — căn ký gửi sẽ nhận tiền về đây. */
   payout: BankPayoutAccount | null;
 }) {
 
-  const initialProject = URBAN_PROJECTS.find((p) => p.id === "vhop1") || URBAN_PROJECTS[0];
+  const dbZones = zonesFromBuildings(buildings);
+  const zonesOf = (projId: string) => (projId === "vhop1" ? dbZones : URBAN_PROJECTS.find((p) => p.id === projId)?.zones ?? []);
 
-  const [projectId, setProjectId] = useState<string>(initialProject.id);
-  const [zoneNameSelected, setZoneNameSelected] = useState<string>(initialProject.zones[0].name);
+  const [projectId, setProjectId] = useState<string>("vhop1");
+  const [zoneNameSelected, setZoneNameSelected] = useState<string>(dbZones[0]?.name ?? "");
 
   const activeProject = URBAN_PROJECTS.find((p) => p.id === projectId);
-  const activeZone = activeProject?.zones.find((z) => z.name === zoneNameSelected);
+  const activeZones = zonesOf(projectId);
+  const activeZone = activeZones.find((z) => z.name === zoneNameSelected);
   const availableBuildings = activeZone?.buildings || [];
 
   const [step, setStep] = useState(0);
   const [f, setF] = useState<Form>({
     ...blank,
-    building: availableBuildings[0] ?? buildings[0]?.buildingCode ?? "S1.02",
+    building: availableBuildings[0] ?? buildings[0]?.buildingCode ?? "",
   });
 
   const handleProjectChange = (newProjId: string) => {
     setProjectId(newProjId);
-    const proj = URBAN_PROJECTS.find((p) => p.id === newProjId);
-    if (proj && proj.zones.length > 0) {
-      const firstZone = proj.zones[0];
+    const zones = zonesOf(newProjId);
+    if (zones.length > 0) {
+      const firstZone = zones[0];
       setZoneNameSelected(firstZone.name);
       if (firstZone.buildings.length > 0) {
         set("building", firstZone.buildings[0]);
@@ -295,8 +287,7 @@ function Wizard({
 
   const handleZoneChange = (newZoneName: string) => {
     setZoneNameSelected(newZoneName);
-    const proj = URBAN_PROJECTS.find((p) => p.id === projectId);
-    const zoneObj = proj?.zones.find((z) => z.name === newZoneName);
+    const zoneObj = zonesOf(projectId).find((z) => z.name === newZoneName);
     if (zoneObj && zoneObj.buildings.length > 0) {
       set("building", zoneObj.buildings[0]);
     }
@@ -699,7 +690,7 @@ function Wizard({
                   value={zoneNameSelected}
                   onChange={(e) => handleZoneChange(e.target.value)}
                 >
-                  {activeProject?.zones.map((z) => (
+                  {activeZones.map((z) => (
                     <option key={z.name} value={z.name}>
                       {z.name}
                     </option>
@@ -793,15 +784,16 @@ function Wizard({
                 <span className="label">Thời gian thuê mong muốn</span>
                 <select
                   className="select"
-                  value={f.leaseTerm === "mid" ? "flexible" : f.leaseTerm}
+                  value={f.leaseTerm === "fixed" ? "long" : f.leaseTerm}
                   onChange={(e) => set("leaseTerm", e.target.value as LeaseTermPref)}
                 >
-                  <option value="flexible">Linh hoạt: Từ 1 tháng trở lên (Khuyên dùng · Tối đa doanh thu & Lấp phòng)</option>
-                  <option value="long">Cố định: Từ 12 tháng trở lên (Dòng tiền ổn định 1 năm)</option>
+                  <option value="mid">{LEASE_TERM_LABEL.mid}</option>
+                  <option value="long">{LEASE_TERM_LABEL.long}</option>
                 </select>
-                {f.leaseTerm === "flexible" && (
+                {f.leaseTerm === "mid" && (
                   <span className="muted xs" style={{ marginTop: 6, display: "block", color: "#0369a1", lineHeight: 1.5 }}>
-                    💡 <b>Biểu phí tự động của AI theo kỳ hạn:</b> Dưới 3 tháng (+15%), từ 3 đến dưới 6 tháng (+8%), từ 6 đến dưới 12 tháng (+4%), từ 12 tháng trở lên (100% giá chuẩn). Triệt tiêu thời gian trống phòng và tối đa hóa doanh thu cho bạn.
+                    💡 Khách thuê tối thiểu 6 tháng, cùng một mức giá chuẩn (không phụ phí thuê ngắn hạn). Khách trả trước 1/3/6 tháng/lần chỉ được giảm giá
+                    khi bạn bật Ủy quyền chốt nhanh, và không bao giờ thấp hơn Giá sàn.
                   </span>
                 )}
                 {f.leaseTerm === "long" && (
@@ -1668,11 +1660,12 @@ function Wizard({
               <ConsignOtpSign
                 warranted={warranted}
                 needPhone={!phoneVerified}
+                verifiedPhone={verifiedPhone}
                 onSign={submitSigned}
                 onError={setErr}
               />
               <p className="muted xs" style={{ textAlign: "center", marginTop: 8 }}>
-                Nhập mã OTP Zalo đồng nghĩa với việc bạn ký Hợp đồng ủy quyền quản lý căn hộ độc quyền 12 tháng (tự gia hạn), có
+                {phoneVerified ? "Bấm ký bằng tài khoản có số Zalo đã xác thực" : "Nhập mã OTP Zalo"} đồng nghĩa với việc bạn ký Hợp đồng ủy quyền quản lý căn hộ độc quyền 12 tháng (tự gia hạn), có
                 giá trị pháp lý theo Luật Giao dịch điện tử 2023.
               </p>
             </div>
