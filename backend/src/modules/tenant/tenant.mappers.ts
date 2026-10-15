@@ -127,6 +127,7 @@ export function toTenantUnit(
       holdingDeposit: 0,
       highlights: [],
       inventory: [],
+      fastDeposit: null,
     };
   }
   const kind = layoutTypeToKind(unit.layoutType);
@@ -186,6 +187,7 @@ export function toTenantUnit(
     holdingDeposit: securityDepositAmount(unit),
     highlights: Array.isArray(unit.highlights) ? unit.highlights : [],
     inventory: toInventoryLines(unit.inventoryItems),
+    fastDeposit: null,
   };
 }
 

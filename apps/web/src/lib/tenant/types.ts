@@ -63,6 +63,8 @@ export interface TenantUnit {
   holdingDeposit: number; // Khoản cọc khách chuyển khi chốt căn (cọc v2 = Tiền cọc bảo đảm) — chỉ đọc từ API
   highlights: string[]; // ≤ 3
   inventory: UnitInventoryLine[]; // chỉ ở chi tiết căn; danh sách = []
+  /** Căn có "Chốt cọc nhanh": mức giảm TIỀN CỌC (không phải giá thuê). Thiếu/null = không có. */
+  fastDeposit?: { depositDiscount: number } | null;
 }
 
 export interface CreateBookingDto {

@@ -68,6 +68,11 @@ export interface TenantUnit {
   highlights: string[];
   /** Chỉ ở chi tiết căn; list = []. có conditionPct (độ mới %), KHÔNG có compensation/photoIds (B6). */
   inventory: UnitInventoryLine[];
+  /**
+   * Căn có "Chốt cọc nhanh" (chủ nhà ủy quyền + căn trống): mức giảm TIỀN CỌC. null = không có.
+   * KHÔNG có giá sàn / giá thuê đã giảm (giá thuê theo chu kỳ chỉ báo cho chủ lịch lúc ký HĐ). Chỉ catalog + chi tiết điền.
+   */
+  fastDeposit: { depositDiscount: number } | null;
 }
 
 export interface CreateBookingDto {

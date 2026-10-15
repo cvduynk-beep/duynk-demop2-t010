@@ -1,6 +1,6 @@
 import { securityDepositAmount } from './deposit-amount';
 import { FAST_CLOSE_CYCLES, FAST_CLOSE_QUOTE_HOURS, fastCloseRent, fastDepositQuote, type FastCloseRentQuote, type FastCloseSource } from './fast-close';
-import { readConsignmentMeta } from '../landlord/landlord.mappers';
+import { fastCloseSourceOf } from './fast-close-source';
 import {
   Injectable,
   BadRequestException,
@@ -96,9 +96,7 @@ export class DepositService {
    */
   async fastCloseSource(db: any, unit: { id: string; baseRentPrice: unknown; securityDeposit?: unknown }): Promise<FastCloseSource> {
     const mandate = await db.exclusiveMandate.findFirst({ where: { unitId: unit.id }, orderBy: { createdAt: 'desc' }, select: { doorAccessConfig: true } });
-    const form = readConsignmentMeta(mandate?.doorAccessConfig)?.form;
-    const floor = form?.allowFastClose && form.floorRent ? Number(form.floorRent) : null;
-    return { rent: Math.round(Number(unit.baseRentPrice)), deposit: securityDepositAmount(unit), floorRent: floor };
+    return fastCloseSourceOf(unit, mandate?.doorAccessConfig);
   }
 
   /**

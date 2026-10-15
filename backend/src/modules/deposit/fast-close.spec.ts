@@ -1,3 +1,4 @@
+import { fastDepositBadge, latestMandateConfigs } from './fast-close-source';
 import { depositDiscount, fastCloseQuote, fastCloseQuotes, fastCloseRent, fastDepositQuote, isFastCloseEligible } from './fast-close';
 import { evaluateMoveIn, moveInWindow } from '../contract/move-in';
 
@@ -49,5 +50,33 @@ describe('move-in — Smart Move-in Window (giờ VN)', () => {
     expect(evaluateMoveIn(paid, '2026-10-21')).toMatchObject({ ok: true, billingStartDate: '2026-10-21', freeHolding: true });
     expect(evaluateMoveIn(paid, '2026-11-01')).toMatchObject({ ok: true, moveInDate: '2026-11-01', billingStartDate: '2026-10-21', freeHolding: false });
     for (const bad of ['2026-10-15', '2026-11-14', '2026-02-30', '14/10/2026']) expect(evaluateMoveIn(paid, bad).ok).toBe(false);
+  });
+});
+
+describe('fast-close-source — dấu "Cọc nhanh" trên catalog (hồ sơ 20)', () => {
+  const cfg = (floorRent: number | null, allowFastClose = true) => ({ consignment: { form: { allowFastClose, floorRent } } });
+  const unit = { status: 'AVAILABLE', baseRentPrice: 9_200_000, securityDeposit: null };
+  it('ủy quyền + căn trống ⇒ chỉ có mức giảm TIỀN CỌC, không có giá sàn / giá thuê', () => {
+    const b = fastDepositBadge(unit, cfg(8_500_000));
+    expect(b).toEqual({ depositDiscount: 450_000 }); // 9,2tr × 5% = 460k → làm tròn 50k = 450k
+    expect(JSON.stringify(b)).not.toMatch(/floor|rent/i);
+  });
+  it('không ủy quyền / không hồ sơ / sàn > giá chào / căn đang giữ ⇒ null', () => {
+    expect(fastDepositBadge(unit, cfg(8_500_000, false))).toBeNull();
+    expect(fastDepositBadge(unit, undefined)).toBeNull();
+    expect(fastDepositBadge(unit, cfg(9_500_000))).toBeNull();
+    expect(fastDepositBadge({ ...unit, status: 'HOLDING' }, cfg(8_500_000))).toBeNull();
+  });
+  it('lấy hồ sơ ký gửi MỚI NHẤT của từng căn trong một truy vấn', async () => {
+    const findMany = jest.fn(async () => [
+      { unitId: 'u1', doorAccessConfig: 'moi' },
+      { unitId: 'u1', doorAccessConfig: 'cu' },
+      { unitId: 'u2', doorAccessConfig: 'u2' },
+    ]);
+    const m = await latestMandateConfigs({ exclusiveMandate: { findMany } }, ['u1', 'u2']);
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(m.get('u1')).toBe('moi');
+    expect(m.get('u2')).toBe('u2');
+    expect((await latestMandateConfigs({ exclusiveMandate: { findMany } }, [])).size).toBe(0);
   });
 });
