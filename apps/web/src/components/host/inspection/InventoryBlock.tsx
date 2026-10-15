@@ -34,6 +34,14 @@ export function InventoryBlock({ draft, catalog, photos, invalidField, onChange,
   const [open, setOpen] = useState<Record<InventoryGroup, boolean>>({ I: true, II: true, III: false, IV: false, V: false, VI: false, VII: false, VIII: false });
   const bad = invalidIndex(invalidField);
   const n = catalog.length;
+  // Lỗi kiểm tra mở nhóm chứa dòng lỗi ⇒ GHI LẠI là đang mở. Không ghi thì sửa dòng đó (chọn độ mới, gõ quy cách…) xoá lỗi,
+  // nhóm tự đóng ngay dưới tay Host và trang nhảy lên trên.
+  const badGroup = bad >= 0 && bad < n ? draft.inventory[bad]?.group : undefined;
+  const [seenBadGroup, setSeenBadGroup] = useState<InventoryGroup | undefined>(undefined);
+  if (badGroup !== seenBadGroup) {
+    setSeenBadGroup(badGroup);
+    if (badGroup && !open[badGroup]) setOpen({ ...open, [badGroup]: true });
+  }
   const declared = declaredCodes ? new Set(declaredCodes) : null;
   const declaredLabels = declaredCodes ? landlordItemLabels(declaredCodes) : [];
   const allOpen = GROUPS.every((g) => open[g]);
