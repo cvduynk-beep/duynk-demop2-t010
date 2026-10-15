@@ -1023,7 +1023,7 @@ function Wizard({
                     <div className={styles.detailBoxItem}>
                       <Zap size={14} className={styles.detailBoxIcon} />
                       <div>
-                        <b>Cơ chế ưu đãi tự động:</b> AI và Field Host chỉ được phép kích hoạt chiết khấu linh hoạt khi khách cam kết thanh toán trước từ 6–12 tháng hoặc chốt cọc trong 24h.
+                        <b>Cơ chế ưu đãi tự động:</b> Khách chuyển cọc trong 24h được giảm ~5% tiền cọc (tối thiểu 200.000đ, tối đa 8%) và được chốt cọc ngay trên app mà không cần đi xem. Khi ký hợp đồng, khách trả trước 1/3/6 tháng/lần được giảm giá thuê 3,5%/5,5%/10%, không bao giờ thấp hơn Giá sàn của bạn.
                       </div>
                     </div>
                     <div className={styles.detailBoxItem}>
@@ -1085,7 +1085,7 @@ function Wizard({
                             type="button"
                             className={`${styles.presetChip} ${floorRentNum === Math.round((rent * 0.95) / 50_000) * 50_000 ? styles.presetChipActive : ""}`}
                             onClick={() => set("floorRent", String(Math.round((rent * 0.95) / 50_000) * 50_000))}
-                            title="Chiết khấu 5% khi khách đóng 6-12 tháng"
+                            title="Giá sàn thấp hơn giá chào 5%: kỳ 6 tháng (−10%) bị kẹp tại giá sàn"
                           >
                             -5% ({vnd(Math.round((rent * 0.95) / 50_000) * 50_000)}đ)
                           </button>
@@ -1093,7 +1093,7 @@ function Wizard({
                             type="button"
                             className={`${styles.presetChip} ${floorRentNum === Math.round((rent * 0.92) / 50_000) * 50_000 ? styles.presetChipActive : ""}`}
                             onClick={() => set("floorRent", String(Math.round((rent * 0.92) / 50_000) * 50_000))}
-                            title="Chiết khấu 8% khi khách đóng 12 tháng"
+                            title="Giá sàn thấp hơn giá chào 8%: kỳ 6 tháng (−10%) bị kẹp tại giá sàn"
                           >
                             -8% ({vnd(Math.round((rent * 0.92) / 50_000) * 50_000)}đ)
                           </button>
@@ -1101,7 +1101,7 @@ function Wizard({
                             type="button"
                             className={`${styles.presetChip} ${floorRentNum === Math.round((rent * 0.9) / 50_000) * 50_000 ? styles.presetChipActive : ""}`}
                             onClick={() => set("floorRent", String(Math.round((rent * 0.9) / 50_000) * 50_000))}
-                            title="Chiết khấu 10% để chốt cọc trong 24h"
+                            title="Giá sàn thấp hơn giá chào 10%: đủ cho cả 3 mức giảm 3,5% / 5,5% / 10%"
                           >
                             -10% ({vnd(Math.round((rent * 0.9) / 50_000) * 50_000)}đ)
                           </button>
@@ -1602,7 +1602,7 @@ function Wizard({
             <ul className={styles.terms}>
               <li>
                 <ShieldCheck size={16} /> <b>Bảo vệ Giá Sàn & Bảo mật 100%:</b> Trường hợp bật Ủy quyền chốt nhanh, hệ thống chỉ
-                kích hoạt chiết khấu khi khách đóng 6–12 tháng hoặc cọc trong 24h; cam kết tuyệt đối không bao giờ chốt giá thấp
+                giảm ~5% tiền cọc khi khách cọc trong 24h và giảm giá thuê 3,5%/5,5%/10% khi khách trả trước 1/3/6 tháng/lần; cam kết tuyệt đối không bao giờ chốt giá thấp
                 hơn Giá sàn {f.allowFastClose && floorRentNum > 0 ? `${vnd(floorRentNum)}đ/tháng` : "đã định"} và bảo mật giá sàn
                 không công khai cho khách thuê.
               </li>

@@ -1,4 +1,4 @@
-import { depositDiscount, fastCloseQuote, fastCloseQuotes } from './fast-close';
+import { depositDiscount, fastCloseQuote, fastCloseQuotes, fastCloseRent, fastDepositQuote, isFastCloseEligible } from './fast-close';
 import { evaluateMoveIn, moveInWindow } from '../contract/move-in';
 
 describe('fast-close — công thức chốt nhanh', () => {
@@ -16,6 +16,26 @@ describe('fast-close — công thức chốt nhanh', () => {
     expect(depositDiscount(20_000_000)).toBe(1_000_000);
     expect(depositDiscount(3_000_000)).toBe(200_000); // 5% = 150k ⇒ sàn 200k (≤ 8% = 240k)
     expect(depositDiscount(2_000_000)).toBe(150_000); // 8% = 160k ⇒ chặn 150k (bội 50k)
+  });
+});
+
+describe('fast-close — hai bước (hồ sơ 20): giảm cọc lúc cọc, giá thuê theo chu kỳ lúc ký HĐ', () => {
+  const src = { rent: 6_300_000, deposit: 6_300_000, floorRent: 5_800_000 };
+  it('bước cọc: 6.300.000 ⇒ giảm 300.000, chuyển 6.000.000; không phụ thuộc chu kỳ', () => {
+    expect(fastDepositQuote(src)).toEqual({ originalDeposit: 6_300_000, depositDiscount: 300_000, deposit: 6_000_000 });
+  });
+  it('bước ký: 3,5% / 5,5% / 10% làm tròn 50k, không bao giờ dưới giá sàn', () => {
+    expect([1, 3, 6].map((c) => fastCloseRent(src, c as 1 | 3 | 6)!.rent)).toEqual([6_100_000, 5_950_000, 5_800_000]); // 6tr: 5.670.000 < sàn ⇒ 5.800.000
+    for (const floorRent of [3_000_000, 5_000_000, 6_000_000, 6_300_000]) {
+      for (const c of [1, 3, 6] as const) expect(fastCloseRent({ ...src, floorRent }, c)!.rent).toBeGreaterThanOrEqual(floorRent);
+    }
+  });
+  it('không ủy quyền / sàn ≤ 0 / sàn > giá chào ⇒ không có cả hai bước (CẤM tự suy giá sàn)', () => {
+    for (const floorRent of [null, 0, -1, 6_300_001]) {
+      expect(isFastCloseEligible({ ...src, floorRent })).toBe(false);
+      expect(fastDepositQuote({ ...src, floorRent })).toBeNull();
+      expect(fastCloseRent({ ...src, floorRent }, 6)).toBeNull();
+    }
   });
 });
 

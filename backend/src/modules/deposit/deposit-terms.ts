@@ -1,8 +1,12 @@
 import { DepositTermsDoc } from '../tenant/tenant.types';
 import { clampHoldHours, HOLD_HOURS_DEFAULT } from './hold-policy';
 
-/** v2 (2026-10-14): chuyển thẳng Tiền cọc bảo đảm thay cọc giữ chỗ 2.000.000đ; khách đã tick v1 phải tick lại. */
-export const DEPOSIT_TERMS_VERSION = 'DEP-2026.10-v2';
+/**
+ * v2 (2026-10-14): chuyển thẳng Tiền cọc bảo đảm thay cọc giữ chỗ 2.000.000đ.
+ * v3 (2026-10-15, hồ sơ 20): chốt nhanh tách hai bước (giảm cọc lúc cọc, chọn chu kỳ lúc ký HĐ) + cọc không cần xem trực tiếp.
+ * Khách đã tick bản cũ mà chưa có tiền về phải tick lại.
+ */
+export const DEPOSIT_TERMS_VERSION = 'DEP-2026.10-v3';
 
 export const HOUSE_RULES = [
   {
@@ -75,8 +79,13 @@ export function buildDepositTerms(holdHours: number = HOLD_HOURS_DEFAULT, amount
       },
       {
         id: 'fast_close',
-        text: 'Chốt nhanh (chỉ khi chủ nhà ủy quyền): Bên B cam kết chu kỳ thanh toán 1/3/6 tháng để được giảm giá thuê (không thấp hơn giá sàn chủ nhà đặt) và giảm khoảng 5% tiền cọc; ưu đãi chỉ giữ khi tiền cọc về trong 24 giờ, quá hạn hệ thống hoàn lại khoản đã chuyển và Bên B đặt cọc lại theo giá thường. Hợp đồng thuê bắt buộc đúng chu kỳ và giá đã chốt.',
+        text: 'Chốt nhanh (chỉ khi chủ nhà ủy quyền): Tiền cọc bảo đảm được giảm khoảng 5% (tối thiểu 200.000đ, tối đa 8%) nếu tiền cọc về trong 24 giờ kể từ lúc Bên B đồng ý; quá hạn hệ thống hoàn lại khoản đã chuyển, căn không bị khoá và Bên B đặt cọc lại theo giá thường. Khi ký Hợp đồng thuê, Bên B chọn chu kỳ thanh toán 1/3/6 tháng để được giảm giá thuê 3,5%/5,5%/10% (không thấp hơn giá sàn chủ nhà đặt); Hợp đồng giữ đúng chu kỳ và giá đã chọn. Khoản cọc đã giảm là Tiền cọc bảo đảm đầy đủ, không nộp bù.',
         source: 'AGENTS.md Chủ nhà #1 (Giá sàn an toàn) · legal/02 Điều 2.6',
+      },
+      {
+        id: 'no_viewing',
+        text: 'Chốt cọc không cần xem trực tiếp (chỉ căn chủ nhà ủy quyền chốt nhanh): Bên B xác nhận đã xem ảnh thực tế có dấu thời gian và thông tin căn đã xác minh [Tòa–Tầng–Căn]. Người thân có thể chuyển khoản thay (Điều 283 BLDS 2015) nhưng Bên B — chủ số điện thoại đã xác thực OTP — là người đặt cọc. Không ký Hợp đồng thuê vì lý do cá nhân (kể cả không ưng khi tới nhận nhà) thì xử lý cọc như mục dưới.',
+        source: 'legal/02 Điều 2.7 · tenant/02 §2.4',
       },
       {
         id: 'move_in',

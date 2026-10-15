@@ -1,5 +1,5 @@
 import { securityDepositAmount } from './deposit-amount';
-import { FAST_CLOSE_QUOTE_HOURS, fastCloseQuote, fastCloseQuotes, isFastCloseCycle, type FastCloseSource } from './fast-close';
+import { FAST_CLOSE_CYCLES, FAST_CLOSE_QUOTE_HOURS, fastCloseRent, fastDepositQuote, type FastCloseRentQuote, type FastCloseSource } from './fast-close';
 import { readConsignmentMeta } from '../landlord/landlord.mappers';
 import {
   Injectable,
@@ -24,6 +24,19 @@ import { DepositStatus, HostRole, TicketStatus, UnitStatus, ViewingStatus } from
 
 function isSerializationConflict(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as any).code === 'P2034');
+}
+
+/** Cọc chốt nhanh = có hạn ưu đãi 24 giờ (hồ sơ 20 · 01-CONTRACTS §2). Chu kỳ có thể còn NULL tới lúc ký HĐ. */
+export const isFastDeposit = (d: { quoteExpiresAt?: unknown } | null | undefined): boolean => d?.quoteExpiresAt != null;
+
+/** Báo giá công khai trên trang căn — KHÔNG có giá sàn, KHÔNG có giá thuê đã giảm. */
+export interface PublicFastDepositQuote {
+  eligible: boolean;
+  holdHours: number;
+  quoteHours: number;
+  deposit: number;
+  depositDiscount: number;
+  amount: number;
 }
 
 @Injectable()
@@ -79,9 +92,9 @@ export class DepositService {
 
   /**
    * Nguồn chốt nhanh của căn: giá chào, Tiền cọc bảo đảm, giá sàn (meta hồ sơ ký gửi mới nhất; chủ nhà không ủy quyền ⇒
-   * `floorRent` null). Giá sàn KHÔNG bao giờ trả ra API — chỉ dùng để kẹp giá đã giảm.
+   * `floorRent` null). Giá sàn KHÔNG bao giờ trả ra API — chỉ dùng để kẹp giá đã giảm. Dùng chung với LeaseSigningService.
    */
-  private async fastCloseSource(db: any, unit: { id: string; baseRentPrice: unknown; securityDeposit?: unknown }): Promise<FastCloseSource> {
+  async fastCloseSource(db: any, unit: { id: string; baseRentPrice: unknown; securityDeposit?: unknown }): Promise<FastCloseSource> {
     const mandate = await db.exclusiveMandate.findFirst({ where: { unitId: unit.id }, orderBy: { createdAt: 'desc' }, select: { doorAccessConfig: true } });
     const form = readConsignmentMeta(mandate?.doorAccessConfig)?.form;
     const floor = form?.allowFastClose && form.floorRent ? Number(form.floorRent) : null;
@@ -89,21 +102,57 @@ export class DepositService {
   }
 
   /**
-   * Báo giá chốt nhanh cho CHÍNH chủ lịch hẹn ở bước chốt cọc (không công khai trên trang căn ⇒ không suy ngược được
-   * giá sàn từ catalog). Không đủ điều kiện ⇒ `eligible: false`, `quotes: []`.
+   * Công khai (trang căn): căn có nút "Chốt cọc nhanh" không và giảm bao nhiêu tiền cọc. Mức giảm cọc chỉ phụ thuộc số cọc
+   * nên không suy ngược được giá sàn; giá thuê theo chu kỳ chỉ báo cho chủ lịch (`getFastCloseQuotes`).
+   */
+  async getPublicFastDeposit(unitCode: string): Promise<PublicFastDepositQuote> {
+    const unit = await this.prisma.unit.findFirst({
+      where: { unitCode: { equals: unitCode.trim(), mode: 'insensitive' }, isVerified: true, media: { some: {} } },
+    });
+    if (!unit) throw new NotFoundException({ message: 'Không tìm thấy căn hộ.', code: 'unit_not_found' });
+    const src = await this.fastCloseSource(this.prisma, unit);
+    const quote = unit.status === UnitStatus.AVAILABLE ? fastDepositQuote(src) : null;
+    return {
+      eligible: quote != null,
+      holdHours: await resolveHoldHours(this.prisma, { override: unit.holdHoursOverride }),
+      quoteHours: FAST_CLOSE_QUOTE_HOURS,
+      deposit: src.deposit,
+      depositDiscount: quote?.depositDiscount ?? 0,
+      amount: quote?.deposit ?? src.deposit,
+    };
+  }
+
+  /**
+   * Báo giá chốt nhanh cho CHÍNH chủ lịch hẹn (không công khai ⇒ không suy ngược được giá sàn từ catalog).
+   * `stage = 'deposit'`: lịch đang chốt cọc — giảm cọc + xem trước giá thuê theo chu kỳ.
+   * `stage = 'lease'`: đã giữ căn bằng cọc chốt nhanh, chưa chọn chu kỳ — khách chọn ở bước ký HĐ.
    */
   async getFastCloseQuotes(ref: string, user: { id: string }) {
     const viewing = await this.bookingAccess.loadOwned(ref, user);
     const unit = await this.prisma.unit.findUnique({ where: { id: viewing.unitId } });
     if (!unit) throw new NotFoundException({ message: 'Không tìm thấy căn hộ.', code: 'unit_not_found' });
     const src = await this.fastCloseSource(this.prisma, unit);
-    const quotes = viewing.status === ViewingStatus.CLOSING ? fastCloseQuotes(src) : [];
+    const dep = viewing.deposit;
+    let stage: 'deposit' | 'lease' | null = null;
+    if (viewing.status === ViewingStatus.CLOSING) stage = 'deposit';
+    else if (
+      viewing.status === ViewingStatus.HOLDING &&
+      dep?.paymentStatus === DepositStatus.PAID_HOLDING &&
+      isFastDeposit(dep) &&
+      dep.fastCloseCycle == null
+    ) stage = 'lease';
+    const depositQuote = fastDepositQuote(src);
+    const quotes = stage && depositQuote ? FAST_CLOSE_CYCLES.map((c) => fastCloseRent(src, c)).filter((q): q is FastCloseRentQuote => q != null) : [];
+    const eligible = quotes.length > 0;
     return {
-      eligible: quotes.length > 0,
+      eligible,
+      stage: eligible ? stage : null,
       quoteHours: FAST_CLOSE_QUOTE_HOURS,
       rent: src.rent,
       deposit: src.deposit,
-      quotes: quotes.map(({ cycle, rent, rentDiscount, rentDiscountPct, deposit, depositDiscount }) => ({ cycle, rent, rentDiscount, rentDiscountPct, deposit, depositDiscount })),
+      depositDiscount: eligible ? depositQuote!.depositDiscount : 0,
+      depositAfter: eligible ? depositQuote!.deposit : src.deposit,
+      quotes: quotes.map(({ cycle, rent, rentDiscount, rentDiscountPct }) => ({ cycle, rent, rentDiscount, rentDiscountPct })),
     };
   }
 
@@ -112,6 +161,8 @@ export class DepositService {
     user: { id: string },
     dto: CreateDepositDto,
     reqContext?: { ip?: string; userAgent?: string },
+    /** Cọc trực tiếp từ trang căn (`POST /bookings/fast-deposit`): ghi dấu vào audit. */
+    origin?: { direct: true; acknowledgeNoViewing: true },
   ): Promise<TenantBooking> {
     if (!isDemoToolsEnabled() && (!getVietQrConfig() || !isVietQrWebhookConfigured())) {
       throw new ServiceUnavailableException({
@@ -145,34 +196,27 @@ export class DepositService {
       });
     }
 
-    const rawCycle = dto.fastCloseCycle;
-    if (rawCycle != null && !isFastCloseCycle(rawCycle)) {
-      throw new BadRequestException({
-        message: 'Chu kỳ chốt nhanh phải là 1, 3 hoặc 6 tháng.',
-        code: 'invalid_request',
-        errors: { fastCloseCycle: 'Chu kỳ chốt nhanh phải là 1, 3 hoặc 6 tháng.' },
-      });
-    }
-    const cycle: 1 | 3 | 6 | null = isFastCloseCycle(rawCycle) ? rawCycle : null;
+    // Chu kỳ 1/3/6 chọn ở bước ký HĐ (hồ sơ 20); lúc cọc chỉ có giảm cọc.
+    const fastClose = dto.fastClose === true;
 
     // Check existing deposit (viewing_id UNIQUE ⇒ một khoản cọc / lịch; chưa có tiền về thì được báo giá lại trên chính dòng đó)
     const existingDeposit = await this.prisma.holdingDeposit.findUnique({
       where: { viewingId: viewing.id },
     });
     const now0 = new Date();
-    const quoteAlive = (d: any) => !d.fastCloseCycle || !d.quoteExpiresAt || new Date(d.quoteExpiresAt) > now0;
+    const quoteAlive = (d: any) => !isFastDeposit(d) || new Date(d.quoteExpiresAt) > now0;
     const reusable = (d: any) =>
       d.paymentStatus === DepositStatus.QR_EXPIRED ||
       d.paymentStatus === DepositStatus.PENDING_PAYMENT ||
-      (d.paymentStatus === DepositStatus.REFUNDED && d.fastCloseCycle != null); // hoàn vì quá hạn chốt nhanh
+      (d.paymentStatus === DepositStatus.REFUNDED && isFastDeposit(d)); // hoàn vì quá hạn chốt nhanh
 
     // Chụp giá trị cũ TRƯỚC khi ghi (audit cũ/mới của lần báo giá lại).
     const before = existingDeposit
-      ? { amount: Number(existingDeposit.amount), fastCloseCycle: existingDeposit.fastCloseCycle ?? null, paymentStatus: existingDeposit.paymentStatus }
+      ? { amount: Number(existingDeposit.amount), fastClose: isFastDeposit(existingDeposit), paymentStatus: existingDeposit.paymentStatus }
       : undefined;
 
     if (existingDeposit) {
-      const sameChoice = (existingDeposit.fastCloseCycle ?? null) === cycle && existingDeposit.termsVersion === DEPOSIT_TERMS_VERSION;
+      const sameChoice = isFastDeposit(existingDeposit) === fastClose && existingDeposit.termsVersion === DEPOSIT_TERMS_VERSION;
       if (existingDeposit.paymentStatus === DepositStatus.PENDING_PAYMENT && sameChoice && quoteAlive(existingDeposit)) {
         // Idempotent: return existing without changing termsAcceptedAt
         const reloaded = await this.bookingAccess.loadOwned(ref, user);
@@ -225,8 +269,8 @@ export class DepositService {
       if (baseAmount <= 0) {
         throw new ConflictException({ message: 'Căn chưa có Tiền cọc bảo đảm hợp lệ, vui lòng liên hệ hỗ trợ.', code: 'deposit_unavailable' });
       }
-      const quote = cycle ? fastCloseQuote(await this.fastCloseSource(tx, unit), cycle) : null;
-      if (cycle && !quote) {
+      const quote = fastClose ? fastDepositQuote(await this.fastCloseSource(tx, unit)) : null;
+      if (fastClose && !quote) {
         throw new ConflictException({ message: 'Căn này chưa được chủ nhà ủy quyền chốt nhanh.', code: 'fast_close_unavailable' });
       }
       const amount = quote ? quote.deposit : baseAmount;
@@ -242,8 +286,9 @@ export class DepositService {
         attributedHostId,
         amount,
         baseAmount: quote ? baseAmount : null,
-        fastCloseCycle: quote ? quote.cycle : null,
-        quotedMonthlyRent: quote ? quote.rent : null,
+        // Chu kỳ + giá thuê ghi khi ký HĐ (LeaseSigningService); báo giá lại xoá giá trị cũ nếu có.
+        fastCloseCycle: null,
+        quotedMonthlyRent: null,
         quoteExpiresAt: quote ? new Date(now.getTime() + FAST_CLOSE_QUOTE_HOURS * 3_600_000) : null,
         vietqrRef,
         transferContent,
@@ -273,7 +318,8 @@ export class DepositService {
             termsVersion: DEPOSIT_TERMS_VERSION,
             holdHours,
             amount,
-            ...(quote ? { fastClose: { cycle: quote.cycle, baseAmount, monthlyRent: quote.rent, quoteExpiresAt: terms.quoteExpiresAt?.toISOString() } } : {}),
+            ...(quote ? { fastClose: { baseAmount, depositDiscount: quote.depositDiscount, quoteExpiresAt: terms.quoteExpiresAt?.toISOString() } } : {}),
+            ...(origin ?? {}),
           },
           ipAddress: reqContext?.ip || '127.0.0.1',
           userAgent: reqContext?.userAgent || 'VinStay PWA / Web Client',
@@ -398,7 +444,7 @@ export class DepositService {
 
       // 3b. Chốt nhanh quá 24 giờ: ưu đãi đã hết ⇒ không giữ căn với giá đã giảm; hoàn đúng khoản vừa nhận.
       const receivedAt = input.paidAt || new Date();
-      if (deposit.fastCloseCycle && deposit.quoteExpiresAt && receivedAt > new Date(deposit.quoteExpiresAt)) {
+      if (isFastDeposit(deposit) && receivedAt > new Date(deposit.quoteExpiresAt)) {
         await tx.holdingDeposit.update({ where: { id: deposit.id }, data: { paymentStatus: DepositStatus.REFUNDED } });
         await tx.escrowTransaction.create({
           data: { depositId: deposit.id, transType: 'INBOUND_DEPOSIT', amount: expected, bankRefNumber: input.bankRefNumber, executedAt: receivedAt },

@@ -255,7 +255,7 @@ Nhằm kiểm soát rủi ro bot càn quét, tấn công vét cạn API token (T
 ### 3.4. Giai đoạn 4: Chốt Cọc Bằng Tiền Cọc Bảo Đảm & Ký Hợp Đồng Điện Tử (Cọc v2 — 2026-10-14)
 1. Khách xem xong và đồng ý thuê: Field Host bấm **[Khách Chốt]** trên Mobile App; khách tick chấp thuận điều khoản cọc (`DEP-2026.10-v2`) trên ứng dụng của mình.
 2. Web App sinh ngay mã **VietQR động** với số tiền = **Tiền Cọc Bảo Đảm của căn** (`units.security_deposit`, chủ nhà đặt từ nửa tháng đến 3 tháng thuê, mặc định 1 tháng; không còn khoản cọc giữ chỗ cố định 2.000.000 VNĐ), nội dung chuyển khoản: `COC [Mã căn] [Mã lịch hẹn]`. Số tiền do server tính; webhook chỉ gạch nợ khi số tiền khớp đúng khoản cọc.
-   * **Ưu đãi Chốt nhanh** (chỉ khi chủ nhà ủy quyền Chốt nhanh & Giá sàn An toàn): khách chọn chu kỳ trả trước 1/3/6 tháng ⇒ giá thuê giảm 3,5%/5,5%/10% (làm tròn 50.000đ, không thấp hơn Giá sàn — Giá sàn không bao giờ trả ra API công khai) và tiền cọc giảm ~5% (tối thiểu 200.000đ, tối đa 8%). Ưu đãi chỉ giữ khi tiền về trong **24 giờ**; về muộn ⇒ hoàn tiền, không khóa căn. Chưa có tiền về thì khách đổi lựa chọn được (báo giá lại trên cùng khoản cọc). Không áp phụ phí thuê ngắn hạn.
+   * **Ưu đãi Chốt nhanh** (chỉ khi chủ nhà ủy quyền Chốt nhanh & Giá sàn An toàn): hai bước (2026-10-15, hồ sơ 20): **lúc cọc** tiền cọc giảm ~5% (tối thiểu 200.000đ, tối đa 8%), cọc được ngay trên trang căn không cần xem trực tiếp (`POST /bookings/fast-deposit`); **lúc ký HĐ** khách chọn chu kỳ trả trước 1/3/6 tháng ⇒ giá thuê giảm 3,5%/5,5%/10% (làm tròn 50.000đ, không thấp hơn Giá sàn — Giá sàn không bao giờ trả ra API công khai). Giảm cọc chỉ giữ khi tiền về trong **24 giờ**; về muộn ⇒ hoàn tiền, không khóa căn. Chưa có tiền về thì khách đổi lựa chọn được (báo giá lại trên cùng khoản cọc). Không áp phụ phí thuê ngắn hạn.
 3. Khi tiền về tài khoản định danh, Webhook kích hoạt:
    * Chuyển trạng thái căn sang `holding` (khóa căn theo thời hạn Admin cài đặt, mặc định 48h, trên toàn hệ thống).
    * Kích hoạt quy trình hủy các lịch xem còn lại của căn này (xem mục 3.5).
@@ -265,7 +265,7 @@ Nhằm kiểm soát rủi ro bot càn quét, tấn công vét cạn API token (T
    * Tự động điền thông tin vào **Hợp đồng thuê căn hộ**.
    * Khách xác thực ký điện tử bằng mã OTP gửi về Zalo/SMS.
 5. **Chuyển đổi thành Tiền Cọc Bảo Đảm Nội Thất (Security Deposit):**
-   * Khi ký Hợp đồng thuê chính thức trong thời hạn giữ căn, toàn bộ khoản cọc đã chuyển được chuyển đổi 100% thành **Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)** của Hợp đồng, không nộp bù; Hợp đồng chốt nhanh bắt buộc đúng chu kỳ và giá đã chốt.
+   * Khi ký Hợp đồng thuê chính thức trong thời hạn giữ căn, toàn bộ khoản cọc đã chuyển được chuyển đổi 100% thành **Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)** của Hợp đồng, không nộp bù; Hợp đồng chốt nhanh giữ đúng chu kỳ và giá khách chọn khi ký.
    * Không ký trong thời hạn vì lý do cá nhân ⇒ mất cọc, chia 50% chủ nhà / 50% nền tảng; chủ nhà vi phạm ⇒ hoàn 100% + phạt bằng tiền cọc; bất khả kháng / thua First-to-Pay ⇒ hoàn 100%.
    * Khoản tiền cọc này được giữ nguyên vẹn suốt thời hạn thuê làm tài sản bảo chứng niềm tin, ràng buộc trách nhiệm giữ gìn nội thất của khách thuê; và được hoàn trả lại 100% khi thanh lý hợp đồng sau khi đối soát hiện trạng.
 6. **Bộ Chọn Ngày Dọn Vào Thông Minh & Khung Chờ Dọn Vào Tiêu Chuẩn (Smart Move-in Window Protocol):**

@@ -4,6 +4,7 @@ import { tenantApi, errorText, type CatalogPayload, type UnitFilter } from "./ap
 import type {
   DepositTermsDoc,
   FastCloseQuotes,
+  PublicFastDeposit,
   TenantBooking,
   TenantContract,
   TenantHandover,
@@ -76,6 +77,13 @@ export const tenantQueries = {
     errorText: (res) => errorText(res, "Không tải được báo giá chốt nhanh."),
   }),
 
+  /** Công khai trên trang căn: có nút "Chốt cọc nhanh" không (chủ nhà ủy quyền + căn trống). */
+  fastDeposit: (unitCode: string): ApiQueryDef<PublicFastDeposit> => ({
+    key: `tenant:fast-deposit:${unitCode.toUpperCase()}`,
+    fetch: () => tenantApi.publicFastDeposit(unitCode),
+    errorText: (res) => errorText(res, "Không tải được ưu đãi chốt cọc nhanh."),
+  }),
+
   depositTerms: (unitCode?: string): ApiQueryDef<DepositTermsDoc> => ({
     key: `tenant:terms:${unitCode ? unitCode.toUpperCase() : "default"}`,
     fetch: () => tenantApi.depositTerms(unitCode),
@@ -89,6 +97,7 @@ export function invalidateTenantUnits() {
 
 export function invalidateTenantUnit(code: string) {
   invalidateApiPattern(`tenant:unit:${code.toUpperCase()}`);
+  invalidateApiPattern(`tenant:fast-deposit:${code.toUpperCase()}`);
 }
 
 export function invalidateTenantBookings() {

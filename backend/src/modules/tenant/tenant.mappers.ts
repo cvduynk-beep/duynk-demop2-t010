@@ -270,13 +270,15 @@ export function toTenantBooking(
     depositDto = {
       // Số tiền đã chốt trên CHÍNH khoản cọc này (cọc cũ 2.000.000đ, cọc v2 = tiền cọc bảo đảm, chốt nhanh = đã giảm).
       amount: Number(d.amount),
-      ...(d.fastCloseCycle
+      // Cọc chốt nhanh = có hạn ưu đãi (hồ sơ 20); chu kỳ + giá thuê chỉ có sau khi ký HĐ (hoặc cọc cũ đã chốt sẵn).
+      ...(d.quoteExpiresAt != null
         ? {
             fastClose: {
-              cycle: d.fastCloseCycle,
+              cycle: d.fastCloseCycle ?? null,
               baseAmount: Number(d.baseAmount ?? d.amount),
-              monthlyRent: Number(d.quotedMonthlyRent),
-              quoteExpiresAt: d.quoteExpiresAt ? new Date(d.quoteExpiresAt).toISOString() : null,
+              depositDiscount: Math.max(0, Number(d.baseAmount ?? d.amount) - Number(d.amount)),
+              monthlyRent: d.quotedMonthlyRent != null ? Number(d.quotedMonthlyRent) : null,
+              quoteExpiresAt: new Date(d.quoteExpiresAt).toISOString(),
             },
           }
         : {}),
@@ -335,6 +337,8 @@ export function toTenantBooking(
     },
     host: hostInfo,
     canModify,
+    // Luồng đặt lịch luôn tạo ticket trong cùng transaction ⇒ không có ticket = cọc trực tiếp trên trang căn.
+    direct: tickets.length === 0,
     deposit: depositDto,
     kyc: kycDto,
     contractId: viewing.deposit?.contract?.id ?? undefined,

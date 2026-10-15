@@ -2,18 +2,21 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Bath, BedDouble, Bot, Building2, CalendarPlus, Check, Compass, Layers, LockKeyhole, Minus, Plus, Ruler, Share2, ShieldCheck, Sofa, Star } from "lucide-react";
+import { Bath, BedDouble, Bot, Building2, CalendarPlus, Check, Compass, Layers, LockKeyhole, Minus, Plus, Ruler, Share2, ShieldCheck, Sofa, Star, Zap } from "lucide-react";
 import { BookingSheet } from "@/components/booking/BookingSheet";
 import { toast } from "@/components/ui/Toast";
 import { allInCost, DEFAULT_HOUSEHOLD, isBargain, RATES, savingsPct, type Household, unitRates } from "@/lib/pricing/cost";
 import { vnd, vndShort } from "@/lib/format";
 import { HOUSE_RULES } from "@/lib/legal/house-rules";
 import { useChat } from "@/lib/chat/store";
+import { useApiQuery } from "@/lib/query/useApiQuery";
+import { tenantQueries } from "@/lib/tenant/queries";
 import type { UnitWithExtras } from "@/lib/tenant/adapters";
 import { similarUnits, useCatalog } from "@/lib/tenant/catalog";
 import { FURNISHING_LABEL, ITEM_LABEL, PASSPORT_ITEMS, unitAddress, zoneById } from "@/lib/units";
 import { getBuildingPerks } from "@/lib/property/livingIntelligence";
 import { AllInBar } from "./AllInBar";
+import { FastCloseModal } from "./FastCloseModal";
 import { FavoriteButton } from "./FavoriteButton";
 import { Gallery } from "./Gallery";
 import { LivingExperience } from "./LivingExperience";
@@ -40,7 +43,15 @@ function Stepper({ label, value, min, max, onChange }: { label: string; value: n
   );
 }
 
-export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; autoOpenBooking: boolean }) {
+export function UnitDetail({
+  unit,
+  autoOpenBooking,
+  autoOpenFastDeposit = false,
+}: {
+  unit: UnitWithExtras;
+  autoOpenBooking: boolean;
+  autoOpenFastDeposit?: boolean;
+}) {
   const chat = useChat();
   const catalog = useCatalog();
   const zoneName = unit.zoneName || zoneById(unit.zoneId)?.name || "Ocean Park 1";
@@ -53,6 +64,10 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
   const cost = allInCost(unit, hh);
   const sv = savingsPct(unit);
   const bookable = status === "available";
+  // Chốt cọc nhanh: chỉ căn chủ nhà ủy quyền + còn trống (backend quyết, không lộ giá sàn). Lỗi tải ⇒ ẩn nút.
+  const fastQuery = useApiQuery(tenantQueries.fastDeposit(unit.code), bookable);
+  const fastDeposit = bookable && fastQuery.state.status === "ready" && fastQuery.state.data.eligible ? fastQuery.state.data : null;
+  const [fastOpen, setFastOpen] = useState(autoOpenFastDeposit);
   const holdHours = unit.holdHours;
   const mgmtPerM2 = unit.managementFee && unit.areaM2 > 0 ? Math.round(unit.managementFee / unit.areaM2) : RATES.mgmtPerM2;
   const rates = unitRates(unit);
@@ -304,7 +319,20 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
 
             {bookable ? (
               <>
-                <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => setBooking(true)}>
+                {fastDeposit && (
+                  <button type="button" className={styles.fastBtn} onClick={() => setFastOpen(true)}>
+                    <span className={styles.fastMain}>
+                      <Zap size={17} /> Chốt cọc nhanh
+                      {fastDeposit.depositDiscount > 0 && <span className={styles.fastBadge}>Giảm {vnd(fastDeposit.depositDiscount)}đ</span>}
+                    </span>
+                    <span className={styles.fastSub}>Khóa giữ căn {fastDeposit.holdHours} giờ · Không cần xem trực tiếp</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`btn ${fastDeposit ? "btn-quiet" : "btn-primary"} btn-lg btn-block`}
+                  onClick={() => setBooking(true)}
+                >
                   <CalendarPlus size={19} /> Đặt lịch xem phòng
                 </button>
                 <button
@@ -319,7 +347,8 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
                     <Check size={15} /> Xem phòng miễn phí, Host đón tại sảnh
                   </li>
                   <li>
-                    <Check size={15} /> Chỉ đặt cọc khi bạn đã xem và ưng ý
+                    <Check size={15} />{" "}
+                    {fastDeposit ? "Ưng ý qua ảnh thực tế? Chốt cọc nhanh, không cần đi xem" : "Chỉ đặt cọc khi bạn đã xem và ưng ý"}
                   </li>
                   <li>
                     <Check size={15} /> Mã cửa chỉ hiện đúng lúc đứng trước phòng
@@ -356,11 +385,20 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
             <b className="num">{vnd(unit.rent)}đ</b>
             <span className="muted xs"> /tháng (thuê) · Chưa bao gồm phí quản lý</span>
           </div>
-          <button type="button" className="btn btn-primary" onClick={() => setBooking(true)}>
-            Đặt lịch xem
-          </button>
+          <div className={styles.barActions}>
+            {fastDeposit && (
+              <button type="button" className={styles.barFast} onClick={() => setFastOpen(true)}>
+                <Zap size={14} /> Cọc nhanh
+                {fastDeposit.depositDiscount > 0 && <span className={styles.barFastBadge}>−{vndShort(fastDeposit.depositDiscount)}</span>}
+              </button>
+            )}
+            <button type="button" className="btn btn-primary" onClick={() => setBooking(true)}>
+              Đặt lịch xem
+            </button>
+          </div>
         </div>
       )}
+      {fastDeposit && <FastCloseModal unit={unit} quote={fastDeposit} open={fastOpen} onClose={() => setFastOpen(false)} />}
 
       <BookingSheet unit={unit} open={booking} onClose={() => setBooking(false)} />
       <UnitConciergeDrawer

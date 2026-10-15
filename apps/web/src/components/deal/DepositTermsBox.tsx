@@ -5,29 +5,29 @@ import { Check, ShieldCheck, Zap } from "lucide-react";
 import { useApiQuery } from "@/lib/query/useApiQuery";
 import { tenantQueries, invalidateTenantTerms } from "@/lib/tenant/queries";
 import { tenantApi, errorText } from "@/lib/tenant/api";
-import type { FastCloseCycle, TenantBooking } from "@/lib/tenant/types";
+import type { TenantBooking } from "@/lib/tenant/types";
 import { vnd } from "@/lib/format";
 import { toast } from "@/components/ui/Toast";
 
 interface DepositTermsBoxProps {
   refCode: string;
   unitCode: string;
-  /** Đang đổi lựa chọn trên khoản cọc chưa có tiền về: chu kỳ chốt nhanh hiện tại (null = cọc thường). */
-  currentCycle?: FastCloseCycle | null;
+  /** Đang đổi lựa chọn trên khoản cọc chưa có tiền về: khoản hiện tại có phải chốt nhanh không. */
+  currentFast?: boolean;
   onSuccess: (booking: TenantBooking) => void;
   onCancel?: () => void;
 }
 
 /**
- * Bước chốt cọc (cọc v2): khách chuyển thẳng Tiền cọc bảo đảm của căn. Nếu chủ nhà ủy quyền chốt nhanh, khách được chọn
- * thêm chu kỳ trả trước 1/3/6 tháng — giá thuê và tiền cọc đã giảm do backend tính (không bao giờ lộ giá sàn), chỉ giữ
- * nếu tiền về trong `quoteHours` giờ. Tick điều khoản ngay trước khi quét VietQR (không ký thỏa thuận cọc riêng).
+ * Bước chốt cọc (cọc v2): khách chuyển thẳng Tiền cọc bảo đảm của căn. Nếu chủ nhà ủy quyền chốt nhanh, khách chọn được
+ * "Chốt nhanh": tiền cọc giảm ~5% (backend tính, không lộ giá sàn), chỉ giữ nếu tiền về trong `quoteHours` giờ. Chu kỳ
+ * 1/3/6 tháng (giảm giá thuê) chọn ở bước ký HĐ — ở đây chỉ xem trước. Tick điều khoản ngay trước khi quét VietQR.
  */
-export function DepositTermsBox({ refCode, unitCode, currentCycle, onSuccess, onCancel }: DepositTermsBoxProps) {
+export function DepositTermsBox({ refCode, unitCode, currentFast, onSuccess, onCancel }: DepositTermsBoxProps) {
   const { state: termsState, reload: refetch } = useApiQuery(tenantQueries.depositTerms(unitCode));
   const { state: fastState } = useApiQuery(tenantQueries.fastClose(refCode));
 
-  const [choice, setChoice] = useState<FastCloseCycle | null>(currentCycle ?? null);
+  const [fastChosen, setFastChosen] = useState(currentFast ?? false);
   const [consent, setConsent] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -53,14 +53,14 @@ export function DepositTermsBox({ refCode, unitCode, currentCycle, onSuccess, on
   const items = terms.items || [];
   const houseRules = terms.houseRules || [];
   // Báo giá chốt nhanh lỗi/không đủ điều kiện ⇒ chỉ còn cọc thường (không chặn khách đặt cọc).
-  const fast = fastState.status === "ready" && fastState.data.eligible ? fastState.data : null;
-  const picked = fast && choice ? fast.quotes.find((q) => q.cycle === choice) ?? null : null;
-  const amount = picked ? picked.deposit : terms.amount;
+  const fast = fastState.status === "ready" && fastState.data.eligible && fastState.data.stage === "deposit" ? fastState.data : null;
+  const useFast = !!fast && fastChosen;
+  const amount = useFast ? fast.depositAfter : terms.amount;
 
   const handleAccept = async () => {
     if (!consent || submitting) return;
     setSubmitting(true);
-    const res = await tenantApi.acceptDeposit(refCode, terms.version, picked ? picked.cycle : null);
+    const res = await tenantApi.acceptDeposit(refCode, terms.version, useFast);
     setSubmitting(false);
 
     if (res.ok && res.data) {
@@ -73,7 +73,7 @@ export function DepositTermsBox({ refCode, unitCode, currentCycle, onSuccess, on
       setConsent(false);
       await refetch();
     }
-    if (res.code === "fast_close_unavailable") setChoice(null);
+    if (res.code === "fast_close_unavailable") setFastChosen(false);
     toast(errorText(res, "Không thể tạo thanh toán VietQR. Vui lòng thử lại sau."));
   };
 
@@ -105,25 +105,29 @@ export function DepositTermsBox({ refCode, unitCode, currentCycle, onSuccess, on
           <legend className="small" style={{ fontWeight: 600, marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
             <Zap size={15} style={{ color: "var(--amber, #d97706)" }} /> Chủ nhà mở ưu đãi chốt nhanh cho căn này
           </legend>
-          <label style={optionStyle(choice === null)}>
-            <input type="radio" name="fastClose" checked={choice === null} onChange={() => setChoice(null)} style={{ marginTop: 3 }} />
+          <label style={optionStyle(!fastChosen)}>
+            <input type="radio" name="fastClose" checked={!fastChosen} onChange={() => setFastChosen(false)} style={{ marginTop: 3 }} />
             <span>
-              <b>Cọc thường</b> — giá thuê {vnd(fast.rent)}đ/tháng, cọc {vnd(fast.deposit)}đ, chọn kỳ thanh toán khi ký hợp đồng.
+              <b>Cọc thường</b>: cọc {vnd(fast.deposit)}đ, giá thuê {vnd(fast.rent)}đ/tháng, chọn kỳ thanh toán khi ký hợp đồng.
             </span>
           </label>
-          {fast.quotes.map((q) => (
-            <label key={q.cycle} style={optionStyle(choice === q.cycle)}>
-              <input type="radio" name="fastClose" checked={choice === q.cycle} onChange={() => setChoice(q.cycle)} style={{ marginTop: 3 }} />
-              <span>
-                <b>Chốt nhanh, trả trước {q.cycle} tháng/kỳ</b> — giá thuê <b>{vnd(q.rent)}đ/tháng</b>
-                {q.rentDiscount > 0 && <span className="muted"> (giảm {vnd(q.rentDiscount)}đ)</span>}, cọc <b>{vnd(q.deposit)}đ</b>
-                {q.depositDiscount > 0 && <span className="muted"> (giảm {vnd(q.depositDiscount)}đ)</span>}.
-              </span>
-            </label>
-          ))}
+          <label style={optionStyle(fastChosen)}>
+            <input type="radio" name="fastClose" checked={fastChosen} onChange={() => setFastChosen(true)} style={{ marginTop: 3 }} />
+            <span>
+              <b>Chốt nhanh</b>: cọc <b>{vnd(fast.depositAfter)}đ</b>
+              {fast.depositDiscount > 0 && <span className="muted"> (giảm {vnd(fast.depositDiscount)}đ)</span>}. Khi ký hợp đồng, chọn trả{" "}
+              {fast.quotes.map((q, i) => (
+                <span key={q.cycle}>
+                  {i > 0 && (i === fast.quotes.length - 1 ? " hoặc " : ", ")}
+                  {q.cycle} tháng/lần còn <b>{vnd(q.rent)}đ</b>
+                </span>
+              ))}
+              /tháng.
+            </span>
+          </label>
           <p className="muted xs" style={{ margin: 0 }}>
-            Ưu đãi chỉ giữ khi tiền cọc về trong {fast.quoteHours} giờ kể từ lúc bấm đồng ý; về muộn hơn sẽ được hoàn lại và căn không bị khoá. Hợp
-            đồng thuê bắt buộc đúng chu kỳ và giá đã chốt.
+            Giảm cọc chỉ giữ khi tiền cọc về trong {fast.quoteHours} giờ kể từ lúc bấm đồng ý; về muộn hơn sẽ được hoàn lại và căn không bị khoá.
+            Kỳ thanh toán bạn chọn khi ký hợp đồng được giữ suốt hợp đồng.
           </p>
         </fieldset>
       )}

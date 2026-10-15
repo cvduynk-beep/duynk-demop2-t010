@@ -3,8 +3,9 @@ import type {
   CreateBookingDto,
   DepositTermsDoc,
   EkycScanResult,
-  FastCloseCycle,
   FastCloseQuotes,
+  FastDepositDto,
+  PublicFastDeposit,
   SignLeaseDto,
   SubmitEkycDto,
   TenantBooking,
@@ -37,7 +38,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   already_rated: "Lịch hẹn này đã được đánh giá.",
   terms_version_stale: "Phiên bản điều khoản cọc đã được cập nhật. Vui lòng kiểm tra lại.",
   unit_already_held: "Căn hộ vừa được khách khác đặt cọc thành công (First-to-Pay Wins).",
-  fast_close_unavailable: "Căn này hiện không áp dụng ưu đãi chốt nhanh. Vui lòng chọn cọc thường.",
+  fast_close_unavailable: "Căn này hiện không áp dụng ưu đãi chốt nhanh. Vui lòng chọn cọc thường hoặc đặt lịch xem.",
+  deposit_unavailable: "Căn chưa có Tiền cọc bảo đảm hợp lệ. Vui lòng liên hệ hỗ trợ.",
   vietqr_not_configured: "Thanh toán VietQR chưa được cấu hình nhận và đối soát giao dịch. Vui lòng liên hệ hỗ trợ.",
   no_kyc: "Cần xác minh CCCD (eKYC) trước khi ký hợp đồng thuê.",
   lease_already_signed: "Lịch hẹn này đã có hợp đồng thuê.",
@@ -196,17 +198,28 @@ export const tenantApi = {
     return api.get<DepositTermsDoc>(`/legal/deposit-terms${unitCode ? `?unitCode=${encodeURIComponent(unitCode)}` : ""}`);
   },
 
-  // A14b: Báo giá chốt nhanh (chỉ chủ lịch hẹn, khi đang chốt cọc)
+  // A14b: Báo giá chốt nhanh (chỉ chủ lịch hẹn: lúc chốt cọc, hoặc lúc ký HĐ để chọn chu kỳ)
   fastCloseQuotes: (ref: string): Promise<ApiResponse<FastCloseQuotes>> => {
     return api.get<FastCloseQuotes>(`/bookings/${encodeURIComponent(ref)}/fast-close`);
   },
 
+  // Công khai: căn có nút "Chốt cọc nhanh" không + mức giảm cọc (không lộ giá sàn)
+  publicFastDeposit: (unitCode: string): Promise<ApiResponse<PublicFastDeposit>> => {
+    return api.get<PublicFastDeposit>(`/units/${encodeURIComponent(unitCode)}/fast-deposit`);
+  },
+
+  // Chốt cọc nhanh trên trang căn (không cần lịch xem) ⇒ trả lịch trực tiếp kèm VietQR
+  createFastDeposit: (dto: FastDepositDto): Promise<ApiResponse<TenantBooking>> => {
+    return api.post<TenantBooking>("/bookings/fast-deposit", dto);
+  },
+
   // A15: Chấp thuận điều khoản cọc & lấy thông tin VietQR. Chưa có tiền về thì gọi lại để đổi lựa chọn (báo giá lại).
-  acceptDeposit: (ref: string, termsVersion: string, fastCloseCycle?: FastCloseCycle | null): Promise<ApiResponse<TenantBooking>> => {
+  // Chốt nhanh chỉ giảm cọc; chu kỳ 1/3/6 chọn khi ký HĐ.
+  acceptDeposit: (ref: string, termsVersion: string, fastClose = false): Promise<ApiResponse<TenantBooking>> => {
     return api.post<TenantBooking>(`/bookings/${encodeURIComponent(ref)}/deposit`, {
       acceptTerms: true,
       termsVersion,
-      ...(fastCloseCycle ? { fastCloseCycle } : {}),
+      ...(fastClose ? { fastClose: true } : {}),
     });
   },
 

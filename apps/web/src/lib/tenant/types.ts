@@ -102,6 +102,8 @@ export interface TenantBooking {
     rating: number | null;
   } | null;
   canModify: boolean; // status ∈ {pending, confirmed} && slot − now ≥ 2h
+  /** Lịch cọc trực tiếp trên trang căn (chốt cọc nhanh, không lịch xem, không Host). */
+  direct: boolean;
   deposit?: {
     amount: number;
     transferContent: string;
@@ -112,12 +114,16 @@ export interface TenantBooking {
     paidAt?: string;
     holdHours?: number;
     expiresAt?: string;
-    /** Có ⇒ khách đã chọn chốt nhanh: `amount` là cọc đã giảm, `monthlyRent` là giá thuê đã chốt (bắt buộc giữ khi ký HĐ). */
+    /**
+     * Có ⇒ cọc chốt nhanh: `amount` là cọc đã giảm (`baseAmount − depositDiscount`). Chu kỳ + giá thuê chọn khi ký HĐ nên
+     * `cycle`/`monthlyRent` null tới lúc đó (cọc cũ trước 2026-10-15 đã có sẵn và bị khoá).
+     */
     fastClose?: {
-      cycle: FastCloseCycle;
+      cycle: FastCloseCycle | null;
       baseAmount: number;
-      monthlyRent: number;
-      quoteExpiresAt: string; // tiền về sau mốc này ⇒ hoàn cọc, không giữ căn
+      depositDiscount: number;
+      monthlyRent: number | null;
+      quoteExpiresAt: string | null; // tiền về sau mốc này ⇒ hoàn cọc, không giữ căn
     };
     outcome: 'awaiting_payment' | 'active' | 'expired' | 'converted' | 'refunded' | 'forfeited';
     vietqr: {
@@ -139,20 +145,46 @@ export interface TenantBooking {
 
 export type FastCloseCycle = 1 | 3 | 6;
 
-/** `GET /bookings/:ref/fast-close` — báo giá chốt nhanh (giá sàn của chủ nhà không bao giờ lộ ra). */
+/**
+ * `GET /bookings/:ref/fast-close` — báo giá chốt nhanh cho chủ lịch (giá sàn của chủ nhà không bao giờ lộ ra).
+ * `stage = deposit`: đang chốt cọc (giảm cọc + xem trước giá thuê theo chu kỳ); `lease`: đã giữ căn, chọn chu kỳ khi ký HĐ.
+ */
 export interface FastCloseQuotes {
   eligible: boolean; // false ⇒ chủ nhà chưa ủy quyền chốt nhanh
+  stage: "deposit" | "lease" | null;
   quoteHours: number; // phải chuyển cọc trong số giờ này
   rent: number;
   deposit: number;
+  depositDiscount: number;
+  depositAfter: number;
   quotes: {
     cycle: FastCloseCycle;
     rent: number;
     rentDiscount: number;
     rentDiscountPct: number;
-    deposit: number;
-    depositDiscount: number;
   }[];
+}
+
+/** `GET /units/:code/fast-deposit` (công khai) — căn có "Chốt cọc nhanh" không; KHÔNG có giá sàn / giá thuê đã giảm. */
+export interface PublicFastDeposit {
+  eligible: boolean;
+  holdHours: number;
+  quoteHours: number;
+  deposit: number;
+  depositDiscount: number;
+  amount: number;
+}
+
+/** `POST /bookings/fast-deposit` — cọc chốt nhanh không cần lịch xem. */
+export interface FastDepositDto {
+  unitCode: string;
+  contactName: string;
+  phone: string;
+  partySize?: number;
+  actionToken?: string;
+  acceptTerms: true;
+  acknowledgeNoViewing: true;
+  termsVersion: string;
 }
 
 export interface DepositTermsDoc {

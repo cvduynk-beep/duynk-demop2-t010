@@ -459,7 +459,38 @@ describe('eKYC (mô phỏng OCR) → ký Hợp đồng thuê (POST /contracts/le
     expect(audit.newValue).toMatchObject({ moveInDate: vnDay(20), billingStartDate: vnDay(7) });
   });
 
-  it('chốt nhanh: HĐ dùng giá đã chốt + bắt buộc đúng chu kỳ đã cam kết', async () => {
+  it('chốt nhanh (hồ sơ 20): cọc đã giảm, chọn chu kỳ lúc ký ⇒ giá thuê giảm theo chu kỳ, kẹp giá sàn, ghi lại vào khoản cọc, không thu bù', async () => {
+    const quoteExpiresAt = new Date(Date.now() + 3_600_000);
+    Object.assign(fixture.getSavedDeposit(), { amount: 6_150_000, baseAmount: 6_500_000, fastCloseCycle: null, quotedMonthlyRent: null, quoteExpiresAt });
+    (fixture.prisma.exclusiveMandate.findFirst as jest.Mock).mockResolvedValue({
+      doorAccessConfig: { consignment: { form: { allowFastClose: true, floorRent: 6_000_000 } } },
+    });
+    await verify();
+    // 6 tháng: −10% = 5.850.000 < sàn 6tr ⇒ 6.000.000
+    const { contract } = await leaseSigning.sign(ME, lease({ paymentCycle: 6 }));
+    expect(contract.monthlyRent).toBe(6_000_000);
+    expect(contract.paymentCycle).toBe(6);
+    expect(contract.securityDeposit).toBe(6_150_000);
+    expect(contract.firstPaymentDue.depositTopUp).toBe(0);
+    expect(contract.firstPaymentDue.rent).toBe(6_000_000 * 6);
+    expect(fixture.getSavedDeposit()).toMatchObject({ fastCloseCycle: 6, quotedMonthlyRent: 6_000_000 });
+    expect(fixture.savedAudits.find((a: any) => a.actionType === 'LEASE_ESTABLISHED').newValue).toMatchObject({
+      fastCloseCycle: 6,
+      monthlyRent: 6_000_000,
+      fastCloseRentDiscount: 500_000,
+    });
+  });
+
+  it('chốt nhanh: chủ nhà rút ủy quyền trong lúc giữ căn ⇒ ký theo giá chào, cọc đã giảm vẫn giữ (không thu bù)', async () => {
+    Object.assign(fixture.getSavedDeposit(), { amount: 6_150_000, baseAmount: 6_500_000, fastCloseCycle: null, quoteExpiresAt: new Date() });
+    await verify();
+    const { contract } = await leaseSigning.sign(ME, lease({ paymentCycle: 3 }));
+    expect(contract.monthlyRent).toBe(6_500_000);
+    expect(contract.securityDeposit).toBe(6_150_000);
+    expect(contract.firstPaymentDue.depositTopUp).toBe(0);
+  });
+
+  it('chốt nhanh CŨ (đã cam kết chu kỳ lúc cọc, trước hồ sơ 20): HĐ dùng giá đã chốt + bắt buộc đúng chu kỳ', async () => {
     Object.assign(fixture.getSavedDeposit(), { amount: 6_150_000, baseAmount: 6_500_000, fastCloseCycle: 3, quotedMonthlyRent: 6_150_000 });
     await verify();
     await expect(leaseSigning.sign(ME, lease({ paymentCycle: 1 }))).rejects.toMatchObject({ response: { code: 'lease_terms_invalid', errors: { paymentCycle: 3 } } });
