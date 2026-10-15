@@ -1,4 +1,5 @@
-import { depositDiscount, fastCloseQuote, fastCloseQuotes } from './fast-close';
+import { fastDepositBadge, latestMandateConfigs } from './fast-close-source';
+import { depositDiscount, fastCloseQuote, fastCloseQuotes, fastCloseRent, fastDepositQuote, isFastCloseEligible } from './fast-close';
 import { evaluateMoveIn, moveInWindow } from '../contract/move-in';
 
 describe('fast-close — công thức chốt nhanh', () => {
@@ -19,6 +20,26 @@ describe('fast-close — công thức chốt nhanh', () => {
   });
 });
 
+describe('fast-close — hai bước (hồ sơ 20): giảm cọc lúc cọc, giá thuê theo chu kỳ lúc ký HĐ', () => {
+  const src = { rent: 6_300_000, deposit: 6_300_000, floorRent: 5_800_000 };
+  it('bước cọc: 6.300.000 ⇒ giảm 300.000, chuyển 6.000.000; không phụ thuộc chu kỳ', () => {
+    expect(fastDepositQuote(src)).toEqual({ originalDeposit: 6_300_000, depositDiscount: 300_000, deposit: 6_000_000 });
+  });
+  it('bước ký: 3,5% / 5,5% / 10% làm tròn 50k, không bao giờ dưới giá sàn', () => {
+    expect([1, 3, 6].map((c) => fastCloseRent(src, c as 1 | 3 | 6)!.rent)).toEqual([6_100_000, 5_950_000, 5_800_000]); // 6tr: 5.670.000 < sàn ⇒ 5.800.000
+    for (const floorRent of [3_000_000, 5_000_000, 6_000_000, 6_300_000]) {
+      for (const c of [1, 3, 6] as const) expect(fastCloseRent({ ...src, floorRent }, c)!.rent).toBeGreaterThanOrEqual(floorRent);
+    }
+  });
+  it('không ủy quyền / sàn ≤ 0 / sàn > giá chào ⇒ không có cả hai bước (CẤM tự suy giá sàn)', () => {
+    for (const floorRent of [null, 0, -1, 6_300_001]) {
+      expect(isFastCloseEligible({ ...src, floorRent })).toBe(false);
+      expect(fastDepositQuote({ ...src, floorRent })).toBeNull();
+      expect(fastCloseRent({ ...src, floorRent }, 6)).toBeNull();
+    }
+  });
+});
+
 describe('move-in — Smart Move-in Window (giờ VN)', () => {
   const paid = new Date('2026-10-13T17:30:00Z'); // 00:30 ngày 14/10 giờ VN ⇒ T0 = 14/10
   it('T0 theo giờ VN; sớm nhất +2, miễn phí tới +7, muộn nhất +30', () => {
@@ -29,5 +50,33 @@ describe('move-in — Smart Move-in Window (giờ VN)', () => {
     expect(evaluateMoveIn(paid, '2026-10-21')).toMatchObject({ ok: true, billingStartDate: '2026-10-21', freeHolding: true });
     expect(evaluateMoveIn(paid, '2026-11-01')).toMatchObject({ ok: true, moveInDate: '2026-11-01', billingStartDate: '2026-10-21', freeHolding: false });
     for (const bad of ['2026-10-15', '2026-11-14', '2026-02-30', '14/10/2026']) expect(evaluateMoveIn(paid, bad).ok).toBe(false);
+  });
+});
+
+describe('fast-close-source — dấu "Cọc nhanh" trên catalog (hồ sơ 20)', () => {
+  const cfg = (floorRent: number | null, allowFastClose = true) => ({ consignment: { form: { allowFastClose, floorRent } } });
+  const unit = { status: 'AVAILABLE', baseRentPrice: 9_200_000, securityDeposit: null };
+  it('ủy quyền + căn trống ⇒ chỉ có mức giảm TIỀN CỌC, không có giá sàn / giá thuê', () => {
+    const b = fastDepositBadge(unit, cfg(8_500_000));
+    expect(b).toEqual({ depositDiscount: 450_000 }); // 9,2tr × 5% = 460k → làm tròn 50k = 450k
+    expect(JSON.stringify(b)).not.toMatch(/floor|rent/i);
+  });
+  it('không ủy quyền / không hồ sơ / sàn > giá chào / căn đang giữ ⇒ null', () => {
+    expect(fastDepositBadge(unit, cfg(8_500_000, false))).toBeNull();
+    expect(fastDepositBadge(unit, undefined)).toBeNull();
+    expect(fastDepositBadge(unit, cfg(9_500_000))).toBeNull();
+    expect(fastDepositBadge({ ...unit, status: 'HOLDING' }, cfg(8_500_000))).toBeNull();
+  });
+  it('lấy hồ sơ ký gửi MỚI NHẤT của từng căn trong một truy vấn', async () => {
+    const findMany = jest.fn(async () => [
+      { unitId: 'u1', doorAccessConfig: 'moi' },
+      { unitId: 'u1', doorAccessConfig: 'cu' },
+      { unitId: 'u2', doorAccessConfig: 'u2' },
+    ]);
+    const m = await latestMandateConfigs({ exclusiveMandate: { findMany } }, ['u1', 'u2']);
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(m.get('u1')).toBe('moi');
+    expect(m.get('u2')).toBe('u2');
+    expect((await latestMandateConfigs({ exclusiveMandate: { findMany } }, [])).size).toBe(0);
   });
 });

@@ -9,9 +9,8 @@ export const LAYOUT_LABEL: Record<LayoutKind, string> = {
 };
 
 export const LEASE_TERM_LABEL: Record<LeaseTermPref, string> = {
-  flexible: "Linh hoạt: Từ 1 tháng trở lên (Khuyên dùng · Tối đa doanh thu & Lấp phòng)",
+  mid: "Linh hoạt: Từ 6 tháng trở lên (Khuyên dùng · Lấp phòng nhanh)",
   long: "Cố định: Từ 12 tháng trở lên (Dòng tiền ổn định 1 năm)",
-  mid: "Trung hạn: 3 đến dưới 12 tháng (Học kỳ / Dự án)",
   fixed: "Cố định: 12 tháng",
 };
 

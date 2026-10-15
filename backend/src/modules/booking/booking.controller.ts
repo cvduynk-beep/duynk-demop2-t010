@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Param, Get } from '@nestjs/common';
+import { Controller, Post, Body, Param, Get, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { BookingService } from './booking.service';
 import {
@@ -7,6 +8,7 @@ import {
   RescheduleBookingDto,
   RateBookingDto,
 } from './dto/booking.dto';
+import { FastDepositDto } from '../deposit/dto/deposit.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -23,6 +25,18 @@ export class BookingController {
   })
   async createBooking(@CurrentUser() user: any, @Body() dto: CreateBookingDto) {
     return this.bookingService.createBooking(user, dto);
+  }
+
+  @Roles('tenant')
+  @Post('fast-deposit')
+  @ApiOperation({
+    summary: 'Chốt cọc nhanh trên trang căn, không cần lịch xem (chỉ căn chủ nhà ủy quyền chốt nhanh)',
+    description:
+      'Tạo lịch trực tiếp (closing, không Host) + khoản cọc chốt nhanh: Tiền cọc bảo đảm giảm ~5% nếu tiền về trong 24 giờ; chu kỳ 1/3/6 chọn khi ký HĐ. ' +
+      'Lỗi: 400 invalid_request · 403 otp_required · 401 action_token_invalid · 404 unit_not_found · 409 unit_not_available / fast_close_unavailable / unit_already_held / terms_version_stale / deposit_unavailable.',
+  })
+  async createFastDeposit(@CurrentUser() user: any, @Body() dto: FastDepositDto, @Req() req: Request) {
+    return this.bookingService.createFastDeposit(user, dto, { ip: req.ip, userAgent: req.headers['user-agent'] });
   }
 
   @Roles('tenant')

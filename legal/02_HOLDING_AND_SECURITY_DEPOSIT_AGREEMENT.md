@@ -84,10 +84,16 @@ Hai Bên thống nhất xác lập Thỏa thuận đặt cọc với các điề
    * **Khung chờ dọn vào miễn phí:** Bên B được bảo lưu thời gian chờ dọn vào không tính tiền thuê tối đa **07 (bảy) ngày** kể từ thời điểm đặt cọc thành công để thu xếp việc chuyển dọn đồ đạc.
    * **Nguyên tắc xác định ngày bắt đầu tính tiền thuê (Billing Start Date):** Trường hợp Bên B đăng ký ngày dọn vào sau 07 ngày (tối đa không quá 30 ngày), Hợp đồng thuê và nghĩa vụ thanh toán tiền thuê nhà bắt buộc bắt đầu tính từ **ngày thứ 08** kể từ ngày đặt cọc thành công. Bên B có toàn quyền nhận mã mở cửa và dọn vào lưu trú bất kỳ lúc nào từ ngày thứ 08 trở đi. Quy định này nhằm bảo vệ lợi ích hợp pháp của Bên A/Chủ nhà, triệt tiêu tổn thất tài chính do giam căn trống kéo dài (Pre-leasing vacancy loss).
 6. **Ưu đãi Chốt nhanh (Fast-Close) — chỉ khi Chủ nhà ủy quyền Chốt nhanh & Giá sàn An toàn:**
-   * Bên B được chọn cam kết trả trước tiền thuê theo chu kỳ **01, 03 hoặc 06 tháng/kỳ** để nhận mức giá thuê ưu đãi giảm lần lượt **3,5% / 5,5% / 10%** so với giá chào thuê (làm tròn tới 50.000 VNĐ) và giảm khoảng **5% tiền đặt cọc** (tối thiểu 200.000 VNĐ, tối đa 8%). Giá thuê ưu đãi **không bao giờ thấp hơn Giá sàn** bảo mật của Chủ nhà; Giá sàn không được công khai cho Bên B.
+   * *(Sửa đổi 2026-10-15 — cần pháp chế rà soát.)* Ưu đãi gồm hai bước:
+     * **Khi đặt cọc:** Bên B được giảm khoảng **5% tiền đặt cọc** (tối thiểu 200.000 VNĐ, tối đa 8%); Bên B không phải cam kết chu kỳ thanh toán ở bước này.
+     * **Khi ký Hợp đồng thuê:** Bên B chọn trả trước tiền thuê theo chu kỳ **01, 03 hoặc 06 tháng/kỳ** để nhận mức giá thuê ưu đãi giảm lần lượt **3,5% / 5,5% / 10%** so với giá chào thuê (làm tròn tới 50.000 VNĐ). Giá thuê ưu đãi **không bao giờ thấp hơn Giá sàn** bảo mật của Chủ nhà; Giá sàn không được công khai cho Bên B.
    * Ưu đãi chỉ có hiệu lực khi tiền đặt cọc được ngân hàng báo có trong vòng **24 giờ** kể từ thời điểm Bên B chấp thuận điều khoản. Tiền về sau thời hạn này: ưu đãi hết hiệu lực, căn hộ **không** bị khóa và Nền tảng hoàn lại đúng số tiền đã nhận cho Bên B trong 24 giờ làm việc; Bên B có thể chấp thuận lại điều khoản để đặt cọc theo mức hiện hành.
-   * Khi chưa có tiền về, Bên B được đổi lựa chọn (cọc thường hoặc chu kỳ Chốt nhanh khác); hệ thống báo giá lại trên cùng khoản cọc.
-   * Hợp đồng thuê chính thức bắt buộc ghi đúng chu kỳ thanh toán và giá thuê đã chốt. Nền tảng không áp dụng phụ phí thuê ngắn hạn.
+   * Khi chưa có tiền về, Bên B được đổi lựa chọn (cọc thường hoặc Chốt nhanh); hệ thống báo giá lại trên cùng khoản cọc.
+   * Hợp đồng thuê chính thức ghi đúng chu kỳ thanh toán và giá thuê Bên B chọn khi ký; khoản đặt cọc đã giảm là Tiền Cọc Bảo Đảm Tài Sản đầy đủ, Bên B không phải nộp bù. Nền tảng không áp dụng phụ phí thuê ngắn hạn.
+7. **Chốt cọc không cần xem trực tiếp — chỉ căn đã ủy quyền Chốt nhanh** *(bổ sung 2026-10-15 — cần pháp chế rà soát)*:
+   * Bên B được đặt cọc ngay trên trang căn mà không cần lịch xem phòng, sau khi xác thực số điện thoại qua OTP Zalo và xác nhận đã xem ảnh thực tế có dấu thời gian cùng thông tin căn đã xác minh [Tòa – Tầng – Căn].
+   * Người thân của Bên B có thể chuyển khoản thay (Điều 283 Bộ luật Dân sự 2015); Bên B — chủ số điện thoại đã xác thực — vẫn là bên đặt cọc.
+   * Bên B không ký Hợp đồng thuê vì lý do cá nhân (kể cả không ưng ý khi tới nhận nhà) thì khoản cọc xử lý theo Khoản xử lý cọc của Thỏa thuận này (Điều 328 BLDS 2015).
 
 ---
 

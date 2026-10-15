@@ -162,6 +162,49 @@
   white-space: nowrap;
 }
 
+.photoButton {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* Cọc nhanh (hồ sơ 20): màu hổ phách đặc, khác nhãn lý do AI (hổ phách nhạt) */
+.fastBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--amber) 0%, var(--amber-600) 100%);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  box-shadow: 0 4px 10px -4px rgba(182, 128, 30, 0.7);
+}
+
+.fastDeposit {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--amber-050);
+  border: 1px dashed rgba(182, 128, 30, 0.45);
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6f4a0c;
+}
+
+.fastDepositIcon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--amber-600);
+}
+
 .actions {
   display: flex;
   gap: 8px;

@@ -21,6 +21,9 @@ import {
   RescheduleBookingDto,
   RateBookingDto,
 } from './dto/booking.dto';
+import { FastDepositDto } from '../deposit/dto/deposit.dto';
+import { DEPOSIT_TERMS_VERSION } from '../deposit/deposit-terms';
+import { fastDepositQuote } from '../deposit/fast-close';
 import { ViewingStatus, UnitStatus, TicketStatus } from '@prisma/client';
 import { DispatchAssignerService } from '../dispatch/dispatch-assigner.service';
 import { toTenantBooking, statusToWeb } from '../tenant/tenant.mappers';
@@ -169,70 +172,9 @@ export class BookingService {
       });
     }
 
-    // 4. Xác thực số điện thoại
-    const normPhone = this.phones.normalize(dto.phone);
-    if (!normPhone) {
-      throw new BadRequestException({
-        message: 'Số điện thoại không đúng định dạng Việt Nam.',
-        code: 'invalid_request',
-      });
-    }
-
-    if (dto.actionToken) {
-      const payload = await this.actionTokens.redeem(dto.actionToken, 'TENANT_VIEWING');
-      const payloadNorm = this.phones.normalize(payload.phone);
-      if (payloadNorm !== normPhone) {
-        throw authError('action_token_invalid');
-      }
-    } else {
-      const profile = await this.prisma.profile.findUnique({ where: { id: user.id } });
-      const expectedHash = this.phones.hash(normPhone);
-      if (!profile?.isPhoneVerified || profile.phoneHash !== expectedHash) {
-        throw new ForbiddenException({
-          message: 'Vui lòng xác thực số điện thoại qua OTP trước khi đặt lịch.',
-          code: 'otp_required',
-        });
-      }
-    }
-
-    // 5. Gắn SĐT vào hồ sơ nếu hồ sơ chưa có SĐT
-    const profile = await this.prisma.profile.findUnique({ where: { id: user.id } });
-    if (profile && !profile.phoneHash) {
-      const targetHash = this.phones.hash(normPhone);
-      const phoneTaken = await this.prisma.profile.findFirst({
-        where: { phoneHash: targetHash, NOT: { id: user.id } },
-      });
-      if (phoneTaken) {
-        throw authError('phone_already_registered');
-      }
-
-      await this.prisma.profile.update({
-        where: { id: user.id },
-        data: {
-          phoneEnc: this.phones.encrypt(normPhone),
-          phoneHash: targetHash,
-          isPhoneVerified: true,
-        },
-      });
-    }
-
-    // 6. Sinh bookingRefCode duy nhất (VS-XXXXX)
-    let refCode = '';
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const candidate = generateBookingRefCode();
-      const existing = await this.prisma.viewing.findUnique({
-        where: { bookingRefCode: candidate },
-        select: { id: true },
-      });
-      if (!existing) {
-        refCode = candidate;
-        break;
-      }
-    }
-    if (!refCode) {
-      // Không rơi về mã đoán được (đồng hồ): báo lỗi tạm thời để khách thử lại.
-      throw new ServiceUnavailableException({ message: 'Chưa cấp được mã lịch hẹn, vui lòng thử lại.', code: 'ref_generation_failed' });
-    }
+    // 4–6. Xác thực SĐT (OTP Zalo) + sinh mã lịch
+    const normPhone = await this.verifyContactPhone(user, dto.phone, dto.actionToken);
+    const refCode = await this.newRefCode();
 
     const contactPhoneEnc = this.phones.encrypt(normPhone);
     const contactPhoneHash = this.phones.hash(normPhone);
@@ -304,6 +246,157 @@ export class BookingService {
 
     const fullViewing = await this.bookingAccess.loadOwned(createdViewing.bookingRefCode, user);
     return toTenantBooking(fullViewing, { rawPhone: normPhone, defaultHoldHours: await readDefaultHoldHours(this.prisma) });
+  }
+
+  /**
+   * Bước 4–5 của đặt lịch, dùng chung với cọc trực tiếp: chuẩn hoá SĐT; có action token OTP (TENANT_VIEWING) thì đổi token,
+   * không thì SĐT tài khoản phải đã xác thực và trùng số; hồ sơ chưa có SĐT ⇒ gắn số vừa xác thực.
+   */
+  private async verifyContactPhone(user: { id: string }, phone: string, actionToken?: string): Promise<string> {
+    const normPhone = this.phones.normalize(phone);
+    if (!normPhone) {
+      throw new BadRequestException({
+        message: 'Số điện thoại không đúng định dạng Việt Nam.',
+        code: 'invalid_request',
+      });
+    }
+
+    if (actionToken) {
+      const payload = await this.actionTokens.redeem(actionToken, 'TENANT_VIEWING');
+      const payloadNorm = this.phones.normalize(payload.phone);
+      if (payloadNorm !== normPhone) {
+        throw authError('action_token_invalid');
+      }
+    } else {
+      const profile = await this.prisma.profile.findUnique({ where: { id: user.id } });
+      const expectedHash = this.phones.hash(normPhone);
+      if (!profile?.isPhoneVerified || profile.phoneHash !== expectedHash) {
+        throw new ForbiddenException({
+          message: 'Vui lòng xác thực số điện thoại qua OTP trước khi đặt lịch.',
+          code: 'otp_required',
+        });
+      }
+    }
+
+    const profile = await this.prisma.profile.findUnique({ where: { id: user.id } });
+    if (profile && !profile.phoneHash) {
+      const targetHash = this.phones.hash(normPhone);
+      const phoneTaken = await this.prisma.profile.findFirst({
+        where: { phoneHash: targetHash, NOT: { id: user.id } },
+      });
+      if (phoneTaken) {
+        throw authError('phone_already_registered');
+      }
+
+      await this.prisma.profile.update({
+        where: { id: user.id },
+        data: {
+          phoneEnc: this.phones.encrypt(normPhone),
+          phoneHash: targetHash,
+          isPhoneVerified: true,
+        },
+      });
+    }
+    return normPhone;
+  }
+
+  /** Bước 6: mã `VS-XXXXX` chưa dùng (thử 5 lần). */
+  private async newRefCode(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = generateBookingRefCode();
+      const existing = await this.prisma.viewing.findUnique({
+        where: { bookingRefCode: candidate },
+        select: { id: true },
+      });
+      if (!existing) return candidate;
+    }
+    // Không rơi về mã đoán được (đồng hồ): báo lỗi tạm thời để khách thử lại.
+    throw new ServiceUnavailableException({ message: 'Chưa cấp được mã lịch hẹn, vui lòng thử lại.', code: 'ref_generation_failed' });
+  }
+
+  /**
+   * Chốt cọc nhanh ngay trên trang căn, KHÔNG cần lịch xem (hồ sơ 20 · SPEC-P01). Chỉ căn chủ nhà ủy quyền chốt nhanh.
+   * Tạo lịch "trực tiếp" (CLOSING, không ticket Host) rồi đi qua đúng `DepositService.createDeposit` (số tiền do server tính,
+   * First-to-Pay ở markPaid). Lỗi sau khi đã tạo lịch ⇒ huỷ lịch đó (không để lịch mồ côi).
+   */
+  async createFastDeposit(
+    user: { id: string },
+    dto: FastDepositDto,
+    reqContext?: { ip?: string; userAgent?: string },
+  ): Promise<TenantBooking> {
+    if (!this.deposits) {
+      throw new ServiceUnavailableException({ message: 'Dịch vụ đặt cọc chưa sẵn sàng.', code: 'deposit_unavailable' });
+    }
+    if (dto.acceptTerms !== true || dto.acknowledgeNoViewing !== true) {
+      throw new BadRequestException({
+        message: 'Bạn cần đồng ý điều khoản cọc và xác nhận chốt cọc không xem trực tiếp.',
+        code: 'invalid_request',
+      });
+    }
+    if (dto.termsVersion !== DEPOSIT_TERMS_VERSION) {
+      throw new ConflictException({ message: 'Phiên bản điều khoản đặt cọc đã cũ, vui lòng tải lại.', code: 'terms_version_stale' });
+    }
+
+    let unit = await this.prisma.unit.findFirst({
+      where: { unitCode: { equals: dto.unitCode.trim(), mode: 'insensitive' }, isVerified: true, media: { some: {} } },
+      include: { building: true },
+    });
+    if (!unit) {
+      throw new NotFoundException({ message: 'Không tìm thấy căn hộ hoặc căn hộ không còn khả dụng.', code: 'unit_not_found' });
+    }
+    if (unit.status === UnitStatus.HOLDING) {
+      await this.deposits.expireIfDue(unit.id);
+      unit = (await this.prisma.unit.findUnique({ where: { id: unit.id }, include: { building: true } })) ?? unit;
+    }
+    if (unit.status !== UnitStatus.AVAILABLE) {
+      throw new ConflictException({ message: 'Căn hộ hiện không còn trống để đặt cọc.', code: 'unit_not_available' });
+    }
+    if (!fastDepositQuote(await this.deposits.fastCloseSource(this.prisma, unit))) {
+      throw new ConflictException({ message: 'Căn này chưa được chủ nhà ủy quyền chốt nhanh.', code: 'fast_close_unavailable' });
+    }
+
+    // Idempotent: lịch trực tiếp còn sống của chính khách cho căn này ⇒ dùng lại (createDeposit tự báo giá lại / trả nguyên).
+    const live = await this.prisma.viewing.findFirst({
+      where: { tenantId: user.id, unitId: unit.id, status: ViewingStatus.CLOSING, tickets: { none: {} } },
+      select: { id: true, bookingRefCode: true },
+    });
+    let ref = live?.bookingRefCode;
+    let createdId: string | null = null;
+    if (!ref) {
+      const normPhone = await this.verifyContactPhone(user, dto.phone, dto.actionToken);
+      ref = await this.newRefCode();
+      const v = await this.prisma.viewing.create({
+        data: {
+          bookingRefCode: ref,
+          unitId: unit.id,
+          tenantId: user.id,
+          contactName: dto.contactName.trim(),
+          contactPhoneEnc: this.phones.encrypt(normPhone),
+          contactPhoneHash: this.phones.hash(normPhone),
+          partySize: dto.partySize || 1,
+          viewingSlot: new Date(),
+          status: ViewingStatus.CLOSING,
+        },
+      });
+      createdId = v.id;
+    }
+
+    try {
+      return await this.deposits.createDeposit(
+        ref,
+        user,
+        { acceptTerms: true, termsVersion: dto.termsVersion, fastClose: true },
+        reqContext,
+        { direct: true, acknowledgeNoViewing: true },
+      );
+    } catch (error) {
+      if (createdId) {
+        await this.prisma.viewing
+          .update({ where: { id: createdId }, data: { status: ViewingStatus.CANCELLED, closedReason: 'fast_deposit_failed' } })
+          .catch((e: Error) => this.logger.error(`Huỷ lịch cọc trực tiếp ${ref} lỗi: ${e.message}`));
+      }
+      throw error;
+    }
   }
 
   /** Lịch còn sống của chính khách cho (căn, giờ) — dùng cho idempotency của `createBooking`. */

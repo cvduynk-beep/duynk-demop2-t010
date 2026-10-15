@@ -121,12 +121,28 @@ const RANK: Record<BookingStatus, number> = {
 export function buildTimeline(b: TenantBooking): TimelineStep[] {
   const r = RANK[b.status];
   const lobbyDone = !!b.lobbyAt || r >= 3;
+  const depositStep: TimelineStep = {
+    key: "deposit",
+    label: "Cọc giữ căn",
+    hint: b.deposit ? `VietQR ${vnd(b.deposit.amount)}đ` : "VietQR tiền cọc bảo đảm",
+    at: b.deposit?.paidAt,
+    done: !!b.deposit?.paidAt,
+  };
+  // Chốt cọc nhanh trên trang căn: không có Host / sảnh / xem phòng.
+  if (b.direct) {
+    return [
+      { key: "sent", label: "Chốt cọc nhanh", hint: "Xác thực SĐT qua Zalo, không cần xem trực tiếp", at: b.createdAt, done: true },
+      depositStep,
+      { key: "kyc", label: "Xác minh CCCD (eKYC)", hint: "Khi làm hợp đồng thuê", at: b.kyc?.verifiedAt, done: !!b.kyc },
+      { key: "lease", label: "Ký hợp đồng thuê", hint: "Chọn kỳ thanh toán 1/3/6 tháng", done: !!b.contractId || b.status === "leased" },
+    ];
+  }
   return [
     { key: "sent", label: "Đã gửi yêu cầu", hint: "Xác thực OTP qua Zalo", at: b.createdAt, done: true },
     { key: "host", label: "Host xác nhận lịch", hint: "Trong vòng 3 phút", at: b.confirmedAt, done: !!b.confirmedAt },
     { key: "lobby", label: "Có mặt tại sảnh", hint: "Bấm “Tôi đã tới sảnh”", at: b.lobbyAt ?? b.receivingAt, done: lobbyDone },
     { key: "view", label: "Xem phòng", hint: "Host mở cửa bằng mã trong app", at: b.viewingAt, done: !!b.viewingAt },
-    { key: "deposit", label: "Cọc giữ căn", hint: b.deposit ? `VietQR ${vnd(b.deposit.amount)}đ` : "VietQR tiền cọc bảo đảm", at: b.deposit?.paidAt, done: !!b.deposit?.paidAt },
+    depositStep,
     { key: "kyc", label: "Xác minh CCCD (eKYC)", hint: "Khi làm hợp đồng thuê", at: b.kyc?.verifiedAt, done: !!b.kyc },
     { key: "lease", label: "Ký hợp đồng thuê", hint: "Xác nhận hợp đồng trên app", done: !!b.contractId || b.status === "leased" },
   ];

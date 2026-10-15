@@ -12,6 +12,7 @@ export const sampleBooking = (patch: Partial<TenantBooking> = {}): TenantBooking
   contact: { name: "Nguyễn Văn Thuê", phoneMasked: "0912 *** 678", persons: 2 },
   host: null,
   canModify: true,
+  direct: false,
   ...patch,
 });
 
