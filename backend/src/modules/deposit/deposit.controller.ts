@@ -26,7 +26,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { HostRoles } from '../../common/decorators/host-roles.decorator';
 
-@ApiTags('5. Cọc VietQR 2M & Khóa Giữ Chỗ')
+@ApiTags('5. Cọc VietQR (Tiền cọc bảo đảm) & Khóa Giữ Chỗ')
 @Controller()
 export class DepositController {
   constructor(private readonly depositService: DepositService) {}
@@ -41,6 +41,16 @@ export class DepositController {
     return this.depositService.getPublicDepositTerms(unitCode);
   }
 
+  @Public()
+  @Get('units/:code/fast-deposit')
+  @ApiOperation({
+    summary: 'Công khai: căn có "Chốt cọc nhanh" không (chủ nhà ủy quyền + căn trống) và mức giảm Tiền cọc bảo đảm',
+    description: 'Trả `eligible`, cọc gốc, mức giảm, số phải chuyển, số giờ giữ căn, hạn ưu đãi (giờ). KHÔNG trả giá sàn / giá thuê đã giảm. 404 unit_not_found.',
+  })
+  async getPublicFastDeposit(@Param('code') code: string) {
+    return this.depositService.getPublicFastDeposit(code);
+  }
+
   @Roles('tenant')
   @Get('bookings/:ref/deposit/terms')
   @ApiOperation({
@@ -53,8 +63,8 @@ export class DepositController {
   @Roles('tenant')
   @Get('bookings/:ref/fast-close')
   @ApiOperation({
-    summary: 'Báo giá Chốt nhanh của chủ lịch hẹn (bước chốt cọc): giá thuê theo chu kỳ 1/3/6 tháng + tiền cọc đã giảm',
-    description: 'Chỉ khi chủ nhà ủy quyền chốt nhanh và lịch ở trạng thái closing; không lộ giá sàn. Không đủ điều kiện ⇒ `eligible: false`.',
+    summary: 'Báo giá Chốt nhanh của chủ lịch hẹn: giảm cọc (stage deposit) + giá thuê theo chu kỳ 1/3/6 tháng (chọn khi ký HĐ, stage lease)',
+    description: 'Chủ nhà ủy quyền chốt nhanh và lịch closing (deposit) hoặc đã giữ căn bằng cọc chốt nhanh chưa chọn chu kỳ (lease); không lộ giá sàn. Không đủ điều kiện ⇒ `eligible: false`.',
   })
   async getFastCloseQuotes(@Param('ref') ref: string, @CurrentUser() user: any) {
     return this.depositService.getFastCloseQuotes(ref, user);
@@ -63,10 +73,10 @@ export class DepositController {
   @Roles('tenant')
   @Post('bookings/:ref/deposit')
   @ApiOperation({
-    summary: 'A15: Chấp thuận điều khoản & tạo giao dịch VietQR Tiền cọc bảo đảm (số tiền do server tính; `fastCloseCycle` tuỳ chọn)',
+    summary: 'A15: Chấp thuận điều khoản & tạo giao dịch VietQR Tiền cọc bảo đảm (số tiền do server tính; `fastClose` tuỳ chọn)',
     description:
       'Số tiền = Tiền cọc bảo đảm của căn (units.security_deposit, chưa đặt ⇒ 1 tháng tiền thuê); chốt nhanh ⇒ giảm ~5% cọc, ưu đãi giữ 24 giờ. ' +
-      'Cọc chưa có tiền về được báo giá lại trên cùng khoản. Lỗi: 400 invalid_request (errors.fastCloseCycle), 409 fast_close_unavailable / deposit_unavailable / bad_status / terms_version_stale.',
+      'Chu kỳ 1/3/6 chọn khi ký HĐ. Cọc chưa có tiền về được báo giá lại trên cùng khoản. Lỗi: 400 invalid_request, 409 fast_close_unavailable / deposit_unavailable / bad_status / terms_version_stale.',
   })
   async createDeposit(
     @Param('ref') ref: string,

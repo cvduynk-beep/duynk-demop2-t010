@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LayoutGrid, Map, SearchX, Sparkles, X } from "lucide-react";
 import { Facade } from "@/components/brand/Facade";
 import { UnitCard } from "@/components/unit/UnitCard";
@@ -10,6 +10,7 @@ import type { CostBreakdown } from "@/lib/pricing/cost";
 import type { UnitWithExtras } from "@/lib/tenant/adapters";
 import { criteriaChips } from "@/lib/tenant/matchmaker";
 import { zoneById, type ZoneId } from "@/lib/units";
+import { UnitPreview } from "./UnitPreview";
 import styles from "./ResultsPanel.module.css";
 
 type Sort = "best" | "price" | "area";
@@ -32,12 +33,33 @@ interface ResultsPanelProps {
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  /** Báo cho khung chứa biết đang mở/đóng chi tiết căn (khung chứa đổi sang bố cục header / thân cuộn / đáy cố định). */
+  onPreviewChange?: (open: boolean) => void;
 }
 
-export function ResultsPanel({ results, criteria, onCriteria, totalOpen, loading, error, onRetry }: ResultsPanelProps) {
+export function ResultsPanel({ results, criteria, onCriteria, totalOpen, loading, error, onRetry, onPreviewChange }: ResultsPanelProps) {
   const [sort, setSort] = useState<Sort>("best");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [mapZone, setMapZone] = useState<string | null>(null);
+  // Căn đang xem chi tiết ngay trong khung (không chuyển sang /units/:code ⇒ khách vẫn chat bên trái).
+  const [preview, setPreview] = useState<{ code: string; book: boolean } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const savedScroll = useRef(0);
+  // Khung cuộn là phần tử cha (section .results của ChatExperience).
+  const scroller = () => rootRef.current?.parentElement ?? null;
+  const openUnit = (unit: UnitWithExtras, opts?: { book?: boolean }) => {
+    savedScroll.current = scroller()?.scrollTop ?? 0;
+    setPreview({ code: unit.code, book: !!opts?.book });
+    onPreviewChange?.(true);
+    requestAnimationFrame(() => scroller()?.scrollTo({ top: 0 }));
+  };
+  const closePreview = () => {
+    setPreview(null);
+    onPreviewChange?.(false);
+    requestAnimationFrame(() => scroller()?.scrollTo({ top: savedScroll.current }));
+  };
+  // Panel bị gỡ (vd. bắt đầu chat mới) khi đang xem chi tiết ⇒ trả khung chứa về chế độ danh sách.
+  useEffect(() => () => onPreviewChange?.(false), [onPreviewChange]);
 
   const chips = criteriaChips(criteria);
   const hh = criteria.household;
@@ -58,8 +80,21 @@ export function ResultsPanel({ results, criteria, onCriteria, totalOpen, loading
     return results.filter((r) => r.unit.zoneId === mapZone);
   }, [results, mapZone]);
 
+  if (preview) {
+    return (
+      <div ref={rootRef} className={`${styles.panel} ${styles.panelPreview}`}>
+        <UnitPreview
+          code={preview.code}
+          book={preview.book}
+          fallback={results.find((r) => r.unit.code === preview.code)?.unit ?? null}
+          onBack={closePreview}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className={styles.panel}>
+    <div ref={rootRef} className={styles.panel}>
       <header className={styles.head}>
         <div className={styles.headTop}>
           <div>
@@ -193,7 +228,7 @@ export function ResultsPanel({ results, criteria, onCriteria, totalOpen, loading
 
           <div className={styles.grid}>
             {zoneResults.map((r) => (
-              <UnitCard key={r.unit.id} unit={r.unit} cost={r.cost} />
+              <UnitCard key={r.unit.id} unit={r.unit} cost={r.cost} onOpen={openUnit} />
             ))}
           </div>
         </div>
@@ -209,7 +244,7 @@ export function ResultsPanel({ results, criteria, onCriteria, totalOpen, loading
               </h3>
               <div className={styles.top}>
                 {top.map((r, i) => (
-                  <UnitCard key={r.unit.id} unit={r.unit} cost={r.cost} variant="feature" rank={r.rank} reasons={r.reasons} priority={i === 0} />
+                  <UnitCard key={r.unit.id} unit={r.unit} cost={r.cost} variant="feature" rank={r.rank} reasons={r.reasons} priority={i === 0} onOpen={openUnit} />
                 ))}
               </div>
             </section>
@@ -220,7 +255,7 @@ export function ResultsPanel({ results, criteria, onCriteria, totalOpen, loading
               <h3 className={styles.section}>{sort === "best" ? `Các căn khớp khác (${rest.length})` : "Tất cả căn khớp"}</h3>
               <div className={styles.grid}>
                 {rest.map((r) => (
-                  <UnitCard key={r.unit.id} unit={r.unit} cost={r.cost} />
+                  <UnitCard key={r.unit.id} unit={r.unit} cost={r.cost} onOpen={openUnit} />
                 ))}
               </div>
             </section>

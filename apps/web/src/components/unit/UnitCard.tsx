@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bath, BedDouble, Compass, Ruler, Sparkles } from "lucide-react";
+import { Bath, BedDouble, Compass, Ruler, Sparkles, Zap } from "lucide-react";
 import { vnd } from "@/lib/format";
 import type { CostBreakdown } from "@/lib/pricing/cost";
 import type { UnitWithExtras } from "@/lib/tenant/adapters";
@@ -17,24 +17,43 @@ interface UnitCardProps {
   rank?: number;
   reasons?: string[];
   priority?: boolean;
+  /**
+   * Có ⇒ mở chi tiết NGAY TẠI CHỖ (vd. khung preview cạnh chat) thay vì chuyển trang `/units/:code`.
+   * `book: true` khi khách bấm "Đặt lịch xem".
+   */
+  onOpen?: (unit: UnitWithExtras, opts?: { book?: boolean }) => void;
 }
 
-export function UnitCard({ unit, variant = "grid", rank, reasons, priority }: UnitCardProps) {
+export function UnitCard({ unit, variant = "grid", rank, reasons, priority, onOpen }: UnitCardProps) {
   const zoneName = unit.zoneName || zoneById(unit.zoneId)?.name || "Phân khu chưa cập nhật";
   const feature = variant === "feature";
+  const photo = (
+    <VerifiedPhoto
+      unit={unit}
+      sizes={feature ? "(max-width: 900px) 100vw, 420px" : "(max-width: 640px) 100vw, (max-width: 1200px) 50vw, 340px"}
+      priority={priority}
+      className={styles.photoFrame}
+    />
+  );
   return (
     <article className={`${styles.card} ${feature ? styles.feature : ""}`}>
       <div className={styles.photo}>
-        <Link href={`/units/${encodeURIComponent(unit.code)}`} aria-label={`Xem chi tiết căn ${unitAddress(unit)}`} className={styles.photoLink}>
-          <VerifiedPhoto
-            unit={unit}
-            sizes={feature ? "(max-width: 900px) 100vw, 420px" : "(max-width: 640px) 100vw, (max-width: 1200px) 50vw, 340px"}
-            priority={priority}
-            className={styles.photoFrame}
-          />
-        </Link>
+        {onOpen ? (
+          <button type="button" onClick={() => onOpen(unit)} aria-label={`Xem chi tiết căn ${unitAddress(unit)}`} className={`${styles.photoLink} ${styles.photoButton}`}>
+            {photo}
+          </button>
+        ) : (
+          <Link href={`/units/${encodeURIComponent(unit.code)}`} aria-label={`Xem chi tiết căn ${unitAddress(unit)}`} className={styles.photoLink}>
+            {photo}
+          </Link>
+        )}
         <div className={styles.badges}>
           {rank && <span className={`badge badge-plain ${styles.rank}`}>AI chọn #{rank}</span>}
+          {unit.fastDepositDiscount != null && (
+            <span className={styles.fastBadge}>
+              <Zap size={11} /> Cọc nhanh
+            </span>
+          )}
           <UnitBadges unit={unit} />
         </div>
         <FavoriteButton unitCode={unit.code} />
@@ -74,6 +93,16 @@ export function UnitCard({ unit, variant = "grid", rank, reasons, priority }: Un
           </p>
         </div>
 
+        {/* Ưu đãi chốt cọc nhanh giảm TIỀN CỌC, không giảm giá thuê đang hiển thị ⇒ dòng riêng, ghi rõ "tiền cọc". */}
+        {unit.fastDepositDiscount != null && (
+          <p className={styles.fastDeposit}>
+            <Zap size={13} className={styles.fastDepositIcon} />
+            <span>
+              Chốt cọc nhanh: <b>tiền cọc giảm {vnd(unit.fastDepositDiscount)}đ</b>, không cần xem trực tiếp
+            </span>
+          </p>
+        )}
+
         {feature && reasons && reasons.length > 0 && (
           <div className={styles.cleanHighlight} title={reasons[0]}>
             <Sparkles size={13} className={styles.highlightIcon} />
@@ -84,17 +113,28 @@ export function UnitCard({ unit, variant = "grid", rank, reasons, priority }: Un
         {/* Trang chi tiết công khai chỉ có căn đang trống / đang giữ chỗ; chỉ căn trống mới đặt lịch được. */}
         <div className={styles.actions}>
           {unit.baseStatus === "available" || unit.baseStatus === "holding" ? (
-            <Link href={`/units/${unit.id}`} className="btn btn-quiet btn-sm">
-              Xem chi tiết
-            </Link>
+            onOpen ? (
+              <button type="button" className="btn btn-quiet btn-sm" onClick={() => onOpen(unit)}>
+                Xem chi tiết
+              </button>
+            ) : (
+              <Link href={`/units/${unit.id}`} className="btn btn-quiet btn-sm">
+                Xem chi tiết
+              </Link>
+            )
           ) : (
             <span className="muted small">Căn không còn hiển thị công khai</span>
           )}
-          {unit.baseStatus === "available" && (
-            <Link href={`/units/${unit.id}?book=1`} className="btn btn-primary btn-sm">
-              Đặt lịch xem
-            </Link>
-          )}
+          {unit.baseStatus === "available" &&
+            (onOpen ? (
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => onOpen(unit, { book: true })}>
+                Đặt lịch xem
+              </button>
+            ) : (
+              <Link href={`/units/${unit.id}?book=1`} className="btn btn-primary btn-sm">
+                Đặt lịch xem
+              </Link>
+            ))}
         </div>
       </div>
     </article>

@@ -22,7 +22,7 @@ export class ContractController {
     summary: 'Khách thuê ký Hợp đồng thuê chính thức (sau eKYC, khi đang giữ chỗ)',
     description:
       'Tạo Contract ACTIVE + chuyển 100% cọc giữ chỗ thành một phần Tiền cọc bảo đảm (không trừ tháng đầu), căn → RENTED, ' +
-      'sinh PDF (SHA-256 thật) và SignedDocument/Signature. MÔ PHỎNG: OTP ký số và dấu thời gian TSA.',
+      'sinh PDF (SHA-256 thật) và SignedDocument + bản ghi đồng ý (APP_CONSENT). Không ký số / OTP ký / TSA.',
   })
   async signLease(@CurrentUser() user: { id: string }, @Body() dto: SignLeaseDto, @Req() req: Request) {
     return this.leaseSigning.sign(user, dto, { ipAddress: req.ip, userAgent: req.headers['user-agent'] });

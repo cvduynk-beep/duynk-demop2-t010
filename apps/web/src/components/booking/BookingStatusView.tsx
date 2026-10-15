@@ -198,7 +198,7 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
               <DepositTermsBox
                 refCode={booking.ref}
                 unitCode={unit.code}
-                currentCycle={changingDeposit ? fastClose?.cycle ?? null : null}
+                currentFast={changingDeposit ? !!fastClose : false}
                 onCancel={changingDeposit ? () => setChangingDeposit(false) : undefined}
                 onSuccess={(next) => {
                   setChangingDeposit(false);
@@ -228,13 +228,21 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
                   </p>
                   {fastClose && (
                     <p className="xs" style={{ maxWidth: 480, margin: "8px auto 0", color: "var(--amber-900, #78350f)" }}>
-                      Chốt nhanh {fastClose.cycle} tháng/kỳ: giá thuê {vnd(fastClose.monthlyRent)}đ/tháng, cọc đã giảm từ {vnd(fastClose.baseAmount)}đ. Chuyển
-                      trước <b>{fmtDateTime(fastClose.quoteExpiresAt)}</b>, quá hạn sẽ được hoàn tiền và căn không bị khoá.
+                      Chốt nhanh: cọc đã giảm {vnd(fastClose.depositDiscount)}đ (từ {vnd(fastClose.baseAmount)}đ).
+                      {fastClose.quoteExpiresAt && (
+                        <>
+                          {" "}Chuyển trước <b>{fmtDateTime(fastClose.quoteExpiresAt)}</b>, quá hạn sẽ được hoàn tiền và căn không bị khoá.
+                        </>
+                      )}{" "}
+                      Khi ký hợp đồng bạn chọn kỳ thanh toán 1/3/6 tháng để được giảm thêm giá thuê.
                     </p>
                   )}
-                  <button type="button" className="btn btn-quiet btn-sm" style={{ marginTop: 8 }} onClick={() => setChangingDeposit(true)}>
-                    Đổi lựa chọn cọc
-                  </button>
+                  {/* Cọc trực tiếp trên trang căn chỉ có chốt nhanh ⇒ không đổi sang cọc thường. */}
+                  {!booking.direct && (
+                    <button type="button" className="btn btn-quiet btn-sm" style={{ marginTop: 8 }} onClick={() => setChangingDeposit(true)}>
+                      Đổi lựa chọn cọc
+                    </button>
+                  )}
                 </div>
                 {/* MÔ PHỎNG VietQR: backend chỉ nhận lệnh này khi DEMO_TOOLS=true và không phải production. */}
                 <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
@@ -311,7 +319,7 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
                     <b style={{ fontSize: 16 }}>Đã huỷ giữ căn và hoàn cọc</b>
                     <p style={{ fontSize: 13.5, margin: "4px 0 10px" }}>
                       {quoteMissed
-                        ? `Tiền cọc về sau hạn ưu đãi chốt nhanh (${fmtDateTime(fastClose.quoteExpiresAt)}) nên căn không bị khoá; VinStay hoàn ${vnd(deposit.amount)}đ trong 24 giờ làm việc. Bạn có thể chọn lại cách cọc ở trên.`
+                        ? `Tiền cọc về sau hạn ưu đãi chốt nhanh${fastClose.quoteExpiresAt ? ` (${fmtDateTime(fastClose.quoteExpiresAt)})` : ""} nên căn không bị khoá; VinStay hoàn ${vnd(deposit.amount)}đ trong 24 giờ làm việc. Bạn có thể chọn lại cách cọc ở trên.`
                         : "Khoản cọc đã được huỷ và hoàn lại (căn vừa được khách khác cọc trước, chủ nhà không giữ cam kết hoặc bất khả kháng). VinStay hoàn tiền theo Điều 328 BLDS trong 24 giờ làm việc; nếu lỗi do chủ nhà, bạn được nhận thêm khoản phạt bằng tiền cọc."}
                     </p>
                     <Link href="/?view=all" className="btn btn-primary btn-sm">
@@ -473,15 +481,20 @@ export function BookingStatusView({ refCode }: { refCode: string }) {
                   <dd className="muted small">{zoneName}</dd>
                 </div>
                 <div>
-                  <dt>Thời gian</dt>
+                  <dt>{booking.direct ? "Chốt cọc lúc" : "Thời gian"}</dt>
                   <dd>
                     {fmtTime(booking.slot)} · {weekday(booking.slot)}, {fmtDateTime(booking.slot).split(" · ")[1]}
                   </dd>
-                  <dd className="muted small">{dayLabel(booking.slot, now)}</dd>
+                  <dd className="muted small">{booking.direct ? "Chốt cọc nhanh, không cần xem trực tiếp" : dayLabel(booking.slot, now)}</dd>
                 </div>
                 <div>
                   <dt>Field Host</dt>
-                  {!host ? (
+                  {booking.direct ? (
+                    <>
+                      <dd className="muted">Field Host phân khu</dd>
+                      <dd className="muted small">Hẹn bàn giao và lập Hộ chiếu bàn giao số khi bạn nhận nhà</dd>
+                    </>
+                  ) : !host ? (
                     <>
                       <dd className="muted">Đang phân bổ...</dd>
                       <dd className="muted small">Tự động chọn Host gần nhất</dd>

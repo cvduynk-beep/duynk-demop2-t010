@@ -8,15 +8,19 @@ import { ContractStatus, DepositStatus, UnitStatus, ViewingStatus } from '@prism
 import { PrismaService } from '../../prisma/prisma.service';
 import { PhoneService } from '../auth/phone/phone.service';
 import { evaluateMoveIn } from './move-in';
-import { DepositService } from '../deposit/deposit.service';
+import { DepositService, isFastDeposit } from '../deposit/deposit.service';
+import { fastCloseRent, type FastCloseCycle } from '../deposit/fast-close';
 import { BookingAccessService } from '../tenant/booking-access.service';
 import { statusToWeb, toTenantBooking, toTenantContract } from '../tenant/tenant.mappers';
 import { TenantBooking, TenantContract } from '../tenant/tenant.types';
 import { SignLeaseDto } from './dto/contract.dto';
 import { LeasePdfService } from './lease-pdf.service';
 
-/** Cách ký ghi vào `signatures.method`: chữ ký tay trên canvas + OTP mô phỏng (chưa có nhà cung cấp OTP ký số thật). */
-export const LEASE_SIGN_METHOD = 'CANVAS_SIMULATED_OTP';
+/**
+ * Cách xác lập ghi vào `signatures.method`: khách tick đồng ý trên app bằng tài khoản có SĐT đã xác thực OTP và CCCD
+ * đã eKYC (đã bỏ ký tay trên canvas + OTP ký số mô phỏng — quyết định 2026-10-14).
+ */
+export const LEASE_SIGN_METHOD = 'APP_CONSENT';
 const MAX_LEASE_MONTHS = 36;
 const PAYMENT_CYCLES = [1, 3, 6];
 
@@ -26,11 +30,12 @@ const PAYMENT_CYCLES = [1, 3, 6];
  * THẬT: chỉ chủ lịch; lịch đang giữ chỗ còn hạn; đã có eKYC; kiểm điều khoản thuê; trong một transaction tạo
  * `contracts` (ACTIVE), chuyển 100% khoản đã chuyển (cọc v2 = Tiền cọc bảo đảm, không thu bù; cọc cũ 2tr ⇒ thu phần chênh)
  * thành Tiền cọc bảo đảm (KHÔNG trừ tiền thuê tháng đầu — `holding_deposits.payment_status = CONVERTED_TO_CONTRACT`,
- * `escrow_transactions` HOLD_CONVERTED); chốt nhanh ⇒ giá thuê và chu kỳ đã chốt; ngày bắt đầu theo Smart Move-in; căn → RENTED,
+ * `escrow_transactions` HOLD_CONVERTED); cọc chốt nhanh ⇒ khách chọn chu kỳ ở đây, giá thuê giảm theo chu kỳ (kẹp giá sàn,
+ * hồ sơ 20) và ghi lại vào khoản cọc — cọc cũ đã chốt sẵn chu kỳ thì giữ đúng chu kỳ + giá; ngày bắt đầu theo Smart Move-in; căn → RENTED,
  * lịch → LEASED, audit LEASE_ESTABLISHED; sau đó sinh PDF thật (SHA-256 của file) và tạo `signed_documents` + `signatures`.
  *
- * MÔ PHỎNG (giữ có chủ đích): bước OTP ký số (`otp_verified_at` = lúc ký, method `CANVAS_SIMULATED_OTP`) và dấu thời
- * gian TSA (`tsa_token` = `SIMULATED-TSA-…`) — chưa tích hợp nhà cung cấp ký số / TSA RFC 3161 thật.
+ * KHÔNG ký số (quyết định 2026-10-14): không chữ ký tay, không OTP ký số, không dấu thời gian TSA. Bằng chứng xác lập =
+ * bản ghi `signatures` method `APP_CONSENT` (IP, user agent, thời điểm) + SHA-256 của PDF + audit LEASE_ESTABLISHED.
  */
 @Injectable()
 export class LeaseSigningService {
@@ -86,7 +91,7 @@ export class LeaseSigningService {
     if (!PAYMENT_CYCLES.includes(dto.paymentCycle)) {
       throw new UnprocessableEntityException({ message: 'Kỳ thanh toán chỉ chấp nhận 1, 3 hoặc 6 tháng/lần.', code: 'lease_terms_invalid' });
     }
-    // Chốt nhanh: chu kỳ đã cam kết lúc chốt cọc là điều kiện của giá đã giảm ⇒ HĐ bắt buộc đúng chu kỳ đó.
+    // Cọc chốt nhanh cũ (trước hồ sơ 20) đã cam kết chu kỳ lúc cọc ⇒ HĐ bắt buộc đúng chu kỳ đó.
     if (deposit.fastCloseCycle && dto.paymentCycle !== deposit.fastCloseCycle) {
       throw new UnprocessableEntityException({
         message: `Bạn đã chốt nhanh với kỳ thanh toán ${deposit.fastCloseCycle} tháng/lần; hợp đồng phải theo đúng kỳ này.`,
@@ -100,15 +105,18 @@ export class LeaseSigningService {
       throw new UnprocessableEntityException({ message: moveIn.message, code: 'lease_terms_invalid', errors: { startDate: moveIn.message, window: moveIn.window } });
     }
     const startDate = new Date(`${moveIn.billingStartDate}T00:00:00.000Z`);
-    if (!dto.signatureSvg?.trim()) {
-      throw new UnprocessableEntityException({ message: 'Thiếu chữ ký tay của khách thuê.', code: 'signature_required' });
-    }
 
     const endDate = new Date(startDate);
     endDate.setUTCMonth(endDate.getUTCMonth() + dto.months);
     endDate.setUTCDate(endDate.getUTCDate() - 1);
-    // Chốt nhanh ⇒ giá đã chốt lúc cọc (≥ giá sàn); không thì giá chào hiện tại.
-    const monthlyRent = deposit.quotedMonthlyRent != null ? Number(deposit.quotedMonthlyRent) : Number(unit.baseRentPrice);
+    // Giá thuê: cọc cũ đã chốt giá ⇒ giữ; cọc chốt nhanh chưa chọn chu kỳ ⇒ giảm theo chu kỳ vừa chọn (≥ giá sàn, theo hồ sơ
+    // ký gửi hiện hành — chủ nhà đã rút ủy quyền thì về giá chào); còn lại giá chào hiện tại.
+    const baseRent = Number(unit.baseRentPrice);
+    const chooseCycleNow = isFastDeposit(deposit) && deposit.fastCloseCycle == null;
+    const rentQuote = chooseCycleNow
+      ? fastCloseRent(await this.deposits.fastCloseSource(this.prisma, unit), dto.paymentCycle as FastCloseCycle)
+      : null;
+    const monthlyRent = deposit.quotedMonthlyRent != null ? Number(deposit.quotedMonthlyRent) : rentQuote ? rentQuote.rent : baseRent;
     const converted = Number(deposit.amount);
     // Cọc v2: khoản đã chuyển CHÍNH LÀ Tiền cọc bảo đảm (không thu bù). Cọc giữ chỗ cũ (điều khoản HOLD-*, 2tr) vẫn
     // lấy cọc bảo đảm theo căn và thu phần chênh ở kỳ đầu.
@@ -140,7 +148,11 @@ export class LeaseSigningService {
       // Chỉ một request được chuyển cọc PAID_HOLDING → CONVERTED (chống ký trùng song song).
       const claimed = await tx.holdingDeposit.updateMany({
         where: { id: deposit.id, paymentStatus: DepositStatus.PAID_HOLDING },
-        data: { paymentStatus: DepositStatus.CONVERTED_TO_CONTRACT },
+        data: {
+          paymentStatus: DepositStatus.CONVERTED_TO_CONTRACT,
+          // Lưu chu kỳ + giá đã chọn trên chính khoản cọc chốt nhanh (đối soát, Admin registry).
+          ...(chooseCycleNow ? { fastCloseCycle: dto.paymentCycle, quotedMonthlyRent: monthlyRent } : {}),
+        },
       });
       if (claimed.count !== 1) {
         throw new ConflictException({ message: 'Lịch hẹn này đã có hợp đồng thuê.', code: 'lease_already_signed' });
@@ -170,7 +182,8 @@ export class LeaseSigningService {
             securityDeposit,
             monthlyRent,
             paymentCycle: dto.paymentCycle,
-            fastCloseCycle: deposit.fastCloseCycle ?? null,
+            fastCloseCycle: chooseCycleNow ? dto.paymentCycle : deposit.fastCloseCycle ?? null,
+            fastCloseRentDiscount: isFastDeposit(deposit) ? Math.max(0, baseRent - monthlyRent) : 0,
             moveInDate: moveIn.moveInDate,
             billingStartDate: moveIn.billingStartDate,
           },
@@ -181,7 +194,7 @@ export class LeaseSigningService {
       return created;
     });
 
-    await this.sealDocument(contract.id, viewing.tenantId, dto.signatureSvg, ctx, now);
+    await this.sealDocument(contract.id, viewing.tenantId, ctx, now);
     this.logger.log(`[LEASE] Đã ký hợp đồng ${contract.contractNumber} cho lịch ${viewing.bookingRefCode}`);
 
     const reloaded = await this.bookingAccess.loadOwned(dto.bookingRef, user);
@@ -199,10 +212,10 @@ export class LeaseSigningService {
   }
 
   /**
-   * PDF + SHA-256 thật (LeasePdfService), rồi gắn dấu TSA mô phỏng và chữ ký của khách. PDF lỗi không huỷ hợp đồng đã ký:
+   * PDF + SHA-256 thật (LeasePdfService), rồi ghi bản ghi đồng ý của khách. PDF lỗi không huỷ hợp đồng đã ký:
    * `pdf.ready=false`, FE bấm thử lại qua `GET /me/contracts/:id/pdf` (LeasePdfService.ensure là idempotent).
    */
-  private async sealDocument(contractId: string, tenantId: string, signatureSvg: string, ctx: { ipAddress?: string; userAgent?: string }, now: Date) {
+  private async sealDocument(contractId: string, tenantId: string, ctx: { ipAddress?: string; userAgent?: string }, now: Date) {
     const pdf = await this.leasePdf.ensure(contractId).catch((err: Error) => {
       this.logger.error(`Sinh PDF hợp đồng ${contractId} lỗi: ${err.message}`);
       return { ready: false as const };
@@ -210,24 +223,18 @@ export class LeaseSigningService {
     if (!pdf.ready) return;
     const contract = await this.prisma.contract.findUnique({ where: { id: contractId }, select: { documentId: true } });
     if (!contract?.documentId) return;
-    await this.prisma.$transaction([
-      this.prisma.signedDocument.update({
-        where: { id: contract.documentId },
-        data: { tsaToken: `SIMULATED-TSA-${now.getTime()}`, tsaTime: now },
-      }),
-      this.prisma.signature.create({
-        data: {
-          documentId: contract.documentId,
-          signerId: tenantId,
-          signerRole: 'tenant',
-          method: LEASE_SIGN_METHOD,
-          signatureSvg: signatureSvg.slice(0, 200_000),
-          otpVerifiedAt: now,
-          ipAddress: ctx.ipAddress?.slice(0, 45),
-          userAgent: ctx.userAgent,
-        },
-      }),
-    ]);
+    await this.prisma.signature.create({
+      data: {
+        documentId: contract.documentId,
+        signerId: tenantId,
+        signerRole: 'tenant',
+        method: LEASE_SIGN_METHOD,
+        // Cột NOT NULL: thời điểm khách xác nhận trên tài khoản đã xác thực SĐT (OTP lúc đặt lịch), không có OTP riêng khi ký.
+        otpVerifiedAt: now,
+        ipAddress: ctx.ipAddress?.slice(0, 45),
+        userAgent: ctx.userAgent,
+      },
+    });
   }
 
   private async nextContractNumber(tx: any, unitCode: string, year: number): Promise<string> {

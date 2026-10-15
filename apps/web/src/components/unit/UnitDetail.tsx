@@ -1,19 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { Bath, BedDouble, Bot, Building2, CalendarPlus, Check, Compass, Layers, LockKeyhole, Minus, Plus, Ruler, Share2, ShieldCheck, Sofa, Star } from "lucide-react";
+import { Fragment, useState, type ReactNode } from "react";
+import { Bath, BedDouble, Bot, Building2, CalendarPlus, Check, ChevronDown, Compass, Layers, LockKeyhole, Minus, Plus, Ruler, Share2, ShieldCheck, Sofa, Star, Zap } from "lucide-react";
 import { BookingSheet } from "@/components/booking/BookingSheet";
 import { toast } from "@/components/ui/Toast";
 import { allInCost, DEFAULT_HOUSEHOLD, isBargain, RATES, savingsPct, type Household, unitRates } from "@/lib/pricing/cost";
 import { vnd, vndShort } from "@/lib/format";
 import { HOUSE_RULES } from "@/lib/legal/house-rules";
 import { useChat } from "@/lib/chat/store";
+import { useApiQuery } from "@/lib/query/useApiQuery";
+import { tenantQueries } from "@/lib/tenant/queries";
 import type { UnitWithExtras } from "@/lib/tenant/adapters";
 import { similarUnits, useCatalog } from "@/lib/tenant/catalog";
 import { FURNISHING_LABEL, ITEM_LABEL, PASSPORT_ITEMS, unitAddress, zoneById } from "@/lib/units";
 import { getBuildingPerks } from "@/lib/property/livingIntelligence";
 import { AllInBar } from "./AllInBar";
+import { FastCloseModal } from "./FastCloseModal";
 import { FavoriteButton } from "./FavoriteButton";
 import { Gallery } from "./Gallery";
 import { LivingExperience } from "./LivingExperience";
@@ -40,7 +43,67 @@ function Stepper({ label, value, min, max, onChange }: { label: string; value: n
   );
 }
 
-export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; autoOpenBooking: boolean }) {
+/**
+ * Một mục của trang chi tiết. Trang đầy đủ: `<section>` + tiêu đề như cũ. Khung nhúng cạnh chat (`embedded`): thẻ thu gọn
+ * được (`<details>`) — mục dài (điều khoản, nội quy…) mặc định đóng để khách lướt nhanh, mở khi cần.
+ */
+function Block({
+  embedded,
+  title,
+  hint,
+  id,
+  defaultOpen = false,
+  children,
+}: {
+  embedded: boolean;
+  title: string;
+  /** Chú thích ngắn bên phải tiêu đề (chỉ khung nhúng). */
+  hint?: string;
+  id?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  if (!embedded) {
+    return (
+      <section className={styles.block} aria-labelledby={id}>
+        <h2 id={id}>{title}</h2>
+        {children}
+      </section>
+    );
+  }
+  return (
+    <details className={styles.acc} open={defaultOpen}>
+      <summary className={styles.accHead}>
+        <span className={styles.accTitle}>{title}</span>
+        {hint && <span className={styles.accHint}>{hint}</span>}
+        <ChevronDown size={18} className={styles.accChevron} aria-hidden />
+      </summary>
+      <div className={styles.accBody}>{children}</div>
+    </details>
+  );
+}
+
+/** Thân cuộn của khung nhúng: cột đọc tối đa ~900px, canh giữa. */
+function EmbScroll({ children }: { children: ReactNode }) {
+  return (
+    <div className={styles.embScroll}>
+      <div className={styles.embInner}>{children}</div>
+    </div>
+  );
+}
+
+export function UnitDetail({
+  unit,
+  autoOpenBooking,
+  autoOpenFastDeposit = false,
+  embedded = false,
+}: {
+  unit: UnitWithExtras;
+  autoOpenBooking: boolean;
+  autoOpenFastDeposit?: boolean;
+  /** Nhúng trong khung preview cạnh chat: thân cuộn + thanh hành động cố định đáy; bỏ breadcrumb, căn tương tự, nút Vinny nổi. */
+  embedded?: boolean;
+}) {
   const chat = useChat();
   const catalog = useCatalog();
   const zoneName = unit.zoneName || zoneById(unit.zoneId)?.name || "Ocean Park 1";
@@ -53,6 +116,10 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
   const cost = allInCost(unit, hh);
   const sv = savingsPct(unit);
   const bookable = status === "available";
+  // Chốt cọc nhanh: chỉ căn chủ nhà ủy quyền + còn trống (backend quyết, không lộ giá sàn). Lỗi tải ⇒ ẩn nút.
+  const fastQuery = useApiQuery(tenantQueries.fastDeposit(unit.code), bookable);
+  const fastDeposit = bookable && fastQuery.state.status === "ready" && fastQuery.state.data.eligible ? fastQuery.state.data : null;
+  const [fastOpen, setFastOpen] = useState(autoOpenFastDeposit);
   const holdHours = unit.holdHours;
   const mgmtPerM2 = unit.managementFee && unit.areaM2 > 0 ? Math.round(unit.managementFee / unit.areaM2) : RATES.mgmtPerM2;
   const rates = unitRates(unit);
@@ -80,13 +147,20 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
     { icon: Sofa, label: "Nội thất", value: FURNISHING_LABEL[unit.furnishing] },
   ];
 
-  return (
-    <div className={`wrap ${styles.page}`}>
-      <nav className={`small muted ${styles.crumbs}`} aria-label="Đường dẫn">
-        <Link href="/">Trang chủ</Link> / <span>{zoneName}</span>
-      </nav>
+  // Khung nhúng: nội dung nằm trong thân cuộn riêng, thanh hành động nằm ngoài nó (luôn thấy).
+  const Body = embedded ? EmbScroll : Fragment;
+  const inventoryCount = unit.inventory.length || unit.items.length;
 
-      <Gallery unit={unit} />
+  return (
+    <div className={embedded ? styles.embedded : `wrap ${styles.page}`}>
+      {!embedded && (
+        <nav className={`small muted ${styles.crumbs}`} aria-label="Đường dẫn">
+          <Link href="/">Trang chủ</Link> / <span>{zoneName}</span>
+        </nav>
+      )}
+
+      <Body>
+      <Gallery unit={unit} compact={embedded} />
 
       <div className={styles.grid}>
         <div className={styles.main}>
@@ -124,13 +198,11 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
             ))}
           </ul>
 
-          <section className={styles.block}>
-            <h2>Trải nghiệm sống &amp; Kết nối thực tế</h2>
+          <Block embedded={embedded} title="Trải nghiệm sống &amp; Kết nối thực tế" defaultOpen>
             <LivingExperience unit={unit} criteria={chat.criteria} />
-          </section>
+          </Block>
 
-          <section className={styles.block} aria-labelledby="allin">
-            <h2 id="allin">Minh bạch chi phí sinh hoạt (Xác thực thực địa)</h2>
+          <Block embedded={embedded} title="Minh bạch chi phí sinh hoạt (Xác thực thực địa)" id="allin" defaultOpen>
             <div className={styles.cost}>
               <div>
                 <div className={styles.costTotal}>
@@ -159,15 +231,12 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
                 {unit.feeNote && <p className="muted xs">Phí khác / tiện ích: {unit.feeNote}</p>}
               </div>
             </div>
-          </section>
+          </Block>
 
-          <section className={styles.block}>
-            <div>
-              <h2>Nội thất và trang thiết bị thực tế</h2>
-              <p className="muted xs">
-                Dữ liệu đối chiếu từ Biên bản thẩm định của Field Host nội khu · Hiện trạng {FURNISHING_LABEL[unit.furnishing]}
-              </p>
-            </div>
+          <Block embedded={embedded} title="Nội thất và trang thiết bị thực tế" hint={`${inventoryCount} hạng mục`} defaultOpen>
+            <p className="muted xs">
+              Dữ liệu đối chiếu từ Biên bản thẩm định của Field Host nội khu · Hiện trạng {FURNISHING_LABEL[unit.furnishing]}
+            </p>
 
             {unit.inventory.length > 0 ? (
               <ul className={styles.items}>
@@ -212,10 +281,9 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
                 </li>
               ))}
             </ul>
-          </section>
+          </Block>
 
-          <section className={styles.block}>
-            <h2>Hộ chiếu bàn giao số</h2>
+          <Block embedded={embedded} title="Hộ chiếu bàn giao số" hint="10 hạng mục">
             <p className="muted">
               Lúc nhận nhà, Field Host và bạn cùng chụp ảnh có dấu thời gian cho 10 hạng mục dưới đây. Đây là căn cứ đối soát khi trả phòng: hao mòn tự nhiên không bị trừ cọc.
             </p>
@@ -226,18 +294,16 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
                 </li>
               ))}
             </ul>
-          </section>
+          </Block>
 
-          <section className={styles.block}>
-            <h2>Vị trí trong Ocean Park 1</h2>
+          <Block embedded={embedded} title="Vị trí trong Ocean Park 1">
             <LocationMap zoneId={unit.zoneId} building={unit.building} />
             <a className="link small" href="https://www.google.com/maps/search/?api=1&query=Vinhomes+Ocean+Park+Gia+Lam" target="_blank" rel="noreferrer">
               Mở Google Maps
             </a>
-          </section>
+          </Block>
 
-          <section className={styles.block}>
-            <h2>Điều khoản thuê</h2>
+          <Block embedded={embedded} title="Điều khoản thuê" hint={`Tối thiểu ${unit.minMonths} tháng`}>
             <dl className={styles.terms}>
               <div>
                 <dt>Kỳ hạn tối thiểu</dt>
@@ -264,10 +330,9 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
                 <dd>VinStay chỉ giới thiệu danh bạ thợ ngoài uy tín, bạn và thợ tự thoả thuận giá</dd>
               </div>
             </dl>
-          </section>
+          </Block>
 
-          <section className={styles.block}>
-            <h2>Nội quy căn hộ</h2>
+          <Block embedded={embedded} title="Nội quy căn hộ" hint={`${HOUSE_RULES.length} quy định`}>
             <dl className={styles.terms}>
               {HOUSE_RULES.map((rule) => (
                 <div key={rule.id}>
@@ -276,7 +341,7 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
                 </div>
               ))}
             </dl>
-          </section>
+          </Block>
 
           <section className={`${styles.block} ${styles.hostCard}`}>
             <span className={styles.hostAvatar}>
@@ -292,6 +357,7 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
           </section>
         </div>
 
+        {!embedded && (
         <aside className={styles.side} aria-label="Đặt lịch xem phòng">
           <div className={`card ${styles.book}`}>
             <div className={styles.bookPrice}>
@@ -304,7 +370,20 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
 
             {bookable ? (
               <>
-                <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => setBooking(true)}>
+                {fastDeposit && (
+                  <button type="button" className={styles.fastBtn} onClick={() => setFastOpen(true)}>
+                    <span className={styles.fastMain}>
+                      <Zap size={17} /> Chốt cọc nhanh
+                      {fastDeposit.depositDiscount > 0 && <span className={styles.fastBadge}>Giảm {vnd(fastDeposit.depositDiscount)}đ</span>}
+                    </span>
+                    <span className={styles.fastSub}>Khóa giữ căn {fastDeposit.holdHours} giờ · Không cần xem trực tiếp</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`btn ${fastDeposit ? "btn-quiet" : "btn-primary"} btn-lg btn-block`}
+                  onClick={() => setBooking(true)}
+                >
                   <CalendarPlus size={19} /> Đặt lịch xem phòng
                 </button>
                 <button
@@ -319,7 +398,8 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
                     <Check size={15} /> Xem phòng miễn phí, Host đón tại sảnh
                   </li>
                   <li>
-                    <Check size={15} /> Chỉ đặt cọc khi bạn đã xem và ưng ý
+                    <Check size={15} />{" "}
+                    {fastDeposit ? "Ưng ý qua ảnh thực tế? Chốt cọc nhanh, không cần đi xem" : "Chỉ đặt cọc khi bạn đã xem và ưng ý"}
                   </li>
                   <li>
                     <Check size={15} /> Mã cửa chỉ hiện đúng lúc đứng trước phòng
@@ -337,9 +417,53 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
             )}
           </div>
         </aside>
+        )}
       </div>
+      </Body>
 
-      {similar.length > 0 && (
+      {embedded && (
+        <div className={styles.embFooter}>
+          {bookable ? (
+            <>
+              <p className={styles.embNote}>
+                {fastDeposit ? (
+                  <>
+                    <Zap size={15} className={styles.embNoteZap} />
+                    <span>
+                      Ưng ý qua ảnh thực tế? <b>Chốt cọc nhanh{fastDeposit.depositDiscount > 0 ? `, giảm ${vnd(fastDeposit.depositDiscount)}đ tiền cọc` : ""}</b>, khoá căn {fastDeposit.holdHours} giờ, không cần đi xem.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={15} className={styles.embNoteIcon} />
+                    <span>Xem phòng miễn phí, Host đón tại sảnh. Chỉ đặt cọc khi bạn đã xem và ưng ý.</span>
+                  </>
+                )}
+              </p>
+              <div className={styles.embActions}>
+                {fastDeposit && (
+                  <button type="button" className={styles.embFast} onClick={() => setFastOpen(true)}>
+                    <Zap size={16} /> Chốt cọc nhanh
+                  </button>
+                )}
+                <button type="button" className={fastDeposit ? styles.embGhost : styles.embPrimary} onClick={() => setBooking(true)}>
+                  <CalendarPlus size={16} /> Đặt lịch xem
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className={styles.embTaken}>
+              <LockKeyhole size={18} />
+              <span>
+                <b>{status === "holding" ? `Căn đang được giữ chỗ (${holdHours} giờ)` : "Căn đã cho thuê"}</b>
+                <small> · Không nhận thêm lịch xem. Quay lại danh sách để chọn căn tương đương.</small>
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!embedded && similar.length > 0 && (
         <section className={styles.similar} aria-label="Căn tương tự">
           <h2>Căn tương tự cùng layout</h2>
           <div className={styles.similarGrid}>
@@ -350,26 +474,37 @@ export function UnitDetail({ unit, autoOpenBooking }: { unit: UnitWithExtras; au
         </section>
       )}
 
-      {bookable && (
+      {bookable && !embedded && (
         <div className={`${styles.bar} no-print`}>
           <div>
             <b className="num">{vnd(unit.rent)}đ</b>
             <span className="muted xs"> /tháng (thuê) · Chưa bao gồm phí quản lý</span>
           </div>
-          <button type="button" className="btn btn-primary" onClick={() => setBooking(true)}>
-            Đặt lịch xem
-          </button>
+          <div className={styles.barActions}>
+            {fastDeposit && (
+              <button type="button" className={styles.barFast} onClick={() => setFastOpen(true)}>
+                <Zap size={14} /> Cọc nhanh
+                {fastDeposit.depositDiscount > 0 && <span className={styles.barFastBadge}>−{vndShort(fastDeposit.depositDiscount)}</span>}
+              </button>
+            )}
+            <button type="button" className="btn btn-primary" onClick={() => setBooking(true)}>
+              Đặt lịch xem
+            </button>
+          </div>
         </div>
       )}
+      {fastDeposit && <FastCloseModal unit={unit} quote={fastDeposit} open={fastOpen} onClose={() => setFastOpen(false)} />}
 
       <BookingSheet unit={unit} open={booking} onClose={() => setBooking(false)} />
-      <UnitConciergeDrawer
-        unit={unit}
-        open={conciergeOpen}
-        onOpen={() => setConciergeOpen(true)}
-        onClose={() => setConciergeOpen(false)}
-        onBook={() => setBooking(true)}
-      />
+      {!embedded && (
+        <UnitConciergeDrawer
+          unit={unit}
+          open={conciergeOpen}
+          onOpen={() => setConciergeOpen(true)}
+          onClose={() => setConciergeOpen(false)}
+          onBook={() => setBooking(true)}
+        />
+      )}
     </div>
   );
 }

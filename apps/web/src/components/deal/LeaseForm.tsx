@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { FileSignature, FileText, BookOpen, ShieldCheck, Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
-import { SignaturePad } from "@/components/ui/SignaturePad";
 import { PAYMENT_CYCLES, type PaymentCycle } from "@/lib/pricing/cost";
 import { fmtDate, vnd } from "@/lib/format";
 import { HOUSE_RULES } from "@/lib/legal/house-rules";
 import type { UnitWithExtras } from "@/lib/tenant/adapters";
+import { useApiQuery } from "@/lib/query/useApiQuery";
 import { errorText, tenantApi } from "@/lib/tenant/api";
+import { tenantQueries } from "@/lib/tenant/queries";
 import { billingStart, moveInWindow } from "@/lib/tenant/moveIn";
 import type { TenantBooking } from "@/lib/tenant/types";
 import { zoneById } from "@/lib/units";
@@ -25,8 +26,8 @@ interface LeaseFormProps {
 const MAX_LEASE_MONTHS = 36;
 
 /**
- * Ký Hợp đồng thuê chính thức: gửi `POST /contracts/lease/sign` (bản ghi Contract/SignedDocument thật, PDF + SHA-256
- * thật). Chỉ nghi thức ký (OTP ký số, dấu thời gian TSA) là mô phỏng ở backend.
+ * Xác lập Hợp đồng thuê chính thức: gửi `POST /contracts/lease/sign` (bản ghi Contract/SignedDocument thật, PDF + SHA-256
+ * thật). Không ký số / ký tay (bỏ 2026-10-14): khách đã eKYC tick đồng ý là đủ, backend lưu bản ghi đồng ý.
  * Tài khoản nhận hoàn cọc và người cùng cư trú chưa có chỗ lưu trong DB (chờ migration) nên không thu ở đây.
  */
 export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
@@ -35,14 +36,18 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
 
   const deposit = booking.deposit;
   const fastClose = deposit?.fastClose;
+  // Cọc chốt nhanh cũ (trước 2026-10-15) đã cam kết chu kỳ + giá ⇒ khoá. Cọc chốt nhanh mới ⇒ chọn chu kỳ ở đây (hồ sơ 20).
+  const lockedCycle = fastClose?.cycle ?? null;
+  const chooseCycle = !!fastClose && lockedCycle == null;
+  const quotesQuery = useApiQuery(tenantQueries.fastClose(booking.ref), chooseCycle);
+  const leaseQuotes =
+    chooseCycle && quotesQuery.state.status === "ready" && quotesQuery.state.data.stage === "lease" ? quotesQuery.state.data.quotes : [];
   // T0 = ngày cọc về; chưa có (không nên xảy ra ở bước ký) ⇒ lấy hôm nay, backend vẫn kiểm lại.
   const moveIn = moveInWindow(deposit?.paidAt ? Date.parse(deposit.paidAt) : now);
   const [moveInDate, setMoveInDate] = useState(moveIn.earliest);
   const [months, setMonths] = useState(() => (monthOptions.includes(12) ? 12 : monthOptions[0]));
-  // Chốt nhanh ⇒ kỳ thanh toán đã cam kết, không đổi được (backend trả 422 nếu lệch).
-  const [paymentCycle, setPaymentCycle] = useState<PaymentCycle>(fastClose?.cycle ?? 1);
-  const [signature, setSignature] = useState<string | null>(null);
-  const [hasInk, setHasInk] = useState(false);
+  // Chốt nhanh cũ ⇒ kỳ thanh toán đã cam kết, không đổi được (backend trả 422 nếu lệch).
+  const [paymentCycle, setPaymentCycle] = useState<PaymentCycle>(lockedCycle ?? 1);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [consentElectronicSign, setConsentElectronicSign] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,7 +60,8 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
   const lateMoveIn = billingDate !== moveInDate;
 
   // Dự toán tài chính (số liệu thật của căn; backend tính lại khi lập hợp đồng)
-  const monthlyRent = fastClose?.monthlyRent ?? unit.rent;
+  const quoteFor = (cycle: PaymentCycle) => leaseQuotes.find((q) => q.cycle === cycle);
+  const monthlyRent = (lockedCycle ? fastClose?.monthlyRent : quoteFor(paymentCycle)?.rent) ?? unit.rent;
   const depositPaid = deposit?.amount ?? unit.holdingDeposit;
   // Cọc v2: khoản đã chuyển CHÍNH LÀ Tiền cọc bảo đảm (không thu bù). Cọc giữ chỗ cũ (điều khoản HOLD-*) ⇒ bù phần chênh.
   const legacyHold = !!deposit?.termsVersion?.startsWith("HOLD-");
@@ -66,12 +72,8 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
 
   const handleSubmit = async () => {
     setError(null);
-    if (!hasInk || !signature) {
-      setError("Vui lòng ký tay vào ô chữ ký trước khi xác nhận.");
-      return;
-    }
     setBusy(true);
-    const res = await tenantApi.signLease({ bookingRef: booking.ref, startDate: moveInDate, months, paymentCycle, signatureSvg: signature });
+    const res = await tenantApi.signLease({ bookingRef: booking.ref, startDate: moveInDate, months, paymentCycle });
     setBusy(false);
     if (!res.ok) {
       setError(errorText(res, "Ký hợp đồng thuê thất bại."));
@@ -85,10 +87,10 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       <header style={{ marginBottom: 16 }}>
         <h3 style={{ fontSize: 18, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
           <FileSignature size={20} style={{ color: "var(--lagoon)" }} />
-          Hợp đồng thuê căn hộ (Ký số)
+          Hợp đồng thuê căn hộ
         </h3>
         <p className="muted small" style={{ margin: 0 }}>
-          Kiểm tra thông tin thuê, đọc điều khoản và ký hợp đồng điện tử.
+          Kiểm tra thông tin thuê, đọc điều khoản và xác nhận hợp đồng.
         </p>
       </header>
 
@@ -128,9 +130,14 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       {/* 2. Khối Kỳ thanh toán */}
       <div className={styles.formSection}>
         <div className={styles.formSectionTitle}>Kỳ thanh toán tiền thuê</div>
-        {fastClose && (
+        {fastClose && lockedCycle && fastClose.monthlyRent != null && (
           <p className="muted xs" style={{ margin: "0 0 6px" }}>
-            Bạn đã chốt nhanh {fastClose.cycle} tháng/kỳ với giá {vnd(fastClose.monthlyRent)}đ/tháng — kỳ thanh toán giữ đúng cam kết.
+            Bạn đã chốt nhanh {lockedCycle} tháng/kỳ với giá {vnd(fastClose.monthlyRent)}đ/tháng — kỳ thanh toán giữ đúng cam kết.
+          </p>
+        )}
+        {chooseCycle && leaseQuotes.length > 0 && (
+          <p className="muted xs" style={{ margin: "0 0 6px" }}>
+            Ưu đãi chốt nhanh: trả trước càng dài, giá thuê càng giảm (không thấp hơn giá sàn chủ nhà đặt). Kỳ bạn chọn được giữ suốt hợp đồng.
           </p>
         )}
         <div className={styles.radioRow}>
@@ -141,10 +148,18 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
                 name="paymentCycle"
                 value={cycle}
                 checked={paymentCycle === cycle}
-                disabled={!!fastClose && fastClose.cycle !== cycle}
+                disabled={lockedCycle != null && lockedCycle !== cycle}
                 onChange={() => setPaymentCycle(cycle)}
               />
-              <span>Thanh toán {cycle} tháng/lần (Điều 3.2 HĐ thuê)</span>
+              <span>
+                Thanh toán {cycle} tháng/lần (Điều 3.2 HĐ thuê)
+                {quoteFor(cycle) && (
+                  <>
+                    {" "}— <b>{vnd(quoteFor(cycle)!.rent)}đ/tháng</b>
+                    {quoteFor(cycle)!.rentDiscount > 0 && <span className="muted"> (giảm {vnd(quoteFor(cycle)!.rentDiscount)}đ)</span>}
+                  </>
+                )}
+              </span>
             </label>
           ))}
         </div>
@@ -226,7 +241,7 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
         </button>
       </div>
 
-      {/* 7. Định danh & ký tay */}
+      {/* 7. Định danh eKYC */}
       <div
         style={{
           background: "var(--paper-2)",
@@ -238,7 +253,7 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, color: "var(--kelp)" }}>
           <ShieldCheck size={20} />
-          <b style={{ fontSize: 14 }}>Chứng thực danh tính eKYC &amp; Ký số điện tử</b>
+          <b style={{ fontSize: 14 }}>Chứng thực danh tính eKYC</b>
         </div>
         <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--ink)", display: "flex", flexDirection: "column", gap: 4 }}>
           <div>
@@ -251,11 +266,8 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
             Số điện thoại xác thực OTP: <b>{booking.contact.phoneMasked}</b>
           </div>
           <div className="muted xs" style={{ marginTop: 4 }}>
-            Hợp đồng được ký điện tử theo Luật Giao dịch điện tử 2023. Dữ liệu CCCD được mã hóa AES-256 theo Nghị định 13/2023/NĐ-CP.
+            Hợp đồng được xác lập dưới dạng văn bản điện tử theo Luật Giao dịch điện tử 2023. Dữ liệu CCCD được mã hóa AES-256 theo Nghị định 13/2023/NĐ-CP.
           </div>
-        </div>
-        <div style={{ marginTop: 12 }}>
-          <SignaturePad onChange={setHasInk} onCapture={setSignature} label="Ký tên của bạn vào đây" />
         </div>
       </div>
 
@@ -269,10 +281,10 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       <button
         type="button"
         className="btn btn-primary btn-lg btn-block"
-        disabled={!consentElectronicSign || !hasInk || busy || !booking.kyc}
+        disabled={!consentElectronicSign || busy || !booking.kyc}
         onClick={handleSubmit}
       >
-        {busy ? <Loader2 size={18} className={styles.spin} /> : null} Xác nhận ký kết hợp đồng thuê căn hộ
+        {busy ? <Loader2 size={18} className={styles.spin} /> : null} Xác nhận hợp đồng thuê căn hộ
       </button>
 
 {/* MODAL CHI TIẾT ĐIỀU KHOẢN HỢP ĐỒNG */}

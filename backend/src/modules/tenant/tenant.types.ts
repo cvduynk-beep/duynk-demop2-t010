@@ -68,6 +68,11 @@ export interface TenantUnit {
   highlights: string[];
   /** Chỉ ở chi tiết căn; list = []. có conditionPct (độ mới %), KHÔNG có compensation/photoIds (B6). */
   inventory: UnitInventoryLine[];
+  /**
+   * Căn có "Chốt cọc nhanh" (chủ nhà ủy quyền + căn trống): mức giảm TIỀN CỌC. null = không có.
+   * KHÔNG có giá sàn / giá thuê đã giảm (giá thuê theo chu kỳ chỉ báo cho chủ lịch lúc ký HĐ). Chỉ catalog + chi tiết điền.
+   */
+  fastDeposit: { depositDiscount: number } | null;
 }
 
 export interface CreateBookingDto {
@@ -107,6 +112,8 @@ export interface TenantBooking {
     rating: number | null;
   } | null;
   canModify: boolean;
+  /** Lịch cọc trực tiếp trên trang căn (không lịch xem, không Host). */
+  direct: boolean;
   deposit?: {
     amount: number;
     transferContent: string;
@@ -118,8 +125,11 @@ export interface TenantBooking {
     holdHours?: number;
     expiresAt?: string;
     outcome: 'awaiting_payment' | 'active' | 'expired' | 'converted' | 'refunded' | 'forfeited';
-    /** Chốt nhanh đã cam kết: chu kỳ, cọc trước giảm, giá thuê đã chốt, hạn chuyển cọc (24h). */
-    fastClose?: { cycle: number; baseAmount: number; monthlyRent: number; quoteExpiresAt: string | null };
+    /**
+     * Cọc chốt nhanh: cọc trước giảm, mức giảm, hạn chuyển cọc (24h). `cycle`/`monthlyRent` NULL tới khi ký HĐ
+     * (chọn chu kỳ ở bước ký — hồ sơ 20); cọc cũ trước 2026-10-15 đã có sẵn chu kỳ + giá.
+     */
+    fastClose?: { cycle: number | null; baseAmount: number; depositDiscount: number; monthlyRent: number | null; quoteExpiresAt: string | null };
     vietqr: {
       bankId: string;
       bankName?: string;

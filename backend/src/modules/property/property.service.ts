@@ -1,3 +1,4 @@
+import { fastDepositBadge, latestMandateConfigs } from '../deposit/fast-close-source';
 import {
   Injectable,
   NotFoundException,
@@ -167,7 +168,7 @@ export class PropertyService {
     );
     const endOfDayVn = new Date(startOfDayVn.getTime() + 24 * 60 * 60 * 1000);
 
-    const [activeViewings, interestGroups, defaultHold] = await Promise.all([
+    const [activeViewings, interestGroups, defaultHold, mandates] = await Promise.all([
       this.prisma.viewing.findMany({
         where: {
           unitId: { in: unitIds },
@@ -192,6 +193,7 @@ export class PropertyService {
         _count: { id: true },
       }),
       readDefaultHoldHours(this.prisma),
+      latestMandateConfigs(this.prisma, unitIds),
     ]);
 
     const activeMap = new Map<string, string>();
@@ -210,7 +212,7 @@ export class PropertyService {
       const activeSlot = activeMap.get(u.id) || null;
       const interest = interestMap.get(u.id) || 0;
       const holdHours = clampHoldHours(u.holdHoursOverride ?? defaultHold);
-      return toTenantUnit(u, activeSlot, holdHours, interest);
+      return { ...toTenantUnit(u, activeSlot, holdHours, interest), fastDeposit: fastDepositBadge(u, mandates.get(u.id)) };
     });
   }
 
@@ -252,7 +254,7 @@ export class PropertyService {
     );
     const endOfDayVn = new Date(startOfDayVn.getTime() + 24 * 60 * 60 * 1000);
 
-    const [activeViewing, interestCount, defaultHold] = await Promise.all([
+    const [activeViewing, interestCount, defaultHold, mandates] = await Promise.all([
       this.prisma.viewing.findFirst({
         where: {
           unitId: unit.id,
@@ -275,16 +277,15 @@ export class PropertyService {
         },
       }),
       readDefaultHoldHours(this.prisma),
+      latestMandateConfigs(this.prisma, [unit.id]),
     ]);
 
     const holdHours = clampHoldHours(unit.holdHoursOverride ?? defaultHold);
 
-    return toTenantUnit(
-      unit,
-      activeViewing ? activeViewing.viewingSlot.toISOString() : null,
-      holdHours,
-      interestCount,
-    );
+    return {
+      ...toTenantUnit(unit, activeViewing ? activeViewing.viewingSlot.toISOString() : null, holdHours, interestCount),
+      fastDeposit: fastDepositBadge(unit, mandates.get(unit.id)),
+    };
   }
 
   /**

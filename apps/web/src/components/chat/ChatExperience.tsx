@@ -60,6 +60,8 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   }
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  // Đang xem chi tiết căn trong khung kết quả ⇒ khung đó thôi cuộn cả khối, để header / thanh hành động đứng yên.
+  const [previewOpen, setPreviewOpen] = useState(false);
   // Backend trả 401 LOGIN_REQUIRED khi khách vãng lai hết lượt (đếm ở server theo IP).
   const [guestLocked, setGuestLocked] = useState(false);
   const busy = useRef(false);
@@ -397,8 +399,9 @@ export function ChatExperience({ below }: { below: ReactNode }) {
         </aside>
       )}
 
-      <section className={styles.results} aria-label="Kết quả tìm căn">
+      <section className={`${styles.results} ${previewOpen ? styles.resultsFlush : ""}`} aria-label="Kết quả tìm căn">
         <ResultsPanel
+          onPreviewChange={setPreviewOpen}
           results={results}
           criteria={chat.criteria}
           onCriteria={onCriteria}

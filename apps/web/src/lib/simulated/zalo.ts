@@ -86,7 +86,7 @@ export function bookingZaloThread(b: TenantBooking): Notice[] {
   const endedAt = b.viewEndedAt ?? b.confirmedAt ?? b.createdAt;
   if (b.status === "leased") {
     push("leased", endedAt, {
-      title: "Hợp đồng thuê đã ký số",
+      title: "Hợp đồng thuê đã được xác lập",
       body: "Hợp đồng thuê đã có hiệu lực. Khoản cọc đã chuyển khi chốt căn được tính 100% vào Tiền cọc bảo đảm tài sản. Field Host sẽ hẹn bàn giao và lập Hộ chiếu số 10 hạng mục.",
       tone: "success",
     });
