@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-16T07:22:11.753Z",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "base": "e25f7acdaf04b4022b28f5a21aa93c732ed5260a",
+  "sets": [
+    "A",
+    "B",
+    "C"
+  ],
+  "runs": 3,
+  "cases": 160,
+  "turnsPerRun": 241,
+  "totalTurns": 723,
+  "promptVersion": "v2",
+  "model": "gemini-3.5-flash-lite",
+  "temperature": 0.2,
+  "maxOutputTokens": 250,
+  "holdHours": 48,
+  "files": {
+    "backend/scripts/eval-vinny.ts": "65e7622956a38210e0ea26be0f7a0432af2341d487b15a61f34251b7940f2d63",
+    "backend/evals/vinny/build_sets.py": "75043d5503b6083b5a3670804acaf7dd6968a27cb53f8cc1a3b2c6c7c552adc8",
+    "backend/evals/vinny/a_mot_luot.jsonl": "e58087a47202587b50fb5c5061dbfd6287ad8f6a44ad17b4380c05b5a428e588",
+    "backend/evals/vinny/b_nhieu_luot.jsonl": "9d8e5d0d30fa1a7fe2252e4d7b5579a6633d4d1044d4a95566a968625a80851d",
+    "backend/evals/vinny/c_tan_cong.jsonl": "d14f499e281d7ef81b21a0193165d1ff635a07a73b2d594b5a044cea683c111a",
+    "backend/evals/vinny/d_giu_kin.jsonl": "b7e02fddd78820cfe62a63e6bfb22d0593b9da46666395f1a533f53ff0775ca0",
+    "backend/evals/vinny/rubric.md": "9a47591f4a8a798da4bd991346a762e11c3554043a2a918ce08e24d72707e6fd",
+    "backend/prompts/vinny/v2/core.md": "af63337becc48d23e7f9f7d41e996256be28493b0ae432ea6f8e633175d00d57",
+    "backend/prompts/vinny/v2/agent.md": "901e49ba7f73e4bf8fdde83de6d4809114c876f1fc5a09a37e61f38aee5cb1bb",
+    "backend/prompts/vinny/v2/explain.md": "63c8c1b11846c2df3042b786b4fbbe215cc4d08fc1dd22c8b73d0fac16b38e2d"
+  },
+  "heldOut": "hash only; not evaluated; prior partial exposure documented"
+}

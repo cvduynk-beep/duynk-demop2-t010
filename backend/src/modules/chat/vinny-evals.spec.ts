@@ -66,8 +66,8 @@ describe('Bộ eval Vinny (A/B/C/D)', () => {
     }
   });
 
-  it('bộ B là hội thoại 2–8 lượt; bộ A mỗi nhóm nội dung bắt buộc ≥ 5 câu', () => {
-    sets.B.forEach((c) => expect(c.luot!.length).toBeGreaterThanOrEqual(2));
+  it('bộ B là hội thoại 3–8 lượt; bộ A mỗi nhóm nội dung bắt buộc ≥ 5 câu', () => {
+    sets.B.forEach((c) => expect(c.luot!.length).toBeGreaterThanOrEqual(3));
     sets.B.forEach((c) => expect(c.luot!.length).toBeLessThanOrEqual(8));
     const count = (loai: string) => sets.A.filter((c) => c.loai === loai).length;
     for (const loai of ['tim_can', 'so_sanh', 'quy_trinh', 'giu_cho', 'cua_toi', 'thieu_thong_tin', 'het_can', 'ngoai_pham_vi', 'tieng_anh', 'khong_dau', 'buc_boi']) {

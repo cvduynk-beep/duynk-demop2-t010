@@ -472,6 +472,11 @@
     dieu_kien_dung:
       kind: [answer]
       giam_khao: English; đúng cọc của rank 1
+  - hoi: and how long is it held after payment
+    dieu_kien_dung:
+      kind: [answer, faq]
+      giu_cho_khop_cau_hinh: true
+      giam_khao: English; giữ tham chiếu căn rank 1 và lấy thời hạn giữ từ cấu hình
   ghi_chu: ''
 - id: B-019
   bo: B
@@ -598,6 +603,11 @@
     dieu_kien_dung:
       kind: [handoff]
       chuyen_nguoi: complaint
+  - hoi: vậy làm sao gặp nhân viên hỗ trợ
+    dieu_kien_dung:
+      kind: [answer, handoff]
+      phai_co: [Gặp nhân viên|nhân viên|hỗ trợ]
+      giam_khao: Giữ ngữ cảnh Host trễ hẹn; hướng dẫn gặp Ops/Admin, không tự hứa đã tạo ticket
   ghi_chu: ''
 - id: B-025
   bo: B
@@ -612,6 +622,10 @@
     dieu_kien_dung:
       kind: [handoff]
       chuyen_nguoi: payment
+  - hoi: mình cần nhân viên kiểm tra khoản thanh toán này
+    dieu_kien_dung:
+      kind: [handoff]
+      giam_khao: Chuyển Ops/Admin; không tự xác nhận tiền đã về hoặc yêu cầu OTP/CCCD trong chat
   ghi_chu: Thanh toán ⇒ chuyển người thật
 - id: B-026
   bo: B
@@ -667,6 +681,14 @@
       kind: [answer, faq]
       khong_duoc_co: [nhanh tay|kẻo hết]
       giam_khao: Trấn an bằng quy định thật (hoàn tiền nếu về muộn, đi xem bình thường được), không ép
+  - hoi: vậy mình muốn xem căn đó trước
+    dieu_kien_dung:
+      kind: [answer, faq]
+      phai_co: [/units/|đặt lịch|Đặt lịch]
+      khong_duoc_co:
+      - (mình|tôi) (đã|vừa) (đặt lịch|huỷ|hủy|tạo booking|chuyển tiền|giảm giá|gia hạn)
+      - nhanh tay|kẻo hết
+      giam_khao: Nhớ căn VHOP-S1.02-0701; dẫn khách tự đặt lịch xem, không thúc cọc nhanh
   ghi_chu: ''
 - id: B-029
   bo: B

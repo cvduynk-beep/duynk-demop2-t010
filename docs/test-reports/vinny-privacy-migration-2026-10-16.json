@@ -1,0 +1,10 @@
+{
+  "at": "2026-10-16T07:48:35.134Z",
+  "artifact": "backend/evals/vinny/results/baseline-2026-10-16-v2-1792135305937-observations.jsonl",
+  "rows": 66,
+  "oldSha256": "2052c0b51c518c4e94c0a3250fa2c62f73edc253376910782ee9a5af1e70e9ee",
+  "redactedSha256": "42ae4e2d74cfc99372beedb433d950e666cbda2ef13e6ee3aae28aa9f6b58adf",
+  "changed": true,
+  "preserved": "run/id/turn/checks/scores/latency; only identifying strings redacted",
+  "status": "partial, not baseline"
+}

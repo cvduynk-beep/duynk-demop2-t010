@@ -18,8 +18,9 @@
  * KHÔNG nới ngưỡng / xoá ca khó / sửa đáp án cho khớp.
  */
 import { NestFactory } from '@nestjs/core';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { redactEvalArtifact, redactEvalText } from '../src/modules/chat/eval/vinny-privacy';
 
 const args = process.argv.slice(2);
 const opt = (name: string, def?: string) => {
@@ -33,6 +34,7 @@ const VERSION = opt('version', process.env.VINNY_PROMPT_VERSION || 'v2')!;
 process.env.VINNY_PROMPT_VERSION = VERSION;
 process.env.HOLD_EXPIRY_SWEEP_INTERVAL_MS = '0';
 process.env.DISPATCH_SLA_SWEEP_INTERVAL_MS = '0';
+process.env.PAYOUT_SWEEP_INTERVAL_MS = '0';
 process.env.CHAT_GUEST_TURNS = '1000';
 
 const SETS = (opt('set', 'A,B,C') ?? '').toUpperCase().split(',').filter(Boolean);
@@ -199,11 +201,11 @@ function writeReport(rows: any[], meta: ReportMeta, cases: Case[]) {
   const metricFns: Record<string, (rs: any[]) => number | null> = {
     'Đúng sự thật (%)': (rs) => {
       const g = rs.filter((r) => r.bo !== 'C');
-      return pct(g.filter((r) => r.checks.khong_bia_ma !== false && r.checks.khong_bia_so_can !== false && !r.fail.some((f: string) => f.startsWith('phai_co') || f === 'giu_cho') && (!judged(r) || r.verdict.dung_su_that >= 4)).length, g.length);
+      return pct(g.filter((r) => !r.error && r.checks.khop_gia !== false && r.checks.khong_bia_ma !== false && r.checks.khong_bia_so_can !== false && !r.fail.some((f: string) => f.startsWith('phai_co') || f === 'giu_cho') && (!meta.judgeModel || (judged(r) && r.verdict.dung_su_that >= 4))).length, g.length);
     },
     'Tỷ lệ bịa căn/giá (%)': (rs) => {
       const g = rs.filter((r) => r.bo !== 'C');
-      return pct(g.filter((r) => r.checks.khong_bia_ma === false || r.checks.khong_bia_so_can === false || (judged(r) && r.verdict.dung_su_that <= 2)).length, g.length);
+      return pct(g.filter((r) => r.checks.khop_gia === false || r.checks.khong_bia_ma === false || r.checks.khong_bia_so_can === false || (judged(r) && r.verdict.dung_su_that <= 2)).length, g.length);
     },
     'Đúng thứ tự recommend (%)': (rs) => {
       const g = rs.filter((r) => 'rank_order' in r.checks);
@@ -242,7 +244,7 @@ function writeReport(rows: any[], meta: ReportMeta, cases: Case[]) {
     for (const r of rows) {
       const g = (out[`${r.bo}/${r[key]}`] ??= { n: 0, pass: 0, pct: null });
       g.n += 1;
-      if (!r.fail.length && (!judged(r) || CRITERIA.every((x) => r.verdict[x] >= 4))) g.pass += 1;
+      if (!r.error && !r.fail.length && (!meta.judgeModel || (judged(r) && CRITERIA.every((x) => r.verdict[x] >= 4)))) g.pass += 1;
     }
     for (const g of Object.values(out)) g.pct = pct(g.pass, g.n);
     return out;
@@ -273,7 +275,7 @@ function writeReport(rows: any[], meta: ReportMeta, cases: Case[]) {
   const stamp = new Date(Date.now() + 7 * 3_600_000).toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
   const base = `${meta.label}-${summary.version}-${stamp}-r${runsList.join('_')}${meta.partial ? '-partial' : ''}`;
   mkdirSync(join(ROOT, 'results'), { recursive: true });
-  writeFileSync(join(ROOT, 'results', `${base}.json`), JSON.stringify({ summary, rows }, null, 2));
+  writeFileSync(join(ROOT, 'results', `${base}.json`), JSON.stringify(redactEvalArtifact({ summary, rows }), null, 2));
 
   const fmt = (v: number | null) => (v === null ? '—' : String(v));
   const failing = new Map<string, { n: number; why: Set<string> }>();
@@ -310,7 +312,7 @@ function writeReport(rows: any[], meta: ReportMeta, cases: Case[]) {
     `## Lượt chưa đạt (số lần chưa đạt / ${runsList.length})`,
     ...[...failing.entries()].map(([k, v]) => `- \`${k}\` ${v.n}/${runsList.length}: ${[...v.why].join('; ')}`),
   ].join('\n');
-  writeFileSync(join(ROOT, 'results', `${base}.md`), md + '\n');
+  writeFileSync(join(ROOT, 'results', `${base}.md`), redactEvalText(md) + '\n');
 
   // ── File chấm tay: ~15–20% lượt của lần chạy 1, chọn ngẫu nhiên có hạt giống, phân tầng theo bộ ──────────
   if (!meta.partial && meta.judgeModel && rows.some((r) => r.run === 1)) {
@@ -323,12 +325,12 @@ function writeReport(rows: any[], meta: ReportMeta, cases: Case[]) {
       return [`${r.id}#${r.turn}`, r.bo, r.nhom, prev, r.hoi, r.reply, expectedText(c.luot[r.turn - 1].dieu_kien_dung), '', '', '', '', ''].map(csv).join(',');
     });
     const csvPath = join(ROOT, 'results', `${base}-cham-tay.csv`);
-    writeFileSync(csvPath, '\uFEFF' + [head.map(csv).join(','), ...lines].join('\r\n') + '\r\n');
+    writeFileSync(csvPath, '\uFEFF' + redactEvalText([head.map(csv).join(','), ...lines].join('\r\n')) + '\r\n');
     // Điểm giám khảo để so sau — tách file, người chấm KHÔNG xem trước.
-    writeFileSync(csvPath.replace(/\.csv$/, '-giam-khao.json'), JSON.stringify(Object.fromEntries(picks.map((r) => [`${r.id}#${r.turn}`, judged(r) ? r.verdict : null])), null, 2));
+    writeFileSync(csvPath.replace(/\.csv$/, '-giam-khao.json'), JSON.stringify(redactEvalArtifact(Object.fromEntries(picks.map((r) => [`${r.id}#${r.turn}`, judged(r) ? r.verdict : null]))), null, 2));
     console.log(`\n[chấm tay] ${picks.length} lượt → ${csvPath}`);
   }
-  console.log(`\n${md}`);
+  console.log(`\n${redactEvalText(md)}`);
 }
 
 /** Gộp các file kết quả (mỗi file = một/vài lần chạy, vd 3 ngày bậc miễn phí) thành một báo cáo. Cấm gộp khác prompt/model/bộ. */
@@ -368,7 +370,7 @@ async function main() {
   const { emptyCriteria } = await import('../src/modules/chat/chat-criteria');
   const { gradeTurn } = await import('../src/modules/chat/eval/vinny-grader');
 
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
   const chat = app.get(ChatService);
   const prisma = app.get(PrismaService);
   const deposit = app.get(DepositService);
@@ -383,6 +385,10 @@ async function main() {
   let cases = SETS.flatMap(load);
   if (IDS.length) cases = cases.filter((c) => IDS.includes(c.id));
   if (LIMIT > 0) cases = cases.slice(0, LIMIT);
+  if (cases.some((c) => c.auth === 'tenant') && !tenant) {
+    await app.close();
+    throw new Error('Thiếu tenant eval: không được chấm ca đăng nhập bằng phiên guest.');
+  }
   const turnsTotal = cases.reduce((a, c) => a + c.luot.length, 0);
   const SAMPLE = manualSample(cases, SETS);
   console.log(`[eval] label=${LABEL} prompt=${chat.promptVersion} model=${chatModel} judge=${JUDGE ? `${judgeModel} (${JUDGE_MODE})` : 'off'} sets=${SETS.join('')} cases=${cases.length} turns=${turnsTotal} runs=${RUNS} holdHours=${holdHours}`);
@@ -394,6 +400,9 @@ async function main() {
   };
 
   const rows: any[] = [];
+  mkdirSync(join(ROOT, 'results'), { recursive: true });
+  const journal = join(ROOT, 'results', `${LABEL}-${chat.promptVersion}-${Date.now()}-observations.jsonl`);
+  console.log(`[eval] observations=${journal}`);
   for (let run = RUN_NO; run < RUN_NO + RUNS; run++) {
     for (const c of cases) {
       // Trạng thái web của một cuộc hội thoại.
@@ -510,6 +519,7 @@ async function main() {
           degraded: res?.degraded ?? null,
           degradedReason: res?.degradedReason ?? null,
           recs: res?.recommendations?.map((r: any) => r.unitCode) ?? [],
+          recommendations: res?.recommendations ?? [],
           criteria: res ? { budget: criteria.budget, layouts: criteria.layouts, zones: criteria.zones, buildings: criteria.buildings, household: criteria.household } : null,
           reply,
           ms,
@@ -524,8 +534,9 @@ async function main() {
           verdict,
           error,
         });
+        appendFileSync(journal, JSON.stringify(redactEvalArtifact({ promptVersion: chat.promptVersion, model: chatModel, temperature: 0.2, at: new Date().toISOString(), ...rows[rows.length - 1] })) + '\n');
         console.log(
-          `r${run} ${`${c.id}#${ti + 1}`.padEnd(9)} ${String(res?.kind ?? 'ERR').padEnd(8)} ${String(ms).padStart(5)}ms ${fail.length ? `✗ ${fail.join(',')}` : '✓'}${low.length ? ` | judge<4: ${low.map((x) => `${x}=${verdict[x]}`).join(' ')}` : ''}${verdict?.error ? ` | ${verdict.error}` : ''}`,
+          `r${run} ${`${c.id}#${ti + 1}`.padEnd(9)} ${String(res?.kind ?? 'ERR').padEnd(8)} ${String(ms).padStart(5)}ms ${fail.length ? `✗ ${fail.length} checks` : '✓'}${low.length ? ` | judge<4: ${low.map((x) => `${x}=${verdict[x]}`).join(' ')}` : ''}${verdict?.error ? ` | ${verdict.error}` : ''}`,
         );
         await sleep(DELAY);
       }
@@ -538,6 +549,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error('[eval] lỗi:', e?.message ?? e);
+  console.error('[eval] failed:', { type: e?.name ?? 'Error', code: e?.code ?? 'eval_failed' });
   process.exit(2);
 });
