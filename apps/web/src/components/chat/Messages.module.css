@@ -195,3 +195,46 @@
   margin-top: 4px;
   font-style: italic;
 }
+
+/* 👍/👎 và "Gặp nhân viên" (Vinny v1) */
+.feedback {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.fbBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2, inherit);
+  cursor: pointer;
+}
+.fbBtn:hover {
+  border-color: var(--lagoon, currentColor);
+}
+.fbReasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fbChip {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.feedbackDone {
+  display: block;
+  margin-top: 6px;
+}
+.handoff {
+  margin-top: 8px;
+}
+

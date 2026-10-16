@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Building2, FileSignature, Gauge, Radar, SlidersHorizontal, Users } from "lucide-react";
+import { BarChart3, Building2, FileSignature, Gauge, Headset, Radar, SlidersHorizontal, Users } from "lucide-react";
 import { loginPathFor } from "@/lib/auth/portals";
 import { useSession } from "@/lib/auth/client";
 import { useDashboardWorkItems } from "@/lib/admin/dashboard";
@@ -32,6 +32,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         { href: "/admin/inventory", label: "Căn hộ & ký gửi", icon: Building2, badge: pendingCs },
         { href: "/admin/bookings", label: "Điều phối lịch", icon: Radar, badge: pendingBk },
         { href: "/admin/contracts", label: "Hợp đồng", icon: FileSignature, badge: contractBadge },
+        { href: "/admin/support", label: "Yêu cầu hỗ trợ", icon: Headset },
         {
           href: "/admin/hosts",
           label: "Field Host",
