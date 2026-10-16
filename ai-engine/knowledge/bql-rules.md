@@ -1,6 +1,7 @@
 ---
 topic: bql_rules
 title: Nội quy BQL Vinhomes Ocean Park cần biết
+summary: Nội quy BQL chính: giữ yên tĩnh 22:00–06:00; thú cưng chỉ nuôi khi căn và phân khu cho phép; cấm sạc xe điện, pin trong căn; không cho thuê lại theo ngày hay Airbnb. Phạt BQL do lỗi của khách được trừ vào Tiền cọc bảo đảm.
 sources: [legal/04_BQL_REGULATIONS_AND_LIABILITY.md, backend/src/modules/deposit/deposit-terms.ts#HOUSE_RULES, legal/06_OFFICIAL_APARTMENT_LEASE_AGREEMENT.md#Điều 8]
 verified_at: 2026-10-07
 verified_sha: e17afa7

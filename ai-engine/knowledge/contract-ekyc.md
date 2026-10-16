@@ -1,6 +1,7 @@
 ---
 topic: contract
 title: Ký Hợp đồng thuê và xác minh CCCD (eKYC)
+summary: Không ký thỏa thuận cọc riêng: khách tick đồng ý điều khoản cọc trước khi quét VietQR. Sau khi cọc, khách chụp CCCD gắn chip hai mặt để AI bóc tách, kiểm tra lại rồi ký điện tử Hợp đồng thuê trên số điện thoại đã xác thực OTP.
 sources: [backend/src/modules/identity/identity.service.ts, backend/src/modules/identity/identity.controller.ts, backend/src/modules/contract/lease-template.ts, backend/src/modules/deposit/deposit-terms.ts#obligation, legal/06_OFFICIAL_APARTMENT_LEASE_AGREEMENT.md, AGENTS.md#Chủ nhà 3]
 verified_at: 2026-10-14
 verified_sha: deposit-v2

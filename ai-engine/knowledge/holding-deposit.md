@@ -1,11 +1,12 @@
 ---
 topic: holding_deposit
 title: Đặt cọc chốt căn hoạt động thế nào?
+summary: Cọc chốt căn bằng đúng Tiền cọc bảo đảm của căn (thường bằng một tháng tiền thuê), quét VietQR động vào tài khoản định danh của nền tảng, không chuyển cho Host hay chủ nhà. Tiền về thì căn được giữ riêng {hold_hours} giờ; khi ký Hợp đồng thuê, khoản này thành Tiền cọc bảo đảm, không trừ vào tiền thuê tháng đầu.
 sources: [backend/src/modules/deposit/deposit.service.ts#createDeposit, backend/src/modules/deposit/deposit-amount.ts, backend/src/modules/deposit/fast-close.ts, backend/src/modules/deposit/deposit.service.ts#markPaid, backend/src/modules/deposit/deposit.service.ts#resolveHoldHours, backend/src/modules/deposit/deposit-terms.ts, legal/tenant/02_HOLDING_DEPOSIT_AND_VIETQR_TERMS.md, legal/02_HOLDING_AND_SECURITY_DEPOSIT_AGREEMENT.md]
-verified_at: 2026-10-14
-verified_sha: deposit-v2
+verified_at: 2026-10-15
+verified_sha: vinny-v1
 ---
-- Đặt cọc chỉ mở sau khi khách đã xem căn cùng Field Host và Host chuyển ca sang bước chốt cọc.
+- Thông thường khách đặt cọc sau khi đã xem căn cùng Field Host (Host chuyển ca sang bước chốt cọc). Căn chủ nhà ủy quyền chốt nhanh thì khách có thể "Chốt cọc nhanh" ngay trên trang căn mà không cần đi xem (xem chủ đề chốt cọc nhanh).
 - Số tiền cọc bằng đúng Tiền cọc bảo đảm của căn (chủ nhà đặt, thường bằng một tháng tiền thuê), do hệ thống tính và in sẵn trên mã VietQR. Không còn khoản cọc giữ chỗ cố định. Con số của từng căn lấy từ công cụ xem căn hoặc hiển thị ở bước đặt cọc; bot không đoán.
 - Khách đọc điều khoản cọc và tick ô đồng ý (Điều 328 BLDS 2015, Nghị định 13/2023/NĐ-CP) trước khi quét mã. Không ký thỏa thuận cọc riêng.
 - Thanh toán bằng VietQR động vào tài khoản định danh của nền tảng; không chuyển cho Field Host hay chủ nhà.

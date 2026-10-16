@@ -1,6 +1,7 @@
 ---
 topic: holding_expiry
 title: Hết thời hạn giữ căn thì sao?
+summary: Căn được giữ {hold_hours} giờ kể từ lúc hệ thống ghi nhận tiền cọc; giờ hết hạn hiển thị trên trang lịch hẹn. Trong thời gian này khách cần hoàn tất xác minh danh tính để lập Hợp đồng thuê; quá hạn vì lý do cá nhân thì mất cọc theo điều khoản đã đồng ý.
 sources: [backend/src/modules/deposit/deposit.service.ts#expireIfDue, backend/src/modules/deposit/deposit-terms.ts#forfeit, backend/src/modules/tenant/tenant.mappers.ts, legal/tenant/02_HOLDING_DEPOSIT_AND_VIETQR_TERMS.md, legal/02_HOLDING_AND_SECURITY_DEPOSIT_AGREEMENT.md]
 verified_at: 2026-10-14
 verified_sha: deposit-v2

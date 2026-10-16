@@ -46,6 +46,18 @@ describe('MatchmakerService limit / totalMatched', () => {
     expect(res.topRecommendations.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
+  it('căn bằng điểm và bằng All-in ⇒ xếp theo mã căn, top 3 và danh sách đủ cùng thứ tự dù dữ liệu vào đảo thứ tự', async () => {
+    const same = (i: number) => mkUnit(i, { rent: 6_000_000 });
+    const run = async (order: number[], limit: number) => {
+      const property = { getUnits: jest.fn().mockResolvedValue(order.map(same)) } as any;
+      const res = await new MatchmakerService({} as any, property).findTopRecommendations(body({ limit }));
+      return res.topRecommendations.map((r) => r.unitCode);
+    };
+    const top = await run([3, 1, 2, 5, 4], 3);
+    expect(top).toEqual(['VHOP-T-0001', 'VHOP-T-0002', 'VHOP-T-0003']);
+    expect((await run([5, 4, 3, 2, 1], 20)).slice(0, 3)).toEqual(top);
+  });
+
   it('totalMatched chỉ đếm căn không vượt ngân sách', async () => {
     const res = await makeService(8).findTopRecommendations(body({ limit: 20, maxAllInBudget: 7_700_000 }));
     expect(res.scanSummary.totalMatched).toBe(res.topRecommendations.length);

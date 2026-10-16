@@ -1,6 +1,7 @@
 ---
 topic: all_in
 title: Chi phí All-in gồm những gì?
+summary: All-in là ước tính tổng chi phí mỗi tháng của căn: giá thuê + phí quản lý BQL + phí gửi xe + điện nước ước tính theo số người. All-in không gồm Tiền cọc bảo đảm. Con số All-in của từng căn hiển thị trên thẻ căn khi bạn tìm căn.
 sources: [backend/src/modules/matchmaker/matchmaker.service.ts#findTopRecommendations, apps/web/src/lib/pricing/cost.ts#allInCost, AGENTS.md#Khách thuê 2]
 verified_at: 2026-10-14
 verified_sha: deposit-v2

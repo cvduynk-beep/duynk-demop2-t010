@@ -24,11 +24,16 @@ export interface ChatCriteria {
 }
 
 /**
+ * - `answer`: trả lời có công cụ chỉ đọc (chi tiết căn, cọc, booking / hợp đồng của chính khách, tri thức).
+ * - `handoff`: cần nhân viên thật (khiếu nại, tranh chấp, thanh toán, hợp đồng…) ⇒ kèm `handoff.category`.
  * - `search`: có tiêu chí ⇒ danh sách lấy NGUYÊN từ MatchmakerService (thứ tự, điểm), LLM chỉ giải thích.
  * - `faq`: câu hỏi quy chế ⇒ trả lời 0 đồng từ tri thức đã kiểm (ai-engine/knowledge + fee_configs), không gọi LLM.
  * - `clarify` / `greeting` / `refusal`: câu cố định, không gọi LLM.
  */
-export type ChatKind = 'search' | 'faq' | 'clarify' | 'greeting' | 'refusal';
+export type ChatKind = 'search' | 'faq' | 'clarify' | 'greeting' | 'refusal' | 'answer' | 'handoff';
+
+/** Loại yêu cầu cần nhân viên thật (`kind: 'handoff'`) — FE hiện nút "Gặp nhân viên". */
+export type ChatHandoffCategory = 'complaint' | 'deposit_dispute' | 'payment' | 'contract' | 'damage' | 'human_request';
 
 /** Vì sao trả lời ở chế độ rút gọn (`degraded: true`). */
 export type ChatDegradedReason =
@@ -58,6 +63,10 @@ export interface ChatRecommendation {
 
 export interface ChatResponseData {
   conversationId: string;
+  /** Id lượt trả lời (dùng cho 👍/👎). */
+  messageId: string;
+  /** Phiên bản prompt Vinny đã sinh lượt này (VINNY_PROMPT_VERSION). */
+  promptVersion: string;
   kind: ChatKind;
   reply: string;
   /** Rỗng khi không phải lượt tìm căn, khi không có căn khớp, hoặc khi recommend lỗi (không bao giờ là danh sách giả). */
@@ -70,4 +79,5 @@ export interface ChatResponseData {
   source: 'llm' | 'template' | 'knowledge' | 'rule';
   degraded: boolean;
   degradedReason?: ChatDegradedReason;
+  handoff?: { category: ChatHandoffCategory };
 }
