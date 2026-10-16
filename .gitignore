@@ -86,4 +86,4 @@ planning/*
 brain4agent-v1.7.1.md
 
 # Eval Vinny: chạy lọc (--group/--limit/--set) chỉ để dò lỗi, không giữ
-backend/evals/vinny/results/*-partial.md
+backend/evals/vinny/results/*-partial.*
