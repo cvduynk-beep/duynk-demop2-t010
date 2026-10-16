@@ -3,9 +3,9 @@
 
 > **Chương trình:** AI20K Build Phase — Cohort 4 (Vingroup x VinUniversity)  
 > **Dự án:** VinStay AI — Hệ điều hành Cho thuê & Vận hành Căn hộ Tinh gọn (Asset-Light)  
-> **Địa bàn triển khai:** Vinhomes Ocean Park (Gia Lâm, Hà Nội)  
-> **Phiên bản:** v1.2 — Chuẩn hóa thẩm định Gate 1–3, Đồng bộ Web v0.9.2 & Bộ Pháp lý 9 Văn bản  
-> **Mốc cập nhật:** 30/09/2026  
+> **Địa bàn triển khai:** Đại đô thị Vinhomes Ocean Park (Gia Lâm, Hà Nội)  
+> **Phiên bản:** v2.0 — Chuẩn hóa thẩm định Gate 3 & Demo Day, Đồng bộ Cọc v2 (Điều 328 BLDS), Fast-Deposit Close, Smart Move-in & Bộ Pháp lý 9 Văn bản  
+> **Mốc cập nhật:** 16/10/2026  
 > **Tác giả / Phụ trách:** Nguyễn Khánh Duy (Team P-010)
 
 ---
@@ -21,46 +21,65 @@
 3. [CHI TIẾT 5 NHÓM CHI PHÍ VẬN HÀNH & ĐẦU TƯ (COST STRUCTURE)](#3-chi-tiết-5-nhóm-chi-phí-vận-hành--đầu-tư-cost-structure)
    - [3.1. Chi Phí Hạ Tầng Kỹ Thuật & Giấy Phép Số (Cloud & Software Infrastructure)](#31-chi-phí-hạ-tầng-kỹ-thuật--giấy-phép-số-cloud--software-infrastructure)
    - [3.2. Chi Phí Vận Hành Trí Tuệ Nhân Tạo & Ký Số (AI Engine & Digital Protocol Cost)](#32-chi-phí-vận-hành-trí-tuệ-nhân-tạo--ký-số-ai-engine--digital-protocol-cost)
-   - [3.3. Chi Phí Điều Phối Thực Địa & Thù Lao Field Host (Field Ops & Dynamic Incentives)](#33-chi-phí-điều-phối-thực-địa--thù-lao-field-host-field-ops--dynamic-incentives)
-   - [3.4. Chi Phí Tiếp Thị & Kích Hoạt Nguồn Cung (Acquisition Cost - CAC)](#34-chi-phí-tiếp-thị--kích-hoạt-nguồn-cung-acquisition-cost---cac)
+   - [3.3. Chi Phí Điều Phối Thực Địa & Thù Lao Field Host (Mô Hình Hoa Hồng Lai 3 Tầng)](#33-chi-phí-điều-phối-thực-địa--thù-lao-field-host-mô-hình-hoa-hồng-lai-3-tầng)
+   - [3.4. Mô Hình Phễu Chuyển Đổi Hai Đầu & Chi Phí Tiếp Thị (Two-Sided CAC & Funnel)](#34-mô-hình-phễu-chuyển-đổi-hai-đầu--chi-phí-tiếp-thị-two-sided-conversion-funnel--unit-cac)
    - [3.5. Chi Phí Pháp Lý, Vận Hành Doanh Nghiệp & Hợp Đồng Số (Admin & Compliance)](#35-chi-phí-pháp-lý-vận-hành-doanh-nghiệp--hợp-đồng-số-admin--compliance)
-4. [CHI TIẾT 3 NHÓM NGUỒN THU CỐT LÕI (REVENUE STREAMS)](#4-chi-tiết-3-nhóm-nguồn-thu-cốt-lõi-revenue-streams)
+4. [CHI TIẾT 4 NHÓM NGUỒN THU CỐT LÕI (REVENUE STREAMS)](#4-chi-tiết-4-nhóm-nguồn-thu-cốt-lõi-revenue-streams)
    - [4.1. Phí Giao Dịch Thành Công Theo Kỳ Hạn (Transaction Fee - Nguồn thu chủ lực)](#41-phí-giao-dịch-thành-công-theo-kỳ-hạn-transaction-fee---nguồn-thu-chủ-lực)
    - [4.2. Phí Đăng Ký Quản Lý Vận Hành Số Hóa (SaaS Subscription Fee)](#42-phí-đăng-ký-quản-lý-vận-hành-số-hóa-saas-subscription-fee)
    - [4.3. Lãi Suất Tạm Giữ Ký Quỹ & Dòng Tiền Đệm (Escrow Float Income)](#43-lãi-suất-tạm-giữ-ký-quỹ--dòng-tiền-đệm-escrow-float-income)
-5. [PHÂN TÍCH KINH TẾ ĐƠN VỊ (UNIT ECONOMICS TRÊN MỖI CĂN HỘ)](#5-phân-tích-kinh-tế-đơn-vị-unit-economics-trên-mỗi-căn-hộ)
-6. [DỰ PHÓNG TÀI CHÍNH THEO 3 GIAI ĐOẠN (FINANCIAL PROJECTIONS 50 - 300 - 1.000 CĂN)](#6-dự-phóng-tài-chính-theo-3-giai-đoạn-financial-projections-50---300---1000-căn)
-7. [MA TRẬN QUẢN TRỊ RỦI RO DÒNG TIỀN & ĐIỂM HÒA VỐN (BREAK-EVEN ANALYSIS)](#7-ma-trận-quản-trị-rủi-ro-dòng-tiền--điểm-hòa-vốn-break-even-analysis)
+   - [4.4. Doanh Thu Phân Chia Xử Lý Vi Phạm Cọc Theo Điều 328 BLDS (Deposit Forfeiture Revenue)](#44-doanh-thu-phân-chia-xử-lý-vi-phạm-cọc-theo-điều-328-blds-deposit-forfeiture-revenue)
+5. [PHÂN TÍCH KINH TẾ ĐƠN VỊ & BẢNG SO SÁNH ROI CHỦ NHÀ](#5-phân-tích-kinh-tế-đơn-vị-unit-economics-trên-mỗi-căn-hộ)
+   - [5.1. Bảng Tính Unit Economics Trên 01 Căn Hộ/Năm](#51-bảng-tính-unit-economics-trên-01-căn-hộnăm)
+   - [5.2. Bảng So Sánh Hiệu Quả Định Lượng ROI Cho Chủ Nhà: VinStay AI vs Môi Giới Truyền Thống](#52-bảng-so-sánh-hiệu-quả-định-lượng-roi-cho-chủ-nhà-vinstay-ai-vs-môi-giới-truyền-thống)
+   - [5.3. Tác Động Tài Chính Của Cơ Chế Fast-Deposit Close & Smart Move-in](#53-tác-động-tài-chính-của-cơ-chế-fast-deposit-close--smart-move-in)
+6. [DỰ PHÓNG TÀI CHÍNH THEO 3 GIAI ĐOẠN (FINANCIAL PROJECTIONS 50 - 300 - 1.000 CĂN)](#6-dự-phóng-tài-chính-theo-3-giai-đoạn-financial-projections)
+7. [MA TRẬN QUẢN TRỊ RỦI RO DÒNG TIỀN, ĐIỂM HÒA VỐN & PHÂN TÍCH ĐỘ NHẠY](#7-ma-trận-quản-trị-rủi-ro-dòng-tiền-điểm-hòa-vốn--phân-tích-độ-nhạy)
+   - [7.1. Xác Định Điểm Hòa Vốn (Break-Even Analysis)](#71-xác-định-điểm-hòa-vốn-break-even-analysis)
+   - [7.2. Ma Trận Quản Trị Rủi Ro Dòng Tiền & Kế Hoạch Ứng Phó (Contingency Matrix)](#72-ma-trận-quản-trị-rủi-ro-dòng-tiền--kế-hoạch-ứng-phó)
+   - [7.3. Phân Tích Độ Nhạy 3 Kịch Bản (Sensitivity Analysis: Conservative - Base - Optimistic)](#73-phân-tích-độ-nhạy-3-kịch-bản-sensitivity-analysis)
 8. [KẾT LUẬN & CAM KẾT HIỆU QUẢ ĐẦU TƯ](#8-kết-luận--cam-kết-hiệu-quả-đầu-tư)
 
 ---
 
 ## 1. TỔNG QUAN CHIẾN LƯỢC TÀI CHÍNH & NGUYÊN TẮC ASSET-LIGHT
 
-VinStay AI theo đuổi triết lý **Siêu Tinh Gọn (Ultra Asset-Light)**. Mục tiêu tài chính tối thượng là:
-1. **CapEx bằng 0 VNĐ:** Không mua sắm thiết bị IoT, không lắp hộp khóa Lockbox (tuân thủ 100% quy chế BQL Vinhomes). Toàn bộ thao tác mở cửa thực hiện qua cơ chế cấp mã số tức thì trên Mobile App khi xác nhận xem phòng hoặc lưu chìa cơ tại quầy phân khu.
-2. **Biến phí hóa tối đa (Variable-Cost Driven):** Thay vì duy trì lực lượng nhân sự cơ hữu cồng kềnh với quỹ lương cứng lớn, 100% thù lao dẫn khách và hoa hồng chốt deal của Field Host được chi trả theo hiệu quả thực tế qua bộ công cụ `Dynamic Commission & Incentive Engine` cấu hình trực tiếp trên Admin Portal (`AdminCommission.tsx`, `AdminSettings.tsx`).
-3. **Dòng tiền bảo chứng độc lập:** Toàn bộ tiền cọc giữ chỗ linh hoạt (2.000.000 VNĐ qua VietQR động, thời hạn khóa căn 12–72 giờ do Admin cài đặt, mặc định 48 giờ) và Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit tương đương 1–2 tháng tiền thuê) được luân chuyển và bảo lưu qua tài khoản định danh ký quỹ (Escrow Account), phân tách hoàn toàn khỏi tài khoản chi phí vận hành nền tảng (OpEx Account).
+VinStay AI theo đuổi triết lý **Siêu Tinh Gọn (Ultra Asset-Light)**. Mục tiêu tài chính tối thượng là chuyển hóa toàn bộ các hoạt động trung gian cồng kềnh, phân mảnh thành một hệ điều hành số hóa chuẩn xác, kiểm soát rủi ro tuyệt đối và bảo toàn dòng tiền:
+
+1. **CapEx bằng 0 VNĐ:** Không mua sắm thiết bị phần cứng IoT đắt đỏ, không lắp đặt hộp khóa cơ/Lockbox treo cửa (tuân thủ 100% Quy chế Quản lý Tòa nhà của Ban Quản lý Vinhomes Ocean Park). Toàn bộ thao tác mở cửa thực hiện qua cơ chế cấp mã số tức thì trên Mobile Web/App khi Field Host bấm xác nhận xem phòng tại sảnh hoặc lưu giữ chìa cơ tập trung tại quầy phân khu.
+2. **Biến phí hóa tối đa (Variable-Cost Driven):** Thay vì duy trì lực lượng nhân sự cơ hữu cồng kềnh với quỹ lương cứng đè nặng dòng tiền trong mùa thấp điểm, 100% thù lao dẫn khách và hoa hồng chốt hợp đồng của Field Host được chi trả theo hiệu quả thực tế thông qua bộ công cụ `Dynamic Commission & Incentive Engine` được cấu hình trực tiếp trên Admin Portal (`AdminCommission.tsx`, `AdminSettings.tsx`).
+3. **Chuẩn hóa Cọc v2 & Dòng tiền bảo chứng ký quỹ độc lập (Căn cứ Điều 328 BLDS 2015):** 
+   - Triệt tiêu hoàn toàn khoản cọc giữ chỗ 2.000.000 VNĐ cố định cũ. Khách ưng ý chuyển ngay **Tiền Cọc Bảo Đảm Tài Sản** (`units.security_deposit`, mặc định bằng **01 tháng tiền thuê**, chủ nhà cài đặt trong biên độ chính sách $0.5\times – 4.0\times$ giá thuê trên Admin Portal).
+   - Căn hộ lập tức khóa trạng thái `holding` trong thời hạn Admin cài đặt (mặc định 48 giờ, cho phép tùy biến 12–72 giờ).
+   - Khi ký Hợp đồng thuê chính thức, số tiền này được **chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit)**, giữ nguyên suốt kỳ hạn thuê, **tuyệt đối KHÔNG khấu trừ vào tiền thuê tháng đầu tiên**, và được bảo chứng qua Tài khoản Ký quỹ Phong tỏa (Escrow Account) mở tại Ngân hàng liên kết, cách ly hoàn toàn khỏi tài khoản chi phí vận hành (OpEx) của sàn.
+4. **Cơ chế Biên độ Giá Sàn Ủy Quyền & Fast-Deposit Close (2026-10-15):** 
+   - Chủ nhà ủy quyền trước mức Giá sàn tối thiểu an toàn ($\ge 3$ triệu VNĐ/tháng và $\le$ Giá chào thuê, ẩn 100% trên trang tìm kiếm). 
+   - Ưu đãi kích cầu 2 bước: (1) Lúc cọc trong 24h: giảm khoảng 5% tiền cọc (min 200k, max 8%); (2) Lúc ký HĐ: khách chọn chu kỳ trả trước 1 / 3 / 6 tháng để nhận mức giảm giá thuê tương ứng 3.5% / 5.5% / 10% (kẹp cứng không bao giờ thấp hơn Giá sàn). 
+   - Đem về **45 – 90 triệu VNĐ tiền mặt trả trước ngay lập tức** cho Chủ nhà, triệt tiêu thời gian trống phòng kéo dài.
+5. **Cơ chế Khung Chờ Dọn Vào Thông Minh (Smart Move-in Window Protocol):** 
+   - Ngày dọn vào sớm nhất = T0 + 2 ngày (đệm 48h để BQL duyệt hồ sơ thẻ cư dân, vé xe và Host kiểm định hiện trạng); miễn phí chờ tối đa 7 ngày. 
+   - Nếu khách chọn dọn vào sau ngày thứ 7 (tối đa 30 ngày), Hợp đồng và tiền thuê **bắt buộc tính từ ngày thứ 8 (T0+7)**, triệt tiêu 100% rủi ro bị giam căn trống không có dòng tiền.
 
 ```mermaid
 flowchart LR
-    subgraph Revenues ["DÒNG THU (REVENUES)"]
-        R1["1. Phí Giao Dịch<br>(50% - 100% tháng thuê)"]
-        R2["2. Phí SaaS Vận Hành<br>(99k - 199k/căn/tháng)"]
-        R3["3. Escrow Float Income<br>(Lợi suất tiền gửi ký quỹ)"]
+    subgraph Revenues ["4 DÒNG THU (REVENUES)"]
+        R1["1. Phí Giao Dịch Thành Công<br>(50% - 100% tháng đầu)"]
+        R2["2. Phí SaaS Quản Lý Số<br>(149k/chủ nhà + 59k/khách)"]
+        R3["3. Escrow Float Income<br>(Lợi suất tiền gửi ký quỹ 2.5% - 4.0%)"]
+        R4["4. Chia Sẻ Phạt Cọc Đ.328 BLDS<br>(50% cọc khi khách hủy)"]
     end
 
     subgraph Core ["VINSTAY AI PLATFORM"]
         direction TB
-        E["Hệ Điều Hành VinStay AI<br>(Asset-Light Engine)"]
+        E["Hệ Điều Hành VinStay AI<br>(Ultra Asset-Light Engine)"]
     end
 
-    subgraph Costs ["DÒNG CHI (COSTS)"]
-        C1["1. Cloud & Software Infra"]
-        C2["2. AI & Vision OCR Costs"]
-        C3["3. Field Ops & Thù lao Host"]
-        C4["4. Marketing & CAC"]
-        C5["5. Admin, Compliance & Ký số"]
+    subgraph Costs ["5 DÒNG CHI (COSTS)"]
+        C1["1. Cloud & Server Infra (Supabase, Render, Vercel)"]
+        C2["2. AI Engine & Digital Protocol (GPT-4o-mini, OCR, OTP)"]
+        C3["3. Field Ops & Thù lao Host (Viewing + Commission)"]
+        C4["4. Marketing & Two-Sided CAC"]
+        C5["5. Admin, Legal & Compliance"]
     end
 
     Revenues --> Core
@@ -73,19 +92,19 @@ flowchart LR
 
 ### 2.1. Phương Pháp Luận Tính Toán (Methodology)
 Mô hình định lượng quy mô thị trường của **VinStay AI** kết hợp phương pháp luận tiếp cận hai chiều:
-1. **Top-Down Approach (Từ vĩ mô đô thị):** Dựa trên dữ liệu thống kê số lượng căn hộ chung cư thương mại bàn giao và tỷ lệ bất động sản đầu tư cho thuê tại Hà Nội và TP. Hồ Chí Minh theo báo cáo của Savills, CBRE Việt Nam và Tổng cục Thống kê.
+1. **Top-Down Approach (Từ vĩ mô đô thị):** Dựa trên dữ liệu thống kê số lượng căn hộ chung cư thương mại bàn giao và tỷ lệ bất động sản đầu tư cho thuê tại Hà Nội và TP. Hồ Chí Minh theo báo cáo của Savills, CBRE Việt Nam và Tổng cục Thống kê giai đoạn 2024–2026.
 2. **Bottom-Up Approach (Từ thực địa vi mô Ocean Park):** Thống kê số lượng căn hộ thực tế tại 66 tòa chung cư đã vận hành tại Vinhomes Ocean Park 1 (Sapphire 1, Sapphire 2, Ruby, Zenpark, Pavilion, Zurich, Masteri Waterfront...) kết hợp đơn giá All-in Cost bình quân thực tế và chu kỳ quay vòng khách thuê (6 – 12 tháng).
 
 ```mermaid
 graph TD
     subgraph TAM ["TAM: Toàn Thị Trường Cho Thuê Căn Hộ VN (HN & HCM)"]
-        T1["270.000 căn hộ cho thuê thứ cấp<br><b>GMV: 29.160 tỷ VNĐ/năm (~1.16B USD)</b><br>Địa hạt phí dịch vụ (Take Rate ~8.3%): <b>2.430 tỷ VNĐ/năm</b>"]
+        T1["270.000 căn hộ cho thuê thứ cấp<br><b>GMV: 29.160 tỷ VNĐ/năm (~1.16B USD)</b><br>Địa hạt phí dịch vụ môi giới & quản lý (Take Rate ~8.3%): <b>2.430 tỷ VNĐ/năm</b>"]
     end
     subgraph SAM ["SAM: Hệ Sinh Thái Đại Đô Thị Vinhomes Ocean Park"]
         S1["15.000 căn hộ cho thuê thường trực (OCP 1)<br><b>GMV: 1.440 tỷ VNĐ/năm (~58M USD)</b><br>Doanh thu dịch vụ thị trường: <b>144 tỷ VNĐ/năm</b>"]
     end
     subgraph SOM ["SOM: Thị Phần Khả Thi VinStay AI Chinh Phục"]
-        M1["Năm 1: 300 căn (2% SAM) → <b>4.73 tỷ VNĐ</b><br>Năm 2: 1.000 căn (6.6% SAM) → <b>15.30 tỷ VNĐ</b><br>Năm 3: 3.000 căn (OCP 1-3 & Smart City) → <b>45.00 tỷ VNĐ</b>"]
+        M1["Năm 1 (Pilot Sapphire): 300 căn (2.0% SAM) → <b>4.97 tỷ VNĐ</b><br>Năm 2 (Toàn OCP 1): 1.000 căn (6.6% SAM) → <b>16.12 tỷ VNĐ</b><br>Năm 3 (OCP 1-3 & Smart City): 3.000 căn → <b>48.60 tỷ VNĐ</b>"]
     end
     TAM --> SAM --> SOM
 ```
@@ -120,7 +139,7 @@ graph TD
   * $\rightarrow$ Dung lượng căn hộ cho thuê thường trực tại OCP 1: $\approx \mathbf{15.000 – 17.000 \text{ căn hộ}}$.
 * **Đặc tính nguồn cầu thuê dồi dào & thường trực:**
   * Quy mô dân cư vượt mốc $100.000$ người.
-  * Hơn $5.000$ sinh viên, giảng viên Đại học Quốc tế VinUni và hệ thống Vinschool.
+  * Hơn $5.000$ sinh viên, giảng viên Đại học Quốc tế VinUni và hệ thống Vinschool liên cấp.
   * Hơn $15.000$ chuyên gia, kỹ sư công nghệ và nhân viên văn phòng làm việc tại tháp văn phòng thông minh 45 tầng TechnoPark Tower.
   * Lực lượng lao động chất lượng cao và chuyên gia nước ngoài tại các khu công nghiệp lân cận (KCN Sài Đồng, KCN Yên Phong, Hưng Yên, Bắc Ninh) di chuyển qua các tuyến cao tốc Hà Nội - Hải Phòng.
 * **Định lượng giá trị tiền tệ SAM (tại riêng Ocean Park 1):**
@@ -133,19 +152,19 @@ graph TD
 ### 2.4. SOM (Serviceable Obtainable Market - Thị Phần Mục Tiêu Của VinStay AI)
 Dựa trên năng lực vận hành công nghệ Asset-Light, mạng lưới Field Host nội khu tại Sapphire và thuật toán AI Matchmaker, VinStay AI đặt lộ trình chiếm lĩnh thị phần qua 3 năm:
 
-* **Năm 1 (Giai đoạn Pilot MVP & Thâm nhập sâu Sapphire 1 & 2):**
+* **Năm 1 (Giai đoạn Pilot MVP & Thâm nhập sâu The Sapphire 1 & 2):**
   * **Quy mô giỏ hàng độc quyền:** **300 căn hộ** (Chiếm $\mathbf{2.0\%}$ tổng lượng căn hộ cho thuê tại OCP 1).
   * **Sản lượng giao dịch:** 50 deal chốt mới/tháng $\approx$ 600 deal/năm.
-  * **Doanh thu mục tiêu Năm 1:** **4.736.000.000 VNĐ / năm** (~190.000 USD).
-  * **Tỷ suất lợi nhuận ròng (Net Margin):** $54.5\%$.
+  * **Doanh thu mục tiêu Năm 1:** **4.976.400.000 VNĐ / năm** (~199.000 USD).
+  * **Tỷ suất lợi nhuận ròng (Net Margin):** **$55.8\%$**.
 * **Năm 2 (Phủ sóng toàn bộ 66 tòa Vinhomes Ocean Park 1):**
   * **Quy mô giỏ hàng độc quyền:** **1.000 căn hộ** (Chiếm $\mathbf{6.6\%}$ tổng lượng căn hộ cho thuê tại OCP 1).
   * **Sản lượng giao dịch:** 160 deal chốt mới/tháng $\approx$ 1.920 deal/năm.
-  * **Doanh thu mục tiêu Năm 2:** **15.300.000.000 VNĐ / năm** (~612.000 USD).
-  * **Tỷ suất lợi nhuận ròng (Net Margin):** $61.8\%$.
+  * **Doanh thu mục tiêu Năm 2:** **16.124.000.000 VNĐ / năm** (~645.000 USD).
+  * **Tỷ suất lợi nhuận ròng (Net Margin):** **$62.5\%$**.
 * **Năm 3 (Mở rộng sang Ocean Park 2, 3 và Vinhomes Smart City Tây Mỗ):**
   * **Quy mô giỏ hàng độc quyền:** **3.000 căn hộ** (gồm 2.000 căn tại Ocean Park 1, 2, 3 và 1.000 căn tại Vinhomes Smart City).
-  * **Doanh thu mục tiêu Năm 3:** **~45.000.000.000 VNĐ / năm** (~1.800.000 USD).
+  * **Doanh thu mục tiêu Năm 3:** **~48.600.000.000 VNĐ / năm** (~1.944.000 USD).
 
 ---
 
@@ -157,8 +176,8 @@ Dựa trên năng lực vận hành công nghệ Asset-Light, mạng lưới Fie
 | **Thị phần nắm giữ** | 100% thị trường lớn | 100% rổ hàng OCP 1 | **2.0% SAM** | **6.6% SAM** | **15.0% OCP + Smart City** |
 | **Giá thuê bình quân / tháng** | 9.000.000 VNĐ | 8.000.000 VNĐ | 8.000.000 VNĐ | 8.000.000 VNĐ | 8.500.000 VNĐ |
 | **Tổng GMV dòng tiền thuê / năm** | 29.160 tỷ VNĐ | 1.440 tỷ VNĐ | **28.8 tỷ VNĐ** | **96.0 tỷ VNĐ** | **306.0 tỷ VNĐ** |
-| **Doanh thu tiềm năng nền tảng / năm** | 2.430 tỷ VNĐ | 144 tỷ VNĐ | **4.73 tỷ VNĐ** | **15.30 tỷ VNĐ** | **45.00 tỷ VNĐ** |
-| **Lợi nhuận ròng (EBITDA) / năm** | — | — | **+2.57 tỷ VNĐ** | **+9.45 tỷ VNĐ** | **+28.50 tỷ VNĐ** |
+| **Doanh thu tiềm năng nền tảng / năm** | 2.430 tỷ VNĐ | 144 tỷ VNĐ | **4.97 tỷ VNĐ** | **16.12 tỷ VNĐ** | **48.60 tỷ VNĐ** |
+| **Lợi nhuận ròng (EBITDA) / năm** | — | — | **+2.78 tỷ VNĐ** | **+10.07 tỷ VNĐ** | **+31.10 tỷ VNĐ** |
 | **Động lực tăng trưởng chính** | Tốc độ đô thị hóa & căn hộ mới | Sinh viên VinUni, TechnoPark Tower | Mạng lưới Field Host Sapphire | Phủ kín 66 tòa OCP 1 | Nhân rộng mô hình sang Smart City |
 
 ---
@@ -166,17 +185,18 @@ Dựa trên năng lực vận hành công nghệ Asset-Light, mạng lưới Fie
 ## 3. CHI TIẾT 5 NHÓM CHI PHÍ VẬN HÀNH & ĐẦU TƯ (COST STRUCTURE)
 
 ### 3.1. Chi Phí Hạ Tầng Kỹ Thuật & Giấy Phép Số (Cloud & Software Infrastructure)
-Khoản chi bảo đảm hệ thống vận hành 24/7 với độ trễ thấp và an toàn dữ liệu:
+Khoản chi bảo đảm toàn bộ hệ thống Web/App, Backend API và CSDL vận hành 24/7 với độ trễ thấp và bảo mật cao:
 
 | Khoản mục chi phí | Đơn vị cung cấp | Định mức đơn giá dự kiến | Chu kỳ | Chi phí ước tính (Pilot 50 căn) | Chi phí ước tính (Scale 300 căn) |
 |---|---|---|---|:---:|:---:|
-| **Server & Frontend Hosting** | Vercel Pro / AWS ECS | $20 USD / dev / tháng | Hàng tháng | 1.000.000 VNĐ | 2.500.000 VNĐ |
+| **Server & Frontend Hosting** | Vercel Pro Tier | $20 USD / seat / tháng | Hàng tháng | 1.000.000 VNĐ | 2.500.000 VNĐ |
+| **Backend API NestJS Live** | Render Web Service | $25 – $50 USD / tháng (Node.js 24, auto-scaling) | Hàng tháng | 650.000 VNĐ | 1.500.000 VNĐ |
 | **Cơ sở dữ liệu (PostgreSQL)** | Supabase Pro Tier | $25 USD / project / tháng (kèm 8GB DB, Daily Backups, PITR) | Hàng tháng | 650.000 VNĐ | 1.500.000 VNĐ |
 | **Bộ nhớ đệm & Queue (Redis)** | Upstash Redis | $0.2 / 100k requests | Hàng tháng | 200.000 VNĐ | 600.000 VNĐ |
-| **Mạng phân phối & Tường lửa** | Cloudflare Pro / Business | $20 USD / tháng (WAF chống DDoS, SSL nâng cao) | Hàng tháng | 500.000 VNĐ | 1.000.000 VNĐ |
+| **Mạng phân phối & Tường lửa** | Cloudflare Pro | $20 USD / tháng (WAF chống DDoS, SSL nâng cao) | Hàng tháng | 500.000 VNĐ | 1.000.000 VNĐ |
 | **Tên miền & Email Doanh nghiệp** | Google Workspace / Namecheap | 3 user $\times$ 150.000 VNĐ/user | Hàng tháng | 450.000 VNĐ | 750.000 VNĐ |
 | **Giám sát lỗi & Logs (Sentry)** | Sentry.io Developer/Team | $26 USD / tháng | Hàng tháng | 650.000 VNĐ | 1.200.000 VNĐ |
-| **TỔNG CỘNG HẠ TẦNG** | | | **Hàng tháng** | **~3.450.000 VNĐ** | **~7.550.000 VNĐ** |
+| **TỔNG CỘNG HẠ TẦNG** | | | **Hàng tháng** | **~4.100.000 VNĐ** | **~9.050.000 VNĐ** |
 
 ---
 
@@ -185,10 +205,10 @@ Khoản chi trả theo lượng tiêu thụ thực tế (Pay-as-you-go) cho các
 
 | Hạng mục AI & Xác thực | Nhà cung cấp & Model | Đơn giá tiêu thụ | Tần suất / Định mức mỗi giao dịch | Chi phí trên mỗi căn chốt deal |
 |---|---|---|---|:---:|
-| **AI Matchmaker (Lọc All-in Cost)** | OpenAI GPT-4o-mini / Gemini Flash | ~$0.15 / 1M input tokens<br>~$0.60 / 1M output tokens | Trung bình 30 lượt chat/ngày $\approx$ 1.500 lượt/tháng $\approx$ 150.000 VNĐ/tháng | ~15.000 VNĐ |
+| **AI Matchmaker (Lọc All-in Cost)** | OpenAI GPT-4o-mini / Gemini 1.5 Flash | ~$0.15 / 1M input tokens<br>~$0.60 / 1M output tokens | Trung bình 30 lượt chat/ngày $\approx$ 1.500 lượt/tháng $\approx$ 150.000 VNĐ/tháng | ~15.000 VNĐ |
 | **AI Vision OCR CCCD gắn chip (Zero-Storage)** | FPT.AI eKYC / VNPT eKYC | 1.800 – 2.500 VNĐ / request bóc tách 2 mặt CCCD | Tiêu hủy ảnh tức thì sau trích xuất, 1 lượt chốt cọc thực hiện 1 lần quét kèm Face Liveness | ~4.000 VNĐ |
 | **Xác thực SĐT Zalo OTP (One-Time OTP)** | Zalo ZNS (Zalo Notification Service) | 300 – 400 VNĐ / tin ZNS | **Chỉ xác thực 1 lần duy nhất** trên SĐT khách thuê (`auth.ts`, `LeaseForm.tsx`), kèm nhắc hẹn T-10m | ~1.200 VNĐ |
-| **Ký Hợp đồng Thuê điện tử 3 bước** | Hệ thống ký số nội bộ (Web v0.9.2) | Ký bằng chữ ký tay cảm ứng (Hand Signature) + Consent | Tinh gọn: Bỏ bước ký thỏa thuận cọc riêng; ký thẳng Hợp đồng thuê 3 bước | ~0 VNĐ (In-house) |
+| **Ký Hợp đồng Thuê điện tử 3 bước** | Hệ thống ký số nội bộ (Web v0.9.2) | Ký bằng chữ ký tay cảm ứng (Hand Signature) + OTP Consent | Tinh gọn: Bỏ bước ký thỏa thuận cọc riêng; ký thẳng Hợp đồng thuê 3 bước | ~0 VNĐ (In-house) |
 | **Embedding & Semantic Vector DB** | Pgvector (nội bộ Supabase) | 0 VNĐ (tích hợp sẵn trong CSDL) | Lưu trữ vector đặc trưng căn hộ và tiêu chí khách | 0 VNĐ |
 | **TỔNG CHI PHÍ AI & KÝ SỐ / GIAO DỊCH** | | | | **~20.200 VNĐ / deal** |
 
@@ -203,7 +223,7 @@ Khoản thù lao chi trả trực tiếp cho mạng lưới Field Host nội khu
 | Tầng chi trả | Khoản mục hiện trường | Cơ chế chi trả | Mức chi trả quy chuẩn (Web v0.9.2) | Ý nghĩa chiến lược & Phạm vi cấu hình Admin |
 |:---:|---|---|---|---|
 | **TẦNG 1**<br>(Công sức) | **Thù lao lượt dẫn khách (Viewing Fee)** | Biến phí trả qua Ví Host | **50.000 VNĐ / lượt dẫn**<br>(`DEFAULT_FEES.baseViewingFee`) | Host quẹt thẻ đưa khách lên phòng, mở cửa thành công. Nuôi sống Host hàng ngày, cam kết SLA sảnh $< 3$ phút. Admin cấu hình: 0 – 500.000 VNĐ. Khách hủy sát giờ < 2h: hưởng 50% thù lao. |
-| **TẦNG 2**<br>(Hiệu quả) | **Hoa hồng chốt cọc (Deal Commission)** | Thưởng thành tích chốt cọc | **400.000 VNĐ / hợp đồng**<br>(Tương đương $25\% - 35\%$ phí sàn; `DEFAULT_FEES.dealCommission`) | Áp dụng khi khách quét VietQR cọc 2 triệu chuyển căn sang `holding` và hoàn tất ký Hợp đồng thuê 3 bước. Gắn chặt quyền lợi Host với việc chốt HĐ thành công. Admin cấu hình: 0 – 2.000.000 VNĐ. |
+| **TẦNG 2**<br>(Hiệu quả) | **Hoa hồng chốt cọc (Deal Commission)** | Thưởng thành tích chốt cọc | **400.000 VNĐ / hợp đồng**<br>(Tương đương $25\% - 35\%$ phí sàn; `DEFAULT_FEES.dealCommission`) | Áp dụng khi khách chuyển Tiền Cọc Bảo Đảm Tài Sản của căn qua VietQR chuyển căn sang `holding` và hoàn tất ký Hợp đồng thuê 3 bước. Gắn chặt quyền lợi Host với việc chốt HĐ thành công. Admin cấu hình: 0 – 2.000.000 VNĐ. |
 | **TẦNG 3**<br>(Chất lượng & Kích cầu) | **Hệ số đánh giá sao (Rating Multiplier)** | Thưởng chất lượng dịch vụ | $\times \mathbf{1.2}$ nếu $\ge 4.8\star$<br>$\times 1.0$ nếu $4.5 - 4.7\star$<br>$\times 0.8$ nếu $< 4.5\star$ | Nhân trực tiếp vào tổng hoa hồng cuối tháng; triệt tiêu hoàn toàn tình trạng chèo kéo khách hay ép cọc văn hóa thấp (`DEFAULT_FEES.ratingMultiplier = 1.2`). |
 | **TẦNG 3**<br>(Chất lượng & Kích cầu) | **Thưởng nóng chiến dịch & Căn tồn kho (Campaign / Slow-Inventory Bonus)** | Thưởng kích cầu mùa vụ & giải phóng phòng trống | **200.000 VNĐ / deal**<br>(`DEFAULT_FEES.campaignBonus`) | Kích hoạt tự động khi căn hộ có số ngày trống $> 21$ ngày hoặc đợt kích cầu cao điểm, giải quyết triệt để nỗi đau số 1 của Chủ nhà (Trống phòng kéo dài). Admin cấu hình: 0 – 1.000.000 VNĐ. |
 | **Hạ tầng** | **Thẻ cư dân thang máy RFID** | Thẻ cư dân BQL cấp | **50.000 – 100.000 VNĐ / thẻ** | Chi phí một lần duy nhất lúc tiếp nhận CTV Host; thẻ được thu hồi hoặc luân chuyển, khấu hao trong 24 tháng. |
@@ -228,8 +248,8 @@ flowchart TD
     F1["<b>Tầng 1: Lượt Tiếp Cận & Truy Cập (Traffic)</b><br>12.000 lượt khách ghé thăm/tháng (SEO, TikTok, Reels, Referral VinUni)"] -->|Tỷ lệ dùng AI: 30%| F2["<b>Tầng 2: Sàng Lọc Nhu Cầu & Tính All-in Cost</b><br>3.600 lượt tương tác AI Matchmaker & bộ lọc ngân sách trần"]
     F2 -->|Tỷ lệ đặt lịch: 10%| F3["<b>Tầng 3: Xác Thực SĐT & Đặt Lịch Xem Phòng</b><br>360 lịch hẹn được tạo qua Zalo OTP 1 lần (One-Time OTP)"]
     F3 -->|Tỷ lệ có mặt (Show Rate): 80%| F4["<b>Tầng 4: Tiếp Đón Sảnh & Xem Phòng Thực Địa</b><br>288 ca xem phòng do Field Host quẹt thẻ cư dân dẫn lên phòng"]
-    F4 -->|Tỷ lệ chốt giữ căn: 20.8%| F5["<b>Tầng 5: Quét VietQR Cọc Giữ Chỗ (Holding Lock)</b><br>60 căn hộ chuyển trạng thái holding (khóa 12–72h)"]
-    F5 -->|Tỷ lệ chuyển đổi HĐ: 83.3%| F6["<b>Tầng 6: Ký Hợp Đồng Thuê 3 Bước Thành Công</b><br><b>50 HỢP ĐỒNG THUÊ CHÍNH THỨC HOÀN TẤT / THÁNG</b>"]
+    F4 -->|Tỷ lệ chốt giữ căn: 20.8%| F5["<b>Tầng 5: Quét VietQR Tiền Cọc Bảo Đảm (Holding Lock)</b><br>60 căn hộ chuyển trạng thái holding (khóa 12–72h)"]
+    F5 -->|Tỷ lệ chuyển đổi HĐ: 83.3%| F6["<b>Tầng 6: Ký Hợp Đồng Thuê 3 Bước Thành Công</b><br><b>50 HỢP ĐỒNG THUÊ CHÍNH THỨC HOÀN TẤT / THÁNG</b><br>(10 deal hủy cọc phân chia 50/50 theo Đ.328 BLDS)"]
 ```
 
 | Tầng phễu khách thuê | Số lượng đầu vào | Tỷ lệ chuyển đổi tầng (CR) | Nguyên nhân suy hao (Drop-off) | Giải pháp công nghệ VinStay AI khắc phục |
@@ -238,7 +258,7 @@ flowchart TD
 | **Tầng 2: Sàng lọc AI Matchmaker** | $3.600$ users | $\mathbf{30.0\%}$ | Rời bỏ nếu bộ lọc phức tạp, sợ bị cộng chi phí ẩn. | **AI Matchmaker theo All-in Cost**: Bảng tính minh bạch tiền thuê + phí QL $9.5k/m^2$ + phí xe + điện nước; gợi ý 3 căn chuẩn trong 30 giây. |
 | **Tầng 3: Đặt lịch Zalo OTP** | $360$ bookings | $\mathbf{10.0\%}$ | Ngại lộ số điện thoại cho môi giới spam làm phiền. | **One-Time OTP & Ẩn danh**: Xác thực OTP Zalo 1 lần duy nhất; hệ thống mã hóa SĐT cá nhân, cam kết 0% cuộc gọi làm phiền. |
 | **Tầng 4: Tiếp đón thực địa sảnh** | $288$ viewings | $\mathbf{80.0\%}$ *(Show Rate)* | Bị lạc đường tại Ocean Park, đứng chờ lâu nên bỏ hẹn (No-show). | **Nhắc hẹn kép T-10m & Nút 1-chạm Zalo**: Báo Host xuống sảnh trước 10p, khách bấm nút "Tôi đã có mặt tại sảnh"; Host quẹt thẻ thang máy dẫn lên trong 60 giây. |
-| **Tầng 5: Cọc giữ chỗ VietQR** | $60$ holding deals | $\mathbf{20.8\%}$ | Do dự, so đo giá giữa nhiều căn, sợ bị lừa tiền cọc. | **Badge Căn hời phân khu & VietQR động**: Tự động nhận diện căn rẻ hơn $\ge 10\%$; quét QR cọc 2 triệu khóa căn ngay 48h gạch nợ tự động vào tài khoản định danh sàn. |
+| **Tầng 5: Cọc giữ chỗ VietQR** | $60$ holding deals | $\mathbf{20.8\%}$ | Do dự, so đo giá giữa nhiều căn, sợ bị lừa tiền cọc. | **Badge Căn hời phân khu & VietQR động (Cọc v2)**: Quét QR chuyển ngay Tiền Cọc Bảo Đảm của căn khóa 48h; căn có Fast-Close được giảm 5% cọc chốt ngay không cần xem. |
 | **Tầng 6: Ký HĐ thuê chính thức** | $\mathbf{50 \text{ leases}}$ | $\mathbf{83.3\%}$ | Ngại thủ tục giấy tờ công chứng rườm rà, tranh chấp điều khoản cọc. | **Quy trình ký thuê 3 bước tinh gọn**: Bỏ thỏa thuận cọc riêng; OCR CCCD Zero-Storage tiêu hủy ảnh tức thì + ký chữ ký tay cảm ứng trên điện thoại. |
 
 ---
@@ -258,9 +278,9 @@ flowchart TD
 |---|:---:|:---:|---|---|
 | **Tầng 1: Tiếp cận truyền thông** | $1.000$ chủ nhà | — | Chủ nhà ở nội thành (Cầu Giấy, Đống Đa...) ngại đi xa 20–30km; sợ môi giới lấy ảnh dìm giá. | Quảng cáo trúng đích: "Chủ nhà ngồi tại nhà 100% — Cho thuê căn hộ Ocean Park không tốn 1 giọt xăng". |
 | **Tầng 2: Định giá All-in sơ bộ** | $120$ leads | $\mathbf{12.0\%}$ | Không nắm được giá thị trường thực tế, sợ bị ép giá. | Hệ thống tự động phân tích dữ liệu phân khu, đề xuất mức giá All-in Cost tối ưu thanh khoản dưới 7 ngày. |
-| **Tầng 3: Khảo sát & Kiểm định** | $70$ inspections | $\mathbf{58.3\%}$ | Bận công việc, không thể chạy sang Ocean Park mở cửa đón thợ/môi giới. | **Mạng lưới Field Host nội khu**: Host đến nhận chìa cơ tại quầy hoặc chủ nhà cấp mã khóa tạm thời; chụp ảnh Hộ chiếu bàn giao số 32 hạng mục. |
-| **Tầng 4: Ký HĐ Ủy quyền độc quyền** | $50$ mandates | $\mathbf{71.4\%}$ | Sợ bị ràng buộc pháp lý chặt, mất quyền tự do định đoạt nhà. | **Hợp đồng Ký gửi 10 điều linh hoạt**: Miễn phí kiểm định; điều khoản thoát linh hoạt (chủ nhà có quyền rút sau 15 ngày báo trước kèm trạng thái nhà trống). |
-| **Tầng 5: Niêm yết & Khớp deal** | $\mathbf{50 \text{ deals}}$ | $\mathbf{100\%}$ | Căn hộ đăng lên bị "thiu", mất 1–2 tháng không có khách. | **AI Pre-Leasing & Khóa căn VietQR**: Tìm khách và chốt cọc trong 7 ngày; tiền cọc 2 triệu chuyển 100% thành cọc bảo đảm tài sản giữ nguyên suốt kỳ thuê. |
+| **Tầng 3: Khảo sát & Kiểm định** | $70$ inspections | $\mathbf{58.3\%}$ | Bận công việc, không thể chạy sang Ocean Park mở cửa đón thợ/môi giới. | **Mạng lưới Field Host nội khu**: Host đến nhận chìa cơ tại quầy hoặc chủ nhà cấp mã khóa tạm thời; chụp ảnh Hộ chiếu bàn giao số 10–32 hạng mục. |
+| **Tầng 4: Ký HĐ Ủy quyền độc quyền** | $50$ mandates | $\mathbf{71.4\%}$ | Sợ bị ràng buộc pháp lý chặt, mất quyền tự do định đoạt nhà. | **Hợp đồng Ký gửi 10 điều linh hoạt**: Miễn phí kiểm định; điều khoản thoát linh hoạt (chủ nhà có quyền rút sau 15 ngày báo trước kèm trạng thái nhà trống). Kèm toggle ủy quyền Giá sàn an toàn. |
+| **Tầng 5: Niêm yết & Khớp deal** | $\mathbf{50 \text{ deals}}$ | $\mathbf{100\%}$ | Căn hộ đăng lên bị "thiu", mất 1–2 tháng không có khách. | **AI Pre-Leasing & Khóa căn VietQR**: Tìm khách và chốt cọc trong 7 ngày; tiền cọc chuyển 100% thành cọc bảo đảm tài sản giữ nguyên suốt kỳ thuê. |
 
 ---
 
@@ -272,7 +292,7 @@ Bảng hạch toán phân rã chi phí thu hút trên mỗi giao dịch thành c
 | **1. Chi phí thu hút Chủ nhà (Supply CAC):** | | | | |
 | • Paid Ads Target (Facebook / Google) | 18.000.000 VNĐ | Phân bổ cho 50 căn ký gửi thành công | 360.000 VNĐ | $31.3\%$ |
 | • Hoa hồng giới thiệu cư dân (Referral Bonus) | 10.000.000 VNĐ | Tặng 200k/chủ nhà ký gửi qua truyền miệng | 200.000 VNĐ | $17.4\%$ |
-| • Chi phí Field Host thẩm định 32 hạng mục | 12.000.000 VNĐ | 70 lượt khảo sát thực địa $\times$ 170k phân bổ | 240.000 VNĐ | $20.9\%$ |
+| • Chi phí Field Host thẩm định hiện trạng | 12.000.000 VNĐ | 70 lượt khảo sát thực địa $\times$ 170k phân bổ | 240.000 VNĐ | $20.9\%$ |
 | **Tiểu kế Supply CAC / deal:** | **40.000.000 VNĐ** | | **~800.000 VNĐ** | **69.6%** |
 | **2. Chi phí thu hút Khách thuê (Demand CAC):** | | | | |
 | • Hợp tác VinUni & Cộng đồng TechnoPark | 6.000.000 VNĐ | Tài trợ sự kiện sinh viên, đặt standee văn phòng | 120.000 VNĐ | $10.4\%$ |
@@ -285,11 +305,11 @@ Bảng hạch toán phân rã chi phí thu hút trên mỗi giao dịch thành c
 ---
 
 #### 3.4.4. Chiến Lược Giảm Thiểu Tỷ Lệ Rơi Rụng (Drop-off Prevention Moats)
-Để bảo vệ biên lợi nhuận và giữ vững chỉ số **LTV/CAC = 9.5x**, VinStay AI thiết lập 4 chốt chặn kỹ thuật triệt tiêu rò rỉ:
+Để bảo vệ biên lợi nhuận và giữ vững chỉ số **LTV/CAC = 9.8x**, VinStay AI thiết lập 4 chốt chặn kỹ thuật triệt tiêu rò rỉ:
 1. **Chốt chặn No-show khách thuê (Tầng 3 $\rightarrow$ Tầng 4):** Quy trình nhắc hẹn kép T-10m kèm nút bấm Zalo 1-chạm nâng Show Rate từ mức trung bình thị trường $50\%$ lên **$80\%$**.
-2. **Chốt chặn Ép giá dìm hàng (Tầng 4 $\rightarrow$ Tầng 5):** Bảng tính All-in Cost chuẩn xác kèm huy hiệu Căn hời phân khu giúp khách ra quyết định chuyển cọc VietQR 2 triệu trong 15 phút mà không đi so kè nhiều nơi.
-3. **Chốt chặn Bỏ cọc / Phân vân (Tầng 5 $\rightarrow$ Tầng 6):** Cọc giữ chỗ khóa căn 48h tạo tính khan hiếm; quy trình ký Hợp đồng thuê 3 bước ngay trên điện thoại giúp giữ vững tỷ lệ chuyển đổi từ cọc sang thuê đạt **$83.3\%$**.
-4. **Chốt chặn Cắt cầu ngoài sàn:** Hợp đồng Ký gửi Độc quyền ràng buộc pháp lý chặt chẽ; Hộ chiếu bàn giao số 32 hạng mục và quyền lợi Escrow bảo vệ tài sản chỉ kích hoạt khi thanh toán qua tài khoản định danh nền tảng, triệt tiêu 100% động cơ giao dịch ngầm.
+2. **Chốt chặn Ép giá dìm hàng (Tầng 4 $\rightarrow$ Tầng 5):** Bảng tính All-in Cost chuẩn xác kèm huy hiệu Căn hời phân khu giúp khách ra quyết định chuyển cọc VietQR nhanh chóng mà không đi so kè nhiều nơi. Căn có ủy quyền Chốt nhanh cho phép cọc ngay không cần xem phòng.
+3. **Chốt chặn Bỏ cọc / Phân vân (Tầng 5 $\rightarrow$ Tầng 6):** Cọc giữ chỗ bằng Tiền Cọc Bảo Đảm của căn khóa 48h tạo tính khan hiếm và cam kết tài chính vững chắc; quy trình ký Hợp đồng thuê 3 bước ngay trên điện thoại giúp giữ vững tỷ lệ chuyển đổi từ cọc sang thuê đạt **$83.3\%$**.
+4. **Chốt chặn Cắt cầu ngoài sàn:** Hợp đồng Ký gửi Độc quyền ràng buộc pháp lý chặt chẽ; Hộ chiếu bàn giao số 10 hạng mục và quyền lợi Escrow bảo vệ tài sản chỉ kích hoạt khi thanh toán qua tài khoản định danh nền tảng, triệt tiêu 100% động cơ giao dịch ngầm.
 
 ---
 
@@ -306,7 +326,7 @@ Chi phí bảo đảm tính pháp lý chuẩn mực theo Nghị định 13/2023/
 
 ---
 
-## 4. CHI TIẾT 3 NHÓM NGUỒN THU CỐT LÕI (REVENUE STREAMS)
+## 4. CHI TIẾT 4 NHÓM NGUỒN THU CỐT LÕI (REVENUE STREAMS)
 
 ### 4.1. Phí Giao Dịch Thành Công Theo Kỳ Hạn (Transaction Fee - Nguồn thu chủ lực)
 Áp dụng theo Biểu phí niêm yết trong **Hợp đồng Ký gửi Quản lý Độc quyền (Exclusive Rental Mandate - 10 điều)** ký với Chủ nhà:
@@ -322,7 +342,9 @@ Chi phí bảo đảm tính pháp lý chuẩn mực theo Nghị định 13/2023/
 * **Gia tăng thanh khoản với All-in Cost & Badge Căn Hời (`cost.ts`):**
   * Công thức All-in Cost minh bạch: $\text{Tiền thuê} + \text{Phí QL (9.500đ/m}^2) + \text{Phí xe (150k xe máy, 1.250k ô tô)} + \text{Dự toán điện nước (300k/người)}$.
   * Thuật toán tự động gắn huy hiệu **"Căn hời phân khu"** cho các căn có giá thuê rẻ hơn $\ge 10\%$ so với trung bình tòa (`bargainThreshold: 0.1`), tăng gấp 3 lần tỷ lệ chốt deal và rút ngắn thời gian trống phòng xuống dưới 7 ngày.
-  * Chu kỳ thanh toán linh hoạt hỗ trợ khách thuê: [1, 3, 6] tháng (`PAYMENT_CYCLES`).
+* **Tác động từ cơ chế Fast-Deposit Close & Smart Move-in:**
+  * Giảm thời gian tìm khách từ 30 ngày xuống dưới 7 ngày (hoặc trong 24 giờ với căn chốt không xem).
+  * Chu kỳ trả trước 3/6 tháng đem lại dòng tiền mặt trả trước 45–90 triệu VNĐ ngay cho chủ nhà; sàn thu phí giao dịch ngay khi hợp đồng được ký kết thành công.
 
 ---
 
@@ -332,7 +354,7 @@ Mô hình thu phí định kỳ hàng tháng cho các tiện ích công nghệ m
 #### A. Gói "Chủ Nhà Thông Minh" (Smart Landlord Dashboard Premium)
 * **Mức phí:** **149.000 VNĐ / căn / tháng** (hoặc gói cả năm 1.490.000 VNĐ).
 * **Quyền lợi mở rộng:**
-  * Giám sát nhật ký mở cửa thời gian thực, lưu trữ hình ảnh Hộ chiếu bàn giao số 32 hạng mục chuẩn AES-256 trong suốt thời hạn ủy quyền.
+  * Giám sát nhật ký mở cửa thời gian thực, lưu trữ hình ảnh Hộ chiếu bàn giao số 10–32 hạng mục chuẩn AES-256 trong suốt thời hạn ủy quyền.
   * Tự động xuất biên lai đối soát tiền điện nước EVN, phí gửi xe hàng tháng và nhắc nợ tự động qua Zalo Bot.
   * Tự động số hóa Nội quy BQL Vinhomes (`house-rules.ts`), hỗ trợ tự động gửi thông báo nhắc nhở và lập biên bản phạt cấn trừ vào cọc bảo đảm.
   * Ưu tiên hiển thị Top đầu trong kết quả AI Matchmaker khi căn hộ chuẩn bị bước vào chu kỳ tìm khách mới (Pre-leasing trước 30 ngày).
@@ -341,33 +363,47 @@ Mô hình thu phí định kỳ hàng tháng cho các tiện ích công nghệ m
 * **Mức phí:** **59.000 VNĐ / tháng** (tích hợp trong hóa đơn All-in Cost hàng tháng).
 * **Quyền lợi:**
   * Cam kết bảo chứng hoàn trả tiền cọc bảo đảm trong 60 giây khi biên bản thanh lý không có khiếu nại (Fast Escrow Release).
-  * Hỗ trợ gọi thợ khẩn cấp 24/7 từ Danh bạ Thợ kỹ thuật uy tín tại Ocean Park với giá chiết khấu $10\%$ (mô hình Asset-Light: khách và thợ tự thỏa thuận chi phí trực tiếp).
+  * Hỗ trợ kết nối khẩn cấp 24/7 từ Danh bạ Thợ kỹ thuật ngoài uy tín tại Ocean Park với giá chiết khấu $10\%$ (mô hình Asset-Light: khách và thợ tự thỏa thuận chi phí trực tiếp).
 
 ---
 
 ### 4.3. Lãi Suất Tạm Giữ Ký Quỹ & Dòng Tiền Đệm (Escrow Float Income)
 Nguồn doanh thu tài chính an toàn sinh ra từ việc quản lý lượng tiền ký quỹ tập trung:
 
-1. **Dòng tiền Tiền cọc giữ chỗ linh hoạt (2.000.000 VNĐ/lượt):**
-   * Quét qua VietQR động gạch nợ tức thì; căn hộ lập tức khóa trạng thái `holding`.
-   * **Thời hạn giữ chỗ do Admin cài đặt:** Mặc định **48 giờ**, Admin có thể cấu hình linh hoạt từ **12 đến 72 giờ** trên toàn sàn hoặc thiết lập riêng cho từng căn (`AdminSettings.tsx`, `cost.ts`).
-2. **Dòng tiền Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (Security Deposit):**
-   * **Quy định tỷ lệ cọc theo giá thuê:** Số tiền cọc được căn cứ dựa trên giá của hợp đồng thuê cụ thể, trong đó **không được nhỏ hơn 50% giá thuê mỗi tháng** ($0.5\times$) và **không được lớn hơn 4 lần số tiền thuê mỗi tháng** ($4.0\times$). Tỷ lệ và khung cọc này được cài đặt, quản lý và kiểm toán trực tiếp trên trang Admin (`AdminSettings.tsx`, `GET/PUT /admin/settings/deposit-policy`).
-   * Khi ký Hợp đồng thuê chính thức, khoản cọc giữ chỗ 2.000.000 VNĐ ban đầu được **chuyển đổi 100%** thành một phần của Tiền Cọc Bảo Đảm Tài Sản & Nội Thất (bình quân **$5.000.000 – 20.000.000 \text{ VNĐ/căn}$** tùy layout và giá thuê).
-   * Khoản tiền này được giữ nguyên suốt kỳ hạn thuê và **tuyệt đối KHÔNG khấu trừ vào tiền thuê tháng đầu tiên**.
-   * Số tiền này nằm bảo chứng trong tài khoản ký quỹ mở tại Ngân hàng liên kết suốt kỳ hạn hợp đồng (6 – 12 tháng) và chỉ giải tỏa khi hai bên đối soát bàn giao trả phòng.
-3. **Cơ chế bảo toàn dòng tiền & cấn trừ tự động theo Nội quy BQL (`house-rules.ts`):**
-   * Hợp đồng thuê ràng buộc tự động: Mọi khoản phạt vi phạm nội quy BQL (tiếng ồn sau 22h, nuôi thú cưng trái phép, PCCC, rác thải) và các hóa đơn nợ dịch vụ EVN/nước/xe tồn đọng khi trả phòng được **tự động cấn trừ trực tiếp** vào Tiền Cọc Bảo Đảm trước khi hoàn lại cho khách, đảm bảo 0% nợ xấu cho chủ nhà.
-4. **Cơ chế sinh lợi nhuận tài chính (Float Yield):**
-   * Áp dụng gói tiền gửi thanh toán doanh nghiệp có kỳ hạn tự động (Sweep Account / Overnight Cash Management) với lãi suất **$2.5\% – 4.0\% / \text{năm}$** trên số dư khả dụng tối thiểu.
-   * *Ước tính quy mô dòng tiền đệm:*
-     * Với 50 căn: Số dư đệm $\approx 600.000.000 \text{ VNĐ} \rightarrow$ Lợi suất: **~18.000.000 VNĐ/năm**.
-     * Với 300 căn: Số dư đệm $\approx 3.600.000.000 \text{ VNĐ} \rightarrow$ Lợi suất: **~120.000.000 VNĐ/năm**.
+1. **Chuẩn hóa Cọc v2 — Dòng tiền Tiền Cọc Bảo Đảm Tài Sản (Security Deposit):**
+   - Khách chuyển ngay Tiền Cọc Bảo Đảm Tài Sản của căn (mặc định bằng 1 tháng tiền thuê: **$6.000.000 – 15.000.000 \text{ VNĐ/căn}$** tùy layout; biên độ chính sách $0.5\times – 4.0\times$ do Admin cài đặt).
+   - Khi ký Hợp đồng thuê chính thức, số tiền này được chuyển đổi 100% thành Tiền Cọc Bảo Đảm Tài Sản & Nội Thất, giữ nguyên suốt kỳ hạn thuê (6 – 12 tháng), **tuyệt đối KHÔNG khấu trừ vào tiền thuê tháng đầu tiên**.
+   - Dòng tiền này được bảo toàn và phong tỏa an toàn trong Tài khoản Ký quỹ mở tại Ngân hàng thương mại liên kết, chỉ giải tỏa khi hai bên đối soát bàn giao trả phòng.
+2. **Cơ chế bảo toàn dòng tiền & cấn trừ tự động theo Nội quy BQL (`house-rules.ts`):**
+   - Hợp đồng thuê ràng buộc tự động: Mọi khoản phạt vi phạm nội quy BQL (tiếng ồn sau 22h, nuôi thú cưng trái phép, PCCC, rác thải) và các hóa đơn nợ dịch vụ EVN/nước/xe tồn đọng khi trả phòng được **tự động cấn trừ trực tiếp** vào Tiền Cọc Bảo Đảm trước khi hoàn lại cho khách, đảm bảo 0% nợ xấu cho chủ nhà.
+3. **Cơ chế sinh lợi nhuận tài chính (Float Yield):**
+   - Áp dụng gói tiền gửi thanh toán doanh nghiệp có kỳ hạn tự động (Sweep Account / Overnight Cash Management) với lãi suất **$2.5\% – 4.0\% / \text{năm}$** trên số dư khả dụng tối thiểu.
+   - *Ước tính quy mô dòng tiền đệm và lợi suất hàng năm:*
+     - Với quy mô 50 căn: Số dư đệm $\approx 500.000.000 \text{ VNĐ} \rightarrow$ Lợi suất: **~18.000.000 VNĐ / năm** (~1.500.000 VNĐ/tháng).
+     - Với quy mô 300 căn: Số dư đệm $\approx 3.000.000.000 \text{ VNĐ} \rightarrow$ Lợi suất: **~108.000.000 VNĐ / năm** (~9.000.000 VNĐ/tháng).
+     - Với quy mô 1.000 căn: Số dư đệm $\approx 10.000.000.000 \text{ VNĐ} \rightarrow$ Lợi suất: **~360.000.000 VNĐ / năm** (~30.000.000 VNĐ/tháng).
 
 ---
 
-## 5. PHÂN TÍCH KINH TẾ ĐƠN VỊ (UNIT ECONOMICS TRÊN MỖI CĂN HỘ)
+### 4.4. Doanh Thu Phân Chia Xử Lý Vi Phạm Cọc Theo Điều 328 BLDS (Deposit Forfeiture Revenue)
+Nguồn thu bổ sung từ cơ chế chế tài tài chính minh bạch theo quy định của pháp luật:
 
+1. **Căn cứ pháp lý Điều 328 Bộ luật Dân sự 2015:**
+   - Trường hợp khách thuê đã chuyển Tiền Cọc Bảo Đảm của căn nhưng quá thời hạn giữ căn (12–72 giờ, mặc định 48 giờ) mà tự ý từ chối ký hợp đồng thuê vì lý do chủ quan (không thuộc trường hợp bất khả kháng): Khách thuê bị mất toàn bộ tiền cọc.
+2. **Cơ chế phân chia 50% Chủ nhà / 50% Nền tảng:**
+   - **$50\%$ chuyển cho Chủ nhà:** Bồi thường chi phí cơ hội trống phòng (Pre-leasing vacancy loss) trong những ngày căn hộ bị khóa giữ chỗ.
+   - **$50\%$ phân bổ cho Nền tảng:** Hạch toán vào doanh thu dịch vụ của VinStay AI để bù đắp chi phí vận hành hệ thống, chi phí tin nhắn OTP/ZNS, chi phí tiếp thị và thù lao dẫn khách cho Field Host.
+3. **Định lượng tài chính từ tỷ lệ suy hao phễu cọc (Holding Drop-off):**
+   - Theo mô hình phễu chuyển đổi tại Mục 3.4.1: Trong 60 lượt khách cọc giữ căn hàng tháng, có $83.3\%$ (50 khách) chuyển đổi thành công sang Hợp đồng thuê; $16.7\%$ còn lại (10 trường hợp) quá hạn hoặc tự ý hủy cọc.
+   - Với mức tiền cọc bình quân 8.000.000 VNĐ/căn (căn 1PN – 2PN Sapphire):
+   $$\text{Doanh thu phạt cọc sàn thu về / tháng} = 10 \text{ cases} \times (50\% \times 8.000.000 \text{ VNĐ}) = \mathbf{40.000.000 \text{ VNĐ / tháng}}$$
+   - Nguồn thu này biến các deal suy hao thành nguồn bù đắp dòng tiền hữu hiệu cho sàn và tạo sự an tâm tuyệt đối cho Chủ nhà (nhận 4 triệu tiền bồi thường ngay cả khi khách hủy cọc).
+
+---
+
+## 5. PHÂN TÍCH KINH TẾ ĐƠN VỊ & BẢNG SO SÁNH ROI CHỦ NHÀ
+
+### 5.1. Bảng Tính Unit Economics Trên 01 Căn Hộ/Năm
 Bảng đối chiếu Doanh thu và Chi phí trên **1 căn hộ ký gửi thành công hợp đồng 12 tháng** (Giá thuê: 8.000.000 VNĐ/tháng, đồng bộ Web v0.9.2):
 
 ```
@@ -378,9 +414,10 @@ Bảng đối chiếu Doanh thu và Chi phí trên **1 căn hộ ký gửi thàn
 │    • Phí hoa hồng giao dịch 12 tháng (100%):            8.000.000 VNĐ │
 │    • Phí SaaS Quản lý từ xa (149k x 12 tháng):          1.788.000 VNĐ │
 │    • Phí VinStay Care khách thuê (59k x 12 tháng):        708.000 VNĐ │
-│    • Lãi suất tiền gửi ký quỹ (Cọc 12tr x 3.5%):          420.000 VNĐ │
+│    • Lãi suất tiền gửi ký quỹ (Cọc 8tr x 3.5%):           280.000 VNĐ │
+│    • Doanh thu phân chia phạt cọc Đ.328 BLDS (bình quân): 480.000 VNĐ │
 │    ─────────────────────────────────────────────────────────────────   │
-│    TỔNG DOANH THU / CĂN / NĂM (A):                     10.916.000 VNĐ │
+│    TỔNG DOANH THU / CĂN / NĂM (A):                     11.256.000 VNĐ │
 │                                                                        │
 │ 2. CHI PHÍ TRỰC TIẾP BIẾN PHÍ (COGS & DIRECT OPEX):                    │
 │    • Thù lao dẫn khách Field Host (3 lượt x 50k):         150.000 VNĐ │
@@ -392,16 +429,54 @@ Bảng đối chiếu Doanh thu và Chi phí trên **1 căn hộ ký gửi thàn
 │    ─────────────────────────────────────────────────────────────────   │
 │    TỔNG CHI PHÍ BIẾN PHÍ / CĂN (B):                     1.790.000 VNĐ │
 │                                                                        │
-│ 3. LỢI NHUẬN GỘP TRÊN MỖI CĂN (GROSS PROFIT = A - B):   9.126.000 VNĐ │
-│    TỶ SUẤT LỢI NHUẬN GỘP (GROSS MARGIN):                       83.6%   │
+│ 3. LỢI NHUẬN GỘP TRÊN MỖI CĂN (GROSS PROFIT = A - B):   9.466.000 VNĐ │
+│    TỶ SUẤT LỢI NHUẬN GỘP (GROSS MARGIN):                       84.1%   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 > **ĐÁNH GIÁ CHỈ SỐ KINH TẾ (HEALTHY SAAS METRICS):**
-> * **LTV (Giá trị trọn đời khách hàng):** $\approx 10.916.000 \text{ VNĐ}$
-> * **CAC (Chi phí thu hút):** $\approx 1.150.000 \text{ VNĐ}$
-> * **Tỷ lệ LTV / CAC:** $\mathbf{9.5x}$ (Vượt xa chuẩn an toàn của ngành công nghệ BĐS là $3.0x$).
-> * **Thời gian thu hồi chi phí CAC (Payback Period):** **0.2 tháng** (Ngay tại thời điểm chốt cọc và thu tiền hoa hồng tháng đầu tiên).
+> * **LTV (Giá trị trọn đời khách hàng):** $\approx \mathbf{11.256.000 \text{ VNĐ}}$
+> * **CAC (Chi phí thu hút):** $\approx \mathbf{1.150.000 \text{ VNĐ}}$
+> * **Tỷ lệ LTV / CAC:** $\mathbf{9.8x}$ (Vượt xa chuẩn an toàn của ngành PropTech là $3.0x$).
+> * **Thời gian thu hồi chi phí CAC (Payback Period):** **0.2 tháng** (Ngay tại thời điểm chốt cọc và thu phí giao dịch tháng đầu tiên).
+
+---
+
+### 5.2. Bảng So Sánh Hiệu Quả Định Lượng ROI Cho Chủ Nhà: VinStay AI vs Môi Giới Truyền Thống
+
+Bảng phân tích đối chiếu tài chính thực tế cho Chủ nhà sở hữu căn hộ 2PN tại The Sapphire (Giá thuê: 8.000.000 VNĐ/tháng) trong một chu kỳ cho thuê 12 tháng:
+
+| Hạng mục đối chiếu tài chính & công sức | Môi Giới Truyền Thống (Tự do) | VinStay AI (Hệ Điều Hành Tinh Gọn) | Giá trị chênh lệch / Lợi ích cho Chủ nhà |
+|---|:---:|:---:|---|
+| **Thời gian trống phòng tìm khách mới** | **30 – 45 ngày** | **Dưới 7 ngày** *(hoặc 24h với Fast-Close)* | **Tiết kiệm 6.000.000 – 10.000.000 VNĐ** tiền mất trắng do phòng trống. |
+| **Gánh nặng nợ vay & phí quản lý khi trống** | Tự gánh 100% nợ gốc lãi + phí BQL ($9.5k/m^2$) | Giảm thiểu tối đa ngày chịu lãi không có dòng tiền bù đắp | Bảo toàn dòng tiền mặt hàng tháng. |
+| **Phí môi giới / hoa hồng** | 8.000.000 VNĐ (1 tháng tiền thuê) | 8.000.000 VNĐ (1 tháng tiền thuê) | Tương đương về chi phí dịch vụ niêm yết. |
+| **Chi phí thời gian & di chuyển (20–30km)** | Đi lại 8–10 lượt đón khách; tốn 1.000.000 – 1.500.000đ tiền xăng/xe | **0 VNĐ (Chủ nhà ở nhà 100%)**; Field Host nội khu quẹt thẻ dẫn khách | **Tiết kiệm 1.500.000 VNĐ** + 40 giờ di chuyển & tránh rủi ro bị "bỏ bom". |
+| **Rủi ro khách hủy cọc / bỏ cọc** | Môi giới giữ cọc hoặc khách đòi lại; chủ nhà mất trắng thời gian chờ | Phân chia phạt cọc **50% cho Chủ nhà** (nhận ngay 4.000.000 VNĐ) | **Được bảo hiểm 4.000.000 VNĐ** rủi ro hủy hẹn theo Điều 328 BLDS. |
+| **Rủi ro tranh chấp nội thất & hỏng hóc** | Tranh chấp cãi vã lúc trả phòng; cọc không đủ bù sửa chữa sofa/sàn gỗ | **Hộ chiếu bàn giao số 10–32 hạng mục** có Timestamp + Geofence đối soát chuẩn | **Tiết kiệm 3.000.000 – 5.000.000 VNĐ** chi phí tự bỏ tiền túi sửa chữa nhà. |
+| **Rủi ro bùng tiền điện nước EVN / BQL phạt** | Khách chuyển đi đột ngột để lại nợ điện nước, chủ nhà tự thanh toán | Tự động cấn trừ dứt điểm vào Tiền Cọc Bảo Đảm trước khi giải tỏa | **Cam kết 0% nợ đọng** dịch vụ cho chủ nhà. |
+| **Hình thức dòng tiền thanh toán** | Khách kỳ kèo trả từng tháng một, rủi ro trễ hạn | Khách trả trước **3 – 6 tháng** qua ưu đãi Fast-Deposit Close | **Nhận ngay 24.000.000 – 48.000.000 VNĐ** tiền mặt trả trước đầu kỳ. |
+| **TỔNG LỢI ÍCH TÀI CHÍNH TĂNG THÊM CHO CHỦ NHÀ** | — | — | **TĂNG THÊM 14.500.000 – 20.500.000 VNĐ / chu kỳ thuê** |
+
+---
+
+### 5.3. Tác Động Tài Chính Của Cơ Chế Fast-Deposit Close & Smart Move-in
+
+#### 1. Fast-Deposit Close Corridor (Biên Độ Giá Sàn & Chốt Cọc Nhanh 2 Bước):
+* **Cơ chế 2 bước:**
+  * **Bước 1 (Lúc cọc trong 24h):** Khách chốt cọc trực tiếp trên web mà không cần xem phòng $\rightarrow$ Giảm khoảng 5% tiền cọc (tối thiểu 200.000 VNĐ, tối đa 8%).
+  * **Bước 2 (Lúc ký hợp đồng):** Khách chọn trả trước theo chu kỳ 1 / 3 / 6 tháng để nhận mức giảm giá thuê tương ứng 3.5% / 5.5% / 10% (kẹp cứng $\ge$ Giá sàn tối thiểu $\ge 3$ triệu VNĐ do chủ nhà cài đặt).
+* **Hiệu quả tài chính:**
+  * Giảm CAC khách thuê từ 350.000 VNĐ xuống 180.000 VNĐ/deal do không tốn thù lao dẫn khách xem phòng nhiều lượt.
+  * Mang về cho chủ nhà dòng tiền mặt lớn trả trước ngay lập tức (**45.000.000 – 90.000.000 VNĐ**), loại bỏ triệt để rủi ro chậm trả tiền thuê hàng tháng.
+
+#### 2. Smart Move-in Window Protocol (Khung Chờ Dọn Vào Tiêu Chuẩn):
+* **Cơ chế:**
+  * Cho phép khách dọn vào từ T0+2 đến tối đa T0+30; miễn phí chờ tối đa 7 ngày.
+  * Nếu khách chọn dọn vào sau ngày thứ 7, Hợp đồng và tiền thuê **bắt buộc tính từ ngày thứ 8 (T0+7)**.
+* **Hiệu quả tài chính:**
+  * Triệt tiêu $100\%$ rủi ro chủ nhà bị "giam phòng chờ khách" từ 15–30 ngày mà không có dòng tiền.
+  * Bảo đảm doanh thu cho thuê bắt đầu phát sinh tối đa sau 7 ngày kể từ khi căn hộ khớp cọc.
 
 ---
 
@@ -409,7 +484,7 @@ Bảng đối chiếu Doanh thu và Chi phí trên **1 căn hộ ký gửi thàn
 
 ```mermaid
 gantt
-    title LỘ TRÌNH QUY MÔ & TĂNG TRƯỞNG TÀI CHÍNH
+    title LỘ TRÌNH QUY MÔ & TĂNG TRƯỞNG TÀI CHÍNH VINSTAY AI
     dateFormat  YYYY-MM
     section Giai đoạn 1 (Gate 1–3)
     Pilot 50 căn Sapphire 1 & 2 :2026-09, 3M
@@ -419,57 +494,89 @@ gantt
     Phủ sóng 1.000 căn OCP 1, 2 & 3 :2027-06, 6M
 ```
 
-### Bảng dự phóng Lãi/Lỗ (P&L Forecast) theo từng giai đoạn:
+### Bảng Dự Phóng Lãi/Lỗ (P&L Forecast) Theo Từng Giai Đoạn Vận Hành:
 
-| Chỉ số tài chính (VNĐ) | Giai đoạn 1: Pilot MVP<br>**(50 căn hộ)** | Giai đoạn 2: Scale Up<br>**(300 căn hộ)** | Giai đoạn 3: Expansion<br>**(1.000 căn hộ)** |
+| Chỉ số tài chính (Đơn vị tính: VNĐ) | Giai đoạn 1: Pilot MVP<br>**(50 căn hộ Sapphire)** | Giai đoạn 2: Scale Up<br>**(300 căn hộ OCP 1)** | Giai đoạn 3: Expansion<br>**(1.000 căn hộ Quần thể)** |
 |---|:---:|:---:|:---:|
-| **Số căn hộ hoạt động đồng thời** | 50 căn | 300 căn | 1.000 căn |
-| **Số deal chốt mới bình quân / tháng** | 10 deal | 50 deal | 160 deal |
-| **1. DOANH THU BÌNH QUÂN / THÁNG** | | | |
-| • Doanh thu Phí giao dịch (6.8tr/deal) | 68.000.000 | 340.000.000 | 1.088.000.000 |
-| • Doanh thu Phí SaaS Quản lý số | 7.450.000 | 44.700.000 | 149.000.000 |
-| • Lợi suất tiền gửi ký quỹ (Float) | 1.500.000 | 10.000.000 | 38.000.000 |
-| **TỔNG DOANH THU THÁNG** | **76.950.000** | **394.700.000** | **1.275.000.000** |
+| **Số căn hộ hoạt động đồng thời trong giỏ hàng** | 50 căn | 300 căn | 1.000 căn |
+| **Sản lượng deal chốt mới bình quân / tháng** | 10 deal | 50 deal | 160 deal |
+| **Số ca hủy cọc phân chia Đ.328 BLDS / tháng** | 2 deal | 10 deal | 32 deal |
+| **1. DOANH THU BÌNH QUÂN HÀNG THÁNG** | | | |
+| • Doanh thu Phí giao dịch (6.8tr/deal thành công) | 68.000.000 | 340.000.000 | 1.088.000.000 |
+| • Doanh thu Phí SaaS Quản lý số (149k/chủ nhà) | 7.450.000 | 44.700.000 | 149.000.000 |
+| • Doanh thu Gói VinStay Care khách thuê (59k/khách) | 2.950.000 | 17.700.000 | 59.000.000 |
+| • Lợi suất tiền gửi ký quỹ (Escrow Float Yield 3.5%) | 1.500.000 | 9.000.000 | 30.000.000 |
+| • Doanh thu phân chia phạt cọc Đ.328 BLDS (50/50) | 8.000.000 | 40.000.000 | 128.000.000 |
+| **TỔNG DOANH THU THÁNG** | **87.900.000** | **451.400.000** | **1.454.000.000** |
+| *(Tương đương doanh thu quy năm)* | *(1.054.800.000)* | *(5.416.800.000)* | *(17.448.000.000)* |
 | **2. TỔNG CHI PHÍ THÁNG (OPEX + CAC)** | | | |
-| • Hạ tầng Cloud, Server, Database | 3.450.000 | 7.550.000 | 18.000.000 |
-| • Chi phí AI Engine, Vision OCR & ZNS | 1.100.000 | 5.200.000 | 16.500.000 |
-| • Thù lao & Hoa hồng Field Host | 6.500.000 | 32.500.000 | 104.000.000 |
-| • Tiếp thị, Quảng cáo & Kích hoạt (CAC) | 11.500.000 | 57.500.000 | 184.000.000 |
-| • Pháp lý, Kế toán, Thuế & Admin cố định | 6.000.000 | 12.000.000 | 25.000.000 |
+| • Hạ tầng Cloud, Server, Database & Render | 4.100.000 | 9.050.000 | 22.000.000 |
+| • Chi phí AI Engine, Vision OCR & ZNS OTP | 1.100.000 | 5.200.000 | 16.500.000 |
+| • Thù lao & Hoa hồng mạng lưới Field Host | 6.500.000 | 32.500.000 | 104.000.000 |
+| • Tiếp thị, Quảng cáo & Kích hoạt hai đầu (CAC) | 11.500.000 | 57.500.000 | 184.000.000 |
+| • Pháp lý, Kế toán, Thuế & Admin doanh nghiệp | 6.000.000 | 12.000.000 | 25.000.000 |
 | • Lương đội ngũ Vận hành cốt lõi (Core Team) | 25.000.000 | 65.000.000 | 140.000.000 |
-| **TỔNG CHI PHÍ THÁNG** | **53.550.000** | **179.750.000** | **487.500.000** |
-| **3. LỢI NHUẬN TRƯỚC THUẾ (EBITDA / THÁNG)** | **+23.400.000** | **+214.950.000** | **+787.500.000** |
-| **TỶ SUẤT LỢI NHUẬN RÒNG (NET MARGIN)** | **30.4%** | **54.5%** | **61.8%** |
+| **TỔNG CHI PHÍ THÁNG** | **54.200.000** | **181.250.000** | **491.500.000** |
+| **3. LỢI NHUẬN TRƯỚC THUẾ (EBITDA / THÁNG)** | **+33.700.000** | **+270.150.000** | **+962.500.000** |
+| *(Tương đương EBITDA quy năm)* | *(+404.400.000)* | *(+3.241.800.000)* | *(+11.550.000.000)* |
+| **TỶ SUẤT LỢI NHUẬN RÒNG (NET MARGIN)** | **38.3%** | **59.8%** | **66.2%** |
 
 ---
 
-## 7. MA TRẬN QUẢN TRỊ RỦI RO DÒNG TIỀN & ĐIỂM HÒA VỐN
+## 7. MA TRẬN QUẢN TRỊ RỦI RO DÒNG TIỀN, ĐIỂM HÒA VỐN & PHÂN TÍCH ĐỘ NHẠY
 
-### 7.1. Xác định Điểm Hòa Vốn (Break-Even Analysis)
-* **Tổng định phí cố định hàng tháng (Fixed OpEx ban đầu):**  
-  $\text{Hạ tầng (3.45M)} + \text{Pháp lý/Admin (6M)} + \text{Lương tối thiểu (25M)} \approx \mathbf{34.450.000 \text{ VNĐ / tháng}}$.
+### 7.1. Xác Định Điểm Hòa Vốn (Break-Even Analysis)
+
+* **Tổng định phí cố định hàng tháng (Fixed OpEx ban đầu tại Pilot 50 căn):**  
+  $$\text{Định phí} = \text{Hạ tầng (4.1M)} + \text{Pháp lý/Admin (6M)} + \text{Lương tối thiểu (25M)} = \mathbf{35.100.000 \text{ VNĐ / tháng}}$$
 * **Biên đóng góp trên mỗi deal thành công (Contribution Margin per Deal):**  
-  $\text{Thu phí (6.8tr)} - \text{Host (600k)} - \text{AI/Ký số (40k)} - \text{CAC (1.15tr)} \approx \mathbf{5.010.000 \text{ VNĐ / deal}}$.
-* **Số lượng deal tối thiểu để hòa vốn (Break-even Volume):**
-  $$\text{Số deal hòa vốn} = \frac{34.450.000}{5.010.000} \approx \mathbf{6.8 \approx 7 \text{ deal / tháng}}$$
-  *(Tương đương chỉ cần khớp thành công 7 căn hộ mỗi tháng là nền tảng hoàn toàn tự trang trải được bộ máy).*
+  $$\text{Doanh thu trực tiếp} = 6.800.000 \text{ VNĐ (Phí sàn)} + 800.000 \text{ VNĐ (Phạt cọc phân bổ)} = 7.600.000 \text{ VNĐ}$$
+  $$\text{Biến phí trực tiếp} = \text{Host (600k)} + \text{AI/Ký số (40k)} + \text{CAC (1.15tr)} = 1.790.000 \text{ VNĐ}$$
+  $$\text{Biên đóng góp (Unit Contribution Margin)} = 7.600.000 - 1.790.000 = \mathbf{5.810.000 \text{ VNĐ / deal}}$$
+* **Số lượng deal tối thiểu hàng tháng để đạt điểm hòa vốn (Break-even Volume):**
+  $$\text{Số deal hòa vốn} = \frac{\text{Tổng định phí cố định}}{\text{Biên đóng góp}} = \frac{35.100.000}{5.810.000} \approx \mathbf{6.04 \approx 6 \text{ deal / tháng}}$$
+  *(Ý nghĩa kinh tế: Nền tảng chỉ cần chốt thành công tối thiểu **6 căn hộ mỗi tháng** là hoàn toàn tự trang trải được 100% chi phí vận hành và nhân sự cốt lõi).*
 
-### 7.2. Ma Trận Quản Trị Rủi Ro Dòng Tiền & Kế Hoạch Ứng Phó:
+---
 
-| Tình huống rủi ro | Mức độ ảnh hưởng | Kế hoạch dự phòng & Kiểm soát tài chính (Contingency) |
+### 7.2. Ma Trận Quản Trị Rủi Ro Dòng Tiền & Kế Hoạch Ứng Phó
+
+| Tình huống rủi ro | Mức độ ảnh hưởng | Kế hoạch dự phòng & Kiểm soát tài chính (Contingency Plan) |
 |---|:---:|---|
 | **Thị trường thấp điểm (Tháng 3 - 5), ít người thuê** | Trung bình | Kích hoạt công cụ `Dynamic Commission` trên Admin Portal: Tăng thù lao dẫn khách cho Host lên 70k, giảm tạm thời phí hoa hồng từ chủ nhà xuống 40% tháng đầu; nới thời gian giữ căn (Hold Hours) lên 72h để khách chuẩn bị tài chính. |
-| **Mùa cao điểm (Tháng 8 - 10), nhu cầu thuê dồn dập** | Tích cực | Rút ngắn thời gian giữ căn (Hold Hours) xuống 12–24h trên Admin Portal để tăng tốc độ thanh khoản, giải phóng giỏ hàng cho khách sẵn sàng ký ngay. |
-| **Chủ nhà cắt cầu, không trả phí hoa hồng** | Cao | Ràng buộc pháp lý từ **Hợp đồng Ký gửi Độc quyền 10 điều**; cọc 2 triệu giữ qua VietQR định danh; Hộ chiếu bàn giao số chỉ cấp cho hợp đồng có xác nhận từ nền tảng. |
-| **Chi phí API AI / Cloud tăng đột biến** | Thấp | Áp dụng chuẩn **Zero-Storage Ephemeral OCR** và cơ chế **One-Time OTP** trên SĐT khách; bộ đệm Redis cho 80% câu hỏi quen thuộc; giới hạn 5 lượt gọi API trên IP chưa xác thực. |
+| **Mùa cao điểm (Tháng 8 - 10), sinh viên VinUni nhập học** | Rất tích cực | Rút ngắn thời gian giữ căn (Hold Hours) xuống 12–24h trên Admin Portal để tăng tốc độ thanh khoản, ưu tiên căn chốt nhanh không cần xem phòng để giải phóng giỏ hàng trong 24 giờ. |
+| **Chủ nhà cắt cầu, không trả phí hoa hồng** | Cao | Ràng buộc pháp lý từ **Hợp đồng Ký gửi Độc quyền 10 điều**; cọc chuyển trực tiếp qua VietQR định danh vào tài khoản ký quỹ; Hộ chiếu bàn giao số và bảo lãnh Escrow chỉ kích hoạt khi thanh toán qua sàn. |
+| **Khách thuê bỏ cọc, gây giam căn trống** | Trung bình | Cơ chế Điều 328 BLDS: Căn hộ tự động mở lại sau 48h; tiền cọc bảo đảm chia **50% cho Chủ nhà** (bồi thường tiền mặt ngay) và **50% cho Sàn** (bù đắp chi phí vận hành và thù lao Host). |
+| **Chi phí API AI / Cloud tăng đột biến** | Thấp | Áp dụng chuẩn **Zero-Storage Ephemeral OCR** và cơ chế **One-Time OTP** trên SĐT khách; bộ đệm Redis cho 80% câu hỏi quen thuộc; siết trần 8 request/phút theo IP và giới hạn 15 câu chat cho khách vãng lai. |
 | **Tranh chấp hao mòn nội thất & nợ cước EVN** | Cao | Số hóa Nội quy BQL Vinhomes (`house-rules.ts`) và chốt công tơ điện nước có timestamp; hợp đồng thuê cho phép tự động cấn trừ thẳng vào Tiền Cọc Bảo Đảm Tài Sản trước khi thanh lý. |
-| **Chậm trễ giải ngân cọc gây khiếu nại** | Cao | Cơ chế **Phê duyệt thụ động sau 7 ngày (Passive Approval SLA)**: Nếu chủ nhà không khiếu nại có bằng chứng hợp lệ trong 7 ngày sau trả phòng, hệ thống tự động giải tỏa cọc trả khách. |
+| **Chậm trễ giải ngân cọc gây khiếu nại** | Cao | Cơ chế **Phê duyệt thụ động sau 7 ngày (Passive Approval SLA)**: Nếu chủ nhà không khiếu nại có bằng chứng hợp lệ trong 7 ngày sau trả phòng, hệ thống tự động giải tỏa cọc hoàn trả khách thuê. |
+
+---
+
+### 7.3. Phân Tích Độ Nhạy 3 Kịch Bản (Sensitivity Analysis)
+
+Bảng kiểm thử sức chịu đựng tài chính của VinStay AI tại quy mô Scale Up (300 căn hộ giỏ hàng) dưới 3 kịch bản thị trường khác nhau:
+
+| Biến số kiểm thử | Kịch bản Thận trọng<br>*(Conservative / Bearish)* | Kịch bản Cơ sở<br>*(Base Case - Mục tiêu)* | Kịch bản Lạc quan<br>*(Optimistic / Bullish)* |
+|---|:---:|:---:|:---:|
+| **Giả định thị trường** | Thị trường trầm lắng, cạnh tranh gay gắt | Điều kiện bình thường, vận hành đúng kế hoạch | Mùa cao điểm, sinh viên & chuyên gia tăng đột biến |
+| **Sản lượng deal chốt / tháng** | **35 deal** | **50 deal** | **70 deal** |
+| **Giá thuê bình quân / tháng** | 7.500.000 VNĐ | 8.000.000 VNĐ | 8.500.000 VNĐ |
+| **Tỷ lệ khách chọn Fast-Deposit Close** | 10% | 25% | 45% |
+| **Chi phí CAC / deal thành công** | 1.400.000 VNĐ (+21.7%) | 1.150.000 VNĐ (Chuẩn) | 900.000 VNĐ (-21.7%) |
+| **Tổng Doanh thu / tháng** | **308.500.000 VNĐ** | **451.400.000 VNĐ** | **648.200.000 VNĐ** |
+| **Tổng Chi phí (OpEx + CAC) / tháng** | **172.500.000 VNĐ** | **181.250.000 VNĐ** | **198.500.000 VNĐ** |
+| **Lợi nhuận trước thuế (EBITDA / tháng)** | **+136.000.000 VNĐ** | **+270.150.000 VNĐ** | **+449.700.000 VNĐ** |
+| **Tỷ suất lợi nhuận ròng (Net Margin)** | **44.1%** | **59.8%** | **69.4%** |
+| **Đánh giá sức khỏe tài chính** | **An toàn tuyệt đối** (vẫn thặng dư $> 136$ triệu/tháng) | **Đạt chỉ tiêu tài chính đề ra** | **Tăng trưởng vượt bậc, hoàn vốn thần tốc** |
 
 ---
 
 ## 8. KẾT LUẬN & CAM KẾT HIỆU QUẢ ĐẦU TƯ
-Mô hình tài chính của **VinStay AI** chứng minh tính bền vững vượt trội nhờ:
-1. **Dòng tiền dương ngay từ tháng đầu tiên** nhờ chi phí đầu tư ban đầu (CapEx) = 0.
-2. **Biên lợi nhuận gộp đạt trên 83%** nhờ mô hình tự động hóa bằng AI, quy trình ký số 3 bước tinh gọn và lực lượng Field Host biến phí.
-3. **Cơ cấu nguồn thu đa dạng** kết hợp giữa Phí giao dịch BĐS truyền thống với Doanh thu phần mềm SaaS định kỳ và Lợi tức dòng tiền ký quỹ an toàn.
 
+Mô hình tài chính phiên bản **v2.0** của **VinStay AI** chứng minh tính bền vững vượt trội và khả năng phòng thủ dòng tiền vững chắc nhờ:
+
+1. **Dòng tiền dương ngay từ tháng đầu tiên:** Nhờ chi phí đầu tư thiết bị phần cứng ban đầu (CapEx) = 0 VNĐ và điểm hòa vốn cực thấp (chỉ cần 6 deal/tháng).
+2. **Biên lợi nhuận gộp đạt trên 84% & Net Margin 59.8% – 66.2%:** Nhờ mô hình tự động hóa bằng AI, quy trình ký số 3 bước tinh gọn và mạng lưới Field Host vận hành biến phí.
+3. **Cơ cấu 4 nguồn thu vững chắc & tương hỗ:** Phí giao dịch BĐS truyền thống kết hợp Doanh thu SaaS định kỳ, Lợi tức dòng tiền ký quỹ an toàn và Doanh thu phân chia phạt cọc Điều 328 BLDS bảo hiểm cho cả Chủ nhà lẫn Nền tảng.
+4. **Giải quyết triệt để 4 nỗi đau của Chủ nhà:** Rút ngắn thời gian trống phòng từ 30 ngày xuống dưới 7 ngày; chủ nhà ngồi tại nhà 100%; bảo vệ tài sản bằng Hộ chiếu số; quản lý trọn gói rủi ro BQL và tiền điện nước.
