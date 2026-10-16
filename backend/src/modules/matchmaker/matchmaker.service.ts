@@ -81,7 +81,10 @@ export class MatchmakerService {
       const diffSaving = b.costComparison.savingPercentage - a.costComparison.savingPercentage;
       if (diffSaving !== 0) return diffSaving;
       // Nếu bằng nhau, ưu tiên giá All-in thấp hơn
-      return a.allInCost.allInTotal - b.allInCost.allInTotal;
+      const diffAllIn = a.allInCost.allInTotal - b.allInCost.allInTotal;
+      if (diffAllIn !== 0) return diffAllIn;
+      // Bằng nhau tuyệt đối ⇒ theo mã căn, để mọi lần gọi (top 3 trong chat, danh sách đủ ở tab kết quả) cùng một thứ tự.
+      return String(a.code).localeCompare(String(b.code));
     });
 
     const top3 = eligibleUnits.slice(0, limit).map((item: any, index: number) => {

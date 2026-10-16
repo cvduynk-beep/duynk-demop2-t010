@@ -85,6 +85,8 @@ model Profile {
   signatures        Signature[]
   auditActions      AuditLog[]
   favoriteUnits     FavoriteUnit[]
+  supportRequests   SupportRequest[]       @relation("RequesterSupport")
+  handledSupport    SupportRequest[]       @relation("HandlerSupport")
 
   @@map("profiles")
 }
@@ -784,3 +786,55 @@ model AuditLog {
   @@index([entityName, entityId])
   @@map("audit_logs")
 }
+
+// ====================================================================
+// VINNY (trợ lý AI) — chuyển người thật + phản hồi 👍/👎 (2026-10-15, migration 20261015_vinny_support_feedback)
+// KHÔNG lưu nội dung hội thoại; tóm tắt yêu cầu hỗ trợ đã che SĐT/email/CCCD/OTP.
+// ====================================================================
+
+enum SupportRequestStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+model SupportRequest {
+  id             String               @id @default(uuid()) @db.Uuid
+  profileId      String               @map("profile_id") @db.Uuid
+  conversationId String               @map("conversation_id") @db.VarChar(64)
+  /// complaint | deposit_dispute | payment | contract | damage | human_request
+  category       String               @db.VarChar(30)
+  /// Tóm tắt do backend dựng từ các câu khách gần nhất, đã che PII (≤ 1000 ký tự).
+  summary        String               @db.VarChar(1000)
+  status         SupportRequestStatus @default(OPEN)
+  handledBy      String?              @map("handled_by") @db.Uuid
+  note           String?              @db.VarChar(500)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  resolvedAt     DateTime?            @map("resolved_at") @db.Timestamptz
+
+  requester Profile  @relation("RequesterSupport", fields: [profileId], references: [id])
+  handler   Profile? @relation("HandlerSupport", fields: [handledBy], references: [id])
+
+  @@index([status, createdAt])
+  @@index([profileId, conversationId])
+  @@map("support_requests")
+}
+
+model ChatFeedback {
+  id             String   @id @default(uuid()) @db.Uuid
+  /// Id lượt trả lời (`messageId` của POST /chat) — một phản hồi / lượt, gửi lại thì cập nhật.
+  messageId      String   @unique @map("message_id") @db.Uuid
+  conversationId String   @map("conversation_id") @db.VarChar(64)
+  /// up | down
+  rating         String   @db.VarChar(4)
+  reason         String?  @db.VarChar(200)
+  promptVersion  String   @map("prompt_version") @db.VarChar(10)
+  kind           String?  @db.VarChar(20)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([promptVersion, rating])
+  @@map("chat_feedback")
+}
+
