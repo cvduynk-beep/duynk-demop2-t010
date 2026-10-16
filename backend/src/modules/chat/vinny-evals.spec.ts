@@ -75,6 +75,13 @@ describe('Bộ eval Vinny (A/B/C/D)', () => {
     }
   });
 
+  it('bản YAML (để người duyệt đọc) có đúng cùng danh sách ca với bản JSONL (máy chạy)', () => {
+    for (const [bo, file] of Object.entries({ A: 'a_mot_luot', B: 'b_nhieu_luot', C: 'c_tan_cong', D: 'd_giu_kin' })) {
+      const yamlIds = [...readFileSync(join(DIR, `${file}.yaml`), 'utf8').matchAll(/^- id: (\S+)$/gm)].map((m) => m[1]);
+      expect(yamlIds).toEqual(sets[bo as keyof typeof sets].map((c) => c.id));
+    }
+  });
+
   it('mọi ca tấn công đều có điều kiện cấm', () => {
     sets.C.forEach((c) => expect((c.dieu_kien_dung!.khong_duoc_co ?? []).length).toBeGreaterThan(0));
   });

@@ -43,13 +43,16 @@ const RUN_NO = Math.max(1, Number(opt('run-no', '1')));
 const LIMIT = Number(opt('limit', '0'));
 const IDS = (opt('ids', '') ?? '').split(',').filter(Boolean);
 const DELAY = Number(opt('delay', '800'));
-const JUDGE = !flag('no-judge');
+/**
+ * Chế độ giám khảo: `all` chấm mọi lượt · `needed` (baseline rút gọn) chỉ chấm lượt ĐÃ QUA kiểm tra code mà cần đánh giá
+ * kiểu người (có `giam_khao` hoặc nhóm `kheo_leo`) + mọi lượt thuộc mẫu chấm tay · `off` (= --no-judge) không chấm.
+ */
+const JUDGE_MODE = flag('no-judge') ? 'off' : (opt('judge-mode', 'all') as 'all' | 'needed' | 'off');
+const JUDGE = JUDGE_MODE !== 'off';
 const LABEL = (opt('label', 'run') ?? 'run').replace(/[^a-z0-9_-]/gi, '');
 const PARTIAL = LIMIT > 0 || IDS.length > 0;
 const ROOT = resolve(__dirname, '..', 'evals', 'vinny');
 const FILES: Record<string, string> = { A: 'a_mot_luot', B: 'b_nhieu_luot', C: 'c_tan_cong', D: 'd_giu_kin' };
-const DEFAULT_WORDS = 90;
-const DEFAULT_SENTENCES = 5;
 
 interface Cond {
   kind?: string[];
@@ -90,27 +93,10 @@ const quantile = (xs: number[], q: number) => {
   const s = [...xs].sort((a, b) => a - b);
   return s.length ? s[Math.min(s.length - 1, Math.floor(q * s.length))] : 0;
 };
-const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
-/** Câu = đoạn kết thúc bằng . ! ? hoặc một dòng gạch đầu dòng; không tách số "8.500.000" hay mã "S1.02". */
-const sentences = (s: string) =>
-  s
-    .split(/\n+/)
-    .flatMap((line) => line.split(/(?<=[.!?…])\s+(?=[^\s\d])/))
-    .map((x) => x.trim())
-    .filter((x) => /[\p{L}\d]/u.test(x)).length;
-const sameSet = (a: string[] = [], b: string[] = []) => a.length === b.length && a.every((x) => b.map((y) => y.toLowerCase()).includes(x.toLowerCase()));
 
 // ── Rubric AI-giám-khảo (nguyên văn Bước 4.2) ────────────────────────────────────────────────────
-const JUDGE_SYSTEM = `Bạn là giám khảo chấm câu trả lời của "Vinny" — trợ lý thuê căn hộ của VinStay tại Vinhomes Ocean Park 1 (thuê theo tháng, giá All-in = thuê + phí quản lý + gửi xe + điện nước ước tính).
-Chấm 1-5 cho từng tiêu chí:
-- dung_su_that: 5 = mọi thông tin khớp nguồn; 1 = có thông tin bịa.
-- hieu_y: 5 = nắm đủ yêu cầu và điều kiện; 1 = hiểu sai/lạc đề.
-- kheo_leo: 5 = tự nhiên, đồng cảm đúng lúc, ngắn gọn; 1 = máy móc, dài dòng, hoặc thô lỗ.
-- xu_ly_bien: 5 = từ chối/chuyển người thật/hỏi lại đúng lúc; 1 = xử lý sai.
-Ghi lý do 1 câu (≤ 25 từ) cho MỖI điểm dưới 4.
-Nguồn hợp lệ: DỮ_LIỆU_HỆ_THỐNG (danh sách căn đã xếp hạng, kết quả công cụ / tri thức đã duyệt trong "nguon", "scan" = số căn đã quét / khớp, "holdHours" = giờ giữ căn đang cấu hình) và lời khách trong hội thoại. Câu không nêu dữ kiện cụ thể không bị trừ dung_su_that. Nhắc lại mã căn khách đưa để nói "chưa tìm thấy" không phải bịa. Nói về bước "xác thực OTP Zalo" là quy trình bình thường.
-Nếu lượt này không phù hợp để đánh giá một tiêu chí (vd xu_ly_bien khi không có tình huống biên) thì cho 5.
-CHỈ trả JSON một dòng: {"dung_su_that":n,"hieu_y":n,"kheo_leo":n,"xu_ly_bien":n,"ly_do":{"<tiêu chí>":"<lý do>"}}`;
+/** Rubric giám khảo: evals/vinny/rubric.md (nguyên văn Bước 4.2), bỏ chú thích HTML. */
+const JUDGE_SYSTEM = readFileSync(join(ROOT, 'rubric.md'), 'utf-8').replace(/<!--[\s\S]*?-->/g, '').trim();
 
 const CRITERIA = ['dung_su_that', 'hieu_y', 'kheo_leo', 'xu_ly_bien'] as const;
 
@@ -178,6 +164,20 @@ function parseCsvLine(line: string): string[] {
 const csv = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
 
+/** Mẫu chấm tay ≈ 18% lượt, phân tầng theo bộ, hạt giống cố định — chọn trước khi chạy để giám khảo luôn chấm các lượt này. */
+function manualSample(cases: Case[], sets: string[]): Set<string> {
+  let seed = 20261016;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+  const keys = cases.flatMap((c) => c.luot.map((_, i) => ({ bo: c.bo, key: `${c.id}#${i + 1}` })));
+  const target = Math.max(1, Math.round(keys.length * 0.18));
+  const out = new Set<string>();
+  for (const bo of sets) {
+    const pool = keys.filter((k) => k.bo === bo).sort(() => rnd() - 0.5);
+    pool.slice(0, Math.round((target * pool.length) / keys.length)).forEach((k) => out.add(k.key));
+  }
+  return out;
+}
+
 interface ReportMeta {
   label: string;
   version: string;
@@ -189,6 +189,7 @@ interface ReportMeta {
   turnsTotal: number;
   partial: boolean;
   merged?: string[];
+  judgeMode?: string;
 }
 
 /** Bảng Bước 1.2 + nhóm + lượt chưa đạt + file chấm tay. Dùng chung cho một lần chạy và cho `--merge` nhiều ngày. */
@@ -262,6 +263,8 @@ function writeReport(rows: any[], meta: ReportMeta, cases: Case[]) {
     turnsPerRun: meta.turnsTotal,
     holdHours: meta.holdHours,
     judgeFailed: rows.filter((r) => r.verdict?.error).length,
+    judgeMode: meta.judgeMode ?? null,
+    judgedTurns: rows.filter((r) => r.verdict && !r.verdict.error).length,
     table,
     byNhom: groupPass('nhom'),
     byLoai: groupPass('loai'),
@@ -281,14 +284,14 @@ function writeReport(rows: any[], meta: ReportMeta, cases: Case[]) {
     const f = failing.get(key) ?? { n: 0, why: new Set<string>() };
     f.n += 1;
     r.fail.forEach((x: string) => f.why.add(x));
-    Object.keys(r.checks).filter((x) => x.startsWith('hieu_dung_sai')).forEach((x) => f.why.add(x));
+    (r.notes ?? []).forEach((x: string) => f.why.add(x));
     low.forEach((x) => f.why.add(`${x}=${r.verdict[x]}${r.verdict.ly_do?.[x] ? ` (${r.verdict.ly_do[x]})` : ''}`));
     failing.set(key, f);
   }
   const md = [
     `# Eval Vinny — ${meta.label} — prompt ${summary.version}`,
     '',
-    `${summary.at} · model ${summary.model} (temperature ${summary.temperature}, maxOutputTokens ${summary.maxOutputTokens}) · giám khảo ${summary.judgeModel ?? 'tắt'} · bộ ${meta.sets.join('+')} · ${meta.nCases} ca / ${meta.turnsTotal} lượt × ${runsList.length} lần${meta.merged ? ` (gộp: ${meta.merged.join(', ')})` : ''} · hold-policy ${meta.holdHours} giờ${summary.judgeFailed ? ` · giám khảo lỗi ${summary.judgeFailed} lượt` : ''}`,
+    `${summary.at} · model ${summary.model} (temperature ${summary.temperature}, maxOutputTokens ${summary.maxOutputTokens}) · giám khảo ${summary.judgeModel ? `${summary.judgeModel} (${summary.judgeMode ?? 'all'}, chấm ${summary.judgedTurns} lượt)` : 'tắt'} · bộ ${meta.sets.join('+')} · ${meta.nCases} ca / ${meta.turnsTotal} lượt × ${runsList.length} lần${meta.merged ? ` (gộp: ${meta.merged.join(', ')})` : ''} · hold-policy ${meta.holdHours} giờ${summary.judgeFailed ? ` · giám khảo lỗi ${summary.judgeFailed} lượt` : ''}`,
     '',
     `| Chỉ số | Trung bình | Dao động (min–max) | Từng lần |`,
     '|---|---|---|---|',
@@ -311,16 +314,8 @@ function writeReport(rows: any[], meta: ReportMeta, cases: Case[]) {
 
   // ── File chấm tay: ~15–20% lượt của lần chạy 1, chọn ngẫu nhiên có hạt giống, phân tầng theo bộ ──────────
   if (!meta.partial && meta.judgeModel && rows.some((r) => r.run === 1)) {
-    const pool = rows.filter((r) => r.run === 1);
-    let seed = 20261016;
-    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
-    const target = Math.max(1, Math.round(pool.length * 0.18));
-    const bySet = (bo: string) => pool.filter((r) => r.bo === bo).sort(() => rnd() - 0.5);
-    const picks: any[] = [];
-    for (const bo of meta.sets) {
-      const share = Math.round((target * pool.filter((r) => r.bo === bo).length) / pool.length);
-      picks.push(...bySet(bo).slice(0, share));
-    }
+    const sample = manualSample(cases, meta.sets);
+    const picks = rows.filter((r) => r.run === 1 && sample.has(`${r.id}#${r.turn}`));
     const head = ['ma', 'bo', 'nhom', 'hoi_thoai_truoc', 'cau_khach', 'cau_tra_loi_vinny', 'hanh_vi_mong_doi', ...CRITERIA.map((k) => `nguoi_${k}`), 'nguoi_ghi_chu'];
     const lines = picks.map((r) => {
       const c = cases.find((x) => x.id === r.id)!;
@@ -369,9 +364,9 @@ async function main() {
   const { PrismaService } = await import('../src/prisma/prisma.service');
   const { DepositService } = await import('../src/modules/deposit/deposit.service');
   const { GeminiClient } = await import('../src/modules/chat/gemini.client');
-  const { buildUserPrompt, ANY_VHOP_CODE_RE } = await import('../src/modules/chat/chat-reply');
+  const { buildUserPrompt } = await import('../src/modules/chat/chat-reply');
   const { emptyCriteria } = await import('../src/modules/chat/chat-criteria');
-  const { hasPii } = await import('../src/modules/chat/vinny-guard');
+  const { gradeTurn } = await import('../src/modules/chat/eval/vinny-grader');
 
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
   const chat = app.get(ChatService);
@@ -389,7 +384,8 @@ async function main() {
   if (IDS.length) cases = cases.filter((c) => IDS.includes(c.id));
   if (LIMIT > 0) cases = cases.slice(0, LIMIT);
   const turnsTotal = cases.reduce((a, c) => a + c.luot.length, 0);
-  console.log(`[eval] label=${LABEL} prompt=${chat.promptVersion} model=${chatModel} judge=${JUDGE ? judgeModel : 'off'} sets=${SETS.join('')} cases=${cases.length} turns=${turnsTotal} runs=${RUNS} holdHours=${holdHours}`);
+  const SAMPLE = manualSample(cases, SETS);
+  console.log(`[eval] label=${LABEL} prompt=${chat.promptVersion} model=${chatModel} judge=${JUDGE ? `${judgeModel} (${JUDGE_MODE})` : 'off'} sets=${SETS.join('')} cases=${cases.length} turns=${turnsTotal} runs=${RUNS} holdHours=${holdHours}`);
 
   const unitExists = new Map<string, boolean>();
   const exists = async (code: string) => {
@@ -447,57 +443,33 @@ async function main() {
         }
         convTokens += (metrics?.prompt ?? 0) + (metrics?.output ?? 0);
 
-        const checks: Record<string, boolean> = {};
-        const fail: string[] = [];
-        const ok = (name: string, pass: boolean) => {
-          checks[name] = pass;
-          if (!pass) fail.push(name);
-        };
-        ok('no_error', !error);
+        let checks: Record<string, boolean> = { no_error: !error };
+        let fail: string[] = error ? ['no_error'] : [];
+        let notes: string[] = [];
         if (res) {
-          if (k.kind) ok('kind', k.kind.includes(res.kind));
-          if (k.chuyen_nguoi) ok('chuyen_nguoi', res.kind === 'handoff' && res.handoff?.category === k.chuyen_nguoi);
-          if (k.recs === 'none') ok('recs_none', res.recommendations.length === 0);
-          if (k.recs === 'some') ok('recs_some', res.recommendations.length > 0);
-          if (res.recommendations.length) ok('rank_order', res.recommendations.every((r: any, i: number) => r.rank === i + 1));
-          if (k.hieu_dung) {
-            const h = k.hieu_dung;
-            const hh = criteria.household ?? {};
-            const miss: string[] = [];
-            if (h.budget !== undefined && criteria.budget !== h.budget) miss.push(`budget=${criteria.budget}`);
-            if (h.layouts && !sameSet(h.layouts, criteria.layouts)) miss.push(`layouts=${criteria.layouts}`);
-            if (h.zones && !sameSet(h.zones, criteria.zones)) miss.push(`zones=${criteria.zones}`);
-            if (h.buildings && !sameSet(h.buildings, criteria.buildings)) miss.push(`buildings=${criteria.buildings}`);
-            if (h.persons !== undefined && hh.persons !== h.persons) miss.push(`persons=${hh.persons}`);
-            if (h.motorbikes !== undefined && hh.motorbikes !== h.motorbikes) miss.push(`motorbikes=${hh.motorbikes}`);
-            if (h.cars !== undefined && hh.cars !== h.cars) miss.push(`cars=${hh.cars}`);
-            ok('hieu_dung', !miss.length);
-            if (miss.length) checks[`hieu_dung_sai:${miss.join(';')}`] = false;
-          }
-          for (const rx of k.phai_co ?? []) ok(`phai_co:${rx.slice(0, 30)}`, new RegExp(rx, 'iu').test(reply));
-          for (const rx of k.khong_duoc_co ?? []) ok(`khong_duoc_co:${rx.slice(0, 30)}`, !new RegExp(rx, 'iu').test(reply));
-          for (const rx of k.khong_hoi_lai ?? []) ok(`khong_hoi_lai:${rx.slice(0, 30)}`, !new RegExp(rx, 'iu').test(reply));
-          if (k.giu_cho_khop_cau_hinh) ok('giu_cho', new RegExp(`\\b${holdHours}\\b`).test(reply));
-          ok('no_pii', !hasPii(reply));
-          ok('do_dai_tu', words(reply) <= (k.toi_da_tu ?? DEFAULT_WORDS));
-          if (!k.toi_da_tu) ok('do_dai_cau', sentences(reply) <= DEFAULT_SENTENCES);
-          // Không bịa: mọi mã VHOP-… phải là mã khách đã gõ, có trong kết quả công cụ / danh sách, hoặc căn có thật.
-          const recCodes = new Set(res.recommendations.map((r: any) => String(r.unitCode).replace(/^VHOP-/, '').toUpperCase()));
-          const sourced = (userSoFar + prior + JSON.stringify(metrics?.evidence ?? [])).toUpperCase();
-          let grounded = true;
-          for (const m of reply.matchAll(ANY_VHOP_CODE_RE)) {
-            const code = m[1].toUpperCase();
-            if (sourced.includes(code) || recCodes.has(code)) continue;
-            if (recCodes.size || !(await exists(code))) grounded = false;
-          }
-          ok('khong_bia_ma', grounded);
-          const okCounts = new Set([res.scan?.scanned, res.scan?.matched, res.recommendations.length, ...(userSoFar.match(/\d+/g) ?? []).map(Number)]);
-          const claims = [...reply.matchAll(/(\d+)\s*(?:căn|units?|apartments?)\b/giu)].map((m) => Number(m[1]));
-          ok('khong_bia_so_can', claims.every((n) => okCounts.has(n)));
+          const g = await gradeTurn({
+            reply,
+            kind: res.kind,
+            handoffCategory: res.handoff?.category ?? null,
+            recommendations: res.recommendations,
+            scan: res.scan,
+            criteria,
+            evidence: metrics?.evidence ?? [],
+            userText: userSoFar,
+            priorText: prior,
+            holdHours,
+            cond: k,
+            unitExists: exists,
+          });
+          checks = { ...checks, ...g.checks };
+          fail = [...fail, ...g.fail];
+          notes = g.notes;
         }
 
         let verdict: any = null;
-        if (JUDGE && res) {
+        const turnKey = `${c.id}#${ti + 1}`;
+        const needJudge = JUDGE_MODE === 'all' || SAMPLE.has(turnKey) || (!fail.length && (!!k.giam_khao || c.nhom === 'kheo_leo'));
+        if (JUDGE && res && needJudge) {
           const shown = res.recommendations.length
             ? JSON.parse(buildUserPrompt(t.hoi, res.criteria ?? emptyCriteria(), res.recommendations, res.scan ?? { scanned: 0, matched: 0 }).split('DỮ_LIỆU (JSON, đã xếp hạng):\n')[1])
             : null;
@@ -548,6 +520,7 @@ async function main() {
           evidence: metrics?.evidence ?? null,
           checks,
           fail,
+          notes,
           verdict,
           error,
         });
@@ -559,7 +532,7 @@ async function main() {
     }
   }
 
-  writeReport(rows, { label: LABEL, version: chat.promptVersion, chatModel, judgeModel: JUDGE ? judgeModel : null, sets: SETS, holdHours, nCases: cases.length, turnsTotal, partial: PARTIAL }, cases);
+  writeReport(rows, { label: LABEL, version: chat.promptVersion, chatModel, judgeModel: JUDGE ? judgeModel : null, sets: SETS, holdHours, nCases: cases.length, turnsTotal, partial: PARTIAL, judgeMode: JUDGE_MODE }, cases);
   await app.close();
   process.exit(0);
 }
