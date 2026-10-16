@@ -83,7 +83,7 @@ async function bootstrap() {
 
   // 4000 (không phải 3000) để không đụng cổng dev của Next.js ở apps/web.
   const port = process.env.PORT || 4000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   logger.log(`========================================================`);
   logger.log(`🚀 VinStay AI Backend is running on: http://localhost:${port}/${apiPrefix}`);

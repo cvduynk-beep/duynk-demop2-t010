@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: vinstay-backend
+    runtime: node
+    plan: free
+    region: singapore # Chọn khu vực gần Việt Nam nhất (Singapore)
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /api/v1/properties/buildings
+    envVars:
+      - key: NODE_ENV
+        value: staging # staging cho phép DEMO_TOOLS & mock OTP cho ngày Demo Day; đổi thành production khi lên thực tế
+      - key: PORT
+        value: 10000
+      - key: API_PREFIX
+        value: api/v1
+      - key: TRUST_PROXY
+        value: "1"
+      - key: OTP_PROVIDER
+        value: mock
+      - key: DEMO_TOOLS
+        value: "true"
+      - key: AES_SECRET_KEY
+        value: vinstay_aes_256_secret_key_vhop_32bytes!
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: WEB_APP_URL
+        sync: false # Nhập URL Vercel của bạn, ví dụ: https://your-project.vercel.app
+      - key: CORS_ORIGINS
+        sync: false # Trùng với WEB_APP_URL
