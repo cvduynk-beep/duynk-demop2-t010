@@ -1,6 +1,7 @@
 ---
 topic: privacy
 title: Dữ liệu cá nhân được bảo vệ thế nào?
+summary: VinStay AI xử lý dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP: số điện thoại lưu mã hoá AES-256, mã cửa chỉ hiện cho Field Host phụ trách ca xem, và không bán hay chia sẻ số điện thoại, ảnh CCCD cho bên thứ ba khi chưa có đồng ý rõ ràng.
 sources: [legal/03_PRIVACY_POLICY_AND_DATA_CONSENT.md, legal/tenant/03_DATA_PRIVACY_AND_OCR_CONSENT.md, backend/src/modules/auth/phone/phone.service.ts, backend/src/modules/door/door-code.util.ts, backend/src/modules/host-viewings/host-viewings.mappers.ts#maskHostPhone]
 verified_at: 2026-10-07
 verified_sha: e17afa7

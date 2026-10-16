@@ -1,6 +1,7 @@
 ---
 topic: maintenance
 title: Hỏng hóc trong căn thì xử lý thế nào?
+summary: VinStay AI không nhận sửa chữa. Khi có sự cố như điều hoà rỉ nước hay vòi rò, Field Host giới thiệu danh bạ thợ kỹ thuật ngoài uy tín tại Ocean Park; khách và thợ tự thỏa thuận giá, trả tiền trực tiếp cho thợ. Sự cố khẩn cấp (nước tràn, khói, chập điện): báo ngay BQL, an ninh tòa nhà.
 sources: [legal/05_HANDYMAN_REFERRAL_DISCLAIMER.md, legal/06_OFFICIAL_APARTMENT_LEASE_AGREEMENT.md#Điều 10, AGENTS.md#Chủ nhà 4]
 verified_at: 2026-10-07
 verified_sha: e17afa7
