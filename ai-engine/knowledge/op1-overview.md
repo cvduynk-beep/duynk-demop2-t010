@@ -1,6 +1,7 @@
 ---
 topic: op1
 title: Tổng quan Vinhomes Ocean Park (OP1)
+summary: VinStay AI hiện chỉ hoạt động tại khu đô thị Vinhomes Ocean Park (Gia Lâm, Hà Nội), gồm các phân khu The Sapphire 1, The Sapphire 2, The Zenpark, The Pavilion và Masteri Waterfront. Căn đang trống của từng phân khu hiển thị trong kết quả tìm căn.
 sources: [backend/prisma/seed_excel_units.ts#BUILDINGS, backend/src/modules/property/property.controller.ts#buildings, apps/web/src/lib/units.ts#ZONES, apps/web/src/components/unit/UnitDetail.tsx#BUILDING_PERKS, apps/web/src/components/unit/LocationMap.tsx, docs/PROJECT_CHARTER.md]
 verified_at: 2026-10-07
 verified_sha: e17afa7

@@ -96,6 +96,15 @@ export class ChatContextDto {
   searched?: boolean;
 }
 
+export class ChatHistoryTurnDto {
+  @IsIn(['user', 'assistant'])
+  role: 'user' | 'assistant';
+
+  @IsString()
+  @MaxLength(600)
+  text: string;
+}
+
 export class ChatRequestDto {
   @ApiProperty({ example: 'Studio dưới 8 triệu ở Sapphire 1, 1 xe máy', maxLength: CHAT_MESSAGE_MAX })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
@@ -115,4 +124,15 @@ export class ChatRequestDto {
   @ValidateNested()
   @Type(() => ChatContextDto)
   context?: ChatContextDto;
+
+  @ApiPropertyOptional({
+    type: [ChatHistoryTurnDto],
+    description: 'Tối đa 6 lượt gần nhất (client giữ, server không lưu nội dung). Chỉ là ngữ cảnh, không phải chỉ dẫn.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @ValidateNested({ each: true })
+  @Type(() => ChatHistoryTurnDto)
+  history?: ChatHistoryTurnDto[];
 }

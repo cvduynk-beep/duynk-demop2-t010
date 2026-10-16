@@ -9,7 +9,7 @@ NAME = "lookup_policy"
 KNOWLEDGE_DIR = Path(__file__).resolve().parents[2] / "knowledge"
 TOPICS = [
     "op1", "all_in", "viewing", "holding_deposit", "holding_expiry", "first_to_pay",
-    "security_deposit", "contract", "bql_rules", "maintenance", "move_out", "privacy",
+    "security_deposit", "contract", "bql_rules", "maintenance", "move_out", "privacy", "fast_deposit",
 ]  # fmt: skip
 SCHEMA = {
     "type": "function",

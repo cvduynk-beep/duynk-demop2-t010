@@ -28,6 +28,7 @@ export class ChatController {
   @ApiResponse({ status: 429, description: 'rate_limited — quá 8 lượt/phút' })
   async send(@Body() dto: ChatRequestDto, @Req() req: Request): Promise<ChatResponseData> {
     await this.chat.assertQuota(req);
-    return this.chat.chat(dto);
+    // Danh tính khách (công cụ my_bookings / my_contracts) lấy từ cookie phiên, không bao giờ từ body.
+    return this.chat.chat(dto, await this.chat.tenantUserId(req));
   }
 }

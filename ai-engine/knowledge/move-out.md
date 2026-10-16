@@ -1,6 +1,7 @@
 ---
 topic: move_out
 title: Nhận nhà, trả phòng và hoàn cọc
+summary: Khi trả nhà, Field Host đối soát Hộ chiếu bàn giao số (10 hạng mục có ảnh từ lúc nhận nhà) và chỉ số công tơ điện nước. Tiền cọc chỉ bị trừ nợ điện nước, phí dịch vụ, phạt BQL do lỗi của khách và hư hỏng do bất cẩn; hao mòn tự nhiên không bị trừ.
 sources: [backend/src/modules/handover/handover.service.ts, backend/prisma/schema.prisma#DigitalHandover, legal/06_OFFICIAL_APARTMENT_LEASE_AGREEMENT.md#Điều 4, legal/02_HOLDING_AND_SECURITY_DEPOSIT_AGREEMENT.md#Điều 8, legal/04_BQL_REGULATIONS_AND_LIABILITY.md#4]
 verified_at: 2026-10-07
 verified_sha: e17afa7
