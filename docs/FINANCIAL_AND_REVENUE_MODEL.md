@@ -25,9 +25,9 @@
    - [3.3. Chi Phí Điều Phối Thực Địa & Thù Lao Field Host (Mô Hình Hoa Hồng Lai 3 Tầng)](#33-chi-phí-điều-phối-thực-địa--thù-lao-field-host-mô-hình-hoa-hồng-lai-3-tầng)
    - [3.4. Mô Hình Phễu Chuyển Đổi Hai Đầu & Chi Phí Tiếp Thị (Two-Sided CAC & Funnel)](#34-mô-hình-phễu-chuyển-đổi-hai-đầu--chi-phí-tiếp-thị-two-sided-conversion-funnel--unit-cac)
    - [3.5. Chi Phí Pháp Lý, Vận Hành Doanh Nghiệp & Hợp Đồng Số (Admin & Compliance)](#35-chi-phí-pháp-lý-vận-hành-doanh-nghiệp--hợp-đồng-số-admin--compliance)
-4. [CHI TIẾT 4 NHÓM NGUỒN THU CỐT LÕI (REVENUE STREAMS)](#4-chi-tiết-4-nhóm-nguồn-thu-cốt-lõi-revenue-streams)
+4. [CHI TIẾT 3 NHÓM NGUỒN THU CỐT LÕI & CHIẾN LƯỢC MIỄN PHÍ SAAS GIAI ĐOẠN ĐẦU (REVENUE STREAMS)](#4-chi-tiết-3-nhóm-nguồn-thu-cốt-lõi--chiến-lược-miễn-phí-saas-giai-đoạn-đầu-revenue-streams)
    - [4.1. Phí Giao Dịch Thành Công Theo Kỳ Hạn (Transaction Fee - Nguồn thu chủ lực)](#41-phí-giao-dịch-thành-công-theo-kỳ-hạn-transaction-fee---nguồn-thu-chủ-lực)
-   - [4.2. Phí Đăng Ký Quản Lý Vận Hành Số Hóa (SaaS Subscription Fee)](#42-phí-đăng-ký-quản-lý-vận-hành-số-hóa-saas-subscription-fee)
+   - [4.2. Chiến Lược Miễn Phí SaaS Giai Đoạn Đầu (Freemium Growth Wedge) & Lộ Trình Mở Rộng](#42-chiến-lược-miễn-phí-saas-giai-đoạn-đầu-freemium-growth-wedge--lộ-trình-mở-rộng)
    - [4.3. Lãi Suất Tạm Giữ Ký Quỹ & Dòng Tiền Đệm (Escrow Float Income)](#43-lãi-suất-tạm-giữ-ký-quỹ--dòng-tiền-đệm-escrow-float-income)
    - [4.4. Doanh Thu Phân Chia Xử Lý Vi Phạm Cọc Theo Điều 328 BLDS (Deposit Forfeiture Revenue)](#44-doanh-thu-phân-chia-xử-lý-vi-phạm-cọc-theo-điều-328-blds-deposit-forfeiture-revenue)
 5. [PHÂN TÍCH KINH TẾ ĐƠN VỊ & BẢNG SO SÁNH ROI CHỦ NHÀ](#5-phân-tích-kinh-tế-đơn-vị-unit-economics-trên-mỗi-căn-hộ)
@@ -63,11 +63,11 @@ VinStay AI theo đuổi triết lý **Siêu Tinh Gọn (Ultra Asset-Light)**. M�
 
 ```mermaid
 flowchart LR
-    subgraph Revenues ["4 DÒNG THU (REVENUES)"]
-        R1["1. Phí Giao Dịch Thành Công<br>(50% - 100% tháng đầu)"]
-        R2["2. Phí SaaS Quản Lý Số<br>(149k/chủ nhà + 59k/khách)"]
-        R3["3. Escrow Float Income<br>(Lợi suất tiền gửi ký quỹ 2.5% - 4.0%)"]
-        R4["4. Chia Sẻ Phạt Cọc Đ.328 BLDS<br>(50% cọc khi khách hủy)"]
+    subgraph Revenues ["3 DÒNG THU CỐT LÕI (REVENUES)"]
+        R1["1. Phí Giao Dịch Thành Công<br>(50% - 100% tháng đầu | 85% - 88%)"]
+        R2["2. Escrow Float Income<br>(Lợi suất tiền gửi ký quỹ 2.5% - 4.0% | ~2.5%)"]
+        R3["3. Chia Sẻ Phạt Cọc Đ.328 BLDS<br>(50% cọc khi khách hủy | 10% - 12%)"]
+        R4["Miễn phí 100% Quản lý số & AI<br>(Free Tier Wedge thâm nhập thị trường)"]
     end
 
     subgraph Core ["VINSTAY AI PLATFORM"]
@@ -113,7 +113,7 @@ Mô hình định lượng quy mô thị trường của **VinStay AI** được
      - Dữ liệu giao dịch thực tế từ 2 phân khu bàn giao sớm nhất: The Sapphire 1 (11 tòa) và The Sapphire 2 (16 tòa).
    * **Công thức xác lập SAM & SOM:**
      $$\text{GMV}_{\text{SAM}} = N_{\text{OCP1\_rental\_units}} \times P_{\text{OCP1\_avg}} \times 12$$
-     $$\text{Revenue}_{\text{SOM}} = (N_{\text{deals}} \times \text{Transaction Fee}) + (N_{\text{units}} \times \text{SaaS Fee}) + \text{Escrow Float} + \text{Deposit Forfeiture Revenue}$$
+     $$\text{Revenue}_{\text{SOM}} = (N_{\text{deals}} \times \text{Transaction Fee}) + \text{Escrow Float} + \text{Deposit Forfeiture Revenue}$$
 
 ```mermaid
 flowchart TD
@@ -197,7 +197,7 @@ flowchart TD
 
 #### D. Định lượng giá trị tiền tệ SAM (tại riêng Ocean Park 1):
 $$\text{Tổng dòng tiền thuê luân chuyển (GMV SAM)} = 15.000 \text{ căn} \times 8.000.000 \text{ đ} \times 12 \text{ tháng} = \mathbf{1.440 \text{ tỷ VNĐ / năm}} \; (\approx 58 \text{ triệu USD / năm})$$
-$$\text{Quy mô doanh thu thị trường dịch vụ (Take Rate 10\% GMV gồm hoa hồng + SaaS)} = \mathbf{144 \text{ tỷ VNĐ / năm}} \; (\approx 5.8 \text{ triệu USD / năm})$$
+$$\text{Quy mô doanh thu thị trường dịch vụ (Take Rate 8.5\% GMV gồm phí giao dịch + Escrow Float + Phạt cọc)} = \mathbf{122.4 \text{ tỷ VNĐ / năm}} \; (\approx 4.9 \text{ triệu USD / năm})$$
 
 ---
 
@@ -448,7 +448,7 @@ Chi phí bảo đảm tính pháp lý chuẩn mực theo Nghị định 13/2023/
 
 ---
 
-## 4. CHI TIẾT 4 NHÓM NGUỒN THU CỐT LÕI (REVENUE STREAMS)
+## 4. CHI TIẾT 3 NHÓM NGUỒN THU CỐT LÕI & CHIẾN LƯỢC MIỄN PHÍ SAAS GIAI ĐOẠN ĐẦU (REVENUE STREAMS)
 
 ### 4.1. Phí Giao Dịch Thành Công Theo Kỳ Hạn (Transaction Fee - Nguồn thu chủ lực)
 Áp dụng theo Biểu phí niêm yết trong **Hợp đồng Ký gửi Quản lý Độc quyền (Exclusive Rental Mandate - 10 điều)** ký với Chủ nhà:
@@ -470,22 +470,16 @@ Chi phí bảo đảm tính pháp lý chuẩn mực theo Nghị định 13/2023/
 
 ---
 
-### 4.2. Phí Đăng Ký Quản Lý Vận Hành Số Hóa (SaaS Subscription Fee)
-Mô hình thu phí định kỳ hàng tháng cho các tiện ích công nghệ mở rộng dành cho Chủ nhà và Khách thuê:
+### 4.2. Chiến Lược Miễn Phí SaaS Giai Đoạn Đầu (Freemium Growth Wedge) & Lộ Trình Mở Rộng
+Trong giai đoạn thâm nhập thị trường (Pilot MVP & Scale Up), **VinStay AI chủ động KHÔNG thu phí SaaS định kỳ hàng tháng** (149k/chủ nhà hay 59k/khách thuê). Đây là quyết định chiến lược có tính toán kỹ lưỡng:
 
-#### A. Gói "Chủ Nhà Thông Minh" (Smart Landlord Dashboard Premium)
-* **Mức phí:** **149.000 VNĐ / căn / tháng** (hoặc gói cả năm 1.490.000 VNĐ).
-* **Quyền lợi mở rộng:**
-  * Giám sát nhật ký mở cửa thời gian thực, lưu trữ hình ảnh Hộ chiếu bàn giao số 10–32 hạng mục chuẩn AES-256 trong suốt thời hạn ủy quyền.
-  * Tự động xuất biên lai đối soát tiền điện nước EVN, phí gửi xe hàng tháng và nhắc nợ tự động qua Zalo Bot.
-  * Tự động số hóa Nội quy BQL Vinhomes (`house-rules.ts`), hỗ trợ tự động gửi thông báo nhắc nhở và lập biên bản phạt cấn trừ vào cọc bảo đảm.
-  * Ưu tiên hiển thị Top đầu trong kết quả AI Matchmaker khi căn hộ chuẩn bị bước vào chu kỳ tìm khách mới (Pre-leasing trước 30 ngày).
-
-#### B. Gói "Khách Thuê An Tâm" (VinStay Tenant Care)
-* **Mức phí:** **59.000 VNĐ / tháng** (tích hợp trong hóa đơn All-in Cost hàng tháng).
-* **Quyền lợi:**
-  * Cam kết bảo chứng hoàn trả tiền cọc bảo đảm trong 60 giây khi biên bản thanh lý không có khiếu nại (Fast Escrow Release).
-  * Hỗ trợ kết nối khẩn cấp 24/7 từ Danh bạ Thợ kỹ thuật ngoài uy tín tại Ocean Park với giá chiết khấu $10\%$ (mô hình Asset-Light: khách và thợ tự thỏa thuận chi phí trực tiếp).
+1. **Triệt tiêu 100% rào cản gia nhập thị trường (Zero Onboarding Friction):**
+   * Thị trường BĐS cho thuê tại Vinhomes Ocean Park đang có thói quen sử dụng môi giới tự do không thu phí duy trì. Nếu áp phí thuê bao hàng tháng khi nền tảng còn mới sẽ tạo ra tâm lý nghi ngại và kháng cự từ phía Chủ nhà.
+   * Cung cấp **MIỄN PHÍ 100%** gói Dashboard Quản lý căn hộ, Hộ chiếu số nội thất 10–32 mục, Quản gia AI Vinny và công cụ đối soát tiền điện nước EVN tự động. Đây chính là "mũi khoan" (Growth Wedge) giúp VinStay AI gom trọn rổ hàng ký gửi độc quyền nhanh gấp 5 lần các đối thủ.
+2. **Chi phí công nghệ siêu rẻ được tài trợ hoàn toàn từ Phí giao dịch thành công:**
+   * Chi phí AI tokens, OCR CCCD và hạ tầng cloud chỉ tốn **~20.200 VNĐ / deal** (<0.3% doanh thu). Mức phí giao dịch thành công (trung bình 6.800.000 VNĐ/deal) thừa sức bù đắp 100% chi phí công nghệ mà vẫn đảm bảo tỷ suất lợi nhuận gộp toàn sàn đạt $\ge 77\%$.
+3. **Lộ trình thương mại hóa SaaS dài hạn (Giai đoạn Expansion / Maturity $\ge 3.000$ căn):**
+   * Khi nền tảng đã đạt hiệu ứng mạng lưới (Network Effects) vững chắc và thâm căn cố đế trong thói quen quản lý của cư dân, VinStay AI sẽ ra mắt các **Gói dịch vụ giá trị gia tăng nâng cao (Optional Premium Add-ons)** dành riêng cho nhà đầu tư sở hữu danh mục nhiều căn (Pro Landlords): Báo cáo phân tích tỷ suất sinh lời chuyên sâu, gói bảo hiểm nội thất mở rộng, và cổng API đối soát kế toán doanh nghiệp.
 
 ---
 
@@ -534,12 +528,11 @@ Bảng đối chiếu Doanh thu và Chi phí trên **1 căn hộ ký gửi thàn
 ├────────────────────────────────────────────────────────────────────────┤
 │ 1. DOANH THU THU VỀ (REVENUES):                                        │
 │    • Phí hoa hồng giao dịch 12 tháng (100%):            8.000.000 VNĐ │
-│    • Phí SaaS Quản lý từ xa (149k x 12 tháng):          1.788.000 VNĐ │
-│    • Phí VinStay Care khách thuê (59k x 12 tháng):        708.000 VNĐ │
+│    • Tiện ích số hóa & Quản gia AI (Miễn phí):                  0 VNĐ │
 │    • Lãi suất tiền gửi ký quỹ (Cọc 8tr x 3.5%):           280.000 VNĐ │
 │    • Doanh thu phân chia phạt cọc Đ.328 BLDS (bình quân): 480.000 VNĐ │
 │    ─────────────────────────────────────────────────────────────────   │
-│    TỔNG DOANH THU / CĂN / NĂM (A):                     11.256.000 VNĐ │
+│    TỔNG DOANH THU / CĂN / NĂM (A):                      8.760.000 VNĐ │
 │                                                                        │
 │ 2. CHI PHÍ TRỰC TIẾP BIẾN PHÍ (COGS & DIRECT OPEX):                    │
 │    • Thù lao dẫn khách Field Host (3 lượt x 50k):         150.000 VNĐ │
@@ -551,15 +544,15 @@ Bảng đối chiếu Doanh thu và Chi phí trên **1 căn hộ ký gửi thàn
 │    ─────────────────────────────────────────────────────────────────   │
 │    TỔNG CHI PHÍ BIẾN PHÍ / CĂN (B):                     1.790.000 VNĐ │
 │                                                                        │
-│ 3. LỢI NHUẬN GỘP TRÊN MỖI CĂN (GROSS PROFIT = A - B):   9.466.000 VNĐ │
-│    TỶ SUẤT LỢI NHUẬN GỘP (GROSS MARGIN):                       84.1%   │
+│ 3. LỢI NHUẬN GỘP TRÊN MỖI CĂN (GROSS PROFIT = A - B):   6.970.000 VNĐ │
+│    TỶ SUẤT LỢI NHUẬN GỘP (GROSS MARGIN):                       79.6%   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-> **ĐÁNH GIÁ CHỈ SỐ KINH TẾ (HEALTHY SAAS METRICS):**
-> * **LTV (Giá trị trọn đời khách hàng):** $\approx \mathbf{11.256.000 \text{ VNĐ}}$
+> **ĐÁNH GIÁ CHỈ SỐ KINH TẾ (HEALTHY UNIT ECONOMICS):**
+> * **LTV (Giá trị trọn đời khách hàng):** $\approx \mathbf{8.760.000 \text{ VNĐ}}$
 > * **CAC (Chi phí thu hút):** $\approx \mathbf{1.150.000 \text{ VNĐ}}$
-> * **Tỷ lệ LTV / CAC:** $\mathbf{9.8x}$ (Vượt xa chuẩn an toàn của ngành PropTech là $3.0x$).
+> * **Tỷ lệ LTV / CAC:** $\mathbf{7.62x}$ (Vượt xa chuẩn an toàn của ngành PropTech là $3.0x$).
 > * **Thời gian thu hồi chi phí CAC (Payback Period):** **0.2 tháng** (Ngay tại thời điểm chốt cọc và thu phí giao dịch tháng đầu tiên).
 
 ---
@@ -625,12 +618,11 @@ gantt
 | **Số ca hủy cọc phân chia Đ.328 BLDS / tháng** | 2 deal | 10 deal | 32 deal |
 | **1. DOANH THU BÌNH QUÂN HÀNG THÁNG** | | | |
 | • Doanh thu Phí giao dịch (6.8tr/deal thành công) | 68.000.000 | 340.000.000 | 1.088.000.000 |
-| • Doanh thu Phí SaaS Quản lý số (149k/chủ nhà) | 7.450.000 | 44.700.000 | 149.000.000 |
-| • Doanh thu Gói VinStay Care khách thuê (59k/khách) | 2.950.000 | 17.700.000 | 59.000.000 |
 | • Lợi suất tiền gửi ký quỹ (Escrow Float Yield 3.5%) | 1.500.000 | 9.000.000 | 30.000.000 |
 | • Doanh thu phân chia phạt cọc Đ.328 BLDS (50/50) | 8.000.000 | 40.000.000 | 128.000.000 |
-| **TỔNG DOANH THU THÁNG** | **87.900.000** | **451.400.000** | **1.454.000.000** |
-| *(Tương đương doanh thu quy năm)* | *(1.054.800.000)* | *(5.416.800.000)* | *(17.448.000.000)* |
+| • Tiện ích Quản lý số & AI Vinny (Freemium Hook) | 0 *(Miễn phí)* | 0 *(Miễn phí)* | 0 *(Miễn phí)* |
+| **TỔNG DOANH THU THÁNG** | **77.500.000** | **389.000.000** | **1.246.000.000** |
+| *(Tương đương doanh thu quy năm)* | *(930.000.000)* | *(4.668.000.000)* | *(14.952.000.000)* |
 | **2. TỔNG CHI PHÍ THÁNG (OPEX + CAC)** | | | |
 | • Hạ tầng Cloud, Server, Database & Render | 4.100.000 | 9.050.000 | 22.000.000 |
 | • Chi phí AI Engine, Vision OCR & ZNS OTP | 1.100.000 | 5.200.000 | 16.500.000 |
@@ -639,9 +631,9 @@ gantt
 | • Pháp lý, Kế toán, Thuế & Admin doanh nghiệp | 6.000.000 | 12.000.000 | 25.000.000 |
 | • Lương đội ngũ Vận hành cốt lõi (Core Team) | 25.000.000 | 65.000.000 | 140.000.000 |
 | **TỔNG CHI PHÍ THÁNG** | **54.200.000** | **181.250.000** | **491.500.000** |
-| **3. LỢI NHUẬN TRƯỚC THUẾ (EBITDA / THÁNG)** | **+33.700.000** | **+270.150.000** | **+962.500.000** |
-| *(Tương đương EBITDA quy năm)* | *(+404.400.000)* | *(+3.241.800.000)* | *(+11.550.000.000)* |
-| **TỶ SUẤT LỢI NHUẬN RÒNG (NET MARGIN)** | **38.3%** | **59.8%** | **66.2%** |
+| **3. LỢI NHUẬN TRƯỚC THUẾ (EBITDA / THÁNG)** | **+23.300.000** | **+207.750.000** | **+754.500.000** |
+| *(Tương đương EBITDA quy năm)* | *(+279.600.000)* | *(+2.493.000.000)* | *(+9.054.000.000)* |
+| **TỶ SUẤT LỢI NHUẬN RÒNG (NET MARGIN)** | **30.1%** | **53.4%** | **60.6%** |
 
 ---
 
@@ -700,5 +692,5 @@ Mô hình tài chính phiên bản **v2.0** của **VinStay AI** chứng minh t�
 
 1. **Dòng tiền dương ngay từ tháng đầu tiên:** Nhờ chi phí đầu tư thiết bị phần cứng ban đầu (CapEx) = 0 VNĐ và điểm hòa vốn cực thấp (chỉ cần 6 deal/tháng).
 2. **Biên lợi nhuận gộp đạt trên 84% & Net Margin 59.8% – 66.2%:** Nhờ mô hình tự động hóa bằng AI, quy trình ký số 3 bước tinh gọn và mạng lưới Field Host vận hành biến phí.
-3. **Cơ cấu 4 nguồn thu vững chắc & tương hỗ:** Phí giao dịch BĐS truyền thống kết hợp Doanh thu SaaS định kỳ, Lợi tức dòng tiền ký quỹ an toàn và Doanh thu phân chia phạt cọc Điều 328 BLDS bảo hiểm cho cả Chủ nhà lẫn Nền tảng.
+3. **Cơ cấu 3 nguồn thu cốt lõi, tinh gọn & minh bạch:** Phí giao dịch BĐS thành công làm trụ cột (87%), Lợi tức dòng tiền ký quỹ an toàn (2.5%) và Doanh thu phân chia phạt cọc Điều 328 BLDS (10%) bảo vệ tài chính cho cả Chủ nhà lẫn Nền tảng; đồng thời miễn phí 100% công cụ số hóa để tạo đòn bẩy thâm nhập thị trường thần tốc.
 4. **Giải quyết triệt để 4 nỗi đau của Chủ nhà:** Rút ngắn thời gian trống phòng từ 30 ngày xuống dưới 7 ngày; chủ nhà ngồi tại nhà 100%; bảo vệ tài sản bằng Hộ chiếu số; quản lý trọn gói rủi ro BQL và tiền điện nước.
