@@ -97,6 +97,25 @@ const cloneCriteria = (c: ChatCriteria): ChatCriteria => ({
   household: { ...c.household },
 });
 
+/**
+ * Từ cho thấy câu đang nói chuyện thuê nhà (đã bỏ dấu). Layout ("2pn") cố ý KHÔNG nằm ở đây: "kể chuyện cười 2pn" vẫn
+ * là câu lạc đề — chỉ từ ngữ cảnh thuê mới gỡ được nghi ngờ lạc đề.
+ */
+const HOUSING_RE =
+  /\b(thue|can ho|phong|nha o|can nha|chung cu|tim|ngan sach|budget|gia|thang|all.?in|duoi|tam|khoang|toi da|tro xuong|rent|apartment|flat|room)\b/;
+/** "căn"/"nhà" sau khi bỏ dấu trùng "cần"/trợ từ "nha" ⇒ chỉ nhận bản có dấu. */
+const HOUSING_ACCENTED_RE = /căn|nhà/;
+
+const hasHousingContext = (text: string) => HOUSING_RE.test(fold(text)) || HOUSING_ACCENTED_RE.test(text.toLowerCase());
+
+/** Câu chỉ gồm ngân sách + từ đệm ("8tr", "dưới 8 triệu thôi") — vẫn là câu tìm căn. */
+function isBareBudget(t: string): boolean {
+  const rest = t
+    .replace(/\d+(?:[.,]\d+)*\s*(?:tr|trieu|cu|million|millions|m|d|vnd)?\s*\d?/g, ' ')
+    .replace(/\b(duoi|tam|khoang|toi da|tro xuong|max|thoi|nhe|nha|a|o|voi|cho|minh|toi|em)\b/g, ' ');
+  return !/[a-z]/.test(rest);
+}
+
 /** Gộp câu chat vào tiêu chí hiện có (`base` = context FE gửi). */
 export function parseMessage(text: string, base: ChatCriteria, searched: boolean): ParsedMessage {
   const t = fold(text);
@@ -104,10 +123,12 @@ export function parseMessage(text: string, base: ChatCriteria, searched: boolean
   let strong = false;
   let weak = false;
 
+  // Con số tiền một mình không đủ để coi là tìm căn ("bạn gái cũ 8m"): cần ngữ cảnh thuê, câu chỉ có ngân sách,
+  // hoặc đang ở giữa một lượt tìm (câu nối tiếp "8tr thôi").
   const budget = parseBudget(text);
   if (budget) {
     c.budget = budget;
-    strong = true;
+    if (hasHousingContext(text) || isBareBudget(t) || searched || hasCriteria(base)) strong = true;
   }
 
   const layouts = LAYOUT_PATTERNS.filter(([, re]) => re.test(t)).map(([k]) => k);
@@ -190,12 +211,18 @@ export function hasCriteria(c: ChatCriteria): boolean {
   return !!(c.budget || c.layouts.length || c.zones.length || c.buildings.length || c.floor || c.furnishing || c.items.length || c.pets);
 }
 
+/** Chủ đề cấm hẳn — từ chối kể cả khi câu có nhắc thuê nhà. */
+const HARD_OFFTOPIC_RE =
+  /(giai|tinh) (giup )?(phuong trinh|bai toan|bai tap|dao ham|tich phan)|viet (giup )?(code|ma nguon|chuong trinh|bai tho|tho|bai van|van mau|essay)|lap trinh|\b(python|javascript|java|sql|html)\b|lam tho|bai tho|chinh tri|bau cu|tong thong|chung khoan|tien ao|crypto|bitcoin|dich (sang|giup|cau)|translate|du doan xo so|xo so|ca do/;
+
+/** Chuyện phiếm / tình cảm — chỉ từ chối khi câu không có ngữ cảnh thuê ("người yêu mình muốn thuê 2pn" vẫn hợp lệ). */
+const CHITCHAT_RE =
+  /\b(nguoi yeu|ny|ban gai|ban trai|bo cu|vo cu|chong cu|crush|chia tay|that tinh|buon qua|co don|ke chuyen|chuyen cuoi|tu vi|boi bai|thoi tiet|bong da|nau an|cong thuc nau)\b/;
+
 /** Câu ngoài phạm vi Ocean Park (AGENTS.md lớp 3) ⇒ từ chối 1 câu, không gọi LLM. */
 export function isOffTopic(text: string): boolean {
   const t = fold(text);
-  return /(giai|tinh) (giup )?(phuong trinh|bai toan|bai tap|dao ham|tich phan)|viet (giup )?(code|ma nguon|chuong trinh|bai tho|tho|bai van|van mau|essay)|lap trinh|\b(python|javascript|java|sql|html)\b|lam tho|bai tho|chinh tri|bau cu|tong thong|chung khoan|tien ao|crypto|bitcoin|dich (sang|giup|cau)|translate|du doan xo so|xo so|ca do/.test(
-    t,
-  );
+  return HARD_OFFTOPIC_RE.test(t) || (CHITCHAT_RE.test(t) && !hasHousingContext(text));
 }
 
 export function isGreeting(text: string): boolean {
