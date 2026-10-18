@@ -1,0 +1,28 @@
+{
+  "reviewDate": "2026-10-18",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "target": "docs/GO_TO_MARKET_AND_OPERATIONAL_STRATEGY.md",
+  "baseCommit": "a1d186f6374a1c0556d0333ce42b91ab66e159ad",
+  "originalSha256": "6b36d702dd9486ed0adc4533b0b5400ea9cc4b03759c5caa4d273654c88fd6e0",
+  "originalPrefixSha256": "6b36d702dd9486ed0adc4533b0b5400ea9cc4b03759c5caa4d273654c88fd6e0",
+  "finalSha256": "c30daca05c7ad8fe05aed7f11f7b72ae48d60ebc065ff8bab5b41430c61c66ef",
+  "originalBytes": 113957,
+  "appendedBytes": 61366,
+  "originalBytesUnchanged": true,
+  "originalHeadingsAndTocUnchanged": true,
+  "additionOnly": true,
+  "appendixSections": 11,
+  "evidenceIdsDefined": 32,
+  "evidenceReferencesResolved": true,
+  "appendixLocalLinksChecked": 3,
+  "appendixSensitivePatternCheck": "passed (bounded pattern check, not full security certification)",
+  "productCodeOrDatabaseChanged": false,
+  "productLaunchCertified": false,
+  "limitations": [
+    "No product tests or live calls rerun for this documentation edit.",
+    "Missing organization, deployment, legal and measured-production facts remain explicitly unconfirmed.",
+    "Original GTM promises were preserved and conflicts listed, not silently rewritten."
+  ],
+  "appendixMarkdownTablesChecked": 21,
+  "appendixCodeFencesBalanced": true
+}

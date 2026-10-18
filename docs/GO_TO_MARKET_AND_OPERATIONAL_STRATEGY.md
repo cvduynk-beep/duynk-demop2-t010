@@ -874,3 +874,372 @@ graph TD
 ---
 
 *Tài liệu này được biên soạn độc lập và chuẩn hóa để làm tài liệu nền tảng cho việc thiết kế Slide Pitch Deck, xây dựng Video Demo và bảo vệ đề án tại các vòng thẩm định AI20K Build Phase.*
+
+
+---
+
+## PHỤ LỤC KỸ THUẬT — MỨC ĐỘ SẴN SÀNG RA THỊ TRƯỜNG & NĂNG LỰC THỰC THI
+
+> **Ngày chốt bằng chứng:** 18/10/2026, Asia/Ho_Chi_Minh. **Bản code được rà:** `main`, `a1d186f`. Phụ lục được nối sau toàn bộ tài liệu gốc; không thay đổi sáu mục, mục lục, số thứ tự, nội dung hoặc cam kết đã có. Các chênh lệch được ghi riêng ở phần “Điểm cần thống nhất”.
+>
+> **Phạm vi:** đọc code/cấu hình/báo cáo và audit dependency ở môi trường dev; không phải nghiệm thu production, pentest hay kết luận pháp lý. Đường dẫn nguồn và ngày nằm trong phụ lục nguồn ở cuối phần này. Không chạy app, job, DB, giao dịch, Gemini hoặc bộ giữ kín trong đợt rà tài liệu.
+
+**Thang trạng thái thống nhất:** ✅ **Đạt** đúng tiêu chí có bằng chứng; 🟡 **Một phần** — có cơ chế nhưng thiếu nghiệm thu hoặc còn khoảng trống; 🔴 **Chưa đạt/chưa có** — có điều kiện chặn hoặc chưa tích hợp; ⚪ **Chưa đo/chưa rõ** — chưa đủ bằng chứng. “Có code” không đồng nghĩa “đã triển khai”, “có test” không đồng nghĩa “test đang pass”. Không gộp các nhãn thành phần trăm hoàn thiện khi chưa duyệt mẫu số và trọng số.
+
+### KT-A. TECHNICAL READINESS SUMMARY
+
+**Mục tiêu:** giúp lãnh đạo quyết định phạm vi ra mắt dựa trên bằng chứng, gắn năng lực công nghệ với thanh khoản căn hộ, niềm tin khách và mô hình Asset-Light.
+
+| Mảng | Hiện trạng | Điểm mạnh có bằng chứng | Rủi ro lớn nhất | Hành động ưu tiên / Bằng chứng |
+|---|---|---|---|---|
+| Product readiness & eval | 🟡 Một phần | Có API, bộ test nhiều phân hệ, runner/rubric Vinny | Chưa có baseline đầy đủ, browser E2E và bug mở tái nghiệm thu trên bản ra mắt | QA + AI owner **cần chỉ định**; lập bằng chứng theo commit; E03–E10 |
+| Security & dữ liệu | 🟡 Một phần; 🔴 dependency cần xử lý | Cookie riêng portal, guard backend, OTP hash và mã hóa một số trường | Audit còn cảnh báo; thiếu pentest, kiểm log/secret và quyền truy cập toàn diện | Security owner **cần chỉ định**; triage và nghiệm thu trước giao dịch thật; E15–E21, E32 |
+| Kiến trúc & tích hợp | 🟡 Một phần; 🔴 OTP/OCR thật chưa sẵn sàng | Next.js/NestJS/PostgreSQL; recommend và công cụ đọc dữ liệu có sẵn | OTP Zalo/SMS chưa tích hợp, OCR mô phỏng; thiếu xác nhận ngân hàng | Nghiệm thu nhà cung cấp, tách demo và luồng thật; E01–E02, E11–E14, E18, E22–E24 |
+| Độ tin cậy, hiệu năng & chi phí | ⚪ Chưa đo đầy đủ | Có fallback, health check, log, cache và job | Chưa có tải/uptime/restore drill, chi phí thực hay quota đảm bảo | DevOps + Tech owner **cần chỉ định**; đo tải, quota, restore, cost trước gate; E09–E10, E24–E30 |
+| Team working | 🟡 Có quy ước repo; ⚪ độ phủ thực tế chưa rõ | Có hướng dẫn agent, PR, CI và ownership theo template | Chưa xác nhận nhân sự, branch protection, review/on-call | Lãnh đạo xác nhận RACI, người duyệt cuối và trực sự cố; E29 |
+| Pháp lý, trải nghiệm & vận hành | 🟡 Có luồng/biểu mẫu; ⚪ chưa nghiệm thu | Consent, hợp đồng, báo cáo, hỗ trợ/feedback có code | Chưa xác nhận escrow/chữ ký/privacy, đối soát, accessibility và KPI chuyển đổi | Ops + Pháp chế + Product **cần chỉ định**; E20–E23, E26, E30–E31 |
+
+**Năm rủi ro kỹ thuật ảnh hưởng trực tiếp GTM:**
+
+| Ưu tiên đề xuất | Trạng thái / rủi ro | Tác động kinh doanh | Việc phải giải quyết trước mốc liên quan |
+|---|---|---|---|
+| 1 | 🔴 OTP thật chưa tích hợp, OCR còn mô phỏng | Không thể coi luồng demo là xác thực/ký hợp đồng thật | Xác nhận phạm vi pilot; nghiệm thu provider và toàn bộ luồng giao dịch; E18, E22–E24 |
+| 2 | 🔴/🟡 Dependency, cấu hình, secret và log cần hardening | Nguy cơ mất niềm tin, dữ liệu và thời gian xử lý sự cố | Triage cảnh báo theo runtime, audit đúng lockfile, kiểm cấu hình thực; E19–E21, E24, E32 |
+| 3 | 🔴 Chưa hoàn tất baseline/held-out; quota và DB từng làm gián đoạn đo | Chưa chứng minh “không bịa”, độ trễ hay hiệu quả AI | Đo đúng A/B/C, người chấm và D độc lập; E07–E13 |
+| 4 | ⚪ Thiếu bằng chứng tải, restore/rollback và độ bền job | Có thể mất ca xem, chậm cọc hoặc sai đối soát khi tăng tải | Load test, restore drill, kiểm restart/idempotency/đối soát; E23–E30 |
+| 5 | ⚪ Chưa xác nhận năng lực đội, chi phí và cam kết ngân hàng/pháp lý | Nguy cơ lịch ra mắt, biên lợi nhuận và SLA không khả thi | Chốt người phụ trách, ngân sách và điều kiện Go/No-Go; E20–E24, E29 |
+
+⚪ **Đánh giá chung:** chưa đủ bằng chứng kết luận sẵn sàng GA hoặc pilot giao dịch thật. Demo nội bộ phải công khai phần mô phỏng; bản deployed cụ thể vẫn cần smoke và xác nhận cấu hình. Khả năng xảy ra và thiệt hại tài chính của từng rủi ro **Chưa đo**, không tự gán xác suất.
+
+### KT-B. ĐỘ HOÀN THIỆN SẢN PHẨM, EVAL & KIỂM THỬ
+
+**Mục tiêu:** giảm tin sai, đặt lịch lỗi và tranh chấp; bảo vệ lời hứa căn thật, All-in minh bạch và chủ nhà không phải đi mở cửa. Scorecard đo theo luồng nghiệp vụ, không tính phần trăm từ số màn hình hoặc số file test.
+
+#### KT-B.1. Product readiness scorecard
+
+| Module | Backend thật / mô phỏng theo code | Hiện trạng kiểm chứng | Điều kiện nghiệm thu đề xuất | Bằng chứng / Owner |
+|---|---|---|---|---|
+| Auth & account | 🟡 JWT/cookie/backend, hồ sơ và quyền theo phiên có code | Có test auth/account; kết quả đầy đủ trên commit ra mắt **Chưa đo** | Test đúng/sai vai, hết hạn, logout, chủ dữ liệu và cập nhật vai; không lộ token | E02–E06, E15–E17; Backend + QA, cần chỉ định |
+| Units & recommend | 🟡 API danh mục/All-in và xếp hạng có code; mock fallback có cờ, production chặn | Độ tươi rổ hàng và độ đúng All-in deployed **Chưa đo** | Căn/giá có nguồn, đúng rank, không trả căn mẫu khi production lỗi; đối chiếu nghiệp vụ | E01–E06, E11–E14, E24–E25; Backend + Product |
+| Booking + OTP | 🟡 Booking/ownership có code; 🔴 delivery Zalo/SMS thật chưa tích hợp | Test giả lập không chứng minh tin nhắn thật tới khách | OTP thật, thử sai/gửi lại, quyền chủ lịch, hủy/đổi lịch, lỗi provider; E2E có Ops | E16–E18, E23; Backend + QA + Ops |
+| Cọc / Fast-Deposit / hợp đồng | 🟡 Webhook/điều khoản/khóa căn và ký có code; 🔴 OCR simulator | Ngân hàng, eKYC và tính pháp lý chưa có nghiệm thu thực trong hồ sơ này | Báo có trùng/chậm, First-to-Pay, hoàn tiền, không ghi nhận hai lần; pháp chế duyệt consent/hợp đồng | E22–E23; Backend + Finance/Ops + Pháp chế |
+| Vinny | 🟡 Gemini + recommend + công cụ đọc + FAQ; có degraded mode | 🔴 Baseline mới chưa đủ; báo cáo cũ khác bộ đo | Gate AI ở KT-B.2; chạy đúng contract HTTP và thứ tự recommend | E07–E14; AI + QA + người chấm nghiệp vụ |
+| Admin & báo cáo | 🟡 Có API quản trị, report whitelist/masking/pagination/CSV | ⚪ Toàn bộ quyền admin và đối chiếu số liệu thật chưa nghiệm thu lại | Least privilege, SQL độc lập khớp báo cáo/CSV, audit thao tác nhạy cảm | E04, E16, E26; Backend + QA + Finance/Ops |
+| Host | 🟡 Có scope phân khu, quyền Sale/Thẩm định, board/viewing/job | ⚪ Ca chính/phụ, phản hồi khách, race nhận ca/mở cửa chưa E2E lại trên bản ra mắt | Đúng người/đúng phân khu, quyền thay đổi có hiệu lực, bàn giao ca và mã cửa có audit | E04, E16, E25; Backend + Frontend + Ops |
+| Landlord / ký gửi / kiểm định | 🟡 Có API và luồng upload/kiểm định/niêm yết | ⚪ Toàn bộ vòng ký gửi → kiểm định → công khai → thoát ủy quyền chưa tái nghiệm thu | Không lộ giá sàn, ảnh/quyền sở hữu đúng, thay đổi portal đồng bộ | E04, E16, E21, E27; Backend + QA + Ops |
+
+⚪ **Bug mở:** có bug log lịch sử E04, nhưng chưa tái phân loại toàn bộ tại `a1d186f`; **Chưa đo số blocker/critical/high còn mở**. Không cộng mọi file bug thành lỗi hiện hành và không coi lỗi cũ đã tự hết chỉ vì code mới hơn.
+
+#### KT-B.2. Chất lượng AI Vinny — chỉ số và điều kiện đo
+
+| Tiêu chí / cách đo | Ngưỡng / mục tiêu | Hiện trạng | Bằng chứng / giới hạn |
+|---|---|---|---|
+| Grounded/đúng sự thật: đối chiếu từng phát biểu với công cụ/tri thức; judge theo rubric | Ngưỡng từng nhóm cần duyệt; không nhóm nào tụt baseline | 🟡 Có bộ đo; ⚪ kết quả đủ và hiệu chuẩn chưa có | E07–E10; không coi điểm judge cũ là chân lý |
+| Bịa căn/giá/chính sách; đúng thứ tự recommend | Mục tiêu đã nêu trong kế hoạch Vinny: **0 lần bịa**, rank đúng nguồn | 🔴 Chưa chứng minh đạt; báo cáo cũ có ca bị judge đánh dấu bịa diện tích | E08; tên metric cũ “căn/giá” không phản ánh đầy đủ loại lỗi |
+| Hiểu ý/đổi ý, nhớ nhiều lượt và tiếng Việt viết tắt | A/B đúng điều kiện; so baseline và dao động; ngưỡng tuyệt đối cần duyệt | ⚪ Chưa đo đủ A/B hiện hành | E07, E10; đếm ca không phải điểm chất lượng |
+| Khéo léo & xử lý biên | Rubric **1–5**; điểm dưới **4** phải có lý do; ngưỡng phát hành cần duyệt | 🟡 Có rubric; ⚪ chưa có bảng đủ hiện hành | E07; thêm đánh giá từ chối, hỏi lại, đồng cảm và ngôn ngữ |
+| Chuyển người thật đúng lúc | Đo precision/recall trên nhãn nghiệp vụ; ngưỡng cuối cần duyệt | 🟡 Báo cáo cũ ghi 100% trên bộ cũ; ⚪ chưa xác nhận lại | E08, E31; SLA phản hồi thật là chỉ số khác |
+| Red-team/injection/PII | Mục tiêu **0 lần lộ thông tin/bị lừa** trong bộ C được duyệt | 🟡 Có báo cáo red-team cũ; ⚪ chưa đủ bộ C hiện hành ×3 | E07–E10; không khẳng định an toàn ngoài mẫu |
+| Judge ↔ người hiểu nghiệp vụ | Chấm tay **15–20%**, đồng thuận **≥80%** theo brief Vinny; dưới ngưỡng thì hiệu chuẩn lại | ⚪ Chưa có bằng chứng hoàn tất | E07, E10; phải công bố cách tính đồng thuận và mẫu |
+| Held-out & hồi quy prompt | D chỉ kiểm cuối, không tuning; không nhóm nào tụt so baseline | 🔴 Một phần D từng lộ trong phiên trước; cần bộ kín do người độc lập quản lý | E10; chỉ đếm 30 dòng D trong đợt rà này, không đọc/chạy D |
+| Độ trễ, quota, token, chi phí | Mục tiêu Vinny đã chốt: **p95 ≤4 giây**; đo HTTP end-to-end và tách degraded | ⚪ p95/tải/chi phí hiện tại Chưa đo | E08–E10 chỉ là lịch sử, không phải SLA production |
+
+🟡 **Nguồn số liệu lịch sử:** E08 ghi **91 golden + 34 red-team**, p95 **3.054 ms**, degraded **11,2%**; E09 ghi **58 ca 429**, degraded **46,4%**. Đây là các lần chạy khác baseline A/B/C ×3, có quota/fallback và thiếu đối chiếu người chấm; không ghép thành bảng trước/sau để tuyên bố cải thiện. E10 ghi lần baseline mới dừng ở **66/723** quan sát dự kiến do DB; tình trạng kết nối hôm nay **Chưa đo**.
+
+✅ **Kiểm kê bộ đo:** A **92**, B **33**, C **35**, D **30** theo E07; backend có **58 file spec**, web có **52 file test** theo E03. Các con số này chỉ là inventory theo mẫu tên file, không phải số test đã pass hoặc phần trăm coverage.
+
+#### KT-B.3. Kiểm thử phần mềm và kế hoạch lấp khoảng trống
+
+| Loại kiểm thử | Cách đo / điều kiện nghiệm thu đề xuất | Hiện trạng + bằng chứng | Owner đề xuất / hạn cần duyệt |
+|---|---|---|---|
+| Unit/HTTP integration, hồi quy | Kết quả trên commit ra mắt, ghi pass/fail/skip và lý do; mock được nhận diện | 🟡 E03–E06; có suite/CI, chưa xác nhận full run hiện tại | QA + Backend/Frontend; trước pilot thật |
+| Coverage | Báo cáo theo module/nhánh nghiệp vụ; ngưỡng theo rủi ro cần duyệt | ⚪ Không có coverage report được kiểm chứng trên commit này; E30 | QA; thiết lập trước beta |
+| Browser E2E/smoke chéo portal | Tenant → booking/OTP → Host/Admin → landlord/report; vi/en/mobile; Network/Console | 🟡 Có QA cũ; ⚪ chưa tái nghiệm thu, không gọi mọi Vitest là browser E2E; E04–E06 | QA + Ops; trước pilot thật và mỗi release ảnh hưởng luồng |
+| Tải & latency | p50/p95/p99, RPS, concurrent users, lỗi, DB pool; đo riêng cold start và provider | ⚪ Chưa đo; tải mục tiêu chưa chốt; E09–E10, E24–E30 | DevOps + Backend; trước pilot và trước tăng quy mô |
+| Chịu lỗi | Backend mất kết nối, LLM timeout/429, OTP lỗi, webhook lặp/chậm, restart sweep | 🟡 Có fallback/test cục bộ; ⚪ chưa có chaos/E2E trên môi trường ra mắt; E14, E18, E23–E25 | QA + DevOps + Ops; trước pilot thật |
+| Dữ liệu/SQL | Đối chiếu report/CSV/commission/holding với truy vấn độc lập và chứng từ được phép | 🟡 Có guardrail report; ⚪ chưa nghiệm thu số liệu thật; E26 | Finance/Ops + QA; trước pilot và định kỳ sau ra mắt |
+| Security | Auth/IDOR/CSRF/XSS/upload/secret scan và pentest được cấp phép | 🟡 Có một số kiểm tra; ⚪ pentest chưa có bằng chứng; E15–E21, E32 | Security owner; triage trước pilot, pentest trước GA |
+
+**Liên hệ kinh doanh:** 🟡 nền tảng kiểm thử có sẵn giúp giảm chi phí sửa lỗi, nhưng chưa chứng minh conversion hoặc giảm ngày trống. Kết quả kỹ thuật phải nối với booking thành công, tỷ lệ bỏ cuộc, tranh chấp và chi phí hỗ trợ bằng đo lường sau pilot; các tác động này hiện **Chưa đo**.
+
+### KT-C. SECURITY, QUYỀN RIÊNG TƯ & QUẢN TRỊ RỦI RO
+
+**Mục tiêu:** bảo vệ tài khoản, dữ liệu khách, tiền cọc và mã cửa; không đánh đổi niềm tin để đạt tốc độ ra mắt. Mỗi cơ chế cần kiểm tra ở backend và môi trường triển khai thực tế.
+
+| Tiêu chí | Hiện trạng có bằng chứng | Khoảng trống / điều kiện nghiệm thu | Nguồn |
+|---|---|---|---|
+| Xác thực/phiên bốn portal | 🟡 Cookie HttpOnly riêng `vs_access_<portal>`; admin Strict, cổng khác Lax; Secure mặc định production, có override; TTL mặc định 7 ngày/admin 8 giờ; logout xóa cookie | Kiểm cấu hình live, token bị sao chép/thu hồi, thiết bị dùng chung, HTTPS; SameSite không thay thế kiểm CSRF toàn diện | E15 |
+| OTP/brute-force | ✅ Code có CSPRNG, HMAC, timing-safe compare, TTL/cooldown/giới hạn thử và consume nguyên tử; 🟡 login lockout trong process | 🔴 Zalo/SMS thật chưa tích hợp; production chặn mock nhưng staging/mock vẫn có mã dev và log; kiểm delivery, abuse nhiều instance | E17–E18 |
+| RBAC/least privilege/IDOR | 🟡 Guard global, vai đọc lại từ DB, kiểm chủ booking và scope Host | Kiểm mọi endpoint/CSV/file; thay vai/khóa quyền có hiệu lực; xác nhận quyền admin tối thiểu; không chỉ ẩn nút UI | E16, E26 |
+| Input/CORS/CSRF/XSS/SQLi | 🟡 ValidationPipe, allowlist CORS, throttle có nơi áp dụng; report whitelist query và transaction read-only | ⚪ Chưa có kết quả kiểm toàn diện; chưa thấy CSP/Helmet ở các file runtime đã rà; rà raw SQL, DOM, state-changing request và security headers deployed | E19, E26 |
+| Upload/storage | 🟡 Có luồng kiểm ảnh/upload/storage | ⚪ Chưa có báo cáo file độc, MIME spoof, quyền bucket, URL hết hạn, quota và truy cập chéo tài khoản | E21 |
+| AI security | 🟡 Recommend quyết định danh sách/rank; công cụ Vinny chỉ đọc; runtime có kiểm câu trả lời, token/rate limit/fallback | Mô tả căn, lịch sử và phản hồi là dữ liệu, không phải lệnh; red-team lại prompt/PII/commission/giá sàn; verifier mở rộng chưa được nối runtime | E11–E14 |
+| PII/đồng ý/lưu giữ | 🟡 Có mã hóa một số trường, blind index, consent và tóm tắt hỗ trợ có che PII | ⚪ Chưa xác nhận phân loại, retention, quyền xóa/xuất, quyền đọc log, dữ liệu chuyển nhà cung cấp và quy trình xóa trong backup | E20, E22, E31 |
+| Secret/config | 🟡 Có quy tắc không commit secret và chặn thiếu khóa production ở một số thành phần | Cấu hình mẫu cần hardening; kiểm toàn repo/history bằng công cụ được phép, tách khóa eval/live, xoay khóa, kiểm quyền CI; không đưa giá trị nhạy cảm vào tài liệu | E20, E24, E29 |
+| Supply chain/hạ tầng | 🔴 Audit dependency còn cảnh báo; 🟡 có lockfile/CI/Docker | Triage prod/dev/transitive, rà self-hosted runner, quyền workflow, version lock, container/network, TLS/backup; audit Python và đúng lockfile web | E06, E24, E32 |
+| Audit/incident/pentest | 🟡 Có audit nghiệp vụ/auth và log HTTP, che response lỗi nội bộ production | ⚪ Chưa có bằng chứng cảnh báo/tổ trực/SLA incident, diễn tập hay pentest; rà URL/exception log và log mock OTP | E19–E20, E26, E29–E31 |
+
+🔴 **Dependency audit 18/10/2026:** `npm audit --json` trên package-lock local ghi backend **63** cảnh báo (**1 critical, 40 high, 18 moderate, 4 low**) và web **6 high**, exit **1** ở cả hai. Bao gồm dependency dev/transitive; **không phải 69 lỗ hổng production đã được xác nhận khai thác**. Web CI dùng `pnpm-lock.yaml`, còn audit này dùng `package-lock.json`; Python chưa audit. E32 lưu output tổng hợp, không công bố chi tiết khai thác chưa vá.
+
+⚪ **Pháp lý:** cần pháp chế rà soát Nghị định **13/2023/NĐ-CP**, Luật Giao dịch điện tử **2023**, Luật Nhà ở **2023** cùng quy định Việt Nam liên quan và đang áp dụng. Biểu mẫu consent, thuật toán mã hóa hoặc chữ ký tay trong code **không phải kết luận tuân thủ** hay chứng nhận hiệu lực pháp lý. Trạng thái đánh giá pháp lý, căn cứ đồng ý, chuyển dữ liệu cho nhà cung cấp và chứng từ ký/thu tiền: **Cần xác nhận** (E22–E23 và tài liệu gốc trụ cột 6).
+
+#### KT-C.1. Bảng rủi ro bảo mật
+
+| Rủi ro | Khả năng | Tác động | Biện pháp hiện có | Biện pháp bổ sung đề xuất | Hạn đề xuất / owner cần xác nhận |
+|---|---|---|---|---|---|
+| 🔴 Dependency có advisory | ⚪ Chưa đánh giá khả năng khai thác runtime | Nguy cơ gián đoạn/ảnh hưởng dữ liệu | Lockfile, CI; E06/E32 | Triage, cập nhật có hồi quy; đóng/giảm thiểu được duyệt các rủi ro cao | Trước pilot thật; Security + Tech |
+| 🟡 Mock/demo hoặc cấu hình không phù hợp bị coi là production | Có cấu hình demo trong repo; phạm vi live ⚪ chưa rõ | Sai xác thực/giao dịch, mất tin cậy | Chặn OTP mock production và một số demo tools; E18/E23/E24 | Kiểm cấu hình live độc lập, vô hiệu luồng demo công khai, nghiệm thu provider | Trước mở giao dịch thật; DevOps + Backend |
+| 🟡 PII/OTP/secret lọt log hoặc artifact | ⚪ Chưa quét toàn bộ | Lộ thông tin và chi phí xử lý sự cố | Mã hóa trường, masking một số luồng; E20/E31 | Redaction có test, phân quyền/retention, quét history/artifact; xoay khóa khi xác nhận lộ | Trước pilot thật; Security + DevOps |
+| 🟡 Truy cập chéo người/portal/phân khu | ⚪ Chưa đo trên toàn API | Lộ hợp đồng, báo cáo hoặc mã cửa | Guard/ownership/scope; E16/E21/E26 | Ma trận IDOR bao phủ API và file; kiểm cache quyền | Trước pilot thật; Backend + QA |
+| 🟡 Injection hoặc AI diễn giải sai dữ liệu | ⚪ Chưa đủ red-team hiện hành | Lộ nội bộ, bịa căn/giá, hỗ trợ sai | Tools đọc, rank, guard và fallback; E11–E14 | Baseline đầy đủ, kiểm nguồn và hồi quy, log sự kiện không chứa PII | Trước phát hành Vinny; AI + QA |
+| ⚪ Phát hiện/khắc phục sự cố chậm | Chưa có diễn tập | Kéo dài gián đoạn và tăng tổn thất | Log/audit/health check; E26/E30 | On-call, alert và runbook theo cấp độ; pháp chế duyệt nghĩa vụ thông báo | Trước pilot thật, pentest trước GA; Ops + Security + DevOps |
+
+⚪ **Incident response cần được chốt:** ai nhận cảnh báo, ai chỉ huy, cách phân loại sự cố dữ liệu/thanh toán/gián đoạn, thời gian phản hồi/khôi phục và kênh thông báo. Luồng đề xuất: phát hiện → giới hạn ảnh hưởng → bảo toàn chứng cứ đã kiểm quyền → xử lý/rollback → khôi phục → hậu kiểm. Thời hạn thông báo khách/cơ quan phải do pháp chế xác nhận theo sự cố; không tự cam kết số giờ. `SECURITY.md` còn tham chiếu template, chưa đủ làm runbook trực P-010 (E29).
+
+**Liên hệ kinh doanh:** 🟡 các lớp bảo vệ hiện có hỗ trợ niềm tin của chủ nhà/khách; ⚪ mức giảm rủi ro thực chưa đo. Ưu tiên quyền dữ liệu, mã cửa, tiền cọc và provider thật trước các tối ưu tăng trưởng.
+
+### KT-D. GIẢI PHÁP CÔNG NGHỆ, HẠ TẦNG & VẬN HÀNH
+
+**Mục tiêu:** đáp ứng luồng thuê/đặt căn với chi phí biến đổi có kiểm soát, giữ rổ hàng và tài chính đồng bộ. ✅ Sơ đồ dưới mô tả các đường tích hợp nhìn thấy trong repo; các nhánh nhà cung cấp ghi rõ phần chưa nghiệm thu (E01–E02, E11–E14, E18, E21–E28).
+
+```mermaid
+flowchart TD
+    U["Tenant / Admin / Host / Landlord"] --> W["Next.js — giao diện và proxy cùng origin"]
+    W --> B["NestJS /api/v1 — session, RBAC, nghiệp vụ"]
+    B --> DB["Prisma / PostgreSQL — Supabase"]
+    B --> ST["Storage — ảnh và tài liệu theo luồng"]
+    B --> J["Sweep trong process — giữ căn, SLA, payout"]
+    B --> V["Vinny /api/v1/chat"]
+    V --> R["Recommend và công cụ chỉ đọc — dữ liệu động"]
+    R --> DB
+    V --> K["Tri thức Markdown — truy hồi từ khóa"]
+    V --> G["Gemini — diễn giải / gọi công cụ"]
+    G --> C["Guard câu trả lời / fallback"]
+    R --> C
+    C --> W
+    B -.-> O["OTP Zalo/SMS thật — chưa tích hợp"]
+    B -.-> Q["Ngân hàng / webhook VietQR — cần nghiệm thu kết nối thật"]
+    B --> I["eKYC — simulator hiện tại"]
+    B --> A["Relay /api/v1/assistant/chat"]
+    A --> F["ai-engine FastAPI / OpenRouter — đường riêng"]
+```
+
+#### KT-D.1. Luồng dữ liệu và lựa chọn công nghệ
+
+| Thành phần / luồng | Hiện trạng | Lý do/đánh đổi kiến trúc được đề xuất ghi nhận | Phương án dự phòng / việc cần nghiệm thu |
+|---|---|---|---|
+| Next.js + NestJS | ✅ Có trong repo; proxy `/api/v1` cùng origin, backend giữ auth/RBAC | Tách UI/nghiệp vụ, thuận lợi cookie; thêm một hop proxy và cần phối hợp version/timeout | Test contract và header/cookie qua proxy; không đổi API trong nhiệm vụ tài liệu; E01–E02 |
+| PostgreSQL/Prisma/Supabase | ✅ Có schema và lớp truy cập; 🟡 dịch vụ deployed chưa xác nhận | Transaction/ràng buộc hỗ trợ tiền cọc, báo cáo; phụ thuộc pool/độ trễ DB | Duyệt index bằng query plan; migration có bằng chứng; kiểm backup/restore và giới hạn kết nối; E01/E10/E26/E27 |
+| Recommend + Vinny | ✅ Recommend cung cấp căn/rank; công cụ đọc dữ liệu động, Gemini diễn giải | Giữ All-in/rank theo code; LLM vẫn có rủi ro hallucination/latency/quota | Guard/fallback có nguồn; không tự thêm căn; phân tích lỗi bằng eval trước sửa; E11–E14 |
+| Knowledge/RAG | ✅ Markdown + từ khóa có ngưỡng trong Vinny | Phù hợp nội dung quy trình nhỏ và dễ duyệt; recall/độ tươi cần đo | API ưu tiên khi mâu thuẫn; liệt kê tri thức lỗi thời cho nghiệp vụ, không tự đổi chính sách. Vector/hybrid chỉ cân nhắc khi có bằng chứng thiếu recall; E12 |
+| Cache / job | 🟡 Cache process và timer sweep hiện hữu; Redis có trong Docker, chưa chứng minh runtime dùng | Ít thành phần, phù hợp MVP; restart/multi-replica và dữ liệu cũ là rủi ro | Đo freshness, lock/idempotency và job trễ; queue bền vững/cache chia sẻ là lựa chọn cần duyệt khi scale; E24–E25 |
+| Hai đường AI | ✅ Vinny Gemini và relay FastAPI/OpenRouter cùng tồn tại | Phải phân biệt người dùng, use case, ngân sách và contract; tránh nhân đôi chi phí/khó vận hành | Tech owner xác nhận portal còn dùng relay; eval riêng; không tự xóa/chuyển đường; E28 |
+| OTP provider abstraction | ✅ Có `OtpSender` và factory; 🔴 Zalo/SMS thật chưa tích hợp | Đổi kênh không đổi quy tắc OTP; phụ thuộc OA/template, delivery và token lifecycle | Nghiệm thu Zalo, kênh dự phòng, chi phí, retry và lỗi thật; E17–E18 |
+| Storage/media và mã cửa | 🟡 Có luồng storage/mã cửa theo phân quyền | Tách ảnh công khai và dữ liệu nhạy cảm; giữ Field Host thực địa theo guardrail | Kiểm bucket/signed URL, audit truy cập, rotation và lịch sử mã; không đề xuất IoT/Lockbox; E16/E21 |
+
+🟡 **Luồng trọng yếu cần nghiệm thu end-to-end:** đặt lịch → xác thực → điều phối/nhận ca → xem phòng; chốt cọc → báo có → khóa căn → hợp đồng/bàn giao; ký gửi → thẩm định → niêm yết; đổi/ca chính-phụ → quyền truy cập → phản hồi khách và thù lao. E04/E16/E23/E25/E26 chứng minh một số code và kiểm tra lịch sử, chưa chứng minh toàn bộ luồng hiện tại đã pass trên deployment.
+
+#### KT-D.2. Kiến trúc AI, giới hạn và chiến lược provider
+
+| Tiêu chí | Hiện trạng + nguồn | Điều kiện vận hành đề xuất |
+|---|---|---|
+| Model/chi phí đầu ra | ✅ Mặc định `gemini-3.5-flash-lite`, temperature **0,2**, output mặc định/trần **250 token** theo code; E11 | Giá trị deployed phải xác nhận riêng; thay model qua cấu hình nhưng eval lại, không coi model tương đương mặc định |
+| Tri thức và dữ liệu động | ✅ FAQ/RAG từ Markdown; công cụ lấy recommend, căn, policy, booking/hợp đồng của chính khách; E11/E12 | Tri thức có owner/ngày duyệt; policy động theo API; không đưa toàn kho/PII vào prompt |
+| Guard/verifier | 🟡 Có `checkExplanation`/`checkAgentAnswer`; verifier mở rộng `verifyReply` chưa gọi runtime; E13 | Chỉ tuyên bố mức bảo vệ đã nghiệm thu; nâng verifier là việc code ngoài nhiệm vụ này, cần baseline và duyệt |
+| Prompt/version/rollback | ✅ Có loader và phiên bản prompt qua cấu hình; E12 | 🟡 Chưa có bằng chứng rollback vận hành trong hồ sơ; thử bản cũ → xác nhận → bản mới trên staging trước phát hành |
+| Quota/free tier | 🟡 README mô tả giới hạn miễn phí; báo cáo có 429; ⚪ gói billing/quota thực chưa xác nhận; E09/E11 | Free tier chỉ dùng dev/demo có kiểm soát; production cần quota/budget được cấp, cảnh báo, backoff/fallback; model dự phòng phải eval và duyệt trước |
+| Chịu lỗi/cost control | 🟡 Có timeout/retry, token/rate limit/guest limit và degraded; E14 | Đo tỷ lệ degraded, cost thật, timeout theo toàn request; tách key/quota eval và khách thật; không coi fallback nhanh là LLM đạt latency |
+
+#### KT-D.3. Mở rộng, độ tin cậy và tích hợp
+
+| Tiêu chí | Hiện trạng / nguồn | Cách đo và kế hoạch / owner đề xuất |
+|---|---|---|
+| Concurrent users/RPS và p95 toàn hệ thống | ⚪ Chưa chốt/chưa đo; E30. Số căn 50/300/1.000/3.000 trong GTM là quy mô kinh doanh | Tech + Product duyệt tải và mix luồng; DevOps đo ở từng gate, bao gồm chat, report/export, upload, sweep và pool DB |
+| Cache/index/pagination/async | 🟡 Có cache process, schema index, report phân trang/giới hạn/timeout; E01/E25/E26 | Đo hit-rate, query plan, freshness; queue cho tác vụ nặng chỉ là đề xuất sau phép đo, không mô tả đã có |
+| Dev/staging/production | 🟡 Blueprint Render free/staging/mock/demo; ⚪ môi trường thật chưa đối chiếu; E24 | Tách dữ liệu/key/cấu hình và phân quyền; staging test không dùng dữ liệu khách thật nếu chưa có phép; DevOps xác nhận trước pilot |
+| CI/CD/migration/release | 🟡 Có workflow và SQL up/down; ⚪ deploy automation, branch rules, rollback thực chưa xác minh; E06/E27/E29 | CI artifacts gắn commit, không merge khi gate bắt buộc đỏ; migration tương thích và thử restore/rollback; feature flag/canary là đề xuất, không khẳng định đã triển khai |
+| Backup/DR/SLO | ⚪ Không có bằng chứng drill, uptime/error budget, RPO/RTO được duyệt; E27/E30 | Định nghĩa RPO/RTO/SLO trước pilot; restore cô lập và đo thời gian/mất dữ liệu trước GA; phân người trực |
+| Monitoring/log/trace/alert | 🟡 Có HTTP log/audit/health check; ⚪ dashboard/tracing/alert thực chưa có bằng chứng; E30 | Theo dõi lỗi/latency/pool/job/429, cảnh báo ngân sách và tỷ lệ phản hồi kém của Vinny; log đã che PII, không lưu prompt đầy đủ tùy tiện |
+| Zalo/OA/template/SMS | 🔴 Provider thật chưa tích hợp; E18 | OA/template được duyệt, token refresh, delivery receipt, giá theo hợp đồng; không chỉ điền env rồi gọi là thật |
+| VietQR/ngân hàng/escrow/hoàn tiền | 🟡 Có webhook secret/markPaid/QR và demo; ⚪ kết nối thật/chứng từ/chế độ hoàn tiền chưa nghiệm thu; E23 | Finance/Ops + Backend kiểm webhook replay/idempotency, First-to-Pay, sai số tiền, trễ tiền, đối soát và hoàn tiền |
+| OCR/e-sign | 🔴 OCR mô phỏng; 🟡 có consent/luồng hợp đồng; E22 | Nhà cung cấp, liveness, dữ liệu, lưu chứng cứ ký và pháp chế duyệt; không hứa SLA OCR hay hiệu lực pháp lý chỉ từ UI |
+
+#### KT-D.4. Unit economics kỹ thuật & nợ kỹ thuật
+
+| Chỉ số chi phí | Hiện trạng | Cách đo trước khi dùng cho quyết định tài chính |
+|---|---|---|
+| Cloud/DB/storage/observability mỗi tháng | ⚪ Chưa đối chiếu hóa đơn/gói thực; các con số mục 4 cũ là dữ liệu tài liệu chưa được xác minh trong đợt này | Finance + DevOps đối chiếu hóa đơn theo môi trường, compute/storage/egress/backup, ghi tiền tệ và kỳ tính; trước pilot thật |
+| AI mỗi hội thoại | ⚪ Chưa có số chi phí đáng tin hiện tại; token bằng 0 ở lần lỗi không có nghĩa chi phí bằng 0 | Log usage đã che PII × đơn giá đúng model/gói; tính retry, fallback, judge/eval tách riêng và hội thoại hoàn tất; AI + Finance trước beta |
+| Kỹ thuật mỗi booking thành công | ⚪ Chưa đo | Tổng chi phí kỹ thuật phân bổ / booking thành công đã đối soát; công bố cách phân bổ cả ca thất bại; Finance + Product trước Scale Up |
+| Zalo/OCR/e-sign mỗi giao dịch | ⚪ Chưa có nghiệm thu provider/đơn giá thực trong hồ sơ | Giá hợp đồng × số lần gọi thực, gồm retry và ca không chốt; không gọi dự toán là “chi phí thực tế”; Finance + Ops |
+
+🟡 **Đòn bẩy có cơ chế hiện hữu:** FAQ không gọi LLM, giới hạn token, timeout/fallback, cache và giới hạn export (E12/E14/E25/E26). ⚪ **Mức tiết kiệm chưa đo**; không gán hit-rate, mức giảm chi phí hay conversion. Tóm tắt lịch sử, retrieval tốt hơn, chia sẻ cache và provider dự phòng chỉ đưa vào backlog khi phép đo chứng minh cần và được duyệt.
+
+| Nợ/khoảng trống | Ưu tiên đề xuất | Mốc xử lý / owner cần xác nhận |
+|---|---|---|
+| 🔴 OTP/OCR thật, kiểm cấu hình demo/live và tích hợp ngân hàng | Chặn luồng giao dịch thật liên quan | Trước pilot thật; Backend + Ops + Pháp chế |
+| 🔴 Dependency/hardening và baseline AI chưa đủ | Ưu tiên bảo mật/niềm tin | Triage trước pilot, đầy đủ trước phát hành luồng ảnh hưởng; Security + AI + QA |
+| 🟡 Timer/cache process, pool DB, chịu lỗi/replay/đối soát | Ưu tiên đúng dữ liệu trước scale | Trước tăng replica/tải; Backend + DevOps + Finance |
+| ⚪ Coverage, browser E2E, observability, DR/rollback | Khoảng trống nghiệm thu | Trước beta/GA theo KT-G; QA + DevOps |
+| ⚪ Hai đường AI, ownership/template docs, KPI cost/funnel | Khoảng trống vận hành/bàn giao | Trước Scale Up; Tech + Product + Finance |
+
+**Liên hệ kinh doanh:** 🟡 kiến trúc hiện tại giữ số thành phần tương đối gọn theo repo; ⚪ chi phí vận hành và mức tải thực chưa được chứng minh. Chỉ tăng hạ tầng khi có nhu cầu đo được để bảo vệ mô hình Asset-Light; không tự thêm vector DB, queue hoặc nhà cung cấp trong nhiệm vụ tài liệu.
+
+### KT-E. TEAM WORKING & NĂNG LỰC THỰC THI
+
+**Mục tiêu:** mỗi thay đổi ảnh hưởng căn/giá/cọc/quyền đều có người chịu trách nhiệm, bằng chứng kiểm thử và đường quay lui; giảm bus factor, sai nghiệp vụ và chi phí hậu kiểm.
+
+| Tiêu chí | Hiện trạng + bằng chứng | Đề xuất / cần xác nhận |
+|---|---|---|
+| Cơ cấu và độ phủ vai trò | ⚪ Chưa xác nhận người/độ phủ Backend, Frontend, AI, QA, DevOps, Security, Product/Design, Ops và Pháp chế; E29 | Đây là vai trò cần có, không phải số vị trí phải tuyển. Một người có thể kiêm nhiệm nếu lãnh đạo duyệt; chỉ định owner/backup và đánh giá bus factor theo hệ thống |
+| Nhánh/commit/PR/review | 🟡 CONTRIBUTING có Conventional Commits/PR; CODEOWNERS và security docs còn tham chiếu template; E29 | Xác nhận quy tắc P-010, người duyệt và số approval; kiểm branch protection thực, quyền bypass và self-hosted runner |
+| Definition of Ready / Done | ⚪ Chưa có bằng chứng quy ước đội được thống nhất | Đề xuất Ready: yêu cầu/acceptance/owner/phạm vi rõ. Done: review, kiểm tra cần thiết pass, tài liệu/evidence, không PII/secret, rollback và nghiệm thu nghiệp vụ tương ứng |
+| CI chặn merge/release | 🟡 Workflow có lint/test/typecheck/build tùy module; ⚪ required checks chưa xác nhận; E06/E29 | Chốt checks bắt buộc, thêm eval gate khi đổi prompt/tools/rank; không nói đã chặn merge chỉ vì có YAML. Canary/feature flag/rollback phải có owner và diễn tập |
+| Kỷ luật chất lượng | 🟡 Có test/eval/rubric và luật agent; E03/E07/E29 | Cấm hạ ngưỡng/skip test để xanh; công bố skip hợp lệ; giữ D độc lập, không tuning theo D; bug có severity, owner, SLA sửa lỗi cần duyệt |
+| Tài liệu/onboarding/ADR | 🟡 Có README, Swagger, spec/SQL và docs; ⚪ độ đủ/chạy được và ADR/runbook mới chưa nghiệm thu; E02/E27/E29 | Tài liệu self-contained theo phiên bản; người mới thử setup bằng dữ liệu test, đo thời gian tới smoke pass; **thời gian onboarding Chưa đo** |
+| Giao tiếp và phối hợp | ⚪ Nhịp sprint/Kanban, kênh trao đổi, người quyết định và cơ chế leo thang chưa xác nhận | Chốt cách đưa bug/feedback Ops/CSKH vào backlog, báo cáo luồng Host và handoff Vinny; không tự đặt lịch họp hoặc SLA |
+| Làm việc với AI Agent | 🟡 Có AGENTS về phạm vi/spec/bàn giao; E29; boot hub hiện bị thiếu | Người duyệt chịu trách nhiệm cuối, agent không tự đổi nghiệp vụ/schema/API; review code sinh, không đưa secret/PII, ngân sách/quota có giới hạn; thiếu hub không được báo kiểm tra đã pass |
+| Đào tạo/chia sẻ/on-call | ⚪ Chưa xác nhận lịch, người trực, người thay và năng lực dự phòng | Tập huấn dữ liệu cá nhân, xử lý secret, review auth/payment/AI và diễn tập incident/restore; chốt trước giao dịch thật |
+
+| KPI đội | Hiện trạng | Định nghĩa/cách đo đề xuất | Owner / hạn đề xuất |
+|---|---|---|---|
+| Lead time | ⚪ Chưa đo | Từ thay đổi được tiếp nhận đến production; định nghĩa mốc thống nhất | Tech Lead cần chỉ định; bắt đầu pilot |
+| Tần suất phát hành | ⚪ Chưa đo | Số lần deploy production thành công theo kỳ, tách demo | Tech/DevOps; bắt đầu pilot |
+| Tỷ lệ lỗi sau phát hành | ⚪ Chưa đo | Release gây incident/hotfix/rollback / tổng release theo kỳ | QA + Ops; từ pilot |
+| Thời gian khắc phục | ⚪ Chưa đo | Từ incident được ghi nhận đến phục hồi, kèm severity và timestamp | On-call owner; từ pilot |
+| Bus factor/độ phủ review | ⚪ Chưa đo | Người có thể vận hành/rollback từng thành phần; review được ghi nhận | Tech Lead; trước beta |
+
+**Liên hệ kinh doanh:** ⚪ chưa có bằng chứng năng suất hoặc SLA thực của đội. Không suy ra năng lực đội từ git author hay mô hình Core Team trong GTM. Cần phân công thật để bảo đảm chủ nhà được xử lý đúng hạn và khách không phải kể lại vấn đề nhiều lần.
+
+### KT-F. TRẢI NGHIỆM, CHẤT LƯỢNG DỮ LIỆU & VÒNG PHẢN HỒI
+
+**Mục tiêu:** chuyển lead thành giao dịch có kiểm soát và giảm tranh chấp sau vào ở; mọi tác động tăng trưởng phải được đo, không mặc định do có AI.
+
+| Chủ đề được rà thêm | Hiện trạng + bằng chứng | Cách đo / kế hoạch đề xuất | Liên kết kinh doanh |
+|---|---|---|---|
+| Accessibility/mobile/CWV/SEO | ⚪ Chưa có báo cáo WCAG/CWV/browser đa thiết bị trên commit ra mắt; E30 | QA/Product kiểm keyboard/focus/contrast/form errors, mobile/network chậm, Core Web Vitals thực và index/metadata trang căn; trước beta | Giảm mất lead do UX hoặc tải chậm |
+| vi/en và giờ Việt Nam | 🟡 Có code/ngữ cảnh ngôn ngữ và timezone report; ⚪ chưa nghiệm thu toàn bộ ngày/giờ UI/API; E11/E26 | Test có dấu/không dấu/viết tắt/tiếng Anh; ngày vào ở, giờ xem/hết hạn theo Asia/Ho_Chi_Minh, biên ngày và đổi ngày | Giảm lỡ lịch, sai kỳ thuê và chăm sóc lại |
+| Tiền/metric/báo cáo | 🟡 DB có Decimal/timestamptz, report có whitelist/masking; E01/E26 | Chốt định nghĩa revenue/commission/deposit/refund, quy tắc làm tròn và đơn vị tiền; đối chiếu SQL/chứng từ độc lập | Tránh sai biên lợi nhuận, thù lao và hoàn cọc |
+| Đồng bộ portal & First-to-Pay | 🟡 Có ownership/status/job; ⚪ end-to-end chịu lỗi chưa đủ; E16/E23/E25 | Kiểm hai khách cọc cạnh tranh, webhook trùng/chậm, ca chính/phụ, stale cache và trạng thái sau restart | Giữ căn thật, tránh chốt trùng và tranh chấp |
+| Công cụ hỗ trợ/audit | 🟡 Có support/feedback DB và tóm tắt che PII; E31 | Xác nhận ai nhận, quyền đọc, nội dung tối thiểu, lịch sử bàn giao, retention và kiểm SLA thực | Giảm thời gian xử lý và khách phải kể lại |
+| Feedback → backlog/eval | 🟡 Có dữ liệu 👍/👎/handoff; ⚪ vòng review và dashboard production chưa chứng minh; E31 | Phân loại lỗi định kỳ, ưu tiên theo tác động, đưa ví dụ đã được phép/ẩn danh vào eval phát triển; không đưa vào D | Sửa đúng lỗi ảnh hưởng giao dịch |
+| KPI kỹ thuật ↔ conversion | ⚪ Chưa đo | Theo dõi latency/degraded/lỗi API ↔ bỏ chat/booking; quota/cost ↔ chi phí hỗ trợ; có consent và quy tắc ẩn danh | Kiểm chứng AI hỗ trợ Time-to-Lease và CAC, không gán quan hệ nhân quả khi chỉ có tương quan |
+| Data residency/nhà cung cấp ngừng dịch vụ | ⚪ Chưa xác nhận hợp đồng/vị trí/xử lý xuyên biên giới; E20/E24/E28 | Pháp chế + DevOps lập bản đồ dữ liệu, quyền truy cập, export/restore và phương án degraded; trước GA | Bảo vệ quyền riêng tư và tính liên tục kinh doanh |
+
+✅ **Giới hạn phạm vi:** không đề xuất triển khai IoT/Lockbox hoặc hạ tầng mới; giữ mô hình Field Host thực địa theo AGENTS. 🟡 Vector/hybrid retrieval, queue bền vững và provider dự phòng chỉ được đánh giá như phương án khi có phép đo và phê duyệt, tránh mở rộng MVP không có căn cứ (E12/E25).
+
+### KT-G. GO/NO-GO, LỘ TRÌNH & DANH SÁCH CHƯA ĐO
+
+**Mục tiêu:** chỉ mở phạm vi kinh doanh tương ứng với bằng chứng và người chịu trách nhiệm. Các điều kiện dưới là **đề xuất nghiệm thu**, không phải tuyên bố đã đạt hoặc lịch phát hành đã cam kết.
+
+| Giai đoạn liên hệ GTM | Điều kiện Go đề xuất | Hiện trạng / bằng chứng | Người duyệt / mốc |
+|---|---|---|---|
+| Demo nội bộ | Luồng trình diễn smoke pass, dữ liệu test, mock gắn nhãn, không trình bày giao dịch mô phỏng là thật | 🟡 Có code/demo blueprint và QA cũ; ⚪ bản demo cụ thể chưa smoke; E04/E24 | Product + Tech + Ops; ngày cần xác nhận |
+| Pilot MVP 50 căn trong GTM | Nếu giao dịch thật: OTP thật; nghiệm thu thanh toán/hợp đồng/dữ liệu/quyền; **0 lỗi blocker/critical còn mở** trong phạm vi ra mắt; rủi ro cao được xử lý hoặc có quyết định kiểm soát phù hợp; alert và người trực | 🔴 Provider còn chặn; ⚪ số bug hiện hành, tải/SLO chưa xác nhận; E04/E18/E22–E24/E30 | Lãnh đạo + Tech/Ops/Pháp chế; ngày và phạm vi giao dịch cần xác nhận |
+| Phát hành Vinny cho khách | A/B/C ×3, không tụt baseline; **0 bịa căn/giá/chính sách**, **0 lộ thông tin/bị lừa** bộ C; người chấm/AI **≥80%** đồng thuận; D niêm phong độc lập nhất quán; p95 HTTP **≤4 giây** dưới tải đã duyệt, chi phí trong ngân sách | 🔴/⚪ Chưa đủ; E07–E14 | AI + QA + người dùng duyệt cuối theo kế hoạch Vinny; không chạy D để chỉnh prompt |
+| Beta | Luồng browser E2E bốn portal và hồi quy pass; đo tải mục tiêu, quota/cost, đối soát report và drill incident/restore; dữ liệu khách chỉ dùng khi có phép/căn cứ | ⚪ Chưa có bộ bằng chứng tổng hợp; E04/E26–E32 | QA + DevOps + Ops; ánh xạ beta với giai đoạn quy mô cần xác nhận |
+| GA | Pentest không còn lỗ hổng cao/nghiêm trọng chưa xử lý trong phạm vi nghiệm thu; dependency/runtime rủi ro đã triage; SLO/RPO/RTO được đo đạt, rollback/restore pass, privacy/escrow/chữ ký được các bên xác nhận, on-call có người | ⚪ Chưa chứng minh đạt; E20–E32 | Lãnh đạo + Tech + Security + Pháp chế/Ops; ngày cần xác nhận |
+| Scale Up 300 → Expansion 1.000 → Maturity 3.000 căn | Đo lại tải/chi phí/độ tươi/replica-job trước mỗi lần tăng quy mô, không có regression chất lượng và không vượt ngân sách | ⚪ Chưa đo; quy mô căn không suy ra RPS/users; E24–E30 | Product + Tech + Finance; trước mở rộng từng mốc |
+
+#### KT-G.1. Kế hoạch đo và trách nhiệm đề xuất
+
+| Việc còn thiếu / hiện trạng | Ai đề xuất phụ trách | Cách đo / bằng chứng phải có | Hạn tương đối đề xuất, cần duyệt |
+|---|---|---|---|
+| ⚪ Môi trường/CI/bug hiện hành | QA + DevOps + Tech | Commit/release ID, cấu hình đã che secret, CI run/artifact, smoke, bug có severity/owner/trạng thái | Trước pilot thật |
+| 🔴 Tích hợp OTP/OCR/thanh toán thật | Backend + Ops + Pháp chế/Finance | Provider nghiệm thu, test thành công/thất bại, chứng từ đã ẩn danh; không coi test fake là thật | Trước mở luồng giao dịch liên quan |
+| 🔴 Full baseline AI/held-out | AI + QA + người chấm nghiệp vụ | A/B/C ×3, thông số prompt/model/nhiệt độ/ngày, code checks + rubric, chấm tay/đồng thuận; D độc lập chỉ cuối | Trước phát hành Vinny |
+| ⚪ Coverage/browser E2E/load/chaos | QA + DevOps | Coverage theo module; E2E thật; p50/p95/errors/429/pool/job dưới tải đã chốt; degraded tách riêng | Pilot/beta theo mức rủi ro |
+| 🔴 Audit + ⚪ pentest/secret/log | Security + Tech | Triage prod/dev, audit đúng lockfile CI và Python, kiểm log không PII/OTP, báo cáo pentest riêng được cấp phép | Triage trước pilot, pentest trước GA |
+| ⚪ RPO/RTO/SLO/rollback | DevOps + Ops | Restore môi trường cô lập, đo mất dữ liệu/thời gian; rollback app/prompt/SQL có evidence và không đổi contract | Mục tiêu trước pilot, chứng minh trước GA |
+| ⚪ Cost/funnel/đội/CWV | Finance + Product + Tech/QA | Hóa đơn và usage thật; event đã đồng ý/ẩn danh; định nghĩa metric, dashboard, sample size/kỳ đo | Thiết lập từ pilot, nghiệm thu trước scale |
+
+⚪ **Ownership và hạn lịch:** tất cả vai trò ở bảng là đề xuất, chưa gán người hoặc cam kết ngày. Ngày beta/GA, concurrent users/RPS, SLO/RPO/RTO, ngân sách và SLA xử lý lỗi **Cần xác nhận**. Không tự lấy SLA “Gặp nhân viên” làm SLA sự cố hạ tầng.
+
+### KT-H. ĐIỂM CẦN THỐNG NHẤT VỚI NỘI DUNG CŨ
+
+Giữ nguyên văn nội dung cũ theo yêu cầu chủ tài liệu. Bảng này xác định điều cần lãnh đạo/đối tác duyệt để người đọc không hiểu mục tiêu hoặc dự toán là thành tích đã nghiệm thu.
+
+| Nội dung cũ | Trạng thái đối chiếu | Quyết định cần có |
+|---|---|---|
+| Slide 11: “Web/App và Backend API Live 100%”, giỏ hàng pilot sẵn sàng | ⚪ Chưa nghiệm thu deployment/dữ liệu hiện tại; E04–E06 | Xác nhận đó là demo, mục tiêu hay sản phẩm đang vận hành thật |
+| Vinny “0 giây”, 24/7, khớp căn 30 giây | 🟡 Có cơ chế, báo cáo cũ có latency/quota; ⚪ chưa uptime/SLO hiện tại; E08–E14 | Tách p95 chat ≤4 giây mục tiêu khỏi thời gian hoàn tất tìm căn 30 giây và cam kết trực 24/7 |
+| OTP Zalo, OCR/liveness 3 giây, ký/gửi hợp đồng hoàn toàn tự động | 🔴/⚪ Provider/OCR chưa đủ bằng chứng thật; E18/E22 | Chốt điều kiện nghiệm thu và phạm vi mô phỏng trước public launch |
+| Upstash/pgvector, GPT-4o-mini/Gemini 1.5 trong mục 4.3 | 🟡 Kiến trúc Vinny thực dùng Gemini cấu hình + retrieval từ khóa; E11/E12/E24/E25 | Phân biệt phương án/dự toán cũ với implementation hiện có; không tự thêm công nghệ để khớp tài liệu |
+| Cloud Pro, WAF, Sentry, PITR trong dự toán | 🟡 Render blueprint free/staging; ⚪ billing/hạ tầng thật khác chưa xác minh; E24/E30 | Finance/DevOps xác nhận gói và chi phí thực; không suy ra đang trả phí từ bảng dự toán |
+| “Chi phí thực tế” AI/OTP/OCR, FAQ hit-rate và hiệu quả kinh tế | ⚪ Chưa có hóa đơn/đo cost và cache hit-rate; E09/E24/E30 | Xác nhận số nào giả định/dự toán/thực đo, nguồn và kỳ đo; không sửa số tài chính trong nhiệm vụ này |
+| Escrow độc lập, hoàn tiền 60 giây, Zero-Storage và tuân thủ pháp luật | ⚪ Chưa có xác nhận ngân hàng/pháp chế/drill tương ứng; E20–E23/E27 | Các bên xác nhận căn cứ và bằng chứng; code crypto/QR không thay thế chứng nhận |
+| Core Team/SLA thực địa/KPI đã nêu; mốc hoàn thành 17/10/2026 | ⚪ Nhân sự trực và nghiệm thu mốc chưa xác nhận; E29 và tài liệu gốc | Chốt người phụ trách, phạm vi, ngày beta/GA; giữ nguyên lịch và sơ đồ cũ tới khi chủ tài liệu quyết định |
+| “0 bịa/0 lộ” hoặc verifier hoàn chỉnh dùng như bảo đảm | 🟡/🔴 Eval chưa đủ; verifier mở rộng chưa bật; E07–E13 | Trình bày là điều kiện phải chứng minh, không suy ra đã đạt từ code/test file |
+
+### KT-I. PHỤ LỤC NGUỒN BẰNG CHỨNG
+
+✅ **Nguồn kỹ thuật:** code/cấu hình được đọc ngày **18/10/2026 tại `a1d186f`**; ngày báo cáo lịch sử nêu riêng. **Độ tin cậy cao** chỉ cho nội dung thấy trong code hoặc phép đo máy; **trung bình** cho báo cáo khác commit/bộ đo; **thấp** cho mô hình/template chưa xác nhận áp dụng. Không có bằng chứng ở đây không đồng nghĩa không tồn tại hạ tầng ngoài repo.
+
+| ID | Nguồn từ root repo | Ngày / độ tin cậy / giới hạn |
+|---|---|---|
+| E01 | `apps/web/package.json`, `backend/package.json`, `backend/prisma/schema.prisma` | 18/10; cao cho stack/schema, không xác nhận deployed |
+| E02 | `apps/web/next.config.ts`, `backend/src/main.ts` | 18/10; cao cho API/proxy/Swagger |
+| E03 | [Bằng chứng máy](test-reports/gtm-technical-evidence-2026-10-18.json), package scripts | 18/10; cao cho inventory, không phải test pass |
+| E04 | `docs/qa/tonghop.md`, `docs/qa/TC-01_search-filter.md` đến `TC-06_admin-portal.md`, `docs/qa/bugs/` | Báo cáo 04–09/10 và ngày từng biên bản; trung bình, chưa tái nghiệm thu |
+| E05 | `docs/test-reports/local-deep-test2-2026-10-14.md` | 14/10; trung bình, file local chưa tracked và khác commit |
+| E06 | `.github/workflows/ci.yml` | 18/10; cao cho workflow; kết quả CI mới chưa kiểm chứng |
+| E07 | `backend/evals/vinny/` bộ A/B/C/D, `rubric.md`, `backend/scripts/eval-vinny.ts` | 18/10; cao cho runner/số dòng; không mở/chạy D |
+| E08 | `backend/evals/vinny/results/v2-20261016-0849.md` | 16/10; trung bình, bộ cũ và có quota/fallback |
+| E09 | `backend/evals/vinny/results/v2-20261016-0907-quota-exhausted.md` | 16/10; trung bình, không đại diện vận hành bình thường |
+| E10 | `docs/test-reports/vinny-step-0-3-2026-10-16.md`, `vinny-baseline-manifest-2026-10-16.json` trong cùng thư mục | 16/10; trung bình, baseline chưa hoàn tất/held-out cần niêm phong |
+| E11 | `backend/src/modules/chat/chat.service.ts`, `gemini.client.ts`, `vinny-tools.ts` | 18/10; cao cho code; env deployed/billing chưa xác nhận |
+| E12 | `backend/src/modules/chat/chat-knowledge.ts`, `vinny-prompt.ts`, `backend/prompts/vinny/`, `ai-engine/knowledge/` | 18/10; cao cho retrieval/prompt theo repo |
+| E13 | `backend/src/modules/chat/vinny-verifier.ts`, `vinny-guard.ts`, `chat-reply.ts`, `chat.service.ts` | 18/10; cao, verifier mở rộng chưa được gọi runtime |
+| E14 | `backend/src/modules/chat/chat.controller.ts`, `dto/chat.dto.ts`, `vinny-agent.ts`, `chat.service.ts` | 18/10; cao cho limit/fallback, chưa chứng minh distributed abuse |
+| E15 | `backend/src/modules/auth/session/session-cookies.service.ts`, `session-token.service.ts`, `backend/src/modules/auth/auth.constants.ts` | 18/10; cao cho session code |
+| E16 | `backend/src/common/guards/`, `backend/src/modules/tenant/booking-access.service.ts`, `backend/src/modules/field-hosts/host-scope.ts`, `backend/src/modules/host-viewings/host-actor.service.ts` | 18/10; cao cho route/scope đã đọc, không phải audit mọi API |
+| E17 | `backend/src/modules/auth/otp/otp-crypto.ts`, `otp.service.ts`, `backend/src/modules/auth/login-lockout.service.ts` | 18/10; cao cho OTP crypto/lifecycle/lockout |
+| E18 | `backend/src/modules/auth/otp/senders/` factory, Zalo, SMS và mock sender | 18/10; cao cho trạng thái chưa tích hợp và mock guard |
+| E19 | `backend/src/main.ts`, `app.module.ts`, `backend/src/common/filters/http-exception.filter.ts`, `apps/web/next.config.ts` | 18/10; cao cho phần cấu hình đã rà, chưa kiểm site live |
+| E20 | `backend/src/modules/auth/phone/phone.service.ts`, `backend/src/modules/auth/secrets.ts`; logging/filter; `.gitignore`, `SECURITY.md` | 18/10; cao cho cơ chế; chưa quét toàn bộ secret/PII |
+| E21 | `backend/src/modules/inspection/inspection-photo.service.ts`, `listing-media.service.ts`, `backend/src/modules/landlord/landlord-photo-storage.service.ts` | 18/10; cao cho luồng upload, chưa pentest/bucket audit |
+| E22 | `backend/src/modules/identity/identity.service.ts`, `ekyc.simulator.ts`, `backend/src/modules/contract/`, `legal/admin/06_DATA_PRIVACY_SECURITY_AND_AI_GOVERNANCE.md` | 18/10; cao cho simulator/code, văn bản không phải kết luận pháp lý |
+| E23 | `backend/src/modules/deposit/deposit.controller.ts`, `deposit.service.ts`, `vietqr.ts` | 18/10; cao cho endpoint; chưa nghiệm thu ngân hàng thật |
+| E24 | `render.yaml`, `backend/docker-compose.yml` | 18/10; cao cho blueprint; không xác nhận gói live |
+| E25 | `backend/src/modules/deposit/hold-expiry.service.ts`, `backend/src/modules/dispatch/dispatch-sla.service.ts`, `backend/src/modules/admin/admin-payout.service.ts`, `backend/src/modules/property/property.service.ts` | 18/10; cao cho timer/cache; tải/độ bền chưa đo |
+| E26 | `backend/src/modules/admin/reports/` service, mask, CSV và spec | 18/10; cao cho guardrail; chưa đối soát SQL production |
+| E27 | `backend/prisma/schema.prisma`, `backend/prisma/migrations-sql/` | 18/10; cao cho file up/down, chưa thử rollback/restore |
+| E28 | `ai-engine/README.md`, `backend/src/modules/assistant/`, `backend/src/modules/chat/` | 18/10; cao cho hai đường AI trong repo |
+| E29 | `AGENTS.md`, `CONTRIBUTING.md`, `.github/CODEOWNERS`, `.github/workflows/ci.yml`, `SECURITY.md` | 18/10; cao cho file, thấp cho áp dụng tổ chức chưa xác nhận |
+| E30 | Log/filter/health check; tìm cấu hình quan sát/tải/DR trong runtime và CI đã rà | 18/10; trung bình cho giới hạn tìm kiếm; báo cáo tải/coverage/pentest/restore/uptime hiện tại: **Không có bằng chứng được kiểm chứng** |
+| E31 | `backend/src/modules/chat/chat-support.service.ts`, `backend/prisma/migrations-sql/20261015_vinny_support_feedback/`, `backend/README.md` | 18/10; cao cho support/feedback và privacy projection, SLA thực chưa đo |
+| E32 | [Output audit tổng hợp](test-reports/gtm-technical-evidence-2026-10-18.json) | 18/10; cao cho npm audit package-lock, không phải pentest hoặc audit pnpm/Python |
+
+🟡 **Hồ sơ rà soát chi tiết và các giới hạn:** [gtm-technical-review-2026-10-18.md](test-reports/gtm-technical-review-2026-10-18.md). ⚪ Không có CI run mới được kiểm chứng, hóa đơn/gói thực, danh sách nhân sự xác nhận, biên bản nghiệm thu ngân hàng/provider, pentest hay restore drill được cung cấp trong đợt rà này. Không sao chép dữ liệu cá nhân hoặc chi tiết lỗ hổng chưa vá từ các báo cáo cũ vào tài liệu.
+
+### KT-J. THUẬT NGỮ
+
+| Thuật ngữ | Nghĩa dùng trong phụ lục |
+|---|---|
+| Readiness / Go–No-Go | Mức sẵn sàng / điều kiện cho phép hoặc chặn mở một phạm vi kinh doanh |
+| Grounded / hallucination | Phát biểu có nguồn đối chiếu / thông tin AI tạo ra không có nguồn đúng |
+| Eval / red-team / held-out | Đo chất lượng AI / kiểm thử tấn công / bộ giữ kín không dùng tuning |
+| LLM-as-judge / agreement | AI chấm theo rubric / độ đồng thuận với người chấm theo cách tính đã chốt |
+| RBAC / IDOR / PII | Phân quyền theo vai / truy cập tài nguyên người khác do kiểm quyền sai / dữ liệu cá nhân |
+| RAG / recommend | Truy hồi tri thức để trả lời / thuật toán chọn và xếp hạng căn; hai chức năng khác nhau |
+| Degraded / fallback | Chế độ suy giảm / đường trả lời dự phòng; không phải dữ liệu giả |
+| p50 / p95 / RPS | Phân vị độ trễ / request mỗi giây; phải nêu tải, mẫu và ranh giới đo |
+| SLO / SLA | Mục tiêu vận hành kỹ thuật / mức dịch vụ cam kết; cần chủ sở hữu và phương pháp đo |
+| RPO / RTO | Mức mất dữ liệu tối đa cho phép / thời gian phục hồi mục tiêu, cần thử khôi phục |
+| Idempotency / replay | Xử lý lặp không tạo tác động trùng / phát lại thông điệp hoặc webhook |
+| CWV / WCAG | Chỉ số trải nghiệm web / hướng dẫn khả năng truy cập; cần phép đo hoặc audit |
+| Bus factor / RACI | Mức phụ thuộc cá nhân / phân công người thực hiện, chịu trách nhiệm, tham vấn và nhận thông tin |
+
+### KT-K. DANH SÁCH CẦN XÁC NHẬN
+
+| Nội dung | Trạng thái / cách xử lý khi chưa có trả lời |
+|---|---|
+| Mục đích bản này: demo hay pilot nhận cọc thật; ngày pilot/beta/GA; ánh xạ với bốn giai đoạn quy mô | ⚪ **Cần xác nhận**; giữ lịch/cam kết cũ nguyên văn, không tự tuyên bố gate đã qua |
+| Người phụ trách và người thay cho Tech/AI/QA/DevOps/Security/Product/Ops/Finance/Pháp chế; người duyệt cuối | ⚪ **Cần xác nhận**; mọi owner trong kế hoạch là vai trò đề xuất, không suy ra biên chế |
+| Review/branch protection/DoR/DoD, nhịp phối hợp, bug severity/SLA sửa và on-call | ⚪ **Cần xác nhận**; không tự nhận quy trình template là thực hành hiện hữu |
+| Concurrent users/RPS, SLO, RPO/RTO, ngân sách cloud/AI/quota và kế hoạch provider dự phòng | ⚪ **Chưa chốt/Chưa đo**; cần duyệt mục tiêu trước phép đo và gate |
+| Gói live/billing, OA/template Zalo, ngân hàng/escrow/hoàn tiền, OCR/e-sign và phê duyệt pháp chế | ⚪ **Cần xác nhận bằng chứng đã che dữ liệu nhạy cảm**; không yêu cầu key/token/OTP/chuỗi kết nối |
+| Retention, quyền xóa/xuất, truy cập log/backup, vị trí/chuyển dữ liệu và căn cứ consent | ⚪ **Cần rà soát pháp lý và vận hành**; không kết luận tuân thủ từ code |
+| Các quyết định Vinny đã chốt trước đó | ✅ Đã nhận xác nhận trong phiên Vinny: mình–bạn, 3–5 câu, trần 90 từ/so sánh 150; p95 mục tiêu ≤4 giây; Ops/Admin qua “Gặp nhân viên”, khoảng 2 giờ làm việc; người dùng chấm tay; chưa dùng chat thật. Đây là yêu cầu mục tiêu, **không phải số đo production**, không tự áp thành SLA hạ tầng |
+
+**🟡 Phán quyết tài liệu:** đã bổ sung căn cứ kỹ thuật và các khoảng trống; **không xác nhận sản phẩm đã sẵn sàng phát hành**. Những mục “Chưa đo/Cần xác nhận” tiếp tục là điều kiện mở, do người có thẩm quyền quyết định theo gate và bằng chứng tương ứng.

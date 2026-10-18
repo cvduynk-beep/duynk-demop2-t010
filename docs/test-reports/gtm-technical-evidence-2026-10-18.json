@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2026-10-18T08:29:35.979Z",
+  "baseCommit": "a1d186f6374a1c0556d0333ce42b91ab66e159ad",
+  "target": "docs/GO_TO_MARKET_AND_OPERATIONAL_STRATEGY.md",
+  "originalSha256": "6b36d702dd9486ed0adc4533b0b5400ea9cc4b03759c5caa4d273654c88fd6e0",
+  "originalBytes": 113957,
+  "originalPrefixSha256": "6b36d702dd9486ed0adc4533b0b5400ea9cc4b03759c5caa4d273654c88fd6e0",
+  "finalSha256": "c30daca05c7ad8fe05aed7f11f7b72ae48d60ebc065ff8bab5b41430c61c66ef",
+  "originalBytesUnchanged": true,
+  "gitBlobLineEndings": "LF; original Windows working copy uses CRLF",
+  "inventory": {
+    "backendSpecFiles": 58,
+    "webTestFiles": 52,
+    "vinnyCases": {
+      "a_mot_luot": 92,
+      "b_nhieu_luot": 33,
+      "c_tan_cong": 35,
+      "d_giu_kin": 30
+    }
+  },
+  "audits": {
+    "backend": {
+      "command": "npm audit --json",
+      "exitCode": 1,
+      "vulnerabilities": {
+        "info": 0,
+        "low": 4,
+        "moderate": 18,
+        "high": 40,
+        "critical": 1,
+        "total": 63
+      },
+      "lockfile": "package-lock.json",
+      "lockfileSha256": "44c4e516be6e808eaf780e4d27139f33e2b316475781930932080ad5552f01f6"
+    },
+    "apps/web": {
+      "command": "npm audit --json",
+      "exitCode": 1,
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 6,
+        "critical": 0,
+        "total": 6
+      },
+      "lockfile": "package-lock.json",
+      "lockfileSha256": "2142cd5cf092d9d976e660715c86734331cce7ea64ab7e2885ddd479aee13f09"
+    }
+  },
+  "limitations": [
+    "Evidence regenerated during pre-push check because the earlier referenced JSON was absent.",
+    "Inventory is not a test pass count or coverage measurement.",
+    "Held-out set counted by non-empty lines only; no cases executed.",
+    "Audit counts include dev and transitive dependencies; exploitability in production is unverified.",
+    "Web CI uses pnpm-lock.yaml; this audit uses package-lock.json. Python dependencies were not audited.",
+    "Product tests, app, DB, payments, and live LLM were not run for this documentation push."
+  ]
+}
