@@ -4,7 +4,8 @@ export type UnitStatus = "available" | "viewing" | "holding" | "rented" | "unlis
 export type MandateStatus = "pending_inspection" | "active" | "exiting" | "ended";
 export type LayoutKind = "Studio" | "1PN" | "2PN" | "3PN";
 export type LockKind = "smart" | "physical";
-export type LeaseTermPref = "flexible" | "long" | "mid" | "fixed";
+/** Khớp backend `CreateConsignmentDto.leaseTerm` (`mid` ⇒ thuê tối thiểu 6 tháng, `long`/`fixed` ⇒ 12 tháng). */
+export type LeaseTermPref = "long" | "mid" | "fixed";
 export type ConsignmentStatus = "awaiting_host" | "inspecting" | "reviewing" | "awaiting_landlord" | "approved" | "rejected";
 
 export interface MandateSummary {

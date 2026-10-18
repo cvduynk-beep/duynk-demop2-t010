@@ -33,9 +33,10 @@ Quy chế này áp dụng tại thời điểm Khách Thuê sau khi trực tiế
    * Giá thuê cơ bản và các khoản bóc tách All-in Cost đã chốt được cố định nguyên vẹn, Chủ nhà không được phép tự ý thay đổi.
 3. **Nghĩa vụ trong thời gian giữ căn của Khách thuê:** Khách thuê có trách nhiệm cung cấp ảnh chụp CCCD gắn chip 2 mặt để hệ thống thực hiện bóc tách AI Vision OCR và tiến hành ký kết Hợp đồng thuê số hóa chính thức.
 4. **Ưu đãi Chốt nhanh (chỉ khi Chủ nhà ủy quyền Chốt nhanh & Giá sàn An toàn):**
-   * Khách thuê được chọn trả trước tiền thuê theo chu kỳ **01 / 03 / 06 tháng/kỳ** để nhận giá thuê giảm **3,5% / 5,5% / 10%** (làm tròn 50.000 VNĐ, không bao giờ thấp hơn Giá sàn bảo mật của Chủ nhà) và tiền cọc giảm khoảng **5%** (tối thiểu 200.000 VNĐ, tối đa 8%).
+   * **Khi đặt cọc:** tiền cọc giảm khoảng **5%** (tối thiểu 200.000 VNĐ, tối đa 8%), không phải chọn chu kỳ. Căn đã ủy quyền Chốt nhanh cho phép **chốt cọc ngay trên trang căn, không cần đi xem trực tiếp** (xác thực SĐT qua OTP Zalo, xác nhận đã xem ảnh thực tế có dấu thời gian; người thân được chuyển khoản thay theo Điều 283 BLDS 2015, Khách thuê vẫn là người đặt cọc).
+   * **Khi ký Hợp đồng thuê:** Khách thuê chọn trả trước tiền thuê theo chu kỳ **01 / 03 / 06 tháng/kỳ** để nhận giá thuê giảm **3,5% / 5,5% / 10%** (làm tròn 50.000 VNĐ, không bao giờ thấp hơn Giá sàn bảo mật của Chủ nhà).
    * Ưu đãi chỉ giữ khi tiền cọc về trong **24 giờ** kể từ lúc chấp thuận; về muộn hơn thì căn **không** bị khóa và Nền tảng hoàn lại đúng số tiền đã nhận trong 24 giờ làm việc. Chưa có tiền về thì Khách thuê được đổi lựa chọn (hệ thống báo giá lại).
-   * Hợp đồng thuê bắt buộc ghi đúng chu kỳ và giá thuê đã chốt. Không áp dụng phụ phí thuê ngắn hạn.
+   * Hợp đồng thuê ghi đúng chu kỳ và giá thuê đã chọn khi ký; khoản cọc đã giảm là Tiền cọc bảo đảm đầy đủ, không nộp bù. Không áp dụng phụ phí thuê ngắn hạn.
 5. **Ngày dọn vào (Smart Move-in Window Protocol):** Ngày dọn vào sớm nhất là T0 + 2 ngày (T0 = ngày tiền cọc về), muộn nhất T0 + 30 ngày. Miễn tiền thuê thời gian chờ tới T0 + 7 (ngày thứ 08); chọn dọn vào muộn hơn thì Hợp đồng và tiền thuê tính từ ngày thứ 08, Khách thuê được nhận mã cửa từ ngày đó.
 
 ---

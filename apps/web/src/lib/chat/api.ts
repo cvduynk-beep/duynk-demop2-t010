@@ -39,11 +39,15 @@ export interface ChatRecommendation {
   explanation: string;
 }
 
-export type ChatKind = "search" | "faq" | "clarify" | "greeting" | "refusal";
+export type ChatKind = "search" | "faq" | "clarify" | "greeting" | "refusal" | "answer" | "handoff";
+export type ChatHandoffCategory = "complaint" | "deposit_dispute" | "payment" | "contract" | "damage" | "human_request";
 export type ChatDegradedReason = "llm_not_configured" | "llm_timeout" | "llm_error" | "llm_rejected" | "recommend_unavailable";
 
 export interface ChatResponse {
   conversationId: string;
+  /** Id lượt trả lời — gửi kèm 👍/👎. */
+  messageId: string;
+  promptVersion: string;
   kind: ChatKind;
   reply: string;
   recommendations: ChatRecommendation[];
@@ -52,6 +56,18 @@ export interface ChatResponse {
   source: "llm" | "template" | "knowledge" | "rule";
   degraded: boolean;
   degradedReason?: ChatDegradedReason;
+  /** Có ⇒ Vinny đề nghị chuyển nhân viên thật (hiện nút "Gặp nhân viên"). */
+  handoff?: { category: ChatHandoffCategory };
+}
+
+export interface ChatHistoryTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+/** Tối đa 6 lượt gần nhất, mỗi lượt ≤ 600 ký tự (giới hạn của backend). Server không lưu nội dung. */
+export function historyOf(messages: { role: "user" | "assistant"; text: string }[]): ChatHistoryTurn[] {
+  return messages.slice(-6).map((m) => ({ role: m.role, text: m.text.slice(0, 600) }));
 }
 
 /** Giới hạn của backend (AGENTS.md lớp 1). */
@@ -74,8 +90,25 @@ function contextOf(c: CriteriaState, searched: boolean) {
 }
 
 export const chatApi = {
-  send: (message: string, criteria: CriteriaState, searched: boolean, conversationId?: string): Promise<ApiResponse<ChatResponse>> =>
-    api.post<ChatResponse>("/chat", { message, conversationId, context: contextOf(criteria, searched) }),
+  send: (
+    message: string,
+    criteria: CriteriaState,
+    searched: boolean,
+    conversationId?: string,
+    history: ChatHistoryTurn[] = [],
+  ): Promise<ApiResponse<ChatResponse>> =>
+    api.post<ChatResponse>("/chat", {
+      message,
+      conversationId,
+      context: contextOf(criteria, searched),
+      ...(history.length ? { history } : {}),
+    }),
+  /** 👍/👎 theo lượt + phiên bản prompt (không gửi nội dung hội thoại). */
+  feedback: (dto: { messageId: string; conversationId: string; rating: "up" | "down"; reason?: string; promptVersion: string; kind?: string }) =>
+    api.post<{ messageId: string; rating: string }>("/chat/feedback", dto),
+  /** Khách đã đăng nhập bấm "Gặp nhân viên": tạo yêu cầu hỗ trợ thật (backend che SĐT/email/CCCD trong tóm tắt). */
+  handoff: (dto: { conversationId: string; category: ChatHandoffCategory; messages: string[] }) =>
+    api.post<{ id: string; status: string; created: boolean; sla: string }>("/chat/handoff", dto),
 };
 
 /** Thông báo cho các mã lỗi của `POST /chat`. */

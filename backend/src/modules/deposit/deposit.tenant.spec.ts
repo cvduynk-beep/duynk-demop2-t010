@@ -569,50 +569,53 @@ describe('Deposit & VietQR Backend Tests (SPEC-P03 §8: Cases 1–11)', () => {
     expect(new Date(dep.expiresAt).getTime() - paidAt.getTime()).toBe(36 * 3600 * 1000);
   });
 
-  // ── Chốt nhanh ─────────────────────────────────────────────────────────────────────────────
-  it('16. báo giá chốt nhanh: chủ nhà chưa ủy quyền ⇒ eligible false; ủy quyền ⇒ 3 nấc, giá ≥ giá sàn, không lộ giá sàn', async () => {
-    expect(await depositService.getFastCloseQuotes('VS-88888', { id: TENANT_ID })).toMatchObject({ eligible: false, quotes: [] });
+  // ── Chốt nhanh (hồ sơ 20: giảm cọc lúc cọc, chọn chu kỳ lúc ký HĐ) ───────────────────────────
+  it('16. báo giá chốt nhanh: chưa ủy quyền ⇒ eligible false; ủy quyền ⇒ stage deposit, giảm cọc + 3 nấc giá thuê ≥ sàn, không lộ giá sàn', async () => {
+    expect(await depositService.getFastCloseQuotes('VS-88888', { id: TENANT_ID })).toMatchObject({ eligible: false, stage: null, quotes: [] });
     fixture.allowFastClose(6_000_000);
     const q = await depositService.getFastCloseQuotes('VS-88888', { id: TENANT_ID });
-    expect(q).toMatchObject({ eligible: true, quoteHours: 24, rent: 6_500_000, deposit: 6_500_000 });
+    // cọc 6.5tr: 5% = 325.000 → làm tròn 50k 350.000 (≥ 200k, ≤ 8% = 520k → 500k) ⇒ 6.150.000
+    expect(q).toMatchObject({ eligible: true, stage: 'deposit', quoteHours: 24, rent: 6_500_000, deposit: 6_500_000, depositDiscount: 350_000, depositAfter: 6_150_000 });
     // 6.5tr: −3,5% ⇒ 6.272.500 → làm tròn 50k 6.250.000 · −5,5% ⇒ 6.150.000 · −10% ⇒ 5.850.000 < sàn 6tr ⇒ kẹp 6.000.000
     expect(q.quotes.map((x: any) => [x.cycle, x.rent])).toEqual([[1, 6_250_000], [3, 6_150_000], [6, 6_000_000]]);
-    // cọc 6.5tr: 5% = 325.000 → làm tròn 50k 350.000 (≥ 200k, ≤ 8% = 520k → 500k) ⇒ 6.150.000
-    expect(q.quotes.every((x: any) => x.deposit === 6_150_000 && x.depositDiscount === 350_000)).toBe(true);
     expect(JSON.stringify(q)).not.toMatch(/floor/i);
   });
 
-  it('17. tạo cọc chốt nhanh: amount đã giảm, snapshot chu kỳ + giá + hạn 24h; chưa ủy quyền ⇒ 409 fast_close_unavailable; chu kỳ sai ⇒ 400', async () => {
+  it('17. tạo cọc chốt nhanh: amount đã giảm, hạn 24h, CHƯA có chu kỳ/giá thuê; chưa ủy quyền ⇒ 409 fast_close_unavailable', async () => {
     await expect(
-      depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 3 }),
+      depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastClose: true }),
     ).rejects.toMatchObject({ response: { code: 'fast_close_unavailable' } });
-    await expect(
-      depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 2 }),
-    ).rejects.toMatchObject({ response: { code: 'invalid_request', errors: { fastCloseCycle: expect.any(String) } } });
     fixture.allowFastClose(6_000_000);
     const before = Date.now();
-    const res = await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 3 });
+    const res = await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastClose: true });
     const dep = fixture.savedDeposits[0];
-    expect(dep).toMatchObject({ amount: 6_150_000, baseAmount: 6_500_000, fastCloseCycle: 3, quotedMonthlyRent: 6_150_000 });
+    expect(dep).toMatchObject({ amount: 6_150_000, baseAmount: 6_500_000, fastCloseCycle: null, quotedMonthlyRent: null });
     expect(new Date(dep.quoteExpiresAt).getTime() - before).toBeGreaterThanOrEqual(24 * 3_600_000 - 1000);
-    expect(res.deposit).toMatchObject({ amount: 6_150_000, fastClose: { cycle: 3, baseAmount: 6_500_000, monthlyRent: 6_150_000 } });
+    expect(res.deposit).toMatchObject({ amount: 6_150_000, fastClose: { cycle: null, baseAmount: 6_500_000, depositDiscount: 350_000, monthlyRent: null } });
+    expect(res.direct).toBe(false); // lịch có ticket Host ⇒ không phải cọc trực tiếp
+  });
+
+  it('17b. client không thể tự đặt số tiền: body có amount ⇒ bị bỏ qua, vẫn là số server tính', async () => {
+    fixture.allowFastClose(6_000_000);
+    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastClose: true, amount: 1_000 } as any);
+    expect(fixture.savedDeposits[0].amount).toBe(6_150_000);
   });
 
   it('18. đổi lựa chọn khi chưa có tiền về ⇒ báo giá lại trên CÙNG khoản cọc (audit DEPOSIT_REQUOTED); gửi lại y hệt ⇒ idempotent', async () => {
     fixture.allowFastClose(6_000_000);
-    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 3 });
-    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 3 });
+    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastClose: true });
+    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastClose: true });
     expect(fixture.savedDeposits).toHaveLength(1);
     expect(fixture.savedAudits.filter((a) => a.actionType === 'DEPOSIT_REQUOTED')).toHaveLength(0);
     await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION });
     expect(fixture.savedDeposits).toHaveLength(1);
-    expect(fixture.savedDeposits[0]).toMatchObject({ amount: 6_500_000, fastCloseCycle: null, quotedMonthlyRent: null });
-    expect(fixture.savedAudits.find((a) => a.actionType === 'DEPOSIT_REQUOTED')).toMatchObject({ oldValue: { amount: 6_150_000, fastCloseCycle: 3 }, newValue: { amount: 6_500_000 } });
+    expect(fixture.savedDeposits[0]).toMatchObject({ amount: 6_500_000, baseAmount: null, quoteExpiresAt: null });
+    expect(fixture.savedAudits.find((a) => a.actionType === 'DEPOSIT_REQUOTED')).toMatchObject({ oldValue: { amount: 6_150_000, fastClose: true }, newValue: { amount: 6_500_000 } });
   });
 
   it('19. báo có sai số tiền của CHÍNH khoản cọc ⇒ ignored + audit expected/received; đúng số ⇒ paid', async () => {
     fixture.allowFastClose(6_000_000);
-    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 6 });
+    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastClose: true });
     const code = fixture.savedDeposits[0].depositCode;
     expect(await depositService.markPaid({ depositCode: code, amount: 2_000_000, bankRefNumber: 'FT-OLD', actor: 'bank' })).toBe('ignored');
     expect(fixture.savedAudits.find((a) => a.actionType === 'DEPOSIT_AMOUNT_MISMATCH')?.newValue).toMatchObject({ expected: 6_150_000, received: 2_000_000 });
@@ -622,7 +625,7 @@ describe('Deposit & VietQR Backend Tests (SPEC-P03 §8: Cases 1–11)', () => {
 
   it('20. chốt nhanh: tiền về SAU 24 giờ ⇒ hoàn đúng số đã nhận, không giữ căn; khách báo giá lại được', async () => {
     fixture.allowFastClose(6_000_000);
-    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 1 });
+    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastClose: true });
     const dep = fixture.savedDeposits[0];
     const late = new Date(new Date(dep.quoteExpiresAt).getTime() + 60_000);
     expect(await depositService.markPaid({ depositCode: dep.depositCode, amount: dep.amount, bankRefNumber: 'FT-LATE', actor: 'bank', paidAt: late })).toBe('refunded');
@@ -632,18 +635,46 @@ describe('Deposit & VietQR Backend Tests (SPEC-P03 §8: Cases 1–11)', () => {
     expect(fixture.savedAudits.map((a) => a.actionType)).toContain('DEPOSIT_QUOTE_EXPIRED_REFUND');
     await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION });
     expect(fixture.savedDeposits).toHaveLength(1);
-    expect(dep).toMatchObject({ paymentStatus: DepositStatus.PENDING_PAYMENT, amount: 6_500_000, fastCloseCycle: null });
+    expect(dep).toMatchObject({ paymentStatus: DepositStatus.PENDING_PAYMENT, amount: 6_500_000, quoteExpiresAt: null });
   });
 
   it('21. demo-pay sau khi khoản cọc chốt nhanh bị hoàn vì quá hạn ⇒ báo giá lại có mã giao dịch demo mới (không bị "duplicate")', async () => {
     process.env.DEMO_TOOLS = 'true';
     fixture.allowFastClose(6_000_000);
-    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 1 });
+    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastClose: true });
     const dep = fixture.savedDeposits[0];
     dep.quoteExpiresAt = new Date(Date.now() - 60_000);
     expect(await depositService.demoPay('VS-88888', { id: TENANT_ID })).toEqual({ outcome: 'refunded' });
-    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastCloseCycle: 1 });
+    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastClose: true });
     expect(await depositService.demoPay('VS-88888', { id: TENANT_ID })).toEqual({ outcome: 'paid' });
     expect(new Set(fixture.savedEscrow.map((e) => e.bankRefNumber)).size).toBe(fixture.savedEscrow.length);
+  });
+
+  it('22. công khai GET /units/:code/fast-deposit: chỉ eligible khi chủ nhà ủy quyền + căn trống; không lộ giá sàn / giá thuê giảm', async () => {
+    expect(await depositService.getPublicFastDeposit('VHOP-S1.02-1208')).toEqual({
+      eligible: false, holdHours: 48, quoteHours: 24, deposit: 6_500_000, depositDiscount: 0, amount: 6_500_000,
+    });
+    fixture.allowFastClose(6_000_000);
+    const q = await depositService.getPublicFastDeposit('vhop-s1.02-1208');
+    expect(q).toEqual({ eligible: true, holdHours: 48, quoteHours: 24, deposit: 6_500_000, depositDiscount: 350_000, amount: 6_150_000 });
+    expect(JSON.stringify(q)).not.toMatch(/floor|rent/i);
+    fixture.allowFastClose(7_000_000); // sàn > giá chào ⇒ không hợp lệ, CẤM tự suy
+    expect((await depositService.getPublicFastDeposit('VHOP-S1.02-1208')).eligible).toBe(false);
+    fixture.allowFastClose(6_000_000);
+    (fixture.mockUnit as any).status = UnitStatus.HOLDING;
+    expect((await depositService.getPublicFastDeposit('VHOP-S1.02-1208')).eligible).toBe(false);
+    await expect(depositService.getPublicFastDeposit('KHONG-CO')).rejects.toMatchObject({ response: { code: 'unit_not_found' } });
+  });
+
+  it('23. đã giữ căn bằng cọc chốt nhanh, chưa chọn chu kỳ ⇒ stage lease (chọn ở bước ký HĐ); cọc thường ⇒ không có', async () => {
+    fixture.allowFastClose(6_000_000);
+    await depositService.createDeposit('VS-88888', { id: TENANT_ID }, { acceptTerms: true, termsVersion: DEPOSIT_TERMS_VERSION, fastClose: true });
+    const dep = fixture.savedDeposits[0];
+    expect(await depositService.markPaid({ depositCode: dep.depositCode, amount: 6_150_000, bankRefNumber: 'FT-FAST', actor: 'bank' })).toBe('paid');
+    const q = await depositService.getFastCloseQuotes('VS-88888', { id: TENANT_ID });
+    expect(q).toMatchObject({ eligible: true, stage: 'lease' });
+    expect(q.quotes.map((x: any) => x.cycle)).toEqual([1, 3, 6]);
+    dep.fastCloseCycle = 3; // đã chọn khi ký ⇒ hết báo giá
+    expect(await depositService.getFastCloseQuotes('VS-88888', { id: TENANT_ID })).toMatchObject({ eligible: false, stage: null });
   });
 });

@@ -94,6 +94,11 @@ describe('chat-criteria (phân tích tất định)', () => {
     expect(p.criteria.household).toEqual({ persons: 2, motorbikes: 2, cars: 0 });
   });
 
+  it('"Beverly" = toà BE3 (tên trong DB), lọc theo toà', () => {
+    const p = parseMessage('căn 1 phòng ngủ ở Beverly giá rẻ dưới 10 triệu', emptyCriteria(), false);
+    expect(p.criteria).toMatchObject({ buildings: ['BE3'], zones: [], layouts: ['1PN'], budget: 10_000_000 });
+  });
+
   it('câu nối tiếp "rẻ hơn nữa" giảm 10% ngân sách khi đã tìm', () => {
     const p = parseMessage('rẻ hơn nữa', { ...emptyCriteria(), budget: 10_000_000 }, true);
     expect(p.criteria.budget).toBe(9_000_000);
@@ -143,6 +148,23 @@ describe('chat-knowledge (FAQ 0 đồng)', () => {
     expect(kb.size).toBeGreaterThanOrEqual(10);
     expect(kb.has('all_in')).toBe(true);
     for (const t of kb.values()) for (const b of t.bullets) expect(b).not.toMatch(/\bbot\b/i);
+  });
+
+  it('mọi chủ đề có summary; câu FAQ theo câu hỏi ngắn (≤ 100 từ), mở bằng tóm tắt, không còn biến', () => {
+    const values = { holding_deposit: 'Tiền cọc bảo đảm của căn', hold_hours: '48', hold_hours_min: '12', hold_hours_max: '72' };
+    for (const t of kb.values()) {
+      expect(t.summary).toBeTruthy();
+      const out = renderTopic(t, values, 'Biểu phí hiện hành trên hệ thống: gửi xe máy 150.000đ/xe/tháng.', { query: t.title });
+      expect(out.split(/\s+/).length).toBeLessThanOrEqual(100);
+      expect(out.startsWith(t.summary!.slice(0, 10))).toBe(true);
+      expect(out).not.toMatch(/\{[a-z_]+\}/);
+    }
+  });
+
+  it('định tuyến FAQ: không khớp nhầm "chuyển khoản cọc" sang hoàn cọc; "hỏng thì ai sửa" ⇒ sửa chữa', () => {
+    expect(routeFaq('chuyển khoản cọc cho ai')?.topic).not.toBe('security_deposit');
+    expect(routeFaq('điều hoà hỏng thì ai sửa')?.topic).toBe('maintenance');
+    expect(routeFaq('hoàn cọc khi nào')?.topic).toBe('security_deposit');
   });
 
   it('thay biến; dòng thiếu giá trị bị bỏ thay vì đoán', () => {
@@ -248,6 +270,24 @@ describe('GeminiClient', () => {
       new Promise<Response>((_r, reject) => init.signal!.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
     await expect(new GeminiClient(opts, hang).generate('s', 'u')).rejects.toBeInstanceOf(GeminiError);
     await expect(new GeminiClient(opts, hang).generate('s', 'u')).rejects.toMatchObject({ kind: 'timeout' });
+  });
+
+  it('lần thử chậm quá attemptTimeoutMs ⇒ thử lại trong ngân sách còn lại; hết ngân sách ⇒ timeout', async () => {
+    let n = 0;
+    const slowThenFast = (_: string, init: RequestInit) =>
+      new Promise<Response>((resolve, reject) => {
+        n += 1;
+        if (n === 1) init.signal!.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+        else resolve(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }), { status: 200 }));
+      });
+    const c = new GeminiClient({ ...opts, timeoutMs: 1500, attemptTimeoutMs: 100 }, slowThenFast, async () => {});
+    await expect(c.generate('s', 'u')).resolves.toBe('ok');
+    expect(n).toBe(2);
+    const hang = (_: string, init: RequestInit) =>
+      new Promise<Response>((_r, reject) => init.signal!.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
+    const started = Date.now();
+    await expect(new GeminiClient({ ...opts, timeoutMs: 1500, attemptTimeoutMs: 100 }, hang, async () => {}).generate('s', 'u')).rejects.toMatchObject({ kind: 'timeout' });
+    expect(Date.now() - started).toBeLessThan(1500);
   });
 
   it('không có key ⇒ not_configured, không gọi mạng', async () => {
@@ -411,8 +451,10 @@ describe('POST /chat (HTTP)', () => {
       .expect(200);
     expect(res.body.success).toBe(true);
     expect(Object.keys(res.body.data).sort()).toEqual(
-      ['conversationId', 'criteria', 'degraded', 'degradedReason', 'kind', 'recommendations', 'reply', 'scan', 'source'].sort(),
+      // Vinny v1 (2026-10-15) THÊM messageId (👍/👎) + promptVersion; các khoá cũ giữ nguyên.
+      ['conversationId', 'criteria', 'degraded', 'degradedReason', 'kind', 'messageId', 'promptVersion', 'recommendations', 'reply', 'scan', 'source'].sort(),
     );
+    expect(res.body.data.promptVersion).toBe('v2');
     expect(res.body.data.recommendations[0]).toMatchObject({ id: 'VHOP-S1.02-0701', rank: 1, score: 14 });
   });
 

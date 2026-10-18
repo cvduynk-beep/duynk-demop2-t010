@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl, Length, Max, Min } from 'class-validator';
 
 export class CreateDepositDto {
   @ApiProperty({ description: 'Đồng ý điều khoản cọc' })
@@ -7,15 +7,62 @@ export class CreateDepositDto {
   @IsBoolean()
   acceptTerms: boolean;
 
-  @ApiProperty({ example: 'DEP-2026.10-v2', description: 'Phiên bản điều khoản cọc' })
+  @ApiProperty({ example: 'DEP-2026.10-v3', description: 'Phiên bản điều khoản cọc' })
   @IsNotEmpty()
   @IsString()
   termsVersion: string;
 
-  // Chỉ khai báo (whitelist); kiểm 1 | 3 | 6 + điều kiện chủ nhà ủy quyền ở DepositService.
-  @ApiPropertyOptional({ enum: [1, 3, 6], description: 'Chốt nhanh: chu kỳ thanh toán cam kết (tháng). Bỏ trống = cọc thường. Số tiền luôn do server tính.' })
+  // Chu kỳ 1/3/6 KHÔNG chọn ở đây (hồ sơ 20): chọn khi ký HĐ. Điều kiện chủ nhà ủy quyền kiểm ở DepositService.
+  @ApiPropertyOptional({ description: 'Chốt nhanh: giảm ~5% tiền cọc nếu tiền về trong 24 giờ. Số tiền luôn do server tính.' })
   @IsOptional()
-  fastCloseCycle?: unknown;
+  @IsBoolean()
+  fastClose?: boolean;
+}
+
+/** `POST /bookings/fast-deposit`: cọc chốt nhanh ngay trên trang căn, không cần lịch xem (hồ sơ 20 · 01-CONTRACTS §3.2). */
+export class FastDepositDto {
+  @ApiProperty({ example: 'VHOP-S1.02-0405', description: 'Mã căn hộ' })
+  @IsNotEmpty()
+  @IsString()
+  unitCode: string;
+
+  @ApiProperty({ example: 'Nguyễn Văn An', description: 'Họ và tên người đặt cọc' })
+  @IsNotEmpty()
+  @IsString()
+  @Length(2, 100)
+  contactName: string;
+
+  @ApiProperty({ example: '0912345678', description: 'Số điện thoại (đã/ sẽ xác thực OTP Zalo)' })
+  @IsNotEmpty()
+  @IsString()
+  phone: string;
+
+  @ApiPropertyOptional({ default: 1, example: 2, description: 'Số người dự kiến ở (1-10)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  partySize?: number = 1;
+
+  @ApiPropertyOptional({ description: 'Token OTP mục đích TENANT_VIEWING' })
+  @IsOptional()
+  @IsString()
+  actionToken?: string;
+
+  @ApiProperty({ description: 'Đồng ý điều khoản cọc' })
+  @IsNotEmpty()
+  @IsBoolean()
+  acceptTerms: boolean;
+
+  @ApiProperty({ description: 'Xác nhận chốt cọc mà không xem trực tiếp' })
+  @IsNotEmpty()
+  @IsBoolean()
+  acknowledgeNoViewing: boolean;
+
+  @ApiProperty({ example: 'DEP-2026.10-v3', description: 'Phiên bản điều khoản cọc' })
+  @IsNotEmpty()
+  @IsString()
+  termsVersion: string;
 }
 
 export class VietQrWebhookInputDto {

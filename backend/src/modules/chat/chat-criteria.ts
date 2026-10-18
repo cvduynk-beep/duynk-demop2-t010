@@ -137,7 +137,8 @@ export function parseMessage(text: string, base: ChatCriteria, searched: boolean
     strong = true;
   }
 
-  const buildings = [...new Set([...text.toUpperCase().matchAll(BUILDING_RE)].map((m) => m[1]))];
+  const named = /\bbeverly\b/.test(t) ? ['BE3'] : [];
+  const buildings = [...new Set([...[...text.toUpperCase().matchAll(BUILDING_RE)].map((m) => m[1]), ...named])];
   if (buildings.length) {
     c.buildings = buildings;
     c.zones = [];
@@ -223,6 +224,9 @@ const CHITCHAT_RE =
 export function isOffTopic(text: string): boolean {
   const t = fold(text);
   return HARD_OFFTOPIC_RE.test(t) || (CHITCHAT_RE.test(t) && !hasHousingContext(text));
+  return /(giai|tinh) (giup |ho )?(minh |toi |em |tui )?(phuong trinh|bai toan|bai tap|dao ham|tich phan)|\bphuong trinh\b|viet (giup )?(code|ma nguon|chuong trinh|bai tho|tho|bai van|van mau|essay)|lap trinh|\b(python|javascript|java|sql|html)\b|lam tho|bai tho|chinh tri|bau cu|tong thong|chung khoan|tien ao|crypto|bitcoin|dich (sang|giup|cau)|translate|du doan xo so|xo so|ca do/.test(
+    t,
+  );
 }
 
 export function isGreeting(text: string): boolean {

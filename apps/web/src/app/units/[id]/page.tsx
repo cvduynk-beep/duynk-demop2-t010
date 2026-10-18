@@ -44,14 +44,17 @@ export default async function UnitPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ book?: string }>;
+  searchParams: Promise<{ book?: string; fastdeposit?: string }>;
 }) {
   const { id } = await params;
-  const { book } = await searchParams;
+  const { book, fastdeposit } = await searchParams;
   const { data, source } = await load(id);
 
   // Vào bằng UUID hoặc mã viết thường ⇒ chuyển về URL chuẩn theo mã căn.
-  if (data.code !== id) redirect(`/units/${encodeURIComponent(data.code)}${book === "1" ? "?book=1" : ""}`);
+  if (data.code !== id) {
+    const qs = book === "1" ? "?book=1" : fastdeposit === "1" ? "?fastdeposit=1" : "";
+    redirect(`/units/${encodeURIComponent(data.code)}${qs}`);
+  }
 
   return (
     <>
@@ -62,7 +65,11 @@ export default async function UnitPage({
             <MockDataBanner detail="Backend không phản hồi nên đây là căn mẫu, không phải căn thật trong hệ thống." />
           </div>
         )}
-        <UnitDetail unit={toUnit(data)} autoOpenBooking={book === "1" && source === "api"} />
+        <UnitDetail
+          unit={toUnit(data)}
+          autoOpenBooking={book === "1" && source === "api"}
+          autoOpenFastDeposit={fastdeposit === "1" && source === "api"}
+        />
       </main>
     </>
   );

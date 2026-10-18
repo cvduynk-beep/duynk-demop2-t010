@@ -73,6 +73,12 @@ export function chatAppend(message: Omit<ChatMessage, "id" | "at">): string {
   return id;
 }
 
+/** Cập nhật một tin đã có (👍/👎, đã gửi yêu cầu gặp nhân viên). */
+export function chatPatch(id: string, patch: Partial<Omit<ChatMessage, "id" | "at">>) {
+  const cur = read();
+  write({ ...cur, messages: cur.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)) });
+}
+
 export function chatSetSearch(criteria: CriteriaState) {
   write({ ...read(), criteria, searched: true });
 }

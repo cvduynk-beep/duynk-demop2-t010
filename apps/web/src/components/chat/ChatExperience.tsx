@@ -2,9 +2,9 @@
 
 import { cloneElement, isValidElement, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { ArrowRight, BadgeCheck, CalendarClock, Plus, ReceiptText, Footprints, MapPin, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
-import { chatApi, chatErrorText, recommendQuery, type RankedCost } from "@/lib/chat/api";
-import { chatAppend, chatReset, chatSetConversation, chatSetCriteria, chatSetSearch, useChat } from "@/lib/chat/store";
-import type { CriteriaState } from "@/lib/chat/types";
+import { chatApi, chatErrorText, historyOf, recommendQuery, type RankedCost } from "@/lib/chat/api";
+import { chatAppend, chatPatch, chatReset, chatSetConversation, chatSetCriteria, chatSetSearch, useChat } from "@/lib/chat/store";
+import type { ChatMessage, CriteriaState } from "@/lib/chat/types";
 import { DEFAULT_HOUSEHOLD, type CostBreakdown } from "@/lib/pricing/cost";
 import { useApiQuery } from "@/lib/query/useApiQuery";
 import { useCatalog } from "@/lib/tenant/catalog";
@@ -60,6 +60,8 @@ export function ChatExperience({ below }: { below: ReactNode }) {
   }
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  // Đang xem chi tiết căn trong khung kết quả ⇒ khung đó thôi cuộn cả khối, để header / thanh hành động đứng yên.
+  const [previewOpen, setPreviewOpen] = useState(false);
   // Backend trả 401 LOGIN_REQUIRED khi khách vãng lai hết lượt (đếm ở server theo IP).
   const [guestLocked, setGuestLocked] = useState(false);
   const busy = useRef(false);
@@ -115,6 +117,8 @@ export function ChatExperience({ below }: { below: ReactNode }) {
     busy.current = true;
     const base = chat.criteria;
     const searchedBefore = chat.searched || chat.messages.some((m) => m.criteria);
+    // Ngữ cảnh 6 lượt gần nhất (server chỉ dùng làm ngữ cảnh, không lưu nội dung).
+    const history = historyOf(chat.messages);
     try {
       chatAppend({ role: "user", text });
       setThinking({
@@ -125,7 +129,7 @@ export function ChatExperience({ below }: { below: ReactNode }) {
         ],
       });
 
-      const res = await chatApi.send(text, base, searchedBefore, chat.conversationId);
+      const res = await chatApi.send(text, base, searchedBefore, chat.conversationId, history);
       if (!res.ok) {
         if (res.status === 401 || res.code === "LOGIN_REQUIRED") setGuestLocked(true);
         setFreshId(chatAppend({ role: "assistant", text: chatErrorText(res) }));
@@ -134,9 +138,11 @@ export function ChatExperience({ below }: { below: ReactNode }) {
       const data = res.data;
       chatSetConversation(data.conversationId);
 
-      if (data.kind === "search" && data.criteria) {
-        const criteria: CriteriaState = { ...base, ...data.criteria };
-        chatSetCriteria(criteria);
+      const meta = { serverId: data.messageId, promptVersion: data.promptVersion, kind: data.kind, handoff: data.handoff };
+      // Lượt tìm căn: bộ phân tích câu (có `criteria`) hoặc Vinny tự gọi công cụ tìm căn (chỉ có `recommendations`).
+      if (data.kind === "search" && (data.criteria || data.recommendations.length)) {
+        const criteria: CriteriaState = data.criteria ? { ...base, ...data.criteria } : base;
+        if (data.criteria) chatSetCriteria(criteria);
         setFreshId(
           chatAppend({
             role: "assistant",
@@ -145,17 +151,44 @@ export function ChatExperience({ below }: { below: ReactNode }) {
             resultIds: data.recommendations.map((r) => r.id),
             criteria,
             degraded: data.degraded,
+            ...meta,
           }),
         );
         // Ở workspace thì chuyển sang tab kết quả; ở hero giữ nguyên để khách xem băng chuyền ngay trong khung chat.
-        if (workspace && data.recommendations.length) setTab("results");
+        if (workspace && data.recommendations.length && data.criteria) setTab("results");
       } else {
-        setFreshId(chatAppend({ role: "assistant", text: data.reply, degraded: data.degraded }));
+        setFreshId(chatAppend({ role: "assistant", text: data.reply, degraded: data.degraded, ...meta }));
       }
     } finally {
       setThinking(null);
       busy.current = false;
     }
+  };
+
+  const onFeedback = async (m: ChatMessage, rating: "up" | "down", reason?: string) => {
+    if (!m.serverId || !m.promptVersion || !chat.conversationId) return;
+    chatPatch(m.id, { feedback: rating });
+    const res = await chatApi.feedback({ messageId: m.serverId, conversationId: chat.conversationId, rating, reason, promptVersion: m.promptVersion, kind: m.kind });
+    if (!res.ok) chatPatch(m.id, { feedback: undefined });
+  };
+
+  const onHandoff = async (m: ChatMessage) => {
+    if (!m.handoff || m.handoff.requested || !chat.conversationId) return;
+    const messages = chat.messages.filter((x) => x.role === "user").slice(-4).map((x) => x.text);
+    const res = await chatApi.handoff({ conversationId: chat.conversationId, category: m.handoff.category, messages });
+    if (!res.ok) {
+      setFreshId(chatAppend({ role: "assistant", text: chatErrorText(res) }));
+      return;
+    }
+    chatPatch(m.id, { handoff: { ...m.handoff, requested: true } });
+    setFreshId(
+      chatAppend({
+        role: "assistant",
+        text: res.data.created
+          ? `Mình đã chuyển yêu cầu kèm tóm tắt cho nhân viên VinStay. Nhân viên sẽ liên hệ bạn qua số điện thoại đã xác thực trong ${res.data.sla}.`
+          : `Yêu cầu của bạn đã được ghi nhận trước đó và đang chờ xử lý. Nhân viên sẽ liên hệ trong ${res.data.sla}.`,
+      }),
+    );
   };
 
   const handleViewAllUnits = () => {
@@ -251,6 +284,9 @@ export function ChatExperience({ below }: { below: ReactNode }) {
                 </div>
                 <div className={styles.convo}>
                   <Messages
+              onFeedback={onFeedback}
+              onHandoff={onHandoff}
+              signedIn={role === "tenant"}
                     greeting={greeting}
                     messages={chat.messages}
                     thinking={thinking}
@@ -382,6 +418,9 @@ export function ChatExperience({ below }: { below: ReactNode }) {
           </div>
           <div className={styles.railMsgs}>
             <Messages
+              onFeedback={onFeedback}
+              onHandoff={onHandoff}
+              signedIn={role === "tenant"}
               greeting={greeting}
               messages={chat.messages}
               thinking={thinking}
@@ -397,8 +436,9 @@ export function ChatExperience({ below }: { below: ReactNode }) {
         </aside>
       )}
 
-      <section className={styles.results} aria-label="Kết quả tìm căn">
+      <section className={`${styles.results} ${previewOpen ? styles.resultsFlush : ""}`} aria-label="Kết quả tìm căn">
         <ResultsPanel
+          onPreviewChange={setPreviewOpen}
           results={results}
           criteria={chat.criteria}
           onCriteria={onCriteria}

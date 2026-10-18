@@ -32,6 +32,13 @@ export interface ChatMessage {
   criteria?: CriteriaState;
   /** Backend trả lời ở chế độ rút gọn (LLM lỗi/không cấu hình, hoặc matchmaker lỗi). */
   degraded?: boolean;
+  /** Id lượt trả lời của backend (👍/👎) + phiên bản prompt + loại lượt. */
+  serverId?: string;
+  promptVersion?: string;
+  kind?: string;
+  /** Vinny đề nghị gặp nhân viên. `requested` = khách đã gửi yêu cầu (không gửi trùng). */
+  handoff?: { category: "complaint" | "deposit_dispute" | "payment" | "contract" | "damage" | "human_request"; requested?: boolean };
+  feedback?: "up" | "down";
 }
 
 export interface ChatState {

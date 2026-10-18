@@ -1,6 +1,7 @@
 ---
 topic: first_to_pay
 title: Hai khách cùng muốn một căn thì ai được?
+summary: Nguyên tắc First-to-Pay Wins: căn khoá cho người có tiền cọc được ngân hàng ghi nhận trước, không phải người đặt lịch xem trước. Người chuyển sau khi căn đã có người giữ được hoàn lại tiền và có thể chọn căn khác còn trống.
 sources: [AGENTS.md#First-to-Pay Wins, backend/src/modules/deposit/deposit.service.ts#markPaid, backend/src/modules/booking/booking.service.ts#createBooking]
 verified_at: 2026-10-14
 verified_sha: deposit-v2

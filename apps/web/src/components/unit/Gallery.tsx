@@ -10,12 +10,14 @@ import { VerifiedPhoto, type PhotoUnit } from "./VerifiedPhoto";
 type GalleryUnit = PhotoUnit & { photos: string[] };
 import styles from "./Gallery.module.css";
 
-export function Gallery({ unit }: { unit: GalleryUnit }) {
+/** `compact`: nhúng trong khung hẹp (preview cạnh chat) ⇒ lưới ảnh thấp hơn, co theo bề rộng khung. */
+export function Gallery({ unit, compact = false }: { unit: GalleryUnit; compact?: boolean }) {
   const [open, setOpen] = useState<number | null>(null);
   const n = unit.photos.length;
+  const size = compact ? styles.compact : "";
   if (n === 0) {
     return (
-      <div className={`${styles.grid} ${styles.n1}`}>
+      <div className={`${styles.grid} ${styles.n1} ${size}`}>
         <div className={styles.cell}>
           <VerifiedPhoto unit={unit} sizes="(max-width: 900px) 100vw, 640px" stamp="none" className={styles.fill} />
         </div>
@@ -27,7 +29,7 @@ export function Gallery({ unit }: { unit: GalleryUnit }) {
 
   return (
     <>
-      <div className={`${styles.grid} ${styles[`n${shown}`]}`}>
+      <div className={`${styles.grid} ${styles[`n${shown}`]} ${size}`}>
         {idx.slice(0, shown).map((i) => (
           <button key={i} type="button" className={styles.cell} onClick={() => setOpen(i)} aria-label={`Xem ảnh ${i} trên ${n}`}>
             <VerifiedPhoto

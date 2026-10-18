@@ -287,7 +287,7 @@ export class AdminContractRegistryService {
       startAt: iso(d.paidAt),
       endAt: iso(d.expiresAt),
       amount: Number(d.amount),
-      amountLabel: d.fastCloseCycle ? `Cọc bảo đảm (chốt nhanh ${d.fastCloseCycle} tháng)` : 'Cọc bảo đảm',
+      amountLabel: d.quoteExpiresAt != null ? `Cọc bảo đảm (chốt nhanh${d.fastCloseCycle ? ` ${d.fastCloseCycle} tháng` : ''})` : 'Cọc bảo đảm',
       needsAction:
         d.paymentStatus === 'UNC_PENDING_REVIEW'
           ? 'Duyệt uỷ nhiệm chi thủ công'

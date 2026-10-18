@@ -7,7 +7,9 @@ import { PAYMENT_CYCLES, type PaymentCycle } from "@/lib/pricing/cost";
 import { fmtDate, vnd } from "@/lib/format";
 import { HOUSE_RULES } from "@/lib/legal/house-rules";
 import type { UnitWithExtras } from "@/lib/tenant/adapters";
+import { useApiQuery } from "@/lib/query/useApiQuery";
 import { errorText, tenantApi } from "@/lib/tenant/api";
+import { tenantQueries } from "@/lib/tenant/queries";
 import { billingStart, moveInWindow } from "@/lib/tenant/moveIn";
 import type { TenantBooking } from "@/lib/tenant/types";
 import { zoneById } from "@/lib/units";
@@ -34,12 +36,18 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
 
   const deposit = booking.deposit;
   const fastClose = deposit?.fastClose;
+  // Cọc chốt nhanh cũ (trước 2026-10-15) đã cam kết chu kỳ + giá ⇒ khoá. Cọc chốt nhanh mới ⇒ chọn chu kỳ ở đây (hồ sơ 20).
+  const lockedCycle = fastClose?.cycle ?? null;
+  const chooseCycle = !!fastClose && lockedCycle == null;
+  const quotesQuery = useApiQuery(tenantQueries.fastClose(booking.ref), chooseCycle);
+  const leaseQuotes =
+    chooseCycle && quotesQuery.state.status === "ready" && quotesQuery.state.data.stage === "lease" ? quotesQuery.state.data.quotes : [];
   // T0 = ngày cọc về; chưa có (không nên xảy ra ở bước ký) ⇒ lấy hôm nay, backend vẫn kiểm lại.
   const moveIn = moveInWindow(deposit?.paidAt ? Date.parse(deposit.paidAt) : now);
   const [moveInDate, setMoveInDate] = useState(moveIn.earliest);
   const [months, setMonths] = useState(() => (monthOptions.includes(12) ? 12 : monthOptions[0]));
-  // Chốt nhanh ⇒ kỳ thanh toán đã cam kết, không đổi được (backend trả 422 nếu lệch).
-  const [paymentCycle, setPaymentCycle] = useState<PaymentCycle>(fastClose?.cycle ?? 1);
+  // Chốt nhanh cũ ⇒ kỳ thanh toán đã cam kết, không đổi được (backend trả 422 nếu lệch).
+  const [paymentCycle, setPaymentCycle] = useState<PaymentCycle>(lockedCycle ?? 1);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [consentElectronicSign, setConsentElectronicSign] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -52,7 +60,8 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
   const lateMoveIn = billingDate !== moveInDate;
 
   // Dự toán tài chính (số liệu thật của căn; backend tính lại khi lập hợp đồng)
-  const monthlyRent = fastClose?.monthlyRent ?? unit.rent;
+  const quoteFor = (cycle: PaymentCycle) => leaseQuotes.find((q) => q.cycle === cycle);
+  const monthlyRent = (lockedCycle ? fastClose?.monthlyRent : quoteFor(paymentCycle)?.rent) ?? unit.rent;
   const depositPaid = deposit?.amount ?? unit.holdingDeposit;
   // Cọc v2: khoản đã chuyển CHÍNH LÀ Tiền cọc bảo đảm (không thu bù). Cọc giữ chỗ cũ (điều khoản HOLD-*) ⇒ bù phần chênh.
   const legacyHold = !!deposit?.termsVersion?.startsWith("HOLD-");
@@ -121,9 +130,14 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
       {/* 2. Khối Kỳ thanh toán */}
       <div className={styles.formSection}>
         <div className={styles.formSectionTitle}>Kỳ thanh toán tiền thuê</div>
-        {fastClose && (
+        {fastClose && lockedCycle && fastClose.monthlyRent != null && (
           <p className="muted xs" style={{ margin: "0 0 6px" }}>
-            Bạn đã chốt nhanh {fastClose.cycle} tháng/kỳ với giá {vnd(fastClose.monthlyRent)}đ/tháng — kỳ thanh toán giữ đúng cam kết.
+            Bạn đã chốt nhanh {lockedCycle} tháng/kỳ với giá {vnd(fastClose.monthlyRent)}đ/tháng — kỳ thanh toán giữ đúng cam kết.
+          </p>
+        )}
+        {chooseCycle && leaseQuotes.length > 0 && (
+          <p className="muted xs" style={{ margin: "0 0 6px" }}>
+            Ưu đãi chốt nhanh: trả trước càng dài, giá thuê càng giảm (không thấp hơn giá sàn chủ nhà đặt). Kỳ bạn chọn được giữ suốt hợp đồng.
           </p>
         )}
         <div className={styles.radioRow}>
@@ -134,10 +148,18 @@ export function LeaseForm({ booking, unit, now, onSigned }: LeaseFormProps) {
                 name="paymentCycle"
                 value={cycle}
                 checked={paymentCycle === cycle}
-                disabled={!!fastClose && fastClose.cycle !== cycle}
+                disabled={lockedCycle != null && lockedCycle !== cycle}
                 onChange={() => setPaymentCycle(cycle)}
               />
-              <span>Thanh toán {cycle} tháng/lần (Điều 3.2 HĐ thuê)</span>
+              <span>
+                Thanh toán {cycle} tháng/lần (Điều 3.2 HĐ thuê)
+                {quoteFor(cycle) && (
+                  <>
+                    {" "}— <b>{vnd(quoteFor(cycle)!.rent)}đ/tháng</b>
+                    {quoteFor(cycle)!.rentDiscount > 0 && <span className="muted"> (giảm {vnd(quoteFor(cycle)!.rentDiscount)}đ)</span>}
+                  </>
+                )}
+              </span>
             </label>
           ))}
         </div>

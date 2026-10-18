@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Sparkles } from "lucide-react";
+import { Headset, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react";
+import Link from "next/link";
 import { Facade } from "@/components/brand/Facade";
 import { fmtTime } from "@/lib/format";
 import type { ChatMessage } from "@/lib/chat/types";
@@ -82,9 +83,53 @@ interface MessagesProps {
   onFreshDone: () => void;
   onShowResults?: (count: number) => void;
   hideInlineUnits?: boolean;
+  onFeedback?: (m: ChatMessage, rating: "up" | "down", reason?: string) => void;
+  onHandoff?: (m: ChatMessage) => void;
+  /** Khách tenant đã đăng nhập (mới gửi được yêu cầu gặp nhân viên). */
+  signedIn?: boolean;
 }
 
-export function Messages({ greeting, messages, thinking, freshId, onFreshDone, onShowResults, hideInlineUnits }: MessagesProps) {
+const DOWN_REASONS = ["Sai thông tin", "Không trả lời đúng câu hỏi", "Khó hiểu"];
+
+/** 👍/👎 + lý do ngắn khi 👎 (lưu theo lượt + phiên bản prompt, không lưu nội dung). */
+function Feedback({ m, onFeedback }: { m: ChatMessage; onFeedback: NonNullable<MessagesProps["onFeedback"]> }) {
+  const [askWhy, setAskWhy] = useState(false);
+  if (m.feedback === "up" || (m.feedback === "down" && !askWhy)) {
+    return <span className={`muted xs ${styles.feedbackDone}`}>Cảm ơn bạn đã phản hồi.</span>;
+  }
+  return (
+    <div className={styles.feedback}>
+      {!askWhy ? (
+        <>
+          <button type="button" className={styles.fbBtn} aria-label="Câu trả lời hữu ích" onClick={() => onFeedback(m, "up")}>
+            <ThumbsUp size={14} />
+          </button>
+          <button type="button" className={styles.fbBtn} aria-label="Câu trả lời chưa tốt" onClick={() => setAskWhy(true)}>
+            <ThumbsDown size={14} />
+          </button>
+        </>
+      ) : (
+        <div className={styles.fbReasons} role="group" aria-label="Vì sao chưa tốt?">
+          {DOWN_REASONS.map((r) => (
+            <button
+              key={r}
+              type="button"
+              className={styles.fbChip}
+              onClick={() => {
+                setAskWhy(false);
+                onFeedback(m, "down", r);
+              }}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Messages({ greeting, messages, thinking, freshId, onFreshDone, onShowResults, hideInlineUnits, onFeedback, onHandoff, signedIn }: MessagesProps) {
   const end = useRef<HTMLDivElement>(null);
   // Cuộn khung chat gần nhất (hero `.convo` / rail), không kéo cả trang theo; không tìm thấy khung cuộn thì mới cuộn trang.
   const scroll = () => {
@@ -142,6 +187,22 @@ export function Messages({ greeting, messages, thinking, freshId, onFreshDone, o
                   onShowResults={onShowResults}
                 />
               )}
+              {!mine && !fresh && m.handoff && (
+                <div className={styles.handoff}>
+                  {m.handoff.requested ? (
+                    <span className="muted xs">Đã gửi yêu cầu cho nhân viên.</span>
+                  ) : signedIn && onHandoff ? (
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => onHandoff(m)}>
+                      <Headset size={14} /> Gặp nhân viên
+                    </button>
+                  ) : (
+                    <Link href="/login?next=/" className="btn btn-primary btn-sm">
+                      <Headset size={14} /> Đăng nhập để gặp nhân viên
+                    </Link>
+                  )}
+                </div>
+              )}
+              {!mine && !fresh && m.serverId && onFeedback && <Feedback m={m} onFeedback={onFeedback} />}
               <span className={styles.time}>{fmtTime(m.at)}</span>
             </div>
           </div>

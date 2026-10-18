@@ -7,6 +7,12 @@
   overflow: hidden;
 }
 
+.compact {
+  /* khung nhúng cạnh chat: thấp hơn trang đầy đủ để nội dung đầu tiên (tên căn, thông số) lên ngay màn đầu */
+  height: clamp(220px, 34vh, 340px);
+  border-radius: 18px;
+}
+
 .n5 {
   grid-template-columns: 2fr 1fr 1fr;
   grid-template-rows: 1fr 1fr;

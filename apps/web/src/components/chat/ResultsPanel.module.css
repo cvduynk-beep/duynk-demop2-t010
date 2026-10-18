@@ -261,3 +261,126 @@
     max-width: 130px;
   }
 }
+
+/* Chi tiết căn ngay trong khung kết quả (UnitPreview) */
+.panelPreview {
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+/* Khung chi tiết căn: header (previewBar) + thân cuộn + thanh hành động đáy (do UnitDetail embedded dựng) */
+.preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 1040px; /* thanh trên, thân và thanh đáy cùng một cột đọc, canh giữa khi khung rất rộng */
+  margin-inline: auto;
+  min-width: 0;
+  min-height: 0;
+}
+.previewState {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.previewBar {
+  flex: none;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  box-shadow: 0 10px 30px -14px rgba(10, 61, 74, 0.35);
+}
+.previewBack {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.previewBack:hover {
+  background: var(--paper-2);
+  transform: translateX(-1px);
+}
+.previewBack:focus-visible,
+.previewFull:focus-visible {
+  outline: 2px solid var(--lagoon);
+  outline-offset: 2px;
+}
+.previewTitle {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  line-height: 1.25;
+}
+.previewTitle b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  color: #0a3d4a;
+}
+.previewEyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-600);
+}
+.previewPrice {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--ink-600);
+}
+.previewPrice b {
+  font-size: 16px;
+  color: #0a3d4a;
+}
+.previewFull {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+.previewFull:hover {
+  background: var(--paper-2);
+}
+@media (max-width: 640px) {
+  .previewPrice,
+  .previewFull span {
+    display: none;
+  }
+  .previewFull {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+}

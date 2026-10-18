@@ -11,6 +11,8 @@ export type UnitWithExtras = Unit & {
   holdingDeposit: number;
   highlights: string[];
   inventory: UnitInventoryLine[];
+  /** Mức giảm tiền cọc khi chốt cọc nhanh; null = căn không có cọc nhanh. */
+  fastDepositDiscount: number | null;
 };
 
 export function toUnit(dto: TenantUnit): UnitWithExtras {
@@ -57,6 +59,7 @@ export function toUnit(dto: TenantUnit): UnitWithExtras {
     holdingDeposit: dto.holdingDeposit,
     highlights: dto.highlights ?? [],
     inventory: dto.inventory ?? [],
+    fastDepositDiscount: dto.fastDeposit?.depositDiscount ?? null,
   };
 }
 

@@ -1,6 +1,7 @@
 ---
 topic: viewing
 title: Quy trình đặt lịch và đi xem căn
+summary: Khách xác thực số điện thoại qua OTP Zalo rồi đặt lịch xem trên trang căn. Đúng giờ, Field Host có thẻ cư dân đón khách tại sảnh và dẫn lên căn; tới cửa, Host xác nhận trên app để nhận mã cửa. Khi tới, khách bấm "Tôi đã có mặt tại sảnh" trên trang lịch hẹn.
 sources: [backend/src/modules/booking/booking.service.ts, backend/src/modules/host-viewings/viewing-flow.service.ts, backend/src/modules/dispatch/dispatch.constants.ts, legal/tenant/01_TERMS_OF_SEARCH_AND_BOOKING.md, AGENTS.md]
 verified_at: 2026-10-14
 verified_sha: deposit-v2
