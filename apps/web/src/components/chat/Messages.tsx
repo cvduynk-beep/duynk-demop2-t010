@@ -131,8 +131,14 @@ function Feedback({ m, onFeedback }: { m: ChatMessage; onFeedback: NonNullable<M
 
 export function Messages({ greeting, messages, thinking, freshId, onFreshDone, onShowResults, hideInlineUnits, onFeedback, onHandoff, signedIn }: MessagesProps) {
   const end = useRef<HTMLDivElement>(null);
+  // Cuộn khung chat gần nhất (hero `.convo` / rail), không kéo cả trang theo; không tìm thấy khung cuộn thì mới cuộn trang.
   const scroll = () => {
-    end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    const el = end.current;
+    if (!el) return;
+    let box = el.parentElement;
+    while (box && box !== document.body && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+    if (box && box !== document.body) box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
+    else el.scrollIntoView({ block: "end", behavior: "smooth" });
   };
 
   useEffect(() => {

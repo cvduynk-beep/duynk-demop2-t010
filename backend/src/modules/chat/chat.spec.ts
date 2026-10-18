@@ -111,6 +111,34 @@ describe('chat-criteria (phân tích tất định)', () => {
     expect(isOffTopic('làm bài thơ về mùa thu')).toBe(true);
     expect(isOffTopic('studio dưới 8 triệu')).toBe(false);
   });
+
+  it.each(['bạn gái cũ 8m', 'người yêu cũ 8 củ', 'kể chuyện cười 2pn', 'thời tiết hôm nay thế nào'])(
+    'chuyện phiếm không có ngữ cảnh thuê ⇒ lạc đề: %p',
+    (text) => {
+      expect(isOffTopic(text)).toBe(true);
+    },
+  );
+
+  it('chuyện phiếm nhưng có ngữ cảnh thuê ⇒ vẫn hợp lệ', () => {
+    expect(isOffTopic('người yêu mình muốn thuê 2pn dưới 12tr')).toBe(false);
+    expect(isOffTopic('bạn gái mình cần căn studio 8tr')).toBe(false);
+  });
+
+  it.each([
+    ['tôi buồn quá 10tr', false],
+    ['bạn ơi 8m', false],
+    ['8tr', true],
+    ['dưới 8 triệu thôi', true],
+    ['tìm căn 8tr', true],
+    ['thuê tầm 9 củ', true],
+  ])('ngân sách cần ngữ cảnh thuê mới thành câu tìm căn: %p ⇒ strong=%p', (text, strong) => {
+    expect(parseMessage(text, emptyCriteria(), false).strongSignal).toBe(strong);
+  });
+
+  it('đang tìm dở (searched) ⇒ câu chỉ có số vẫn là tìm căn', () => {
+    expect(parseMessage('ok 8m', emptyCriteria(), true).strongSignal).toBe(true);
+    expect(parseMessage('ok 8m', emptyCriteria(), false).strongSignal).toBe(false);
+  });
 });
 
 describe('chat-knowledge (FAQ 0 đồng)', () => {
@@ -355,6 +383,22 @@ describe('ChatService', () => {
     const mm = fakeMatchmaker();
     const res = await ask(makeService({}, mm), 'viết code python giúp mình');
     expect(res).toMatchObject({ kind: 'refusal', recommendations: [], source: 'rule' });
+    expect(mm.findTopRecommendations).not.toHaveBeenCalled();
+  });
+
+  it('"bạn gái cũ 8m" ⇒ từ chối, không gọi matchmaker/Gemini', async () => {
+    const mm = fakeMatchmaker();
+    const f = geminiReply('x');
+    const res = await ask(withGemini(makeService({}, mm), f), 'bạn gái cũ 8m');
+    expect(res).toMatchObject({ kind: 'refusal', recommendations: [], source: 'rule' });
+    expect(mm.findTopRecommendations).not.toHaveBeenCalled();
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it('chỉ có số tiền, không ngữ cảnh thuê ⇒ hỏi lại, không tìm căn', async () => {
+    const mm = fakeMatchmaker();
+    const res = await ask(makeService({}, mm), 'bạn ơi 8m');
+    expect(res.kind).toBe('clarify');
     expect(mm.findTopRecommendations).not.toHaveBeenCalled();
   });
 
